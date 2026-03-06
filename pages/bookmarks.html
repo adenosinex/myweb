@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云端书签</title>
+    <style>
+        body { font-family: system-ui; background: #f4f5f7; max-width: 900px; margin: 0 auto; padding: 20px; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .input-box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 30px; display: flex; gap: 10px; flex-wrap: wrap; }
+        input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; }
+        input { flex: 2; min-width: 200px; }
+        select { flex: 1; min-width: 120px; }
+        button { background: #000; color: white; border: none; font-weight: bold; cursor: pointer; flex: 1; min-width: 100px; transition: 0.2s; }
+        button:hover { background: #333; }
+        
+        .category-title { border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 30px; color: #555; }
+        .bookmark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
+        .bookmark-card { background: white; padding: 15px; border-radius: 8px; border-left: 5px solid #007bff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-decoration: none; color: #333; display: flex; flex-direction: column; transition: transform 0.2s; }
+        .bookmark-card:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+        .bm-title { font-weight: bold; font-size: 16px; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bm-url { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" style="text-decoration: none; color: #007bff;">← 返回控制台</a>
+        <h2>🔖 云端书签库</h2>
+    </div>
+
+    <div class="input-box">
+        <input type="text" id="bmTitle" placeholder="网站名称 (如: Flask 官方文档)">
+        <input type="url" id="bmUrl" placeholder="网址 (如: https://...)">
+        <select id="bmCategory">
+            <option value="技术开发">💻 技术开发</option>
+            <option value="日语学习">五十音/日语</option>
+            <option value="机车骑行">🏍️ 机车骑行</option>
+            <option value="常用工具">🧰 常用工具</option>
+            <option value="其他">📁 其他</option>
+        </select>
+        <button id="addBtn" onclick="addBookmark()">添加书签</button>
+    </div>
+
+    <div id="bookmarksContainer">
+        <p style="text-align: center; color: #999;">正在加载书签...</p>
+    </div>
+
+    <script>
+        // 利用万能引擎的 'my_bookmarks' 集合
+        const COLLECTION = 'my_bookmarks';
+
+        // 提交书签
+        async function addBookmark() {
+            const title = document.getElementById('bmTitle').value.trim();
+            const url = document.getElementById('bmUrl').value.trim();
+            const category = document.getElementById('bmCategory').value;
+
+            if (!title || !url) return alert('名称和网址不能为空！');
+            // 简单校验网址格式，没有 http 前缀自动补全
+            let finalUrl = url;
+            if (!/^https?:\/\//i.test(finalUrl)) {
+                finalUrl = 'http://' + finalUrl;
+            }
+
+            const btn = document.getElementById('addBtn');
+            btn.innerText = "添加中...";
+            btn.disabled = true;
+
+            await fetch(`/api/${COLLECTION}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, url: finalUrl, category })
+            });
+
+            // 清空输入框并刷新列表
+            document.getElementById('bmTitle').value = '';
+            document.getElementById('bmUrl').value = '';
+            btn.innerText = "添加书签";
+            btn.disabled = false;
+            loadBookmarks();
+        }
+
+        // 加载并按分类渲染书签
+        async function loadBookmarks() {
+            const res = await fetch(`/api/${COLLECTION}`);
+            const data = await res.json();
+            const container = document.getElementById('bookmarksContainer');
+
+            if (data.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #999;">还没有书签，赶紧添加一个吧！</p>';
+                return;
+            }
+
+            // 按分类对数据进行分组
+            const grouped = {};
+            data.forEach(item => {
+                const cat = item.category || '未分类';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(item);
+            });
+
+            // 生成 HTML
+            let html = '';
+            for (const [cat, items] of Object.entries(grouped)) {
+                html += `<h3 class="category-title">${cat}</h3>`;
+                html += `<div class="bookmark-grid">`;
+                items.forEach(item => {
+                    // 采用 a 标签，target="_blank" 确保在新标签页打开
+                    html += `
+                        <a href="${item.url}" target="_blank" class="bookmark-card">
+                            <span class="bm-title">${item.title}</span>
+                            <span class="bm-url">${item.url}</span>
+                        </a>
+                    `;
+                });
+                html += `</div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        // 页面加载时拉取数据
+        loadBookmarks();
+    </script>
+</body>
+</html>

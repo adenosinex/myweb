@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>UHR 骑行日志</title>
+    <style>
+        body { font-family: system-ui; background: #fff; max-width: 600px; margin: 20px auto; padding: 20px; }
+        .box { border: 1px solid #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        input, textarea, button { width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; }
+        button { background: #000; color: #fff; border: none; font-weight: bold; cursor: pointer;}
+        .log-item { padding: 15px 0; border-bottom: 1px solid #eee; }
+        .log-time { color: #888; font-size: 0.8em; margin-bottom: 5px; display: block;}
+    </style>
+</head>
+<body>
+    <a href="/" style="text-decoration: none; color: #007bff;">← 返回控制台</a>
+    <h2>🏍️ Haojue UHR 数据打卡</h2>
+
+    <div class="box">
+        <input type="text" id="route" placeholder="骑行路线 (例: 恩施-神农架)">
+        <input type="number" id="mileage" placeholder="本次里程 (km)">
+        <textarea id="notes" placeholder="车辆状态及改装心得 (例: 尾箱异响、胎压情况...)"></textarea>
+        <button onclick="saveUhrData()">提交记录</button>
+    </div>
+
+    <div id="list"></div>
+
+    <script>
+        // 将数据保存到万能后端的 'uhr_logs' 集合中
+        async function saveUhrData() {
+            const payload = {
+                route: document.getElementById('route').value,
+                mileage: document.getElementById('mileage').value,
+                notes: document.getElementById('notes').value
+            };
+            await fetch('/api/uhr_logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            location.reload(); // 刷新看最新数据
+        }
+
+        // 读取 'uhr_logs' 集合
+        async function loadData() {
+            const res = await fetch('/api/uhr_logs');
+            const data = await res.json();
+            document.getElementById('list').innerHTML = data.map(item => `
+                <div class="log-item">
+                    <span class="log-time">${item._time}</span>
+                    <strong>🗺️ 路线: ${item.route || '未填'} | 🏁 里程: ${item.mileage || 0} km</strong>
+                    <p style="color:#555; margin: 5px 0;">📝 备注: ${item.notes}</p>
+                </div>
+            `).join('');
+        }
+        loadData();
+    </script>
+</body>
+</html>

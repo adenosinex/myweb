@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跨端文字中转站</title>
+    <style>
+        body { font-family: system-ui; background: #f4f5f7; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        textarea { width: 100%; height: 150px; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; resize: vertical; margin-bottom: 10px; font-family: monospace; }
+        input, select, button { padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; width: 100%; }
+        button { background: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #0056b3; }
+        .btn-green { background: #28a745; } .btn-green:hover { background: #218838; }
+        .btn-orange { background: #fd7e14; } .btn-orange:hover { background: #e86e10; }
+        .code-display { font-size: 24px; font-weight: bold; color: #d63384; text-align: center; letter-spacing: 2px; margin: 10px 0;}
+    </style>
+</head>
+<body>
+    <a href="/" style="text-decoration: none; color: #007bff; margin-bottom: 20px; display: inline-block;">← 返回控制台</a>
+    <h2 style="text-align: center;">🔄 跨端文字中转站</h2>
+
+    <div class="grid">
+        <div class="card">
+            <h3>📤 发送文字</h3>
+            <textarea id="sendText" placeholder="粘贴你需要跨设备共享的文字或代码..."></textarea>
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="customCode" value="1" placeholder="提取码" title="可自定义提取码" style="flex: 1; text-align: center; font-weight: bold; font-size: 16px; color: #d63384;">
+                
+                <select id="expireTime" style="flex: 2;">
+                    <option value="30">销毁: 30分钟后</option>
+                    <option value="60">销毁: 1小时后</option>
+                    <option value="1440">销毁: 24小时后</option>
+                    <option value="0">永不销毁</option>
+                </select>
+                
+                <button id="uploadBtn" onclick="uploadText()" style="flex: 1.5;">上传</button>
+            </div>
+            
+            <div id="codeResult" style="display: none;">
+                <p style="text-align: center; margin: 5px 0;">请在另一台设备输入此提取码：</p>
+                <div class="code-display" id="shareCode"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📥 接收文字</h3>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="receiveCode" placeholder="输入提取码..." style="flex: 2; font-size: 18px; text-transform: uppercase; text-align: center;">
+                <button onclick="fetchText()" class="btn-green" style="flex: 1;">提取</button>
+            </div>
+            
+            <textarea id="receiveText" placeholder="提取的内容将显示在这里..." readonly></textarea>
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="copyText()" style="flex: 1;">📋 复制到剪贴板</button>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee;">
+                <input type="text" id="fileExt" value=".csv" placeholder="后缀(如 .csv, .py)" style="flex: 1;">
+                <button onclick="downloadFile()" class="btn-orange" style="flex: 2;">💾 下载为文件</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 上传文字：无需弹窗，直接读取界面输入框
+    // 1. 改进的随机生成函数：默认生成 1 位随机字符 (数字+小写字母)
+// 这样既安全又足够简洁
+function generateRandomCode(length = 1) {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// 2. 页面加载时自动初始化一个随机提取码
+window.onload = () => {
+    document.getElementById('customCode').value = generateRandomCode(1);
+};
+
+async function uploadText() {
+    const text = document.getElementById('sendText').value;
+    if (!text) return alert("内容为空，请输入需要中转的文字！");
+    
+    // 获取用户输入，如果被清空了，自动生成一个新的随机码兜底
+    let code = document.getElementById('customCode').value.trim();
+    if (!code) {
+        code = generateRandomCode(1);
+        document.getElementById('customCode').value = code;
+    }
+
+    const minutes = parseInt(document.getElementById('expireTime').value);
+    const expireAt = minutes > 0 ? Math.floor(Date.now() / 1000) + (minutes * 60) : null;
+    const btn = document.getElementById('uploadBtn');
+
+    btn.innerText = "上传中...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/kv/${code}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                payload: { content: text },
+                expire_at: expireAt
+            })
+        });
+
+        if (res.ok) {
+            document.getElementById('codeResult').style.display = 'block';
+            document.getElementById('shareCode').innerText = code;
+            
+            // 自动填充到右侧接收框，方便验证
+            document.getElementById('receiveCode').value = code;
+
+            btn.innerText = "✅ 已上传";
+            btn.style.background = "#28a745";
+            setTimeout(() => {
+                btn.innerText = "上传";
+                btn.style.background = "";
+                btn.disabled = false;
+                // 上传成功后，为下一次上传预刷新一个新的随机码
+                document.getElementById('customCode').value = generateRandomCode(1);
+            }, 2000);
+        } else {
+            throw new Error("后端返回错误");
+        }
+    } catch (err) {
+        alert("上传失败，请检查 Flask 服务是否正常运行！");
+        btn.innerText = "上传";
+        btn.disabled = false;
+    }
+}
+        // 提取文字
+        async function fetchText() {
+            const code = document.getElementById('receiveCode').value.trim();
+            if (!code) return alert("请输入提取码");
+
+            const res = await fetch(`/api/kv/${code}`);
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('receiveText').value = data.content;
+            } else {
+                const err = await res.json();
+                alert(err.error || "提取失败");
+                document.getElementById('receiveText').value = '';
+            }
+        }
+
+        // 复制到剪贴板
+        function copyText() {
+            const text = document.getElementById('receiveText').value;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('button[onclick="copyText()"]');
+                const oldHtml = btn.innerHTML;
+                btn.innerHTML = "✅ 已复制";
+                setTimeout(() => btn.innerHTML = oldHtml, 2000);
+            }).catch(() => alert("复制失败，请手动选择复制"));
+        }
+
+        // 纯前端：将文字转为指定后缀的文件下载
+        function downloadFile() {
+            const text = document.getElementById('receiveText').value;
+            if (!text) return alert("没有可以下载的内容！");
+            
+            let ext = document.getElementById('fileExt').value.trim();
+            if (!ext.startsWith('.')) ext = '.' + ext; 
+            
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `relay_${Math.random().toString(36).substring(2, 6)}${ext}`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
