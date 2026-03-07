@@ -13,7 +13,7 @@ from tags_extension import tags_bp      # 导入AI打标蓝图
 app = Flask(__name__)
 DB_PATH = 'universal_data.db'
 PAGES_DIR = 'pages'
-ACCESS_CODE = "8888" 
+ACCESS_CODE =   os.environ.get('ACCESS_CODE') or "8888"
 
 # 注册外部蓝图路由到当前 App
 app.register_blueprint(player_bp)
