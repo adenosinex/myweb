@@ -6,13 +6,15 @@ import io
 import os
 import re
 import requests
+import threading
+import queue
+import time
 from flask import Blueprint, request, jsonify, make_response
 
 tags_bp = Blueprint('tags', __name__)
 DB_PATH = 'universal_data.db'
 
 # ================= 配置管理模块 =================
-# 全局标签列表：约束 AI 的输出边界，防止标签库被污染
 TAG_CHOICES = [
     "深夜emo", "健身", "说唱", "图书馆", "通勤", "驾车",
     "起床", "DJ", "助眠", "抖音漫游", "Chill", "洗澡",
@@ -28,7 +30,6 @@ TAG_CHOICES = [
 def get_tags():
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        # 确保表存在，防止初次运行报错
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS song_tags (
                 song_name TEXT PRIMARY KEY,
@@ -89,96 +90,178 @@ def download_tags_csv():
     output.headers["Content-type"] = "text/csv; charset=utf-8"
     return output
 
-@tags_bp.route('/api/ai/tag', methods=['POST'])
-def ai_tag():
-    data = request.json
-    song_name = data.get('song_name')
-    
-    # 支持前端传入或环境变量兜底
-    api_key = data.get('api_key') or os.environ.get('SILICONFLOW_API_KEY') or os.environ.get('SILICON_API_KEY')
-    model_name = data.get('model_name') or os.environ.get('SILICON_MODEL', 'Qwen/Qwen2.5-72B-Instruct')
-    
-    if not api_key:
-        return jsonify({"error": "缺少 API Key。请在页面填写，或在后端配置 SILICONFLOW_API_KEY 环境变量"}), 400
-        
+# ================= AI 动态批处理核心 =================
+
+BATCH_QUEUE = queue.Queue()
+MAX_BATCH_SIZE = 5      # 每次最多打包 5 首
+BATCH_TIMEOUT = 1.0     # 最多等待 1 秒
+def call_silicon_batch(song_names, api_key, model_name):
+    """
+    底层发包函数：将多首歌一并发送给大模型，并要求强制返回严格的 JSON 对象
+    """
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    
     tags_str = "，".join(TAG_CHOICES)
     
-    # 优化 Prompt：加入 Few-Shot 示例，明确要求输出格式
-    prompt = (
-        f"歌曲名：'{song_name}'\n"
-        f"请根据这首歌曲的常见受众和氛围，从以下列表中选择1到3个最符合的标签。\n\n"
-        f"可选标签列表：[{tags_str}]\n\n"
-        f"严格按照以下格式输出：\n标签：[标签1, 标签2]\n\n"
-        f"要求：\n1. 只能从列表中选择，绝不要自己编造新标签。\n"
-        f"2. 除了标签列表外，不要输出任何分析、解释或多余的废话。\n"
-        f"示例1：\n歌曲名：'海底'\n标签：[深夜emo, 助眠]\n"
-        f"示例2：\n歌曲名：'好运来'\n标签：[快乐, 派对]"
-    )
-    
+    prompt = f"""
+请为以下列表中的每首歌曲，从给定的标签库中选择1到3个最符合其受众或氛围的标签。
+标签库：[{tags_str}]
+
+歌曲列表：
+{json.dumps(song_names, ensure_ascii=False)}
+
+【极度重要约束】：
+1. 你的返回内容必须是纯粹的 JSON 格式（不要加 ```json 代码块，直接输出大括号）。
+2. JSON 的键必须与列表中提供的歌曲名一字不差！
+3. 值必须是一个字符串数组，里面的标签必须且只能来自上述标签库。
+
+返回示例：
+{{
+  "歌曲A": ["流行", "快乐"],
+  "歌曲B": ["深夜emo", "伤感"]
+}}
+"""
     payload = {
         "model": model_name, 
         "messages": [
-            {"role": "system", "content": "你是一个专业的音乐标签分类助手，严格遵循用户的格式要求。"},
+            {"role": "system", "content": "你是一个严格遵循 JSON 格式输出协议的音乐分类专家。"},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.1
     }
     
     try:
-        resp = requests.post("https://api.siliconflow.cn/v1/chat/completions", json=payload, headers=headers, timeout=15)
+        # 发送请求
+        resp = requests.post("https://api.siliconflow.cn/v1/chat/completions", json=payload, headers=headers, timeout=20)
         
-        # 1. 拦截非 JSON 返回值（比如网关挂了返回 502 HTML）
+        # 1. 拦截所有非 200 的状态码 (比如 429, 502 等)
+        if resp.status_code != 200:
+            raise Exception(f"HTTP {resp.status_code}: {resp.text[:200]}")
+            
+        # 2. 安全解析 JSON
         try:
             res_json = resp.json()
         except Exception:
-            return jsonify({"error": f"API 返回非 JSON 数据: {resp.text}"}), 500
+            raise Exception(f"API 返回了非 JSON 数据: {resp.text[:200]}")
             
-        # 2. 拦截返回了 JSON 字符串而非字典的极端情况
-        if not isinstance(res_json, dict):
-            return jsonify({"error": f"API 拒绝请求，返回文本: {res_json}"}), 500
-
-        # 3. 拦截 API 明确的错误响应（余额不足、Key 错误等）
         if 'choices' not in res_json:
-            # 兼容 OpenAI 标准的 {"error": {"message": "..."}} 格式
-            err_data = res_json.get('error', {})
-            if isinstance(err_data, dict):
-                error_msg = err_data.get('message', str(res_json))
-            else:
-                error_msg = str(err_data)
-                
-            # 如果依然找不到，尝试拿外层的 message
-            if error_msg == str(res_json):
-                error_msg = res_json.get('message', str(res_json))
-                
-            return jsonify({"error": f"API 服务端拒绝: {error_msg}"}), 500
+            error_msg = res_json.get('error', {}).get('message', str(res_json))
+            raise Exception(f"API 服务端拒绝: {error_msg}")
             
-        # 4. 正常解析标签
         raw_text = res_json['choices'][0]['message']['content'].strip()
-        raw_text = raw_text.replace('\n', ' ').replace('，', ',')
         
-        match = re.search(r'标签[:：]\s*(.*)', raw_text)
-        if match:
-            tags_result = match.group(1).strip()
-        else:
-            tags_result = raw_text 
+        # 3. 尝试暴力提取 JSON，防大模型返回多余文本
+        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if not match:
+            raise Exception(f"大模型未能返回合法的 JSON 结构。原始输出: {raw_text[:100]}...")
             
-        tags_result = tags_result.strip('[]【】')
-        extracted_tags = [t.strip() for t in tags_result.split(',') if t.strip()]
+        try:
+            result_dict = json.loads(match.group(0))
+        except Exception as e:
+            raise Exception(f"大模型返回的 JSON 格式损坏: {e}。原始输出: {match.group(0)[:100]}")
         
-        # 后处理防幻觉：强制剔除不在 TAG_CHOICES 中的标签
-        valid_tags = [t for t in extracted_tags if t in TAG_CHOICES]
-        
-        if not valid_tags:
-            return jsonify({"tags": ["未分类"]})
-            
-        return jsonify({"tags": valid_tags[:3]}) 
-        
+        # 清洗：过滤掉不在 TAG_CHOICES 里的幻觉标签
+        clean_result = {}
+        for song, tags in result_dict.items():
+            if isinstance(tags, list):
+                valid_tags = [t for t in tags if t in TAG_CHOICES][:3]
+                clean_result[song] = valid_tags if valid_tags else ["未分类"]
+            else:
+                clean_result[song] = ["未分类"]
+                
+        return clean_result
+
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"网络请求异常: {str(e)}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"后端处理异常: {str(e)}"}), 500
+        raise Exception(f"网络连接层异常: {e}")
+
+def ai_batch_worker():
+    """后台工作线程：负责收割队列，批量请求大模型"""
+    print("[AI Worker] 动态批处理引擎已启动")
+    while True:
+        batch_items = []
+        # 1. 阻塞等待第一个请求到达
+        first_item = BATCH_QUEUE.get()
+        batch_items.append(first_item)
+        
+        # 2. 开启 1 秒窗口期，收集后续请求
+        start_time = time.time()
+        while len(batch_items) < MAX_BATCH_SIZE:
+            elapsed = time.time() - start_time
+            if elapsed >= BATCH_TIMEOUT:
+                break
+            try:
+                item = BATCH_QUEUE.get(timeout=BATCH_TIMEOUT - elapsed)
+                batch_items.append(item)
+            except queue.Empty:
+                break
+                
+        song_names = [item['song_name'] for item in batch_items]
+        api_key = batch_items[0]['api_key']
+        model_name = batch_items[0]['model_name']
+        
+        print(f"[AI Worker] 聚合发车: 共 {len(batch_items)} 首 -> {song_names}")
+        
+        try:
+            # 3. 真正向外发送网络请求
+            result_dict = call_silicon_batch(song_names, api_key, model_name)
+            
+            # 4. 精确分发结果并唤醒各个阻塞的请求线程
+            for item in batch_items:
+                song = item['song_name']
+                # 用 get 方法获取，防止大模型遗漏了某首歌
+                item['result'] = result_dict.get(song, ["未分类"])
+                item['event'].set()
+                
+        except Exception as e:
+            print(f"[AI Worker Error] 批量处理崩溃: {e}")
+            for item in batch_items:
+                item['error'] = str(e)
+                item['event'].set()
+
+# 启动线程
+# 启动多条后台收割机线程（建立并发池）
+WORKER_COUNT = 5  # 你可以根据 API 的限流承受能力调整这个数字
+for _ in range(WORKER_COUNT):
+    threading.Thread(target=ai_batch_worker, daemon=True).start()
+print(f"🚀 成功启动 {WORKER_COUNT} 条 AI 动态批处理流水线！")
+
+# --- 接收端路由 ---
+@tags_bp.route('/api/ai/tag', methods=['POST'])
+def tag_song_api():
+    """
+    前端每首歌依然单独请求这个接口，但这只是一个“挂号处”。
+    真正的看病逻辑在后台 worker 线程里，按批次处理。
+    """
+    data = request.json
+    song_name = data.get('song_name')
+    
+    api_key = data.get('api_key') or os.environ.get('SILICONFLOW_API_KEY')
+    model_name = data.get('model_name') or os.environ.get('SILICON_MODEL')
+    
+    if not api_key:
+        return jsonify({"error": "缺少 API Key"}), 400
+        
+    event = threading.Event()
+    req_context = {
+        'song_name': song_name,
+        'api_key': api_key,
+        'model_name': model_name,
+        'event': event,
+        'result': None,
+        'error': None
+    }
+    
+    # 丢进公交车站，等车来
+    BATCH_QUEUE.put(req_context)
+    
+    # 本请求线程挂起，最多等 25 秒 (1秒等车 + 20秒大模型处理 + 缓冲)
+    success = event.wait(timeout=25.0)
+    
+    if not success:
+        return jsonify({"error": "队列等待或模型响应超时"}), 504
+    if req_context['error']:
+        return jsonify({"error": req_context['error']}), 500
+        
+    return jsonify({"tags": req_context['result']})

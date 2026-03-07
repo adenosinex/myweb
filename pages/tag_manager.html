@@ -27,6 +27,13 @@
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; word-wrap: break-word;}
         .tag-badge { background: #e6f7ff; color: #1890ff; padding: 4px 10px; border-radius: 12px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 4px;}
         .action-btns { display: flex; gap: 5px; }
+
+        /* 新增：置顶行动画高亮效果 */
+        @keyframes highlight-row {
+            0% { background-color: #e6f7ff; }
+            100% { background-color: transparent; }
+        }
+        .flash-row { animation: highlight-row 2s ease-out; }
     </style>
 </head>
 <body>
@@ -35,14 +42,17 @@
     <h2>🎵 AI 标签管理中枢</h2>
     <div class="config-inputs">
         <input type="password" id="apiKey" placeholder="API Key (留空则用后端环境)">
-        <input type="text" id="modelName" placeholder="模型 (留空默认 Qwen2.5-7B)">
+        <input type="text" id="modelName" placeholder="模型  ">
         <button class="success" onclick="downloadCSV()">⬇️ 导出 CSV</button>
     </div>
 </div>
 
 <div class="card progress-card" id="progressCard">
     <div class="progress-header">
-        <span id="progressText" style="font-weight: bold; color: #fa8c16;">准备就绪...</span>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="progressText" style="font-weight: bold; color: #fa8c16;">准备就绪...</span>
+            <button class="danger" id="abortBtn" onclick="abortBatchTask()" style="display:none; padding: 4px 8px; font-size: 12px;">⏹ 终止批量</button>
+        </div>
         <span class="time-badge" id="lastTimeText">最新耗时: -- s</span>
     </div>
     <div class="progress-track">
@@ -70,6 +80,7 @@
 <script>
     let allSongs = [];
     let tagsData = {};
+    let isBatchAborted = false; // 全局终止信号
 
     window.onload = async () => {
         const savedKey = localStorage.getItem('silicon_key');
@@ -97,7 +108,6 @@
         }
     }
 
-    // 核心优化：利用 Array.map 和 join 规避 DOM 循环追加陷阱
     function renderTable() {
         const tbody = document.getElementById('songTable');
         
@@ -110,15 +120,15 @@
             const tags = tagsData[song] || [];
             const tagsHtml = tags.map(t => `<span class="tag-badge">${t}</span>`).join('');
             
-            // 安全转义处理
             const safeSongName = song.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            // 生成唯一ID供局部刷新使用 (剔除特殊字符)
-            const rowId = 'tags-' + btoa(encodeURIComponent(song)).replace(/[^a-zA-Z0-9]/g, '');
+            // 基础 ID 用于定位行和列
+            const baseId = 'row-' + btoa(encodeURIComponent(song)).replace(/[^a-zA-Z0-9]/g, '');
             
+            // 为 <tr> 和 <td> 都打上对应的 ID
             return `
-                <tr>
+                <tr id="${baseId}-tr">
                     <td>${song}</td>
-                    <td id="${rowId}">${tagsHtml || '<span style="color:#999">暂无标签</span>'}</td>
+                    <td id="${baseId}-td">${tagsHtml || '<span style="color:#999">暂无标签</span>'}</td>
                     <td class="action-btns">
                         <button class="warning" onclick="manualTag('${safeSongName}')">✍️</button>
                         <button onclick="triggerAiTagSingle('${safeSongName}')">✨ AI</button>
@@ -128,17 +138,36 @@
             `;
         });
         
-        // 一次性注入，渲染极速
         tbody.innerHTML = rowsHtml.join('');
     }
 
-    // 局部刷新标签，不重新渲染表格
-    function updateRowTags(songName, tags) {
-        const rowId = 'tags-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
-        const td = document.getElementById(rowId);
-        if(td) {
+    // 局部刷新 + 动态置顶协议
+    function updateRowTagsAndMoveToTop(songName, tags) {
+        const baseId = 'row-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
+        const td = document.getElementById(baseId + '-td');
+        const tr = document.getElementById(baseId + '-tr');
+        const tbody = document.getElementById('songTable');
+        
+        if(td && tr && tbody) {
+            // 1. 更新标签内容
             td.innerHTML = tags.map(t => `<span class="tag-badge">${t}</span>`).join('') || '<span style="color:#999">暂无标签</span>';
+            
+            // 2. 将这行数据物理移动到 tbody 的最前面
+            if (tbody.firstChild !== tr) {
+                tbody.prepend(tr);
+            }
+
+            // 3. 触发 CSS 背景色高亮动画
+            tr.classList.remove('flash-row');
+            void tr.offsetWidth; // 触发重绘
+            tr.classList.add('flash-row');
         }
+    }
+
+    // 用户主动终止批量任务
+    function abortBatchTask() {
+        isBatchAborted = true;
+        document.getElementById('progressText').innerText = "⚠️ 正在安全终止批量队列...";
     }
 
     async function manualTag(songName) {
@@ -153,47 +182,64 @@
                 body: JSON.stringify({ song_name: songName, tags: newTags })
             });
             tagsData[songName] = newTags;
-            updateRowTags(songName, newTags); // 局部刷新
+            updateRowTagsAndMoveToTop(songName, newTags); 
         }
     }
 
-    // --- 核心 AI 调用逻辑封装 (带计时器) ---
-    async function executeAiTag(songName, apiKey, modelName) {
-        const startTime = performance.now();
-        try {
-            const res = await fetch('/api/ai/tag', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ song_name: songName, api_key: apiKey, model_name: modelName })
-            });
-            const data = await res.json();
-            
-            if(res.ok && data.tags) {
-                // 保存标签到数据库
-                await fetch('/api/tags', {
+    // 核心请求逻辑，取消了内部计时，交由外部（单曲/批量）控制
+    async function executeAiTag(songName, apiKey, modelName, maxRetries = 3) {
+        let attempt = 0;
+
+        while(attempt < maxRetries) {
+            if (isBatchAborted) return { success: false, error: "用户手动终止", isNetworkError: false };
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                const res = await fetch('/api/ai/tag', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ song_name: songName, tags: data.tags })
+                    body: JSON.stringify({ song_name: songName, api_key: apiKey, model_name: modelName }),
+                    signal: controller.signal
                 });
                 
-                // 计算耗时
-                const endTime = performance.now();
-                const timeCost = ((endTime - startTime) / 1000).toFixed(2);
+                clearTimeout(timeoutId);
+                const data = await res.json();
                 
-                // 更新本地内存与 UI
-                tagsData[songName] = data.tags;
-                updateRowTags(songName, data.tags);
-                document.getElementById('lastTimeText').innerText = `最新耗时: ${timeCost}s`;
+                if(res.ok && data.tags) {
+                    await fetch('/api/tags', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ song_name: songName, tags: data.tags })
+                    });
+                    
+                    return { success: true, tags: data.tags };
+                } else {
+                    if (res.status === 429 || res.status >= 500) {
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    return { success: false, error: data.error || "大模型返回异常", isNetworkError: false };
+                }
+            } catch (e) {
+                attempt++;
+                console.warn(`[${songName}] 请求失败，第 ${attempt} 次重试... 错误:`, e);
                 
-                return { success: true };
+                if (attempt >= maxRetries) {
+                    return { 
+                        success: false, 
+                        error: e.name === 'AbortError' ? "请求严重超时" : "网络中断或后端无响应", 
+                        isNetworkError: true 
+                    };
+                }
+                
+                document.getElementById('lastTimeText').innerText = `网络波动，正在重试 ${attempt}/${maxRetries}...`;
+                await new Promise(r => setTimeout(r, 2000 * attempt));
             }
-            return { success: false, error: data.error || "未知异常" };
-        } catch (e) {
-            return { success: false, error: "网络超时或崩溃" };
         }
     }
 
-    // 点击按钮单首标记
+    // --- 点击单首执行 ---
     async function triggerAiTagSingle(songName) {
         const apiKey = document.getElementById('apiKey').value;
         const modelName = document.getElementById('modelName').value;
@@ -204,23 +250,30 @@
         progressCard.style.display = 'block';
         document.getElementById('progressText').innerText = `正在分析: ${songName}`;
         document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('abortBtn').style.display = 'none';
 
+        const startTime = performance.now(); // 开始计时
         const result = await executeAiTag(songName, apiKey, modelName);
+        const timeCost = ((performance.now() - startTime) / 1000).toFixed(2); // 结束计时
+
         if (!result.success) {
             alert("AI 标记失败：" + result.error);
             document.getElementById('progressText').innerText = `分析失败: ${songName}`;
             document.getElementById('progressBar').style.background = '#ff4d4f';
         } else {
+            tagsData[songName] = result.tags;
+            updateRowTagsAndMoveToTop(songName, result.tags);
             document.getElementById('progressText').innerText = `分析完成: ${songName}`;
             document.getElementById('progressBar').style.background = '#52c41a';
+            document.getElementById('lastTimeText').innerText = `耗时: ${timeCost}s`; // 更新显示
         }
     }
 
-    // 批量标记
+    // --- 批量执行 (并发控制 + 批次耗时计算) ---
     async function autoTagAll() {
         const untagged = allSongs.filter(s => !tagsData[s] || tagsData[s].length === 0);
         if(untagged.length === 0) return alert("所有歌曲都已打标！");
-        if(!confirm(`发现 ${untagged.length} 首未打标歌曲，预计耗时较长，是否开始？`)) return;
+        if(!confirm(`发现 ${untagged.length} 首未打标歌曲。\n后端已开启 DataLoader 并发加速。\n是否开始？`)) return;
 
         const apiKey = document.getElementById('apiKey').value;
         const modelName = document.getElementById('modelName').value;
@@ -230,27 +283,61 @@
         const progressCard = document.getElementById('progressCard');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
+        const timeText = document.getElementById('lastTimeText');
+        const abortBtn = document.getElementById('abortBtn');
         
         progressCard.style.display = 'block';
+        abortBtn.style.display = 'block';
         progressBar.style.background = '#1890ff';
-
+        
+        isBatchAborted = false; 
         let successCount = 0;
+        
+        const CHUNK_SIZE = 15; 
+        
+        for (let i = 0; i < untagged.length; i += CHUNK_SIZE) {
+            if (isBatchAborted) break;
 
-        for(let i = 0; i < untagged.length; i++) {
-            const song = untagged[i];
-            progressText.innerText = `批量执行中 (${i+1}/${untagged.length}): ${song}`;
-            progressBar.style.width = `${((i + 1) / untagged.length) * 100}%`;
+            const chunk = untagged.slice(i, i + CHUNK_SIZE);
+            progressText.innerText = `批量执行中 (${Math.min(i + CHUNK_SIZE, untagged.length)}/${untagged.length})，正在并发请求...`;
             
-            const result = await executeAiTag(song, apiKey, modelName);
-            if (result.success) successCount++;
+            const batchStartTime = performance.now(); // 批次开始计时
             
-            // 延时 1.5 秒，防止短时间内高并发触发大模型 API 的 429 频率限制
-            await new Promise(r => setTimeout(r, 1500)); 
+            // 同时发送 5 个请求
+            const chunkPromises = chunk.map(song => executeAiTag(song, apiKey, modelName));
+            const results = await Promise.all(chunkPromises);
+            
+            const batchTimeCost = ((performance.now() - batchStartTime) / 1000).toFixed(2); // 批次结束计时
+            
+            // 批量更新 UI 状态
+            let hasNetworkError = false;
+            results.forEach((res, idx) => {
+                if (res.success) {
+                    successCount++;
+                    tagsData[chunk[idx]] = res.tags;
+                    updateRowTagsAndMoveToTop(chunk[idx], res.tags); // 每首成功都会置顶高亮
+                }
+                if (res.isNetworkError) hasNetworkError = true;
+            });
+            
+            // 计算单首平均耗时并显示
+            const avgTime = (batchTimeCost / chunk.length).toFixed(2);
+            timeText.innerText = `批次耗时: ${batchTimeCost}s (均 ${avgTime}s/首)`;
+
+            if (hasNetworkError) {
+                alert(`🚨 遭遇严重的网络异常，任务自动熔断。`);
+                isBatchAborted = true;
+                break;
+            }
+            
+            progressBar.style.width = `${(Math.min(i + CHUNK_SIZE, untagged.length) / untagged.length) * 100}%`;
+            
+            if (!isBatchAborted) await new Promise(r => setTimeout(r, 500)); 
         }
         
+        abortBtn.style.display = 'none';
         progressBar.style.background = '#52c41a';
-        progressText.innerText = `🎉 批量执行完毕！成功标记 ${successCount} 首。`;
-        alert(`批量处理结束。成功: ${successCount}，失败: ${untagged.length - successCount}`);
+        progressText.innerText = `🎉 批量执行结束！成功标记 ${successCount} 首。`;
     }
 
     async function clearTags(songName) {
@@ -261,7 +348,9 @@
             body: JSON.stringify({ song_name: songName })
         });
         tagsData[songName] = [];
-        updateRowTags(songName, []);
+        const baseId = 'row-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
+        const td = document.getElementById(baseId + '-td');
+        if(td) td.innerHTML = '<span style="color:#999">暂无标签</span>';
     }
 
     function downloadCSV() {
