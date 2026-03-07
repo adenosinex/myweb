@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>云端幻境 - 播放器</title>
+    <link rel="icon" href="/static/music.svg" type="image/svg+xml">
     <style>
         :root { 
             --bg: #0f172a; --drawer-bg: #0b1120; --card-bg: rgba(30, 41, 59, 0.6); 
@@ -14,21 +15,18 @@
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        /* 底层背景色，也就是抽屉的颜色 */
         body { 
             margin: 0; font-family: -apple-system, sans-serif; 
             background: var(--drawer-bg); color: var(--text-main); 
             height: 100vh; overflow: hidden; 
         }
 
-        /* ================= 抽屉区域 (底层，默认在左侧隐藏) ================= */
         .drawer {
-            position: fixed; top: 0; left: 0; bottom: 0; width: 85vw; /* 占据约85%宽度 */
+            position: fixed; top: 0; left: 0; bottom: 0; width: 85vw;
             padding: calc(var(--safe-top) + 20px) 15px 20px 20px;
             z-index: 0; display: flex; flex-direction: column;
         }
         .drawer-header { font-size: 18px; font-weight: bold; color: var(--text-sub); margin-bottom: 20px; }
-        /* 核心：三列网格布局 */
         .drawer-grid {
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
             overflow-y: auto; align-content: start;
@@ -38,30 +36,25 @@
             background: rgba(255,255,255,0.05);
         }
 
-        /* ================= 主应用包装器 (顶层，会被推向右侧) ================= */
         .app-wrapper {
             position: relative; z-index: 1;
             background: var(--bg); height: 100vh; width: 100vw;
             display: flex; flex-direction: column;
-            /* 核心动效协议：平滑缩放与位移 */
             transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.4s;
             box-shadow: -5px 0 25px rgba(0,0,0,0.5);
             overflow: hidden;
         }
-        /* 当抽屉打开时，追加此类名 */
         .app-wrapper.squeezed {
-            transform: translateX(85vw) scale(0.92); /* 挤到右边并缩小 */
-            border-radius: 24px; /* 边缘变得圆润，像个卡片 */
+            transform: translateX(85vw) scale(0.92);
+            border-radius: 24px; 
         }
         
-        /* 阻断层：当被挤压时，覆盖在应用上，点击即可恢复原状 */
         .app-mask {
             position: absolute; inset: 0; z-index: 999;
             background: transparent; display: none; cursor: pointer;
         }
         .app-wrapper.squeezed .app-mask { display: block; }
 
-        /* ================= 头部与分类单行区 ================= */
         .header { 
             padding: calc(var(--safe-top) + 15px) 20px 10px 20px; 
             background: rgba(15, 23, 42, 0.75); border-bottom: 1px solid rgba(255,255,255,0.08); 
@@ -82,7 +75,6 @@
         }
         .icon-btn.active-local { background: rgba(16, 185, 129, 0.2); border-color: var(--success); color: var(--success); }
 
-        /* 分类单行区：flex:1 占据剩余空间，右侧留给扩展按钮 */
         .cat-row-container { display: flex; align-items: center; gap: 10px; }
         .category-scroll { 
             display: flex; overflow-x: auto; gap: 8px; flex: 1; 
@@ -101,7 +93,6 @@
             display: flex; justify-content: center; align-items: center; cursor: pointer;
         }
 
-        /* ================= 列表区 ================= */
         .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(120px + var(--safe-bottom)) 15px; }
         .song-item { 
             display: flex; justify-content: space-between; align-items: center;
@@ -115,7 +106,6 @@
         .song-tag { font-size: 10px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: var(--text-sub); }
         .cached-badge { color: var(--success); font-size: 10px; border: 1px solid var(--success); padding: 2px 4px; border-radius: 4px; }
 
-        /* ================= 播放器控制台 ================= */
         .player-bar { 
             position: absolute; bottom: 0; left: 0; right: 0;
             padding: 15px 20px var(--safe-bottom) 20px; 
@@ -123,14 +113,12 @@
             border-top: 1px solid rgba(255,255,255,0.08); z-index: 100;
         }
         
-        /* 采用原生的 Range 标签作为进度条 */
         .range-slider {
             -webkit-appearance: none; width: 100%; height: 20px; 
             background: transparent; outline: none; margin: 0 0 5px 0;
         }
         .range-slider::-webkit-slider-runnable-track {
             width: 100%; height: 4px; border-radius: 2px;
-            /* 使用 CSS 变量动态填充左侧进度颜色 */
             background: linear-gradient(to right, var(--accent) var(--p, 0%), rgba(255,255,255,0.1) var(--p, 0%));
         }
         .range-slider::-webkit-slider-thumb {
@@ -139,10 +127,10 @@
         }
 
         .console-layout { display: flex; justify-content: space-between; align-items: center; }
-        .now-playing-info { display: flex; flex-direction: column; width: 50%; overflow: hidden; }
+        .now-playing-info { display: flex; flex-direction: column; width: 45%; overflow: hidden; }
         .now-playing-text { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;}
         .time-display { font-size: 11px; color: var(--text-sub); font-variant-numeric: tabular-nums;}
-        .control-buttons { display: flex; align-items: center; gap: 20px; }
+        .control-buttons { display: flex; align-items: center; gap: 15px; }
         .ctrl-btn { background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0; transition: 0.2s;}
         .ctrl-btn.main-play { width: 44px; height: 44px; background: var(--accent); border-radius: 50%; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);}
         audio { display: none; }
@@ -170,8 +158,7 @@
             </div>
             
             <div class="cat-row-container">
-                <div class="category-scroll" id="categoryBar">
-                    </div>
+                <div class="category-scroll" id="categoryBar"></div>
                 <button class="expand-btn" onclick="toggleDrawer()">⊞</button>
             </div>
         </div>
@@ -189,6 +176,7 @@
                     </div>
                 </div>
                 <div class="control-buttons">
+                    <button class="ctrl-btn" id="shuffleBtn" onclick="toggleShuffle()" style="font-size: 14px; opacity: 0.5;">🔁</button>
                     <button class="ctrl-btn" onclick="playPrev()">⏮</button>
                     <button class="ctrl-btn main-play" id="playPauseBtn" onclick="togglePlayPause()">▶</button>
                     <button class="ctrl-btn" onclick="playNext()">⏭</button>
@@ -206,11 +194,17 @@
     let currentCategory = '全部';
     let currentFilteredSongs = []; 
     let cachedSongUrls = new Set();
+    
+    // 核心重构：引入物理播放历史栈 (保证可回溯前后4首)
+    const MAX_HISTORY = 9; 
+    let playHistory = [];
+    let historyIndex = -1;
     let currentPlaying = '';
+    
     let isLocalMode = false;
     let currentBlobUrl = null;
+    let isShuffleMode = false;
 
-    // --- DOM 缓存 ---
     const audio = document.getElementById('audioPlayer');
     const range = document.getElementById('progressRange');
     const currentTimeEl = document.getElementById('currentTime');
@@ -229,6 +223,12 @@
             renderCategories();
             filterSongs();
             setupAudioEngine(); 
+            
+            // 初始化自动播放：尝试静默加载第一首歌 (浏览器可能会因为无用户交互而拦截发声，已做 try/catch 容错)
+            if (currentFilteredSongs.length > 0) {
+                generateNewPlay(currentFilteredSongs[0]);
+            }
+
         } catch (e) {
             document.getElementById('songList').innerHTML = '<div style="text-align:center;color:#ef4444;">网络异常，无法获取数据</div>';
         }
@@ -240,25 +240,19 @@
         cachedSongUrls = new Set(requests.map(req => new URL(req.url).pathname));
     }
 
-    // ================= UI 动效协议 =================
     let isDrawerOpen = false;
     function toggleDrawer() {
         isDrawerOpen = !isDrawerOpen;
         const appWrapper = document.getElementById('appWrapper');
-        if (isDrawerOpen) {
-            appWrapper.classList.add('squeezed');
-        } else {
-            appWrapper.classList.remove('squeezed');
-        }
+        if (isDrawerOpen) appWrapper.classList.add('squeezed');
+        else appWrapper.classList.remove('squeezed');
     }
 
-    // ================= 分类渲染 (双端同步) =================
     function renderCategories() {
         const bar = document.getElementById('categoryBar');
         const grid = document.getElementById('drawerGrid');
         bar.innerHTML = ''; grid.innerHTML = '';
 
-        // 插入“全部”选项
         const allHtml = `<div class="cat-pill active" data-cat="全部" onclick="handleCategoryClick('全部')">全部</div>`;
         bar.innerHTML += allHtml; grid.innerHTML += allHtml;
 
@@ -271,14 +265,17 @@
 
     function handleCategoryClick(cat) {
         currentCategory = cat;
-        // 同步修改顶栏和侧边栏的选中状态
         document.querySelectorAll('.cat-pill').forEach(el => {
             if (el.getAttribute('data-cat') === cat) el.classList.add('active');
             else el.classList.remove('active');
         });
         filterSongs();
-        if(isDrawerOpen) toggleDrawer(); // 点击后自动收起抽屉
-        document.querySelector("#songList > div:nth-child(1)").click()
+        if(isDrawerOpen) toggleDrawer();
+        
+        // 核心：切换分类后，立刻自动播放该分类下的第一首新歌
+        if (currentFilteredSongs.length > 0) {
+            generateNewPlay(currentFilteredSongs[0]);
+        }
     }
 
     function filterSongs() {
@@ -298,6 +295,14 @@
         filterSongs();
     }
 
+    function toggleShuffle() {
+        isShuffleMode = !isShuffleMode;
+        const btn = document.getElementById('shuffleBtn');
+        btn.innerText = isShuffleMode ? '🔀' : '🔁';
+        btn.style.opacity = isShuffleMode ? '1' : '0.5';
+        btn.style.color = isShuffleMode ? 'var(--accent)' : 'white';
+    }
+
     function renderList() {
         const listEl = document.getElementById('songList');
         listEl.innerHTML = '';
@@ -309,7 +314,9 @@
         currentFilteredSongs.forEach(song => {
             const item = document.createElement('div');
             item.className = `song-item ${song === currentPlaying ? 'playing' : ''}`;
-            item.onclick = () => playSong(song);
+            
+            // 点击列表中的歌，视为一次“新播放意图”，会截断原本向后的历史记录
+            item.onclick = () => generateNewPlay(song);
             
             const tags = tagsMap[song] || [];
             let tagsHtml = tags.map(t => `<span class="song-tag">${t}</span>`).join('');
@@ -329,9 +336,10 @@
         });
     }
 
-    // ================= 极简原生进度条引擎 =================
+    // ================= 历史播放栈控制器 =================
 
-    async function playSong(song) {
+    // 底层音频执行函数（绝对不污染历史栈）
+    async function executePlay(song) {
         currentPlaying = song;
         document.getElementById('nowPlayingText').innerText = song.replace(/\.(mp3|flac|wav)$/i, '');
         const urlPath = `/stream/${encodeURIComponent(song)}`;
@@ -349,25 +357,73 @@
             audio.src = urlPath;
         }
         
-        audio.play();
-        renderList();
+        try {
+            await audio.play();
+        } catch(err) {
+            // 首次打开网页时，浏览器严格禁止未交互的自动播放，记录Log并忽略
+            console.log("浏览器限制自动播放，等待用户首次点击交互", err);
+        }
+        renderList(); // 更新高亮UI
     }
 
-    function togglePlayPause() {
-        if (!audio.src || audio.src === window.location.href) return; 
-        audio.paused ? audio.play() : audio.pause();
+    // 产生新的播放记录（用户点击、分类切换、或生成了一首全新随机/顺序歌）
+    function generateNewPlay(song) {
+        // 如果我们在历史回溯中产生了新动作，砍掉“未来”的记录
+        if (historyIndex < playHistory.length - 1) {
+            playHistory = playHistory.slice(0, historyIndex + 1);
+        }
+        
+        playHistory.push(song);
+        if (playHistory.length > MAX_HISTORY) playHistory.shift(); // 维持最大队列长度为9
+        
+        historyIndex = playHistory.length - 1;
+        executePlay(song);
     }
 
     function playPrev() {
-        if (currentFilteredSongs.length === 0 || !currentPlaying) return;
-        let idx = currentFilteredSongs.indexOf(currentPlaying) - 1;
-        playSong(currentFilteredSongs[idx < 0 ? currentFilteredSongs.length - 1 : idx]);
+        if (historyIndex > 0) {
+            // 历史指针回溯
+            historyIndex--;
+            executePlay(playHistory[historyIndex]);
+        } else {
+            // 历史栈空了，退化为列表找歌模式
+            if (currentFilteredSongs.length === 0 || !currentPlaying) return;
+            let idx = currentFilteredSongs.indexOf(currentPlaying) - 1;
+            generateNewPlay(currentFilteredSongs[idx < 0 ? currentFilteredSongs.length - 1 : idx]);
+        }
     }
 
     function playNext() {
+        // 如果我们在过去，则优先走向未来（不生成新歌）
+        if (historyIndex < playHistory.length - 1) {
+            historyIndex++;
+            executePlay(playHistory[historyIndex]);
+            return;
+        }
+
+        // 否则，产生新歌
         if (currentFilteredSongs.length === 0 || !currentPlaying) return;
-        let idx = currentFilteredSongs.indexOf(currentPlaying) + 1;
-        playSong(currentFilteredSongs[idx >= currentFilteredSongs.length ? 0 : idx]);
+        let nextIndex;
+        
+        if (isShuffleMode && currentFilteredSongs.length > 1) {
+            const currentIndex = currentFilteredSongs.indexOf(currentPlaying);
+            do { nextIndex = Math.floor(Math.random() * currentFilteredSongs.length); } 
+            while (nextIndex === currentIndex);
+        } else {
+            nextIndex = currentFilteredSongs.indexOf(currentPlaying) + 1;
+            if (nextIndex >= currentFilteredSongs.length) nextIndex = 0;
+        }
+        
+        generateNewPlay(currentFilteredSongs[nextIndex]);
+    }
+
+    function togglePlayPause() {
+        if (!audio.src || audio.src === window.location.href) {
+            // 如果还未成功加载过 src（如遭遇严格模式拦截），尝试补发一次指令
+            if(currentPlaying) executePlay(currentPlaying);
+            return;
+        } 
+        audio.paused ? audio.play() : audio.pause();
     }
 
     function formatTime(sec) {
@@ -380,18 +436,15 @@
     function setupAudioEngine() {
         let isDragging = false;
 
-        // 1. 底层音频播放时，更新原生 Range 的值和填充色
         audio.addEventListener('timeupdate', () => {
             if (audio.duration && !isDragging) {
                 const percent = (audio.currentTime / audio.duration) * 100;
                 range.value = percent;
-                // 核心：利用 CSS 变量动态绘制滑块左侧的高亮进度
                 range.style.setProperty('--p', `${percent}%`);
                 currentTimeEl.innerText = formatTime(audio.currentTime);
             }
         });
 
-        // 2. 拖拽时：停止同步进度条，仅更新时间文字
         range.addEventListener('input', (e) => {
             isDragging = true;
             range.style.setProperty('--p', `${e.target.value}%`);
@@ -400,7 +453,6 @@
             }
         });
 
-        // 3. 拖拽松手时：真正更改底层音频进度
         range.addEventListener('change', (e) => {
             isDragging = false;
             if (audio.duration) {

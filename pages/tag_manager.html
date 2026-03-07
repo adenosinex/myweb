@@ -3,19 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <title>AI 歌曲标签管理中枢</title>
-     <link rel="icon" href="/static/tag.svg" type="image/svg+xml">
+    <link rel="icon" href="/static/tag.svg" type="image/svg+xml">
     <style>
         body { font-family: system-ui, sans-serif; background: #f0f2f5; padding: 20px; }
         .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         input[type="password"], input[type="text"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
         .config-inputs input { width: 220px; }
-        button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; background: #1890ff; font-size: 13px;}
+        button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; background: #1890ff; font-size: 13px; transition: 0.2s;}
+        button:active { transform: scale(0.95); }
         button.danger { background: #ff4d4f; }
         button.success { background: #52c41a; }
         button.warning { background: #faad14; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px;}
+        
+        /* 进度条样式 */
+        .progress-card { display: none; background: #fffbe6; border: 1px solid #ffe58f; }
+        .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
+        .progress-track { width: 100%; background: #f0f0f0; border-radius: 6px; height: 12px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #52c41a; width: 0%; transition: width 0.3s linear; }
+        .time-badge { background: #faad14; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;}
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; table-layout: fixed;}
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; word-wrap: break-word;}
         .tag-badge { background: #e6f7ff; color: #1890ff; padding: 4px 10px; border-radius: 12px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 4px;}
         .action-btns { display: flex; gap: 5px; }
     </style>
@@ -31,9 +40,19 @@
     </div>
 </div>
 
+<div class="card progress-card" id="progressCard">
+    <div class="progress-header">
+        <span id="progressText" style="font-weight: bold; color: #fa8c16;">准备就绪...</span>
+        <span class="time-badge" id="lastTimeText">最新耗时: -- s</span>
+    </div>
+    <div class="progress-track">
+        <div class="progress-fill" id="progressBar"></div>
+    </div>
+</div>
+
 <div class="card">
     <div class="flex-between">
-        <h3>歌曲列表</h3>
+        <h3>歌曲列表 (<span id="songCount">0</span>)</h3>
         <button onclick="autoTagAll()">✨ 一键自动标记无标签歌曲</button>
     </div>
     <table>
@@ -62,66 +81,85 @@
     };
 
     async function loadData() {
-        const [songsRes, tagsRes] = await Promise.all([
-            fetch('/api/proxy/songs'),
-            fetch('/api/tags')
-        ]);
-        allSongs = await songsRes.json();
-        const data = await tagsRes.json();
-        tagsData = data.song_tags;
-        renderTable();
+        try {
+            const [songsRes, tagsRes] = await Promise.all([
+                fetch('/api/proxy/songs'),
+                fetch('/api/tags')
+            ]);
+            allSongs = await songsRes.json();
+            const data = await tagsRes.json();
+            tagsData = data.song_tags || {};
+            
+            document.getElementById('songCount').innerText = allSongs.length;
+            renderTable();
+        } catch(e) {
+            document.getElementById('songTable').innerHTML = '<tr><td colspan="3" style="color:red;text-align:center;">数据拉取失败，请检查网络或后端服务。</td></tr>';
+        }
     }
 
+    // 核心优化：利用 Array.map 和 join 规避 DOM 循环追加陷阱
     function renderTable() {
         const tbody = document.getElementById('songTable');
-        tbody.innerHTML = '';
-        allSongs.forEach(song => {
+        
+        if (allSongs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">暂无歌曲数据</td></tr>';
+            return;
+        }
+
+        const rowsHtml = allSongs.map(song => {
             const tags = tagsData[song] || [];
             const tagsHtml = tags.map(t => `<span class="tag-badge">${t}</span>`).join('');
-            // 对单引号进行转义，防止破坏 onclick 函数
-            const safeSongName = song.replace(/'/g, "\\'");
             
-            tbody.innerHTML += `
+            // 安全转义处理
+            const safeSongName = song.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            // 生成唯一ID供局部刷新使用 (剔除特殊字符)
+            const rowId = 'tags-' + btoa(encodeURIComponent(song)).replace(/[^a-zA-Z0-9]/g, '');
+            
+            return `
                 <tr>
                     <td>${song}</td>
-                    <td>${tagsHtml || '<span style="color:#999">暂无标签</span>'}</td>
+                    <td id="${rowId}">${tagsHtml || '<span style="color:#999">暂无标签</span>'}</td>
                     <td class="action-btns">
-                        <button class="warning" onclick="manualTag('${safeSongName}')">✍️ 手动</button>
-                        <button onclick="aiTagSingle('${safeSongName}')">✨ AI</button>
+                        <button class="warning" onclick="manualTag('${safeSongName}')">✍️</button>
+                        <button onclick="triggerAiTagSingle('${safeSongName}')">✨ AI</button>
                         <button class="danger" onclick="clearTags('${safeSongName}')">🗑️</button>
                     </td>
                 </tr>
             `;
         });
+        
+        // 一次性注入，渲染极速
+        tbody.innerHTML = rowsHtml.join('');
     }
 
-    // 新增：手动修改或添加标签
+    // 局部刷新标签，不重新渲染表格
+    function updateRowTags(songName, tags) {
+        const rowId = 'tags-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
+        const td = document.getElementById(rowId);
+        if(td) {
+            td.innerHTML = tags.map(t => `<span class="tag-badge">${t}</span>`).join('') || '<span style="color:#999">暂无标签</span>';
+        }
+    }
+
     async function manualTag(songName) {
         const currentTags = tagsData[songName] ? tagsData[songName].join('，') : '';
         const input = prompt(`请输入《${songName}》的标签\n多个标签请用逗号分隔：`, currentTags);
         
         if (input !== null) {
-            // 解析用户输入，支持中英文逗号
             const newTags = input.replace(/,/g, '，').split('，').map(t => t.trim()).filter(t => t);
-            
             await fetch('/api/tags', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ song_name: songName, tags: newTags })
             });
-            await loadData(); // 刷新
+            tagsData[songName] = newTags;
+            updateRowTags(songName, newTags); // 局部刷新
         }
     }
 
-    // AI 标记单首歌曲
-    async function aiTagSingle(songName) {
-        const apiKey = document.getElementById('apiKey').value;
-        const modelName = document.getElementById('modelName').value;
-        
-        // 保存配置到本地缓存
-        if(apiKey) localStorage.setItem('silicon_key', apiKey);
-        if(modelName) localStorage.setItem('silicon_model', modelName);
-
+    // --- 核心 AI 调用逻辑封装 (带计时器) ---
+    async function executeAiTag(songName, apiKey, modelName) {
+        const startTime = performance.now();
         try {
             const res = await fetch('/api/ai/tag', {
                 method: 'POST',
@@ -131,16 +169,51 @@
             const data = await res.json();
             
             if(res.ok && data.tags) {
+                // 保存标签到数据库
                 await fetch('/api/tags', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ song_name: songName, tags: data.tags })
                 });
-                await loadData();
-            } else {
-                alert("AI 标记失败：" + (data.error || "未知异常"));
+                
+                // 计算耗时
+                const endTime = performance.now();
+                const timeCost = ((endTime - startTime) / 1000).toFixed(2);
+                
+                // 更新本地内存与 UI
+                tagsData[songName] = data.tags;
+                updateRowTags(songName, data.tags);
+                document.getElementById('lastTimeText').innerText = `最新耗时: ${timeCost}s`;
+                
+                return { success: true };
             }
-        } catch (e) { alert("请求网络错误或超时！"); }
+            return { success: false, error: data.error || "未知异常" };
+        } catch (e) {
+            return { success: false, error: "网络超时或崩溃" };
+        }
+    }
+
+    // 点击按钮单首标记
+    async function triggerAiTagSingle(songName) {
+        const apiKey = document.getElementById('apiKey').value;
+        const modelName = document.getElementById('modelName').value;
+        if(apiKey) localStorage.setItem('silicon_key', apiKey);
+        if(modelName) localStorage.setItem('silicon_model', modelName);
+
+        const progressCard = document.getElementById('progressCard');
+        progressCard.style.display = 'block';
+        document.getElementById('progressText').innerText = `正在分析: ${songName}`;
+        document.getElementById('progressBar').style.width = '100%';
+
+        const result = await executeAiTag(songName, apiKey, modelName);
+        if (!result.success) {
+            alert("AI 标记失败：" + result.error);
+            document.getElementById('progressText').innerText = `分析失败: ${songName}`;
+            document.getElementById('progressBar').style.background = '#ff4d4f';
+        } else {
+            document.getElementById('progressText').innerText = `分析完成: ${songName}`;
+            document.getElementById('progressBar').style.background = '#52c41a';
+        }
     }
 
     // 批量标记
@@ -149,12 +222,35 @@
         if(untagged.length === 0) return alert("所有歌曲都已打标！");
         if(!confirm(`发现 ${untagged.length} 首未打标歌曲，预计耗时较长，是否开始？`)) return;
 
-        for(let i=0; i<untagged.length; i++) {
-            console.log(`正在标记 ${i+1}/${untagged.length}: ${untagged[i]}`);
-            await aiTagSingle(untagged[i]);
-            await new Promise(r => setTimeout(r, 1500)); // 放慢节奏避免触发限流
+        const apiKey = document.getElementById('apiKey').value;
+        const modelName = document.getElementById('modelName').value;
+        if(apiKey) localStorage.setItem('silicon_key', apiKey);
+        if(modelName) localStorage.setItem('silicon_model', modelName);
+
+        const progressCard = document.getElementById('progressCard');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        progressCard.style.display = 'block';
+        progressBar.style.background = '#1890ff';
+
+        let successCount = 0;
+
+        for(let i = 0; i < untagged.length; i++) {
+            const song = untagged[i];
+            progressText.innerText = `批量执行中 (${i+1}/${untagged.length}): ${song}`;
+            progressBar.style.width = `${((i + 1) / untagged.length) * 100}%`;
+            
+            const result = await executeAiTag(song, apiKey, modelName);
+            if (result.success) successCount++;
+            
+            // 延时 1.5 秒，防止短时间内高并发触发大模型 API 的 429 频率限制
+            await new Promise(r => setTimeout(r, 1500)); 
         }
-        alert("🎉 批量标记执行完毕！请检查结果。");
+        
+        progressBar.style.background = '#52c41a';
+        progressText.innerText = `🎉 批量执行完毕！成功标记 ${successCount} 首。`;
+        alert(`批量处理结束。成功: ${successCount}，失败: ${untagged.length - successCount}`);
     }
 
     async function clearTags(songName) {
@@ -164,7 +260,8 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ song_name: songName })
         });
-        await loadData();
+        tagsData[songName] = [];
+        updateRowTags(songName, []);
     }
 
     function downloadCSV() {
