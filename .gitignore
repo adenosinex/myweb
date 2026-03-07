@@ -1,3 +1,5 @@
 *.db
 __pycache__/*
 anki.csv
+.DS_Store
+.env

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 歌曲标签管理中枢</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f0f2f5; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        input[type="password"], input[type="text"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .config-inputs input { width: 220px; }
+        button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; background: #1890ff; font-size: 13px;}
+        button.danger { background: #ff4d4f; }
+        button.success { background: #52c41a; }
+        button.warning { background: #faad14; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px;}
+        .tag-badge { background: #e6f7ff; color: #1890ff; padding: 4px 10px; border-radius: 12px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 4px;}
+        .action-btns { display: flex; gap: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="card flex-between">
+    <h2>🎵 AI 标签管理中枢</h2>
+    <div class="config-inputs">
+        <input type="password" id="apiKey" placeholder="API Key (留空则用后端环境)">
+        <input type="text" id="modelName" placeholder="模型 (留空默认 Qwen2.5-7B)">
+        <button class="success" onclick="downloadCSV()">⬇️ 导出 CSV</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="flex-between">
+        <h3>歌曲列表</h3>
+        <button onclick="autoTagAll()">✨ 一键自动标记无标签歌曲</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th width="40%">歌曲名</th>
+                <th width="40%">当前标签</th>
+                <th width="20%">操作</th>
+            </tr>
+        </thead>
+        <tbody id="songTable"><tr><td colspan="3">加载星辰大海中...</td></tr></tbody>
+    </table>
+</div>
+
+<script>
+    let allSongs = [];
+    let tagsData = {};
+
+    window.onload = async () => {
+        const savedKey = localStorage.getItem('silicon_key');
+        const savedModel = localStorage.getItem('silicon_model');
+        if(savedKey) document.getElementById('apiKey').value = savedKey;
+        if(savedModel) document.getElementById('modelName').value = savedModel;
+        
+        await loadData();
+    };
+
+    async function loadData() {
+        const [songsRes, tagsRes] = await Promise.all([
+            fetch('/api/proxy/songs'),
+            fetch('/api/tags')
+        ]);
+        allSongs = await songsRes.json();
+        const data = await tagsRes.json();
+        tagsData = data.song_tags;
+        renderTable();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('songTable');
+        tbody.innerHTML = '';
+        allSongs.forEach(song => {
+            const tags = tagsData[song] || [];
+            const tagsHtml = tags.map(t => `<span class="tag-badge">${t}</span>`).join('');
+            // 对单引号进行转义，防止破坏 onclick 函数
+            const safeSongName = song.replace(/'/g, "\\'");
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td>${song}</td>
+                    <td>${tagsHtml || '<span style="color:#999">暂无标签</span>'}</td>
+                    <td class="action-btns">
+                        <button class="warning" onclick="manualTag('${safeSongName}')">✍️ 手动</button>
+                        <button onclick="aiTagSingle('${safeSongName}')">✨ AI</button>
+                        <button class="danger" onclick="clearTags('${safeSongName}')">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // 新增：手动修改或添加标签
+    async function manualTag(songName) {
+        const currentTags = tagsData[songName] ? tagsData[songName].join('，') : '';
+        const input = prompt(`请输入《${songName}》的标签\n多个标签请用逗号分隔：`, currentTags);
+        
+        if (input !== null) {
+            // 解析用户输入，支持中英文逗号
+            const newTags = input.replace(/,/g, '，').split('，').map(t => t.trim()).filter(t => t);
+            
+            await fetch('/api/tags', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ song_name: songName, tags: newTags })
+            });
+            await loadData(); // 刷新
+        }
+    }
+
+    // AI 标记单首歌曲
+    async function aiTagSingle(songName) {
+        const apiKey = document.getElementById('apiKey').value;
+        const modelName = document.getElementById('modelName').value;
+        
+        // 保存配置到本地缓存
+        if(apiKey) localStorage.setItem('silicon_key', apiKey);
+        if(modelName) localStorage.setItem('silicon_model', modelName);
+
+        try {
+            const res = await fetch('/api/ai/tag', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ song_name: songName, api_key: apiKey, model_name: modelName })
+            });
+            const data = await res.json();
+            
+            if(res.ok && data.tags) {
+                await fetch('/api/tags', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ song_name: songName, tags: data.tags })
+                });
+                await loadData();
+            } else {
+                alert("AI 标记失败：" + (data.error || "未知异常"));
+            }
+        } catch (e) { alert("请求网络错误或超时！"); }
+    }
+
+    // 批量标记
+    async function autoTagAll() {
+        const untagged = allSongs.filter(s => !tagsData[s] || tagsData[s].length === 0);
+        if(untagged.length === 0) return alert("所有歌曲都已打标！");
+        if(!confirm(`发现 ${untagged.length} 首未打标歌曲，预计耗时较长，是否开始？`)) return;
+
+        for(let i=0; i<untagged.length; i++) {
+            console.log(`正在标记 ${i+1}/${untagged.length}: ${untagged[i]}`);
+            await aiTagSingle(untagged[i]);
+            await new Promise(r => setTimeout(r, 1500)); // 放慢节奏避免触发限流
+        }
+        alert("🎉 批量标记执行完毕！请检查结果。");
+    }
+
+    async function clearTags(songName) {
+        if(!confirm("确定清除该歌曲的标签吗？")) return;
+        await fetch('/api/tags', {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ song_name: songName })
+        });
+        await loadData();
+    }
+
+    function downloadCSV() {
+        window.open('/api/tags/csv', '_blank');
+    }
+</script>
+</body>
+</html>
