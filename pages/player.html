@@ -2,49 +2,106 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云端幻境音乐</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+   <link rel="icon" href="/static/music.svg" type="image/svg+xml">
+    <title>云端幻境</title>
     <style>
         :root {
             --bg: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-bg: rgba(30, 41, 59, 0.6);
             --text-main: #f8fafc;
             --text-sub: #94a3b8;
             --accent: #3b82f6;
             --accent-hover: #60a5fa;
+            /* 适配移动端安全区域 */
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
         }
         
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        /* 顶部导航与分类 */
-        .header { padding: 20px; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); z-index: 10; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        body { 
+            margin: 0; padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: var(--bg); color: var(--text-main); 
+            height: 100vh; display: flex; flex-direction: column; 
+            overflow: hidden; 
+        }
+        
+        /* === 顶部导航与分类 (毛玻璃悬浮) === */
+        .header { 
+            padding: calc(var(--safe-top) + 15px) 20px 15px 20px; 
+            background: rgba(15, 23, 42, 0.75); 
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            z-index: 10; 
+            border-bottom: 1px solid rgba(255,255,255,0.08); 
+            position: sticky; top: 0;
+        }
         .title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        h1 { margin: 0; font-size: 24px; font-weight: 700; background: linear-gradient(to right, #60a5fa, #a78bfa); -webkit-background-clip: text; color: transparent; }
+        h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, #60a5fa, #c084fc); -webkit-background-clip: text; color: transparent; }
         
-        .search-box { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 8px 15px; color: white; width: 200px; outline: none; transition: 0.3s; }
-        .search-box:focus { background: rgba(255,255,255,0.15); border-color: var(--accent); width: 250px; }
+        .search-box { 
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.05); 
+            border-radius: 12px; padding: 8px 12px; color: white; width: 140px; 
+            outline: none; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 14px;
+        }
+        .search-box:focus { background: rgba(255,255,255,0.15); border-color: var(--accent); width: 180px; }
 
-        /* 分类标签栏 */
-        .category-scroll { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 5px; scrollbar-width: none; }
+        /* === 分类标签栏 (顺滑横向滚动) === */
+        .category-scroll { 
+            display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; 
+            scrollbar-width: none; -webkit-overflow-scrolling: touch; 
+        }
         .category-scroll::-webkit-scrollbar { display: none; }
-        .cat-pill { padding: 6px 16px; background: rgba(255,255,255,0.05); border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 14px; transition: 0.2s; border: 1px solid transparent; }
-        .cat-pill:hover { background: rgba(255,255,255,0.1); }
-        .cat-pill.active { background: var(--accent); color: white; border-color: var(--accent-hover); box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .cat-pill { 
+            padding: 6px 14px; background: rgba(255,255,255,0.06); border-radius: 20px; 
+            font-size: 13px; font-weight: 500; white-space: nowrap; transition: 0.2s; 
+        }
+        .cat-pill:active { transform: scale(0.95); }
+        .cat-pill.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
 
-        /* 主列表区 */
-        .main-content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 100px; }
-        .song-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; margin-bottom: 10px; background: var(--card-bg); border-radius: 12px; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.05); transition: 0.3s; cursor: pointer; }
-        .song-item:hover { transform: translateY(-2px); background: rgba(30, 41, 59, 0.9); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
-        .song-info { display: flex; flex-direction: column; gap: 5px; }
-        .song-name { font-size: 16px; font-weight: 500; }
-        .song-tags { display: flex; gap: 6px; }
-        .song-tag { font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: var(--text-sub); }
+        /* === 主列表区 === */
+        .main-content { 
+            flex: 1; overflow-y: auto; padding: 15px 20px calc(140px + var(--safe-bottom)) 20px; 
+            -webkit-overflow-scrolling: touch;
+        }
+        .song-item { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 14px 16px; margin-bottom: 12px; 
+            background: var(--card-bg); border-radius: 16px; 
+            border: 1px solid rgba(255,255,255,0.04); transition: 0.2s; 
+        }
+        .song-item:active { transform: scale(0.98); background: rgba(255,255,255,0.1); }
+        .song-item.playing { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
         
-        /* 底部播放栏 */
-        .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.1); padding: 15px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; box-shadow: 0 -10px 30px rgba(0,0,0,0.5); }
-        .now-playing { font-size: 14px; color: var(--accent-hover); font-weight: bold; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        audio { width: 100%; max-width: 600px; outline: none; border-radius: 20px; }
-        audio::-webkit-media-controls-panel { background: rgba(255,255,255,0.1); color: white; }
+        .song-info { display: flex; flex-direction: column; gap: 6px; width: 85%; }
+        .song-name { font-size: 15px; font-weight: 500; line-height: 1.4; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .song-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .song-tag { font-size: 10px; font-weight: 600; background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 6px; color: var(--text-sub); }
+        .play-icon { font-size: 18px; opacity: 0.5; color: white; transition: 0.2s; }
+        .song-item.playing .play-icon { opacity: 1; color: var(--accent-hover); }
+
+        /* === 底部播放栏 (沉浸式吸底) === */
+        .player-bar { 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            background: rgba(15, 23, 42, 0.85); 
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.08); 
+            padding: 15px 20px calc(15px + var(--safe-bottom)) 20px; 
+            display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 100; 
+        }
+        .now-playing-container { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 600px; }
+        .now-playing-info { display: flex; flex-direction: column; overflow: hidden; }
+        .now-playing-label { font-size: 10px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;}
+        .now-playing { font-size: 14px; color: white; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* 自定义 Audio 控件皮肤 */
+        audio { width: 100%; max-width: 600px; height: 36px; outline: none; }
+        audio::-webkit-media-controls-panel { background: rgba(255,255,255,0.08); }
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display { color: var(--text-sub); }
     </style>
 </head>
 <body>
@@ -56,27 +113,34 @@
         </div>
         <div class="category-scroll" id="categoryBar">
             <div class="cat-pill active" onclick="selectCategory('全部', this)">全部</div>
-            </div>
+        </div>
     </div>
 
     <div class="main-content" id="songList">
-        <div style="text-align:center; color:#94a3b8; margin-top: 50px;">加载星辰大海中...</div>
+        <div style="text-align:center; color:#94a3b8; margin-top: 50px;">同步星辰数据中...</div>
     </div>
 
     <div class="player-bar">
-        <div class="now-playing" id="nowPlayingText">享受安静的时刻...</div>
-        <audio id="audioPlayer" controls autoplay></audio>
+        <div class="now-playing-container">
+            <div class="now-playing-info">
+                <div class="now-playing-label">正在播放</div>
+                <div class="now-playing" id="nowPlayingText">准备就绪...</div>
+            </div>
+            </div>
+        <audio id="audioPlayer" controls autoplay preload="metadata"></audio>
     </div>
 
 <script>
     let allSongs = [];
-    let tagsMap = {};       // {"song_name": ["emo", "流行"]}
-    let categories = [];    // ["emo", "流行", "动感健身"]
+    let tagsMap = {};       
+    let categories = [];    
     let currentCategory = '全部';
+    let currentPlayingSong = ''; 
+    // 新增：用于记录当前正在展示的列表，供“上一首/下一首”使用
+    let currentFilteredSongs = []; 
 
     async function init() {
         try {
-            // 并行请求：获取音乐文件列表 和 数据库里的标签数据
             const [songsRes, tagsRes] = await Promise.all([
                 fetch('/api/proxy/songs'),
                 fetch('/api/tags')
@@ -85,17 +149,19 @@
             allSongs = await songsRes.json();
             const tagsData = await tagsRes.json();
             
-            tagsMap = tagsData.song_tags;
-            categories = tagsData.categories;
+            tagsMap = tagsData?.song_tags || {};
+            categories = tagsData?.categories || [];
             
             renderCategories();
-            renderList(allSongs);
+            // 初始化时，默认列表就是全部歌曲
+            currentFilteredSongs = allSongs;
+            renderList(currentFilteredSongs);
+            setupAudioEvents();
         } catch (e) {
-            document.getElementById('songList').innerHTML = `<div style="text-align:center;color:#ef4444;">网络连接异常</div>`;
+            document.getElementById('songList').innerHTML = `<div style="text-align:center;color:#ef4444; margin-top: 50px;">网络连接异常<br><span style="font-size:12px; opacity:0.7">${e.message}</span></div>`;
         }
     }
 
-    // 渲染顶部分类栏
     function renderCategories() {
         const bar = document.getElementById('categoryBar');
         categories.forEach(cat => {
@@ -107,34 +173,27 @@
         });
     }
 
-    // 点击分类触发过滤
     function selectCategory(cat, element) {
         currentCategory = cat;
-        // 样式切换
         document.querySelectorAll('.cat-pill').forEach(el => el.classList.remove('active'));
         element.classList.add('active');
         filterSongs();
     }
 
-    // 搜索与分类双重过滤
     function filterSongs() {
         const keyword = document.getElementById('searchInput').value.toLowerCase();
-        
-        const filtered = allSongs.filter(song => {
+        currentFilteredSongs = allSongs.filter(song => {
             const matchKeyword = song.toLowerCase().includes(keyword);
             let matchCategory = true;
-            
             if (currentCategory !== '全部') {
                 const songTags = tagsMap[song] || [];
                 matchCategory = songTags.includes(currentCategory);
             }
             return matchKeyword && matchCategory;
         });
-        
-        renderList(filtered);
+        renderList(currentFilteredSongs);
     }
 
-    // 渲染歌曲列表
     function renderList(songs) {
         const listEl = document.getElementById('songList');
         listEl.innerHTML = '';
@@ -146,29 +205,89 @@
 
         songs.forEach(song => {
             const item = document.createElement('div');
-            item.className = 'song-item';
+            item.className = `song-item ${song === currentPlayingSong ? 'playing' : ''}`;
             item.onclick = () => playSong(song);
             
             const tags = tagsMap[song] || [];
-            const tagsHtml = tags.map(t => `<span class="song-tag">${t}</span>`).join('');
+            const tagsHtml = tags.length > 0 
+                ? tags.map(t => `<span class="song-tag">${t}</span>`).join('')
+                : `<span class="song-tag" style="opacity:0.5">未分类</span>`;
             
             item.innerHTML = `
                 <div class="song-info">
-                    <div class="song-name">${song}</div>
+                    <div class="song-name">${song.replace('.mp3', '')}</div>
                     <div class="song-tags">${tagsHtml}</div>
                 </div>
-                <div style="font-size: 20px; opacity: 0.5;">▶</div>
+                <div class="play-icon">${song === currentPlayingSong ? '⏸' : '▶'}</div>
             `;
             listEl.appendChild(item);
         });
     }
 
-    // 播放音乐
+    // 新增：播放下一首逻辑
+    function playNextSong() {
+        if (currentFilteredSongs.length === 0) return;
+        const currentIndex = currentFilteredSongs.indexOf(currentPlayingSong);
+        let nextIndex = currentIndex + 1;
+        // 如果到了列表最后一首，循环回第一首
+        if (nextIndex >= currentFilteredSongs.length) {
+            nextIndex = 0; 
+        }
+        playSong(currentFilteredSongs[nextIndex]);
+    }
+
+    // 新增：播放上一首逻辑
+    function playPrevSong() {
+        if (currentFilteredSongs.length === 0) return;
+        const currentIndex = currentFilteredSongs.indexOf(currentPlayingSong);
+        let prevIndex = currentIndex - 1;
+        // 如果是第一首，跳到最后一首
+        if (prevIndex < 0) {
+            prevIndex = currentFilteredSongs.length - 1;
+        }
+        playSong(currentFilteredSongs[prevIndex]);
+    }
+
     function playSong(songName) {
         const player = document.getElementById('audioPlayer');
+        currentPlayingSong = songName;
+        
+        document.getElementById('nowPlayingText').innerText = songName.replace('.mp3', '');
+        renderList(currentFilteredSongs); // 只更新状态，不重新过滤
+        
         player.src = `/stream/${encodeURIComponent(songName)}`;
-        document.getElementById('nowPlayingText').innerText = `正在播放 • ${songName}`;
         player.play();
+
+        // 注册 Media Session (锁屏控制)
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: songName.replace('.mp3', ''),
+                artist: '云端幻境 FM',
+                album: currentCategory !== '全部' ? currentCategory : '全部歌曲'
+                // 移除了之前引发报错的网络图片链接
+            });
+
+            navigator.mediaSession.setActionHandler('play', () => player.play());
+            navigator.mediaSession.setActionHandler('pause', () => player.pause());
+            // 绑定锁屏界面的“上一首/下一首”按钮
+            navigator.mediaSession.setActionHandler('previoustrack', playPrevSong);
+            navigator.mediaSession.setActionHandler('nexttrack', playNextSong);
+        }
+    }
+
+    function setupAudioEvents() {
+        const player = document.getElementById('audioPlayer');
+        
+        // 核心：当前歌曲播放结束时，自动触发下一首
+        player.addEventListener('ended', () => {
+            playNextSong();
+        });
+        
+        // 增加容错：如果播放出错（比如文件不存在），也跳到下一首
+        player.addEventListener('error', () => {
+            console.error("音频加载失败，自动跳过:", currentPlayingSong);
+            setTimeout(playNextSong, 1000); // 延迟 1 秒后跳过，防死循环
+        });
     }
 
     window.onload = init;

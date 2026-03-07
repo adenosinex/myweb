@@ -10,7 +10,7 @@ load_dotenv()  # 自动寻找当前目录下的 .env 并注入到 os.environ
 from player_extension import player_bp  # 导入播放器蓝图
 from tags_extension import tags_bp      # 导入AI打标蓝图
 
-app = Flask(__name__, static_folder='pages')
+app = Flask(__name__)
 DB_PATH = 'universal_data.db'
 PAGES_DIR = 'pages'
 ACCESS_CODE = "8888" 
@@ -48,7 +48,8 @@ def init_db():
 # ================= 1. 安全拦截器 =================
 @app.before_request
 def check_access():
-    if request.path == '/login' or request.path.startswith('/api/') or request.path.startswith('/stream/'):
+    # 加入 /static/ 和 /favicon.ico，让静态资源免登录即可访问
+    if request.path == '/login' or request.path.startswith('/api/') or request.path.startswith('/stream/') or request.path.startswith('/static/') or request.path == '/favicon.ico':
         return
     if request.cookies.get('access_token') != ACCESS_CODE:
         return redirect('/login')
