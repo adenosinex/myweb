@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>缓存库管理</title>
+      <link rel="icon" href="/static/music.svg" type="image/svg+xml">
+    <style>
+        :root { --bg: #0f172a; --card-bg: #1e293b; --text-main: #f8fafc; --text-sub: #94a3b8; --accent: #3b82f6; --danger: #ef4444; --success: #10b981; }
+        body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text-main); padding: 20px; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .btn { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s;}
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: var(--accent); border: none; }
+        .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
+        
+        .section-title { font-size: 14px; color: var(--text-sub); margin: 25px 0 12px 0; font-weight: 500;}
+        
+        /* 优化后的分类操作区：紧凑排版 */
+        .category-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+        .cat-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 8px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1; min-width: 120px;}
+        .cat-name { font-weight: 600; }
+        .cat-stats { font-size: 11px; color: var(--text-sub); }
+        .cat-stats.full { color: var(--success); }
+
+        /* 进度控制面板 */
+        .task-panel { display: none; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--accent); border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .task-title { font-size: 14px; font-weight: bold; color: var(--accent); }
+        .progress-text { font-size: 12px; color: var(--text-sub); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .progress-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s linear; }
+
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.03); margin-bottom: 8px; border-radius: 8px; font-size: 14px; }
+        .item-name { width: 75%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2 style="margin:0; font-size:18px;">📦 离线管理中心</h2>
+        <a href="/index.html" class="btn">🔙 返回听歌</a>
+    </div>
+
+    <div class="task-panel" id="taskPanel">
+        <div class="task-header">
+            <div class="task-title" id="taskTitle">正在下载: 全部</div>
+            <button class="btn btn-danger" onclick="abortDownload()">⏹ 终止任务</button>
+        </div>
+        <div class="progress-text" id="progressText">准备中...</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <div class="section-title" style="display: flex; justify-content: space-between;">
+        <span>选择要离线的单元</span>
+        <button class="btn btn-primary" style="padding: 4px 10px; font-size:12px;" onclick="promptDownload('全部')">⬇️ 缓存全部</button>
+    </div>
+    
+    <div class="category-actions" id="categoryActions">
+        </div>
+
+    <div class="section-title" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <span id="cacheCount">已离线数据 (0)</span>
+        <button class="btn btn-danger" style="padding: 4px 10px; font-size:12px;" onclick="clearAllCache()">🗑️ 清空所有</button>
+    </div>
+    <div id="cachedList"></div>
+
+<script>
+    const CACHE_NAME = 'cloud-music-cache-v1';
+    let allSongs = [];
+    let tagsMap = {};
+    let categories = [];
+    let cachedSongUrls = new Set();
+    
+    // 全局中断信号标记
+    let abortSignal = false;
+
+    async function init() {
+        await loadCacheData();
+        try {
+            const [songsRes, tagsRes] = await Promise.all([
+                fetch('/api/proxy/songs'), fetch('/api/tags').catch(()=>({json:()=>({})}))
+            ]);
+            allSongs = await songsRes.json();
+            const tagsData = await tagsRes.json();
+            tagsMap = tagsData?.song_tags || {};
+            categories = tagsData?.categories || [];
+            
+            renderCategoryActions();
+        } catch (e) {
+            console.error("数据拉取失败", e);
+        }
+    }
+
+    // --- 核心数据层 ---
+    async function loadCacheData() {
+        const cache = await caches.open(CACHE_NAME);
+        const requests = await cache.keys();
+        cachedSongUrls = new Set(requests.map(req => new URL(req.url).pathname));
+        renderListUI(requests);
+    }
+
+    // --- UI 渲染层 ---
+    function renderCategoryActions() {
+        const container = document.getElementById('categoryActions');
+        container.innerHTML = '';
+        
+        categories.forEach(cat => {
+            // 计算该分类下：总歌曲数 vs 已缓存数
+            const catSongs = allSongs.filter(s => (tagsMap[s] || []).includes(cat));
+            const total = catSongs.length;
+            const cachedCount = catSongs.filter(s => cachedSongUrls.has(`/stream/${encodeURIComponent(s)}`)).length;
+            
+            const isFull = total > 0 && total === cachedCount;
+            
+            container.innerHTML += `
+                <button class="cat-btn" onclick="promptDownload('${cat}')">
+                    <span class="cat-name">${cat}</span>
+                    <span class="cat-stats ${isFull ? 'full' : ''}">
+                        ${isFull ? '✓ 已全部离线' : `📥 已存 ${cachedCount} / 共 ${total} 首`}
+                    </span>
+                </button>
+            `;
+        });
+    }
+
+    function renderListUI(requests) {
+        document.getElementById('cacheCount').innerText = `管理已离线数据 (${cachedSongUrls.size})`;
+        const listEl = document.getElementById('cachedList');
+        listEl.innerHTML = '';
+        
+        if(cachedSongUrls.size === 0) {
+            listEl.innerHTML = '<div style="color:var(--text-sub); text-align:center; padding: 20px; font-size:13px;">尚未缓存任何歌曲</div>';
+            return;
+        }
+
+        requests.forEach(req => {
+            const urlPath = new URL(req.url).pathname;
+            const songName = decodeURIComponent(urlPath.replace('/stream/', ''));
+            
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `
+                <div class="item-name">${songName.replace(/\.(mp3|flac|wav)$/i, '')}</div>
+                <button class="btn btn-danger" style="padding:4px 8px; font-size:12px; background:transparent;" onclick="deleteCache('${urlPath}')">删除</button>
+            `;
+            listEl.appendChild(item);
+        });
+    }
+
+    // --- 任务控制层 ---
+    function promptDownload(category) {
+        let targets = category === '全部' ? allSongs : allSongs.filter(s => (tagsMap[s] || []).includes(category));
+        // 过滤出真正需要下载的（排除已缓存的）
+        let toDownload = targets.filter(s => !cachedSongUrls.has(`/stream/${encodeURIComponent(s)}`));
+
+        if (toDownload.length === 0) {
+            alert(`【${category}】分类下的歌曲已全部离线，无需重复下载。`);
+            return;
+        }
+
+        if (confirm(`即将离线【${category}】分类。\n共需下载 ${toDownload.length} 首歌曲。\n确认开始？`)) {
+            executeDownloadTask(category, toDownload);
+        }
+    }
+
+    async function executeDownloadTask(category, targetSongs) {
+        // 重置状态
+        abortSignal = false;
+        const panel = document.getElementById('taskPanel');
+        const fill = document.getElementById('progressFill');
+        const text = document.getElementById('progressText');
+        
+        document.getElementById('taskTitle').innerText = `正在下载: ${category}`;
+        panel.style.display = 'block';
+        fill.style.width = '0%';
+
+        let successCount = 0;
+        const cache = await caches.open(CACHE_NAME);
+
+        for (let i = 0; i < targetSongs.length; i++) {
+            // 检查中断信号
+            if (abortSignal) {
+                text.innerText = "⚠️ 任务已终止";
+                fill.style.background = "var(--danger)";
+                setTimeout(finishTask, 2000);
+                return;
+            }
+
+            const song = targetSongs[i];
+            const urlPath = `/stream/${encodeURIComponent(song)}`;
+            
+            text.innerText = `(${i+1}/${targetSongs.length}) 正在拉取: ${song.replace(/\.(mp3|flac)$/i, '')}`;
+            
+            try {
+                const response = await fetch(urlPath);
+                if (response.ok) {
+                    await cache.put(urlPath, response);
+                    cachedSongUrls.add(urlPath); // 更新内存标记
+                    successCount++;
+                }
+            } catch(e) {
+                console.error(`下载失败: ${song}`);
+            }
+            
+            fill.style.width = `${((i + 1) / targetSongs.length) * 100}%`;
+            
+            // 每下载完一首，刷新一下 UI 数据，做到实时反馈
+            renderCategoryActions();
+            renderListUI(Array.from(cachedSongUrls).map(path => ({url: location.origin + path})));
+        }
+        
+        text.innerText = `✅ 下载完成！成功: ${successCount} 首`;
+        setTimeout(finishTask, 2000);
+    }
+
+    function abortDownload() {
+        if(confirm("确定要终止当前的下载任务吗？已下载的文件会保留。")) {
+            abortSignal = true;
+            document.getElementById('progressText').innerText = "正在停止...";
+        }
+    }
+
+    function finishTask() {
+        document.getElementById('taskPanel').style.display = 'none';
+        document.getElementById('progressFill').style.background = 'var(--accent)'; // 恢复颜色
+    }
+
+    async function deleteCache(urlPath) {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.delete(urlPath);
+        await loadCacheData();
+        renderCategoryActions(); // 同步刷新上方的统计数据
+    }
+
+    async function clearAllCache() {
+        if(confirm("警告：此操作将删除手机上所有的离线歌曲。\n\n确定要清空吗？")) {
+            await caches.delete(CACHE_NAME);
+            await loadCacheData();
+            renderCategoryActions();
+        }
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
