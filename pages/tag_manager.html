@@ -28,12 +28,18 @@
         .tag-badge { background: #e6f7ff; color: #1890ff; padding: 4px 10px; border-radius: 12px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 4px;}
         .action-btns { display: flex; gap: 5px; }
 
-        /* 新增：置顶行动画高亮效果 */
+        /* 置顶行动画高亮效果 */
         @keyframes highlight-row {
             0% { background-color: #e6f7ff; }
             100% { background-color: transparent; }
         }
         .flash-row { animation: highlight-row 2s ease-out; }
+        
+        /* 统计看板样式 */
+        .stats-board { display: flex; gap: 15px; font-size: 15px; font-weight: bold; }
+        .stat-item { padding: 4px 10px; border-radius: 6px; background: #f5f5f5; border: 1px solid #e8e8e8;}
+        .stat-item.green { color: #52c41a; background: #f6ffed; border-color: #b7eb8f;}
+        .stat-item.orange { color: #fa8c16; background: #fff7e6; border-color: #ffd591;}
     </style>
 </head>
 <body>
@@ -42,7 +48,7 @@
     <h2>🎵 AI 标签管理中枢</h2>
     <div class="config-inputs">
         <input type="password" id="apiKey" placeholder="API Key (留空则用后端环境)">
-        <input type="text" id="modelName" placeholder="模型  ">
+        <input type="text" id="modelName" placeholder="模型 (留空默认 Qwen2.5-7B)">
         <button class="success" onclick="downloadCSV()">⬇️ 导出 CSV</button>
     </div>
 </div>
@@ -62,8 +68,12 @@
 
 <div class="card">
     <div class="flex-between">
-        <h3>歌曲列表 (<span id="songCount">0</span>)</h3>
-        <button onclick="autoTagAll()">✨ 一键自动标记无标签歌曲</button>
+        <div class="stats-board">
+            <div class="stat-item">总曲目: <span id="songCount">0</span></div>
+            <div class="stat-item green">已标记: <span id="taggedCount">0</span></div>
+            <div class="stat-item orange">未标记: <span id="untaggedCount">0</span></div>
+        </div>
+        <button onclick="autoTagAll()">✨ 一键标记剩余</button>
     </div>
     <table>
         <thead>
@@ -80,7 +90,8 @@
 <script>
     let allSongs = [];
     let tagsData = {};
-    let isBatchAborted = false; // 全局终止信号
+    let isBatchAborted = false; 
+    let sessionMarked = new Set(); // 核心：记录本次打开页面后新标记的歌曲，强制置顶
 
     window.onload = async () => {
         const savedKey = localStorage.getItem('silicon_key');
@@ -101,11 +112,23 @@
             const data = await tagsRes.json();
             tagsData = data.song_tags || {};
             
-            document.getElementById('songCount').innerText = allSongs.length;
             renderTable();
         } catch(e) {
             document.getElementById('songTable').innerHTML = '<tr><td colspan="3" style="color:red;text-align:center;">数据拉取失败，请检查网络或后端服务。</td></tr>';
         }
+    }
+
+    function updateStats() {
+        let tagged = 0;
+        let untagged = 0;
+        allSongs.forEach(song => {
+            const tags = tagsData[song] || [];
+            if (tags.length > 0) tagged++;
+            else untagged++;
+        });
+        document.getElementById('songCount').innerText = allSongs.length;
+        document.getElementById('taggedCount').innerText = tagged;
+        document.getElementById('untaggedCount').innerText = untagged;
     }
 
     function renderTable() {
@@ -113,18 +136,35 @@
         
         if (allSongs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">暂无歌曲数据</td></tr>';
+            updateStats();
             return;
         }
 
-        const rowsHtml = allSongs.map(song => {
+        // ================= 新增：三级智能排序 =================
+        const sessionNewlyMarked = []; // 第一级：当前页面新打标的 (排最前)
+        const untaggedSongs = [];      // 第二级：未打标的 (排中间)
+        const taggedSongs = [];        // 第三级：以前打好标的 (沉底)
+
+        allSongs.forEach(song => {
+            const tags = tagsData[song] || [];
+            if (sessionMarked.has(song)) {
+                sessionNewlyMarked.push(song);
+            } else if (tags.length === 0) {
+                untaggedSongs.push(song);
+            } else {
+                taggedSongs.push(song);
+            }
+        });
+
+        const sortedSongs = [...sessionNewlyMarked, ...untaggedSongs, ...taggedSongs];
+
+        const rowsHtml = sortedSongs.map(song => {
             const tags = tagsData[song] || [];
             const tagsHtml = tags.map(t => `<span class="tag-badge">${t}</span>`).join('');
             
             const safeSongName = song.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            // 基础 ID 用于定位行和列
             const baseId = 'row-' + btoa(encodeURIComponent(song)).replace(/[^a-zA-Z0-9]/g, '');
             
-            // 为 <tr> 和 <td> 都打上对应的 ID
             return `
                 <tr id="${baseId}-tr">
                     <td>${song}</td>
@@ -139,32 +179,35 @@
         });
         
         tbody.innerHTML = rowsHtml.join('');
+        updateStats(); // 每次渲染后更新数据统计看板
     }
 
-    // 局部刷新 + 动态置顶协议
     function updateRowTagsAndMoveToTop(songName, tags) {
+        // 更新内存数据池
+        tagsData[songName] = tags;
+        sessionMarked.add(songName); // 纳入置顶池
+        updateStats(); // 实时更新统计数字
+
         const baseId = 'row-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
         const td = document.getElementById(baseId + '-td');
         const tr = document.getElementById(baseId + '-tr');
         const tbody = document.getElementById('songTable');
         
         if(td && tr && tbody) {
-            // 1. 更新标签内容
+            // 局部更新 DOM，避免全量刷新导致滚动条跳动
             td.innerHTML = tags.map(t => `<span class="tag-badge">${t}</span>`).join('') || '<span style="color:#999">暂无标签</span>';
-            
-            // 2. 将这行数据物理移动到 tbody 的最前面
             if (tbody.firstChild !== tr) {
-                tbody.prepend(tr);
+                tbody.prepend(tr); // 物理提升到第一行
             }
-
-            // 3. 触发 CSS 背景色高亮动画
             tr.classList.remove('flash-row');
-            void tr.offsetWidth; // 触发重绘
+            void tr.offsetWidth; 
             tr.classList.add('flash-row');
+        } else {
+            // 兜底：如果 DOM 结构发生错乱，重新全量渲染
+            renderTable();
         }
     }
 
-    // 用户主动终止批量任务
     function abortBatchTask() {
         isBatchAborted = true;
         document.getElementById('progressText').innerText = "⚠️ 正在安全终止批量队列...";
@@ -181,15 +224,12 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ song_name: songName, tags: newTags })
             });
-            tagsData[songName] = newTags;
             updateRowTagsAndMoveToTop(songName, newTags); 
         }
     }
 
-    // 核心请求逻辑，取消了内部计时，交由外部（单曲/批量）控制
     async function executeAiTag(songName, apiKey, modelName, maxRetries = 3) {
         let attempt = 0;
-
         while(attempt < maxRetries) {
             if (isBatchAborted) return { success: false, error: "用户手动终止", isNetworkError: false };
 
@@ -213,18 +253,13 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ song_name: songName, tags: data.tags })
                     });
-                    
                     return { success: true, tags: data.tags };
                 } else {
-                    if (res.status === 429 || res.status >= 500) {
-                        throw new Error(`HTTP ${res.status}`);
-                    }
+                    if (res.status === 429 || res.status >= 500) throw new Error(`HTTP ${res.status}`);
                     return { success: false, error: data.error || "大模型返回异常", isNetworkError: false };
                 }
             } catch (e) {
                 attempt++;
-                console.warn(`[${songName}] 请求失败，第 ${attempt} 次重试... 错误:`, e);
-                
                 if (attempt >= maxRetries) {
                     return { 
                         success: false, 
@@ -232,14 +267,12 @@
                         isNetworkError: true 
                     };
                 }
-                
                 document.getElementById('lastTimeText').innerText = `网络波动，正在重试 ${attempt}/${maxRetries}...`;
                 await new Promise(r => setTimeout(r, 2000 * attempt));
             }
         }
     }
 
-    // --- 点击单首执行 ---
     async function triggerAiTagSingle(songName) {
         const apiKey = document.getElementById('apiKey').value;
         const modelName = document.getElementById('modelName').value;
@@ -252,24 +285,22 @@
         document.getElementById('progressBar').style.width = '100%';
         document.getElementById('abortBtn').style.display = 'none';
 
-        const startTime = performance.now(); // 开始计时
+        const startTime = performance.now();
         const result = await executeAiTag(songName, apiKey, modelName);
-        const timeCost = ((performance.now() - startTime) / 1000).toFixed(2); // 结束计时
+        const timeCost = ((performance.now() - startTime) / 1000).toFixed(2);
 
         if (!result.success) {
             alert("AI 标记失败：" + result.error);
             document.getElementById('progressText').innerText = `分析失败: ${songName}`;
             document.getElementById('progressBar').style.background = '#ff4d4f';
         } else {
-            tagsData[songName] = result.tags;
             updateRowTagsAndMoveToTop(songName, result.tags);
             document.getElementById('progressText').innerText = `分析完成: ${songName}`;
             document.getElementById('progressBar').style.background = '#52c41a';
-            document.getElementById('lastTimeText').innerText = `耗时: ${timeCost}s`; // 更新显示
+            document.getElementById('lastTimeText').innerText = `耗时: ${timeCost}s`; 
         }
     }
 
-    // --- 批量执行 (并发控制 + 批次耗时计算) ---
     async function autoTagAll() {
         const untagged = allSongs.filter(s => !tagsData[s] || tagsData[s].length === 0);
         if(untagged.length === 0) return alert("所有歌曲都已打标！");
@@ -292,7 +323,6 @@
         
         isBatchAborted = false; 
         let successCount = 0;
-        
         const CHUNK_SIZE = 15; 
         
         for (let i = 0; i < untagged.length; i += CHUNK_SIZE) {
@@ -301,26 +331,20 @@
             const chunk = untagged.slice(i, i + CHUNK_SIZE);
             progressText.innerText = `批量执行中 (${Math.min(i + CHUNK_SIZE, untagged.length)}/${untagged.length})，正在并发请求...`;
             
-            const batchStartTime = performance.now(); // 批次开始计时
-            
-            // 同时发送 5 个请求
+            const batchStartTime = performance.now();
             const chunkPromises = chunk.map(song => executeAiTag(song, apiKey, modelName));
             const results = await Promise.all(chunkPromises);
+            const batchTimeCost = ((performance.now() - batchStartTime) / 1000).toFixed(2);
             
-            const batchTimeCost = ((performance.now() - batchStartTime) / 1000).toFixed(2); // 批次结束计时
-            
-            // 批量更新 UI 状态
             let hasNetworkError = false;
             results.forEach((res, idx) => {
                 if (res.success) {
                     successCount++;
-                    tagsData[chunk[idx]] = res.tags;
-                    updateRowTagsAndMoveToTop(chunk[idx], res.tags); // 每首成功都会置顶高亮
+                    updateRowTagsAndMoveToTop(chunk[idx], res.tags); 
                 }
                 if (res.isNetworkError) hasNetworkError = true;
             });
             
-            // 计算单首平均耗时并显示
             const avgTime = (batchTimeCost / chunk.length).toFixed(2);
             timeText.innerText = `批次耗时: ${batchTimeCost}s (均 ${avgTime}s/首)`;
 
@@ -331,7 +355,6 @@
             }
             
             progressBar.style.width = `${(Math.min(i + CHUNK_SIZE, untagged.length) / untagged.length) * 100}%`;
-            
             if (!isBatchAborted) await new Promise(r => setTimeout(r, 500)); 
         }
         
@@ -347,10 +370,12 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ song_name: songName })
         });
+        
         tagsData[songName] = [];
-        const baseId = 'row-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
-        const td = document.getElementById(baseId + '-td');
-        if(td) td.innerHTML = '<span style="color:#999">暂无标签</span>';
+        sessionMarked.delete(songName); // 清除标记后，从置顶池移除
+        
+        // 彻底重新渲染列表，让它乖乖回到“未打标”的分组里
+        renderTable();
     }
 
     function downloadCSV() {

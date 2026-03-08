@@ -144,10 +144,21 @@
         }
         .ctrl-btn:active { transform: scale(0.85); }
 
+        
         /* ================= 针对 Plyr 的微调与手机端音量栏隐藏 ================= */
         .plyr--audio .plyr__controls { padding: 0; }
         .plyr__control--overlaid:hover, .plyr__control:hover { background: rgba(255,255,255,0.1) !important; }
-        
+        /* ================= 歌曲列表操作区 ================= */
+        .song-row-content { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .song-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding-right: 10px; }
+        .song-actions { display: flex; gap: 6px; align-items: center; }
+        .action-btn { 
+            background: rgba(255,255,255,0.05); border: none; border-radius: 50%; 
+            width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; 
+            color: var(--text-sub); cursor: pointer; transition: 0.2s; font-size: 14px;
+        }
+        .action-btn:active { transform: scale(0.85); background: rgba(255,255,255,0.15); }
+        .action-btn.fav-active { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
         /* 核心修正：在窄屏手机上彻底隐藏音量图标和滑块，交给手机物理按键接管 */
         @media (max-width: 600px) {
             .plyr__controls > .plyr__volume {
@@ -227,22 +238,36 @@
         tooltips: { controls: false, seek: true }
     });
 
+// 在之前的全局变量声明区，增加一个 Set 用于存放收藏
+    let favoriteSongs = new Set();
+
+    // 替换原有的 init 函数
     async function init() {
         await checkLocalCache();
         try {
-            const [songsRes, tagsRes] = await Promise.all([
-                fetch('/api/proxy/songs'), fetch('/api/tags').catch(()=>({json:()=>({})}))
+            // 并行拉取：歌曲列表、标签数据、收藏数据
+            const [songsRes, tagsRes, favRes] = await Promise.all([
+                fetch('/api/proxy/songs'), 
+                fetch('/api/tags').catch(()=>({json:()=>({})})),
+                fetch('/api/favorites').catch(()=>({json:()=>([])})) // 使用万能接口
             ]);
+            
             allSongs = await songsRes.json();
+            
             const tagsData = await tagsRes.json();
             tagsMap = tagsData?.song_tags || {};
             categories = tagsData?.categories || [];
+            
+            // 解析收藏数据
+            const favData = await favRes.json();
+            if (Array.isArray(favData)) {
+                favData.forEach(item => { if(item.song_name) favoriteSongs.add(item.song_name); });
+            }
             
             renderCategories();
             filterSongs();
             setupAudioEngine(); 
             
-            // 自动加载第一首歌
             if (currentFilteredSongs.length > 0) {
                 generateNewPlay(currentFilteredSongs[0]);
             }
@@ -250,7 +275,6 @@
             document.getElementById('songList').innerHTML = '<div style="text-align:center;color:#ef4444;">网络异常，无法获取数据</div>';
         }
     }
-
     async function checkLocalCache() {
         const cache = await caches.open(CACHE_NAME);
         const requests = await cache.keys();
@@ -265,27 +289,72 @@
         else appWrapper.classList.remove('squeezed');
     }
 
+// 替换原有的 renderCategories 函数
     function renderCategories() {
         const bar = document.getElementById('categoryBar');
         const grid = document.getElementById('drawerGrid');
         bar.innerHTML = ''; grid.innerHTML = '';
 
-        const allHtml = `<div class="cat-pill active" data-cat="全部" onclick="handleCategoryClick('全部')">全部</div>`;
+        // 1. 读取本地的分类点击记录
+        const categoryClicks = JSON.parse(localStorage.getItem('categoryClicks') || '{}');
+
+        // 2. 动态统计每个分类下的歌曲数量
+        const categoryCounts = {};
+        categories.forEach(cat => categoryCounts[cat] = 0);
+        allSongs.forEach(song => {
+            const tags = tagsMap[song] || [];
+            tags.forEach(tag => {
+                if (categoryCounts[tag] !== undefined) {
+                    categoryCounts[tag]++;
+                }
+            });
+        });
+
+        // 3. 核心排序：优先按“点击次数”降序，其次按“歌曲数量”降序
+        categories.sort((a, b) => {
+            const clicksA = categoryClicks[a] || 0;
+            const clicksB = categoryClicks[b] || 0;
+            if (clicksB !== clicksA) {
+                return clicksB - clicksA; // 点击次数多的排前面
+            }
+            return categoryCounts[b] - categoryCounts[a]; // 数量多的排前面
+        });
+
+        // 4. 渲染 "全部" 按钮（固定在第一位，并顺便显示总歌曲数）
+        const allHtml = `<div class="cat-pill ${currentCategory === '全部' ? 'active' : ''}" data-cat="全部" onclick="handleCategoryClick('全部')">全部 <span style="font-size:0.85em;opacity:0.6;">${allSongs.length}</span></div>`;
         bar.innerHTML += allHtml; grid.innerHTML += allHtml;
 
+        // 5. 按排序后的顺序渲染其余分类
         categories.forEach(cat => {
-            const html = `<div class="cat-pill" data-cat="${cat}" onclick="handleCategoryClick('${cat}')">${cat}</div>`;
+            const count = categoryCounts[cat] || 0;
+            if (count === 0) return; // 体验优化：隐藏没有歌曲的空分类
+            
+            const isActive = currentCategory === cat ? 'active' : '';
+            // 顺便把歌曲数量展示在分类名旁边，UI 更直观
+            const html = `<div class="cat-pill ${isActive}" data-cat="${cat}" onclick="handleCategoryClick('${cat}')">${cat} <span style="font-size:0.85em;opacity:0.6;">${count}</span></div>`;
             bar.innerHTML += html;
             grid.innerHTML += html;
         });
     }
 
+    // 替换原有的 handleCategoryClick 函数
     function handleCategoryClick(cat) {
         currentCategory = cat;
+        
+        // ================= 新增：记录点击频次 =================
+        if (cat !== '全部') {
+            const categoryClicks = JSON.parse(localStorage.getItem('categoryClicks') || '{}');
+            categoryClicks[cat] = (categoryClicks[cat] || 0) + 1;
+            localStorage.setItem('categoryClicks', JSON.stringify(categoryClicks));
+        }
+        // =======================================================
+
+        // 样式切换
         document.querySelectorAll('.cat-pill').forEach(el => {
             if (el.getAttribute('data-cat') === cat) el.classList.add('active');
             else el.classList.remove('active');
         });
+        
         filterSongs();
         if(isDrawerOpen) toggleDrawer();
         
@@ -293,7 +362,6 @@
             generateNewPlay(currentFilteredSongs[0]);
         }
     }
-
     function filterSongs() {
         const keyword = document.getElementById('searchInput').value.toLowerCase();
         currentFilteredSongs = allSongs.filter(song => {
@@ -319,7 +387,7 @@
         btn.style.color = isShuffleMode ? 'var(--accent)' : 'white';
     }
 
-    function renderList() {
+function renderList() {
         const listEl = document.getElementById('songList');
         listEl.innerHTML = '';
         if (currentFilteredSongs.length === 0) {
@@ -330,7 +398,6 @@
         currentFilteredSongs.forEach(song => {
             const item = document.createElement('div');
             item.className = `song-item ${song === currentPlaying ? 'playing' : ''}`;
-            item.onclick = () => generateNewPlay(song);
             
             const tags = tagsMap[song] || [];
             let tagsHtml = tags.map(t => `<span class="song-tag">${t}</span>`).join('');
@@ -339,20 +406,33 @@
                 tagsHtml = `<span class="cached-badge">✓ 离线</span>` + tagsHtml;
             } else if (tags.length === 0) tagsHtml = `<span class="song-tag" style="opacity:0.5">未分类</span>`;
 
+            const isFav = favoriteSongs.has(song);
+
+            // 分隔播放区与操作区
             item.innerHTML = `
-                <div class="song-info">
-                    <div class="song-name">${song.replace('.mp3', '')}</div>
-                    <div class="song-tags">${tagsHtml}</div>
+                <div class="song-row-content">
+                    <div class="song-main" onclick="generateNewPlay('${song.replace(/'/g, "\\'")}')">
+                        <div class="song-name" style="color:${song === currentPlaying ? 'var(--accent)' : 'inherit'}">
+                            ${song === currentPlaying ? (audio.paused ? '⏸ ' : '🎶 ') : ''}${song.replace('.mp3', '')}
+                        </div>
+                        <div class="song-tags">${tagsHtml}</div>
+                    </div>
+                    <div class="song-actions">
+                        <button class="action-btn ${isFav ? 'fav-active' : ''}" onclick="toggleFav(event, '${song.replace(/'/g, "\\'")}')">
+                            ${isFav ? '❤️' : '🤍'}
+                        </button>
+                        <button class="action-btn" onclick="editTags(event, '${song.replace(/'/g, "\\'")}')">🏷️</button>
+                        <button class="action-btn" onclick="deleteSong(event, '${song.replace(/'/g, "\\'")}')">🗑️</button>
+                    </div>
                 </div>
-                <div style="font-size:12px; color:var(--accent);">${song === currentPlaying ? (audio.paused ? '⏸' : '🎶') : ''}</div>
             `;
             listEl.appendChild(item);
         });
     }
-
-    async function executePlay(song) {
+ async function executePlay(song) {
         currentPlaying = song;
-        document.getElementById('nowPlayingText').innerText = song.replace(/\.(mp3|flac|wav)$/i, '');
+        const cleanSongName = song.replace(/\.(mp3|flac|wav)$/i, ''); // 提取干净的歌名
+        document.getElementById('nowPlayingText').innerText = cleanSongName;
         const urlPath = `/stream/${encodeURIComponent(song)}`;
 
         if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
@@ -368,6 +448,20 @@
             audio.src = urlPath;
         }
         
+        // ================= 新增：同步歌曲信息到系统锁屏/控制中心 =================
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: cleanSongName,
+                artist: '云端幻境',   // 你可以改成读取标签或其他信息
+                album: '我的云端曲库',
+                artwork: [
+                    // 提供一个默认的封面，系统控制台上会显示这个图片
+                    { src: '/static/music.svg', sizes: '512x512', type: 'image/svg+xml' }
+                ]
+            });
+        }
+        // =====================================================================
+
         try {
             await audio.play();
         } catch(err) {
@@ -375,7 +469,6 @@
         }
         renderList(); 
     }
-
     function generateNewPlay(song) {
         if (historyIndex < playHistory.length - 1) {
             playHistory = playHistory.slice(0, historyIndex + 1);
@@ -418,16 +511,108 @@
         
         generateNewPlay(currentFilteredSongs[nextIndex]);
     }
-
-    function setupAudioEngine() {
-        // 由于引入了 Plyr，进度条的更新逻辑已由它全盘接管
-        // 我们只需保留 UI 状态联动和自动下一首的回调即可
+// 1. 收藏/取消收藏功能 (对接你后端的万能 store 接口)
+    async function toggleFav(event, songName) {
+        event.stopPropagation(); // 阻止触发播放
+        const btn = event.currentTarget;
         
+        if (favoriteSongs.has(songName)) {
+            // 前端移除 (由于你的万能接口没有提供 DELETE 方法，这里先做前端清除，后续可在后端补全)
+            favoriteSongs.delete(songName);
+            btn.classList.remove('fav-active');
+            btn.innerText = '🤍';
+        } else {
+            favoriteSongs.add(songName);
+            btn.classList.add('fav-active');
+            btn.innerText = '❤️';
+            // 发送到后端保存
+            fetch('/api/favorites', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ song_name: songName, action: 'add' })
+            });
+        }
+    }
+
+    // 2. 快捷修改标签 (对接已经存在的 tags_bp 接口)
+    async function editTags(event, songName) {
+        event.stopPropagation();
+        const currentTags = tagsMap[songName] ? tagsMap[songName].join('，') : '';
+        const input = prompt(`请输入《${songName}》的标签\n多个标签请用逗号分隔：`, currentTags);
+        
+        if (input !== null) {
+            const newTags = input.replace(/,/g, '，').split('，').map(t => t.trim()).filter(t => t);
+            
+            try {
+                // 直接调用现成的标签保存接口
+                const res = await fetch('/api/tags', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ song_name: songName, tags: newTags })
+                });
+                
+                if (res.ok) {
+                    // 更新本地内存字典并重新渲染
+                    tagsMap[songName] = newTags;
+                    renderList();
+                    // 偷偷重绘一下分类目录栏，避免新增了未知分类没显示
+                    if(!categories.includes(...newTags)) {
+                        newTags.forEach(t => { if(!categories.includes(t)) categories.push(t); });
+                        renderCategories();
+                    }
+                }
+            } catch(e) { alert("保存标签失败！"); }
+        }
+    }
+
+    // 3. 删除歌曲 (预留了后端对接逻辑)
+    async function deleteSong(event, songName) {
+        event.stopPropagation();
+        if(!confirm(`⚠️ 确定要从云端彻底删除歌曲《${songName}》吗？\n此操作不可恢复！`)) return;
+
+        try {
+            // 这里对接后端的删除接口。你需要在 resource_node.py 或 player_extension.py 里写对应的后端物理删除代码
+            const res = await fetch('/api/proxy/songs/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ song_name: songName })
+            });
+            
+            // 假设后端还没写好，我们先在前端把它隐藏掉，方便你测试交互
+            allSongs = allSongs.filter(s => s !== songName);
+            filterSongs();
+            alert("请求已发送！需要在后端补充对应的 os.remove() 物理删除逻辑。");
+            
+        } catch(e) {
+            alert("请求后端删除失败！");
+        }
+    }
+function setupAudioEngine() {
         audio.addEventListener('play', () => renderList());
         audio.addEventListener('pause', () => renderList());
         audio.addEventListener('ended', playNext);
-    }
 
+        // ================= 新增：监听系统级别的媒体控制按键 =================
+        if ('mediaSession' in navigator) {
+            // 响应系统“播放”按钮 (比如耳机单按)
+            navigator.mediaSession.setActionHandler('play', () => {
+                audio.play();
+            });
+            // 响应系统“暂停”按钮 (比如耳机单按)
+            navigator.mediaSession.setActionHandler('pause', () => {
+                audio.pause();
+            });
+            // 响应系统“上一首”按钮 (比如耳机连按三下)
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                playPrev();
+            });
+            // 响应系统“下一首”按钮 (比如耳机连按两下)
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                playNext();
+            });
+        }
+        // =====================================================================
+    }
     window.onload = init;
 </script>
 </body>
