@@ -73,8 +73,23 @@
     let categories = [];
     let cachedSongUrls = new Set();
     
-    // 全局中断信号标记
     let abortSignal = false;
+
+    // ================= 1. 同步场景合成配置 =================
+    const SCENARIOS = {
+        "🏔️ 爬山": { 
+            include: ["史诗", "氛围", "后摇", "纯音乐", "环境", "轻音乐"], 
+            exclude: ["重金属", "硬核", "说唱", "电音", "DJ", "快节奏"] 
+        },
+        "🚴 骑车": { 
+            include: ["流行", "轻快", "电音", "EDM", "节奏", "动感健身", "欢快"], 
+            exclude: ["舒缓", "悲伤", "助眠", "夜晚", "emo"] 
+        },
+        "🏋️ 无氧": { 
+            include: ["摇滚", "说唱", "重低音", "燃", "金属", "硬核", "动感健身", "高强度"], 
+            exclude: ["轻音乐", "古典", "抒情", "民谣", "舒缓", "安静"] 
+        }
+    };
 
     async function init() {
         await loadCacheData();
@@ -93,7 +108,23 @@
         }
     }
 
-    // --- 核心数据层 ---
+    // --- 核心获取逻辑 (支持场景引擎) ---
+    function getSongsForCategory(cat) {
+        if (cat === '全部') return allSongs;
+        
+        if (SCENARIOS[cat]) {
+            const config = SCENARIOS[cat];
+            return allSongs.filter(song => {
+                const songTags = tagsMap[song] || [];
+                const hasInclude = config.include.some(t => songTags.includes(t));
+                const hasExclude = config.exclude.some(t => songTags.includes(t));
+                return hasInclude && !hasExclude;
+            });
+        }
+        
+        return allSongs.filter(song => (tagsMap[song] || []).includes(cat));
+    }
+
     async function loadCacheData() {
         const cache = await caches.open(CACHE_NAME);
         const requests = await cache.keys();
@@ -101,24 +132,30 @@
         renderListUI(requests);
     }
 
-    // --- UI 渲染层 ---
     function renderCategoryActions() {
         const container = document.getElementById('categoryActions');
         container.innerHTML = '';
         
-        categories.forEach(cat => {
-            // 计算该分类下：总歌曲数 vs 已缓存数
-            const catSongs = allSongs.filter(s => (tagsMap[s] || []).includes(cat));
+        // 组装所有需要渲染的选项：场景配置优先，普通标签在后
+        const displayList = [...Object.keys(SCENARIOS), ...categories];
+
+        displayList.forEach(cat => {
+            const catSongs = getSongsForCategory(cat);
             const total = catSongs.length;
+            if (total === 0) return; // 隐藏空分类
+
             const cachedCount = catSongs.filter(s => cachedSongUrls.has(`/stream/${encodeURIComponent(s)}`)).length;
-            
             const isFull = total > 0 && total === cachedCount;
+            const isScenario = SCENARIOS[cat] !== undefined;
             
+            // 为合成场景加上特殊颜色区分
+            const styleExtra = isScenario ? 'border-color: rgba(96, 165, 250, 0.4); background: rgba(59, 130, 246, 0.05);' : '';
+
             container.innerHTML += `
-                <button class="cat-btn" onclick="promptDownload('${cat}')">
-                    <span class="cat-name">${cat}</span>
+                <button class="cat-btn" style="${styleExtra}" onclick="promptDownload('${cat}')">
+                    <span class="cat-name" style="${isScenario ? 'color: var(--accent);' : ''}">${cat}</span>
                     <span class="cat-stats ${isFull ? 'full' : ''}">
-                        ${isFull ? '✓ 已全部离线' : `📥 已存 ${cachedCount} / 共 ${total} 首`}
+                        ${isFull ? '✓ 已全部离线' : `📥 已存 ${cachedCount} / 共 ${total}`}
                     </span>
                 </button>
             `;
@@ -149,24 +186,43 @@
         });
     }
 
-    // --- 任务控制层 ---
+    // ================= 2. 支持限量抽样离线的核心逻辑 =================
     function promptDownload(category) {
-        let targets = category === '全部' ? allSongs : allSongs.filter(s => (tagsMap[s] || []).includes(category));
-        // 过滤出真正需要下载的（排除已缓存的）
+        let targets = getSongsForCategory(category);
         let toDownload = targets.filter(s => !cachedSongUrls.has(`/stream/${encodeURIComponent(s)}`));
 
         if (toDownload.length === 0) {
-            alert(`【${category}】分类下的歌曲已全部离线，无需重复下载。`);
+            alert(`【${category}】下的歌曲已全部离线，无需重复下载。`);
             return;
         }
 
-        if (confirm(`即将离线【${category}】分类。\n共需下载 ${toDownload.length} 首歌曲。\n确认开始？`)) {
-            executeDownloadTask(category, toDownload);
+        let limit = toDownload.length;
+        
+        // 当未下载数量大于 50 首时，触发部分缓存提示
+        if (toDownload.length > 50) {
+            const userInput = prompt(`【${category}】共有 ${toDownload.length} 首未离线歌曲。\n\n请输入你想随机缓存的数量：\n(留空或输入"全部"则离线所有)`, "100");
+            
+            if (userInput === null) return; // 用户点击取消
+            
+            if (userInput.trim() !== "" && userInput !== "全部") {
+                const parsed = parseInt(userInput, 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                    limit = Math.min(parsed, toDownload.length);
+                }
+            }
+        } else {
+            if (!confirm(`即将离线【${category}】分类。\n共需下载 ${toDownload.length} 首歌曲。\n确认开始？`)) return;
         }
+
+        // 如果用户选择了限制数量，打乱数组进行随机抽样
+        if (limit < toDownload.length) {
+            toDownload = toDownload.sort(() => 0.5 - Math.random()).slice(0, limit);
+        }
+
+        executeDownloadTask(category, toDownload);
     }
 
     async function executeDownloadTask(category, targetSongs) {
-        // 重置状态
         abortSignal = false;
         const panel = document.getElementById('taskPanel');
         const fill = document.getElementById('progressFill');
@@ -180,7 +236,6 @@
         const cache = await caches.open(CACHE_NAME);
 
         for (let i = 0; i < targetSongs.length; i++) {
-            // 检查中断信号
             if (abortSignal) {
                 text.innerText = "⚠️ 任务已终止";
                 fill.style.background = "var(--danger)";
@@ -197,7 +252,7 @@
                 const response = await fetch(urlPath);
                 if (response.ok) {
                     await cache.put(urlPath, response);
-                    cachedSongUrls.add(urlPath); // 更新内存标记
+                    cachedSongUrls.add(urlPath); 
                     successCount++;
                 }
             } catch(e) {
@@ -206,9 +261,11 @@
             
             fill.style.width = `${((i + 1) / targetSongs.length) * 100}%`;
             
-            // 每下载完一首，刷新一下 UI 数据，做到实时反馈
-            renderCategoryActions();
-            renderListUI(Array.from(cachedSongUrls).map(path => ({url: location.origin + path})));
+            // 每下载完 5 首更新一次列表视图，避免 DOM 刷新过于频繁导致卡顿
+            if (i % 5 === 0 || i === targetSongs.length - 1) {
+                renderCategoryActions();
+                renderListUI(Array.from(cachedSongUrls).map(path => ({url: location.origin + path})));
+            }
         }
         
         text.innerText = `✅ 下载完成！成功: ${successCount} 首`;
@@ -224,14 +281,14 @@
 
     function finishTask() {
         document.getElementById('taskPanel').style.display = 'none';
-        document.getElementById('progressFill').style.background = 'var(--accent)'; // 恢复颜色
+        document.getElementById('progressFill').style.background = 'var(--accent)'; 
     }
 
     async function deleteCache(urlPath) {
         const cache = await caches.open(CACHE_NAME);
         await cache.delete(urlPath);
         await loadCacheData();
-        renderCategoryActions(); // 同步刷新上方的统计数据
+        renderCategoryActions(); 
     }
 
     async function clearAllCache() {
