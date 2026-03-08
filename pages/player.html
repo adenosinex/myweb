@@ -209,7 +209,7 @@
     </div>
 
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
- <script>
+<script>
     const CACHE_NAME = 'cloud-music-cache-v1';
     let allSongs = [];
     let tagsMap = {};       
@@ -250,21 +250,48 @@
     });
 
     let favoriteSongs = new Set();
+    let deletedSongs = new Set(); 
     
-    // ================= 升级版：多维度听歌行为记录池 =================
-    // 数据结构示例: { "songA": { accumulatedTime: 120, recentSkipCount: 0, lastPlayedAt: 171... } }
-    let playStats = JSON.parse(localStorage.getItem('playStats') || '{}'); 
+    // 全局统计字典
+    let playStats = {}; 
+
+    // ================= 新增：离线状态与队列同步机制 =================
+    window.addEventListener('online', flushSyncQueue); // 一旦恢复网络，立刻尝试同步
+
+    async function flushSyncQueue() {
+        let queue = JSON.parse(localStorage.getItem('playStatsQueue') || '[]');
+        if (queue.length === 0) return;
+
+        try {
+            const res = await fetch('/api/play_stats/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(queue) // 将离线积累的所有听歌记录发给后端
+            });
+
+            if (res.ok) {
+                localStorage.setItem('playStatsQueue', '[]'); // 同步成功，清空离线队列
+                console.log(`📡 成功将 ${queue.length} 条播放记录同步至云端`);
+            }
+        } catch (e) {
+            console.log("📡 处于离线模式，播放记录已缓存，待下次同步");
+        }
+    }
+    // =============================================================
 
     async function init() {
         await checkLocalCache();
         try {
-            const [songsRes, tagsRes, favRes] = await Promise.all([
+            // 并行拉取所有基础数据，包含后端的“权威统计记录”
+            const [songsRes, tagsRes, favRes, delRes, statsRes] = await Promise.all([
                 fetch('/api/proxy/songs'), 
                 fetch('/api/tags').catch(()=>({json:()=>({})})),
-                fetch('/api/favorites').catch(()=>({json:()=>([])})) 
+                fetch('/api/favorites').catch(()=>({json:()=>([])})),
+                fetch('/api/deleted_songs').catch(()=>({json:()=>([])})),
+                fetch('/api/play_stats').catch(()=>({json:()=>({})})) // 获取后端统计
             ]);
             
-            allSongs = await songsRes.json();
+            let rawSongs = await songsRes.json();
             const tagsData = await tagsRes.json();
             tagsMap = tagsData?.song_tags || {};
             categories = tagsData?.categories || [];
@@ -273,11 +300,27 @@
             if (Array.isArray(favData)) {
                 favData.forEach(item => { if(item.song_name) favoriteSongs.add(item.song_name); });
             }
+
+            const delData = await delRes.json();
+            if (Array.isArray(delData)) {
+                delData.forEach(item => { if(item.song_name) deletedSongs.add(item.song_name); });
+            }
+
+            // 载入后端云同步的播放统计，作为基准
+            const serverStats = await statsRes.json();
+            if (Object.keys(serverStats).length > 0) {
+                playStats = serverStats;
+            }
+            
+            allSongs = rawSongs.filter(song => !deletedSongs.has(song));
             
             renderCategories();
             filterSongs();
             setupAudioEngine(); 
             
+            // 页面一打开，顺手尝试清一下上次断网遗留的队列
+            flushSyncQueue();
+
             if (currentFilteredSongs.length > 0) {
                 generateNewPlay(currentFilteredSongs[0]);
             }
@@ -360,26 +403,26 @@
         }
     }
 
-    // ================= 新增：动态智能排序算法 =================
+    // ================= 核心：极度敏感的权重算法 =================
     function calculateSongWeight(songName) {
         const stats = playStats[songName];
-        if (!stats) return 0; // 没听过的歌权重为 0
-        
-        // 核心因子 1：累计播放时长 (每听 1 分钟算 1 分，封顶 100 分防无限膨胀)
-        let weight = Math.min((stats.accumulatedTime || 0) / 60, 100); 
-        
-        // 核心因子 2：近期敏感度 (惩罚机制)
-        const recentSkips = stats.recentSkipCount || 0;
-        if (recentSkips > 0) {
-            // 如果连续秒切，权重呈指数级暴降，保证它瞬间沉底！
-            // 连续切 1 次，权重打 5 折；连切 3 次，权重趋近于 0
-            weight = weight * Math.pow(0.5, recentSkips); 
+        let weight = 10; // 基础分：所有歌就算没听过，至少给10分起步
+
+        if (stats) {
+            // 奖赏：累计听歌时长（秒）。每一分钟时长，增加 2 点基础权重（无上限）
+            weight += (stats.accumulatedTime / 60) * 2;
+            
+            // 惩罚：近期敏感度暴跌
+            const recentSkips = stats.recentSkipCount || 0;
+            if (recentSkips > 0) {
+                // 指数级惩罚：连切 1 次权重打 3 折；连切 2 次打 0.09 折；极速沉底
+                weight = weight * Math.pow(0.3, recentSkips); 
+            }
         }
         
-        // 收藏加成：喜欢的歌自带基础高分
-        if (favoriteSongs.has(songName)) {
-            weight += 20; 
-        }
+        // 收藏自带保底光环
+        if (favoriteSongs.has(songName)) weight += 30; 
+        
         return weight;
     }
 
@@ -406,7 +449,7 @@
             return matchKeyword && matchCategory && matchLocal;
         });
 
-        // 执行智能权重降序排序
+        // 每次点击分类或打开页面，严格按照听歌行为权重降序重排列表
         currentFilteredSongs.sort((a, b) => calculateSongWeight(b) - calculateSongWeight(a));
         renderList();
     }
@@ -458,6 +501,7 @@
                             ${isFav ? '❤️' : '🤍'}
                         </button>
                         <button class="action-btn" onclick="editTags(event, '${song.replace(/'/g, "\\'")}')">🏷️</button>
+                        <button class="action-btn" onclick="deleteSong(event, '${song.replace(/'/g, "\\'")}')">🗑️</button>
                     </div>
                 </div>
             `;
@@ -465,34 +509,60 @@
         });
     }
 
-    // ================= 升级版：行为监听引擎 =================
+    // ================= 核心：精准追踪并分发至队列 =================
     function evaluateCurrentSong() {
         if (!currentPlaying || !audio.duration) return;
         
         let playedTime = 0;
+        // 使用底层的 played 属性，无论怎么拖拽进度条，只算耳朵真实听到的秒数
         for (let i = 0; i < audio.played.length; i++) {
             playedTime += (audio.played.end(i) - audio.played.start(i));
         }
         
+        if (playedTime < 3) return; // 播放少于3秒视为失误，不计入统计
+
         const ratio = playedTime / audio.duration;
         let stats = playStats[currentPlaying] || { accumulatedTime: 0, recentSkipCount: 0, lastPlayedAt: 0 };
         
-        stats.accumulatedTime += playedTime; // 记录真实听歌时长
+        stats.accumulatedTime += playedTime;
         stats.lastPlayedAt = Date.now();
 
-        if (ratio < 0.15 && playedTime > 2 && playedTime < 30) { 
-            // 如果听了超过2秒，但不到30秒且比例极低就被切歌，判定为“近期不喜欢” (Skip)
+        let isSkip = false;
+        let isComplete = false;
+
+        if (ratio < 0.15 && playedTime < 30) { 
+            // 极其讨厌：没到高潮就立刻切歌
             stats.recentSkipCount += 1; 
-        } else if (ratio > 0.6) {
-            // 只要好好听过一遍（超过60%），就原谅它之前的被切记录，洗白！
+            isSkip = true;
+        } else if (ratio >= 0.8) {
+            // 完整听完（超80%）：原谅一切过去的秒切历史，彻底洗白！
             stats.recentSkipCount = 0; 
+            isComplete = true;
+        } else if (ratio > 0.5) {
+            // 听到一半以上：酌情减轻一次惩罚
+            stats.recentSkipCount = Math.max(0, stats.recentSkipCount - 1);
         }
         
+        // 1. 更新前端展示基准
         playStats[currentPlaying] = stats;
-        localStorage.setItem('playStats', JSON.stringify(playStats));
+
+        // 2. 将本次动作打包推入“待同步队列”
+        let queue = JSON.parse(localStorage.getItem('playStatsQueue') || '[]');
+        queue.push({
+            song_name: currentPlaying,
+            played_time: playedTime,
+            is_skip: isSkip,
+            is_complete: isComplete,
+            timestamp: Date.now()
+        });
+        localStorage.setItem('playStatsQueue', JSON.stringify(queue));
+
+        // 3. 触发发送指令
+        flushSyncQueue();
     }
 
     async function executePlay(song) {
+        // 先结算上一首
         evaluateCurrentSong(); 
 
         currentPlaying = song;
@@ -561,10 +631,25 @@
         let nextIndex;
         
         if (isShuffleMode && currentFilteredSongs.length > 1) {
-            // 随机模式下：权重越高的歌，被随机抽到的概率应该越大 (暂时用简单的均等随机，避免算法过于复杂卡死浏览器)
-            const currentIndex = currentFilteredSongs.indexOf(currentPlaying);
-            do { nextIndex = Math.floor(Math.random() * currentFilteredSongs.length); } 
-            while (nextIndex === currentIndex);
+            const candidates = currentFilteredSongs.filter(s => s !== currentPlaying);
+            let totalWeight = 0;
+            const weights = candidates.map(song => {
+                const w = calculateSongWeight(song);
+                totalWeight += w;
+                return w;
+            });
+
+            let randomNum = Math.random() * totalWeight;
+            let selectedSong = candidates[candidates.length - 1]; 
+            for (let i = 0; i < candidates.length; i++) {
+                if (randomNum < weights[i]) {
+                    selectedSong = candidates[i];
+                    break;
+                }
+                randomNum -= weights[i];
+            }
+            
+            nextIndex = currentFilteredSongs.indexOf(selectedSong);
         } else {
             nextIndex = currentFilteredSongs.indexOf(currentPlaying) + 1;
             if (nextIndex >= currentFilteredSongs.length) nextIndex = 0;
@@ -591,7 +676,7 @@
                 body: JSON.stringify({ song_name: songName, action: 'add' })
             });
         }
-        filterSongs(); // 收藏状态改变，重新计算权重排序
+        filterSongs(); 
     }
 
     async function editTags(event, songName) {
@@ -619,6 +704,26 @@
         }
     }
 
+    async function deleteSong(event, songName) {
+        event.stopPropagation(); 
+
+        deletedSongs.add(songName);
+        allSongs = allSongs.filter(s => s !== songName);
+        
+        renderCategories(); 
+        filterSongs();
+        
+        try {
+            fetch('/api/deleted_songs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ song_name: songName, action: 'delete' })
+            });
+        } catch(e) {
+            console.error("隐藏同步失败");
+        }
+    }
+
     function setupAudioEngine() {
         audio.addEventListener('play', () => renderList());
         audio.addEventListener('pause', () => renderList());
@@ -636,5 +741,6 @@
 
     window.onload = init;
 </script>
+
 </body>
 </html>

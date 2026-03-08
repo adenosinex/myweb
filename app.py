@@ -44,6 +44,14 @@ def init_db():
                 tags TEXT NOT NULL
             )
         ''')
+        conn.execute('''
+    CREATE TABLE IF NOT EXISTS play_stats (
+        song_name TEXT PRIMARY KEY,
+        accumulated_time REAL DEFAULT 0,
+        recent_skip_count INTEGER DEFAULT 0,
+        last_played_at INTEGER DEFAULT 0
+    )
+''')
 
 # ================= 1. 安全拦截器 =================
 @app.before_request
