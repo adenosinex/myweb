@@ -16,7 +16,6 @@
         
         .section-title { font-size: 14px; color: var(--text-sub); margin: 25px 0 12px 0; font-weight: 500; display: flex; align-items: center; gap: 6px;}
         
-        /* 分类操作区：针对视频分类显示 */
         .category-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
         .cat-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 12px; border-radius: 12px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; transition: 0.2s;}
         .cat-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--accent); }
@@ -24,7 +23,6 @@
         .cat-stats { font-size: 11px; color: var(--text-sub); }
         .cat-stats.full { color: var(--success); font-weight: bold; }
 
-        /* 进度控制面板 */
         .task-panel { display: none; background: rgba(17, 24, 39, 0.95); border: 1px solid var(--accent); border-radius: 16px; padding: 18px; margin-bottom: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.6); position: sticky; top: 10px; z-index: 100; backdrop-filter: blur(10px); }
         .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .task-title { font-size: 15px; font-weight: bold; color: var(--accent); }
@@ -32,7 +30,6 @@
         .progress-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
         .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #60a5fa); width: 0%; transition: width 0.4s ease; }
 
-        /* 已缓存列表 */
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: rgba(255,255,255,0.03); margin-bottom: 10px; border-radius: 12px; font-size: 14px; border: 1px solid rgba(255,255,255,0.05); }
         .item-info { display: flex; flex-direction: column; gap: 4px; width: 75%; }
         .item-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
@@ -43,7 +40,10 @@
 
     <div class="header">
         <h2 style="margin:0; font-size:18px;">🎬 视频离线空间</h2>
-        <a href="/video.html" class="btn">🔙 返回刷视频</a>
+        <div class="flex gap-3">
+            <button onclick="exportData()" class="btn" style="border-color: rgba(16, 185, 129, 0.5); color: #10b981;">📊 导出报表</button>
+            <a href="/video.html" class="btn">🔙 返回</a>
+        </div>
     </div>
 
     <div class="task-panel" id="taskPanel">
@@ -56,7 +56,7 @@
     </div>
 
     <div class="section-title">
-        <span>按分类批量离线</span>
+        <span>按分类智能离线</span>
     </div>
     
     <div class="category-actions" id="categoryActions">
@@ -85,22 +85,22 @@
         }
     }
 
+    function exportData() {
+        window.location.href = '/api/video/export_csv';
+    }
+
     async function refreshCacheList() {
         const cache = await caches.open(CACHE_NAME);
         const requests = await cache.keys();
         cachedUrls = new Set(requests.map(req => new URL(req.url).pathname));
         renderListUI(requests);
-        if(allVideos.length > 0) renderCategories(); // 同步更新按钮状态
+        if(allVideos.length > 0) renderCategories(); 
     }
 
     function renderCategories() {
         const container = document.getElementById('categoryActions');
         const counts = {};
-        
-        // 统计分类
-        allVideos.forEach(v => {
-            if(v.category) counts[v.category] = (counts[v.category] || 0) + 1;
-        });
+        allVideos.forEach(v => { if(v.category) counts[v.category] = (counts[v.category] || 0) + 1; });
 
         container.innerHTML = '';
         Object.entries(counts).sort((a,b) => b[1]-a[1]).forEach(([cat, total]) => {
@@ -108,7 +108,7 @@
             const isFull = cachedInCat === total;
 
             container.innerHTML += `
-                <button class="cat-btn" onclick="startDownload('${cat}')">
+                <button class="cat-btn" onclick="startSmartDownload('${cat}')">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats ${isFull ? 'full' : ''}">
                         ${isFull ? '✓ 已全部离线' : `📥 ${cachedInCat} / ${total}`}
@@ -137,7 +137,7 @@
             item.innerHTML = `
                 <div class="item-info">
                     <div class="item-name">${fileName}</div>
-                    <div class="item-meta">Video / MP4资源</div>
+                    <div class="item-meta">Video / 离线可用</div>
                 </div>
                 <button class="btn btn-danger" style="padding:4px 8px; font-size:12px; border:none; background:transparent;" onclick="deleteCache('${urlPath}')">移除</button>
             `;
@@ -145,11 +145,17 @@
         });
     }
 
-    async function startDownload(cat) {
-        const targets = allVideos.filter(v => v.category === cat && !cachedUrls.has(v.url));
+    async function startSmartDownload(cat) {
+        let targets = allVideos.filter(v => v.category === cat && !cachedUrls.has(v.url));
         if (targets.length === 0) return alert("该分类已全部离线");
 
-        if (!confirm(`准备离线【${cat}】分类下的 ${targets.length} 个视频？\n请确保处于 Wi-Fi 环境。`)) return;
+        // 智能下载提示：询问是下载全部还是只下载未播放的
+        const downloadAll = confirm(`【${cat}】有 ${targets.length} 个未缓存视频。\n\n点击 [确定] 下载全部\n点击 [取消] 仅下载从未播放过的新视频`);
+        
+        if (!downloadAll) {
+            targets = targets.filter(v => (v.play_count || 0) === 0);
+            if (targets.length === 0) return alert("当前分类没有未播放过的新视频可供下载。");
+        }
 
         abortSignal = false;
         const panel = document.getElementById('taskPanel');
@@ -157,27 +163,18 @@
         const text = document.getElementById('progressText');
         
         panel.style.display = 'block';
-        
         let count = 0;
         const cache = await caches.open(CACHE_NAME);
 
         for (const video of targets) {
             if (abortSignal) break;
-
             text.innerText = `[${count+1}/${targets.length}] 正在下载: ${video.filename}`;
-            
             try {
                 const response = await fetch(video.url);
-                if (response.ok) {
-                    await cache.put(video.url, response);
-                    count++;
-                }
-            } catch(e) {
-                console.error("下载出错", video.filename);
-            }
+                if (response.ok) { await cache.put(video.url, response); count++; }
+            } catch(e) {}
             
             fill.style.width = `${((count) / targets.length) * 100}%`;
-            // 增量刷新UI
             if(count % 2 === 0) refreshCacheList(); 
         }
 
@@ -186,19 +183,8 @@
     }
 
     function abortDownload() { abortSignal = true; }
-
-    async function deleteCache(url) {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.delete(url);
-        await refreshCacheList();
-    }
-
-    async function clearAllCache() {
-        if(confirm("确定清空所有视频缓存？此操作不可撤销。")) {
-            await caches.delete(CACHE_NAME);
-            await refreshCacheList();
-        }
-    }
+    async function deleteCache(url) { const cache = await caches.open(CACHE_NAME); await cache.delete(url); await refreshCacheList(); }
+    async function clearAllCache() { if(confirm("确定清空所有视频缓存？此操作不可撤销。")) { await caches.delete(CACHE_NAME); await refreshCacheList(); } }
 
     window.onload = init;
 </script>

@@ -6,80 +6,77 @@
     <title>云端幻境 - 短视频</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; background-color: #000; color: white; overflow: hidden; font-family: -apple-system, sans-serif; }
+        body, html { margin: 0; padding: 0; height: 100%; background-color: #000; color: white; overflow: hidden; font-family: -apple-system, sans-serif; touch-action: pan-y; }
         
-        /* ============== 顶部导航与标签栏 ============== */
-        .top-nav {
-            position: absolute; top: 0; left: 0; right: 0; z-index: 40;
-            background: linear-gradient(to bottom, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0));
-            padding-top: env(safe-area-inset-top, 15px); pointer-events: none;
-        }
+        /* 顶部导航 */
+        .top-nav { position: absolute; top: 0; left: 0; right: 0; z-index: 40; background: linear-gradient(to bottom, rgba(0,0,0, 0.8), transparent); padding-top: env(safe-area-inset-top, 15px); pointer-events: none; }
         .main-tabs { display: flex; justify-content: center; gap: 25px; padding: 15px 0 10px; pointer-events: auto; }
         .tab-item { font-size: 16px; color: rgba(255,255,255,0.5); font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .tab-item.active { color: white; font-size: 18px; text-shadow: 0 2px 8px rgba(255,255,255,0.3); }
+        .tab-item.active { color: white; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
 
+        /* 横向 Tag 栏 */
         .tag-row { display: flex; align-items: center; gap: 10px; padding: 0 15px 15px; pointer-events: auto; }
-        .tag-scroll { display: flex; overflow-x: auto; gap: 10px; flex: 1; scrollbar-width: none; }
+        .tag-scroll { display: flex; overflow-x: auto; gap: 10px; flex: 1; scrollbar-width: none; padding-bottom: 5px; }
         .tag-scroll::-webkit-scrollbar { display: none; }
-        
-        .cat-pill {
-            padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 20px;
-            font-size: 12px; white-space: nowrap; transition: 0.2s; cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-        .cat-pill.active { background: #3b82f6; color: white; border-color: #60a5fa; }
+        .cat-pill { padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 12px; white-space: nowrap; transition: 0.2s; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(4px); }
+        .cat-pill.active { background: #3b82f6; color: white; border-color: #60a5fa; font-weight: bold; box-shadow: 0 0 15px rgba(59,130,246,0.6); }
 
-        /* ============== 侧边抽屉式分类网格 ============== */
-        .drawer {
-            position: fixed; inset: 0; background: #0b1120; z-index: 100;
-            transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-            padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px;
+        /* 🎯 悬浮筛选提示牌 */
+        .filter-toast {
+            position: absolute; top: calc(env(safe-area-inset-top, 15px) + 60px); left: 50%; transform: translateX(-50%);
+            background: rgba(59, 130, 246, 0.85); backdrop-filter: blur(10px);
+            padding: 6px 14px 6px 16px; border-radius: 24px; font-size: 13px; font-weight: bold;
+            display: flex; align-items: center; gap: 8px; z-index: 45;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: auto; border: 1px solid rgba(255,255,255,0.3);
         }
+        .filter-toast.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -20px) scale(0.9); }
+        .filter-close-btn { background: rgba(255,255,255,0.2); width: 22px; height: 22px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+        .filter-close-btn:active { transform: scale(0.8); background: rgba(255,255,255,0.4); }
+
+        /* 抽屉 */
+        .drawer { position: fixed; inset: 0; background: #0b1120; z-index: 100; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1); padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px; }
         .drawer.open { transform: translateY(0); }
         .drawer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; overflow-y: auto; max-height: 80vh; }
-        .grid-item { 
-            background: rgba(255,255,255,0.05); padding: 15px 10px; border-radius: 12px; text-align: center;
-            display: flex; flex-direction: column; gap: 5px; cursor: pointer;
-        }
-        .grid-item.active { border: 1px solid #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .grid-item { background: rgba(255,255,255,0.05); padding: 15px 10px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: 0.2s;}
+        .grid-item.active { border: 1px solid #60a5fa; background: rgba(59, 130, 246, 0.2); box-shadow: inset 0 0 10px rgba(59,130,246,0.2); }
 
-        /* ============== 视频流容器 ============== */
-        .video-feed {
-            height: 100dvh; width: 100vw; overflow-y: scroll;
-            scroll-snap-type: y mandatory; scroll-behavior: smooth; scrollbar-width: none;
-        }
+        /* 虚拟列表视频容器 */
+        .video-feed { height: 100dvh; width: 100vw; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; position: relative; }
         .video-feed::-webkit-scrollbar { display: none; }
 
-        .video-card {
-            height: 100dvh; width: 100vw; scroll-snap-align: start;
-            position: relative; display: flex; justify-content: center; align-items: center;
-            padding: calc(env(safe-area-inset-top, 15px) + 110px) 0 80px 0; overflow: hidden;
-        }
-
-        .blur-bg {
-            position: absolute; inset: 0; z-index: 1;
-            background-size: cover; background-position: center;
-            filter: blur(40px) brightness(0.3); transform: scale(1.1);
-        }
-
-        .video-player { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; border-radius: 12px; pointer-events: none; }
+        .video-card { height: 100dvh; width: 100vw; scroll-snap-align: center; scroll-snap-stop: always; position: absolute; left: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #000; }
+        .video-player { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+        .blur-bg { position: absolute; inset: 0; z-index: 1; background-size: cover; background-position: center; filter: blur(40px) brightness(0.3); transform: scale(1.1); pointer-events: none;}
+        
         .click-area { position: absolute; inset: 0; z-index: 10; cursor: pointer; }
-        .play-icon {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 11; opacity: 0; pointer-events: none; color: rgba(255,255,255,0.7);
-        }
-        .video-card.paused .play-icon { opacity: 1; transform: translate(-50%, -50%) scale(1.2); transition: 0.2s; }
+        
+        .play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 11; opacity: 0; pointer-events: none; color: rgba(255,255,255,0.7); transition: 0.2s; }
+        .video-card.paused .play-icon { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
 
-        /* ============== UI 悬浮层 ============== */
-        .action-sidebar {
-            position: absolute; right: 15px; bottom: 130px; z-index: 20;
-            display: flex; flex-direction: column; gap: 20px; align-items: center;
-        }
+        /* 右侧按钮 */
+        .action-sidebar { position: absolute; right: 15px; bottom: 120px; z-index: 20; display: flex; flex-direction: column; gap: 20px; align-items: center; }
         .action-btn { background: none; border: none; color: white; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .icon-circle { width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; }
-        .action-btn.liked .icon-circle { color: #ef4444; }
+        .icon-circle { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; transition: 0.3s;}
+        
+        @keyframes heartPop { 0% { transform: scale(1); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
+        .action-btn.liked .icon-circle { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); color: #ef4444; background: rgba(239,68,68,0.2); }
+        .btn-dislike:active .icon-circle { background: rgba(255,255,255,0.3); }
+        
+        /* 底部信息栏 */
+        .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
 
-        .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 4px rgba(0,0,0,0.8); pointer-events: none; }
+        /* 进度条 */
+        .progress-container { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.2); z-index: 30; }
+        .progress-bar { height: 100%; background: rgba(255,255,255,0.9); width: 0%; box-shadow: 0 0 8px rgba(255,255,255,0.8); }
+        
+        /* 拖拽快进提示 */
+        .seek-toast { 
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
+            color: rgba(255,255,255,0.9); font-size: 16px; font-weight: bold; letter-spacing: 1px;
+            z-index: 50; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
     </style>
 </head>
 <body class="selection:bg-blue-500">
@@ -97,141 +94,323 @@
             <div class="tab-item active" onclick="switchFilter('all')" id="nav-all">推荐</div>
             <div class="tab-item" onclick="switchFilter('unplayed')" id="nav-unplayed">新鲜</div>
             <div class="flex gap-2 absolute right-4 top-4 pointer-events-auto">
-                <a href="/video-cache.html" class="text-[10px] bg-white/10 border border-white/10 backdrop-blur px-2 py-1 rounded-md">管理📦</a>
+                <a href="/video-cache.html" class="text-[10px] bg-white/20 border border-white/20 backdrop-blur px-2.5 py-1.5 rounded-md hover:bg-white/40 shadow-lg">管理📦</a>
             </div>
         </div>
         <div class="tag-row">
             <div class="tag-scroll" id="categoryBar"></div>
-            <button onclick="toggleDrawer()" class="p-1.5 bg-white/10 rounded-lg">⊞</button>
+            <button onclick="toggleDrawer()" class="p-1.5 bg-white/20 rounded-lg shadow-md">⊞</button>
         </div>
     </div>
 
-    <div class="video-feed" id="videoFeed"></div>
+    <div id="filterToast" class="filter-toast hidden">
+        <span>🎯 当前分类: <span id="filterName" class="text-white"></span></span>
+        <div onclick="setTag('全部')" class="filter-close-btn">✕</div>
+    </div>
+
+    <div class="video-feed" id="videoFeed">
+        <div id="scrollPlaceholder" style="width: 100%; position: absolute; top: 0; left: 0; z-index: -1;"></div>
+    </div>
 
     <script>
         let allVideoData = [];
         let displayData = [];
         let currentFilter = 'all';
         let activeTag = '全部';
-        let observer;
-        let currentIndex = 0; 
-        let isWheelScrolling = false;
+        
+        let currentIndex = 0;
+        const feed = document.getElementById('videoFeed');
+        const placeholder = document.getElementById('scrollPlaceholder');
 
-        // ================= 核心：数据初始化 =================
+        // 提取文件名标签
+        function extractTagsFromFilename(filename) {
+            const matches = filename.match(/#([^#\s.]+)/g);
+            if (!matches) return [];
+            return matches.map(m => m.substring(1));
+        }
+
+        window.addEventListener('online', syncOfflineActions);
+
+        async function syncOfflineActions() {
+            if (!navigator.onLine) return;
+            let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
+            if (queue.length === 0) return;
+            try {
+                const res = await fetch('/api/video/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(queue) });
+                if (res.ok) localStorage.setItem('videoActionsQueue', '[]');
+            } catch (e) {}
+        }
+
+        function recordAction(filename, action) {
+            let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
+            queue.push({ filename, action, timestamp: Date.now() });
+            localStorage.setItem('videoActionsQueue', JSON.stringify(queue));
+            syncOfflineActions();
+        }
+
         async function initVideos() {
+            syncOfflineActions();
+            fetch('/api/video/scan', { method: 'POST' }).catch(()=>{});
+
             try {
                 const res = await fetch(`/api/video/list?filter=${currentFilter}`);
-                allVideoData = await res.json();
+                let rawData = await res.json();
+                allVideoData = rawData.map(v => {
+                    const filenameTags = extractTagsFromFilename(v.filename);
+                    const aiTags = v.tags || [];
+                    // 将 AI Tag 和文件名 Tag 无缝合并去重
+                    v.mergedTags = [...new Set([...aiTags, ...filenameTags])];
+                    return v;
+                });
             } catch (e) {
                 const cache = await caches.open('video-cache-v1');
                 const keys = await cache.keys();
-                allVideoData = keys.map(req => ({
-                    filename: decodeURIComponent(req.url.split('/').pop()),
-                    url: req.url, category: '离线', tags: ['缓存'], is_liked: false
-                }));
+                allVideoData = keys.map(req => {
+                    const fname = decodeURIComponent(req.url.split('/').pop());
+                    return { filename: fname, url: req.url, category: '离线', mergedTags: extractTagsFromFilename(fname), is_liked: false };
+                });
             }
             renderTagsAndDrawer();
             filterByTag();
         }
 
-        function toggleDrawer() {
-            document.getElementById('drawer').classList.toggle('open');
-        }
+        function toggleDrawer() { document.getElementById('drawer').classList.toggle('open'); }
 
-        // ================= 增强版分类显示与计票 =================
+        // ================= 分类渲染与状态同步 =================
         function renderTagsAndDrawer() {
-            const counts = {};
-            let total = 0;
+            const counts = {}; let total = 0;
             allVideoData.forEach(v => {
                 total++;
                 if (v.category) counts[v.category] = (counts[v.category] || 0) + 1;
-                if (v.tags) v.tags.forEach(t => counts[t] = (counts[t] || 0) + 1);
+                v.mergedTags.forEach(t => counts[t] = (counts[t] || 0) + 1);
             });
-
             const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
 
-            // 1. 顶部横排 (仅显示前8个，保持整洁)
+            // 智能插队：如果当前选中的标签不在前列，强制将其显示在第一位
+            let topTags = sorted.slice(0, 10).map(item => item[0]);
+            if (activeTag !== '全部' && !topTags.includes(activeTag)) {
+                topTags.unshift(activeTag);
+                if(topTags.length > 10) topTags.pop();
+            }
+
+            // 渲染顶部横条
             const bar = document.getElementById('categoryBar');
             let barHtml = `<div class="cat-pill ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部')">全部</div>`;
-            sorted.slice(0, 8).forEach(([tag]) => {
-                barHtml += `<div class="cat-pill ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}')">${tag}</div>`;
+            topTags.forEach(tag => { 
+                barHtml += `<div class="cat-pill ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}')">${tag}</div>`; 
             });
             bar.innerHTML = barHtml;
 
-            // 2. 抽屉网格 (显示全部及统计数据)
+            // 渲染抽屉
             const grid = document.getElementById('drawerGrid');
             let gridHtml = `
-                <div class="grid-item ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部'); toggleDrawer()">
-                    <span class="text-sm font-bold">全部</span>
+                <div class="grid-item border border-red-500/30" onclick="switchFilter('disliked'); toggleDrawer()">
+                    <span class="text-sm font-bold text-red-400">已不喜欢 🗑️</span>
+                    <span class="text-[10px] opacity-50 text-red-200">误触可找回</span>
+                </div>
+                <div class="grid-item ${activeTag === '全部' && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('全部'); toggleDrawer()">
+                    <span class="text-sm font-bold">全部视频</span>
                     <span class="text-[10px] opacity-50">${total} 视频</span>
                 </div>`;
             sorted.forEach(([tag, count]) => {
-                gridHtml += `
-                    <div class="grid-item ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}'); toggleDrawer()">
-                        <span class="text-sm font-bold">${tag}</span>
-                        <span class="text-[10px] opacity-50">${count} 视频</span>
-                    </div>`;
+                gridHtml += `<div class="grid-item ${activeTag === tag && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('${tag}'); toggleDrawer()">
+                    <span class="text-sm font-bold">${tag}</span><span class="text-[10px] opacity-50">${count} 视频</span>
+                </div>`;
             });
             grid.innerHTML = gridHtml;
         }
 
-        function setTag(tag) {
-            activeTag = tag;
-            renderTagsAndDrawer();
-            filterByTag();
+        function switchFilter(type) {
+            currentFilter = type;
+            document.getElementById('nav-all').classList.toggle('active', type === 'all');
+            document.getElementById('nav-unplayed').classList.toggle('active', type === 'unplayed');
+            if (type === 'disliked') {
+                document.getElementById('nav-all').classList.remove('active');
+                document.getElementById('nav-unplayed').classList.remove('active');
+            }
+            initVideos();
+        }
+
+        function setTag(tag) { 
+            activeTag = tag; 
+            
+            // 核心：控制悬浮提示牌的显隐
+            const toast = document.getElementById('filterToast');
+            if (tag !== '全部') {
+                document.getElementById('filterName').innerText = '#' + tag;
+                toast.classList.remove('hidden');
+            } else {
+                toast.classList.add('hidden');
+            }
+
+            renderTagsAndDrawer(); 
+            filterByTag(); 
         }
 
         function filterByTag() {
-            displayData = activeTag === '全部' ? allVideoData : 
-                          allVideoData.filter(v => v.category === activeTag || (v.tags && v.tags.includes(activeTag)));
+            displayData = activeTag === '全部' ? allVideoData : allVideoData.filter(v => v.category === activeTag || v.mergedTags.includes(activeTag));
             currentIndex = 0; 
-            renderFeed();
+            feed.scrollTo(0, 0); 
+            renderVirtualList();
         }
 
-        // ================= 播放器渲染逻辑 =================
-        function renderFeed() {
-            const feed = document.getElementById('videoFeed');
-            feed.innerHTML = '';
+        // ================= 虚拟列表与视频卡片构建 =================
+        function renderVirtualList() {
+            placeholder.style.height = `${displayData.length * 100}dvh`;
+            document.querySelectorAll('.video-card').forEach(el => el.remove());
 
-            displayData.forEach((v, index) => {
-                const card = document.createElement('div');
-                card.className = 'video-card paused';
-                card.id = `card-${index}`;
-                card.dataset.index = index;
+            if(displayData.length === 0) {
+                feed.innerHTML = `<div class="h-full w-full absolute top-0 flex items-center justify-center text-gray-500 font-bold">${currentFilter==='disliked' ? '回收站空' : '无匹配视频'}</div>`;
+                return;
+            }
+
+            const start = Math.max(0, currentIndex - 1);
+            const end = Math.min(displayData.length - 1, currentIndex + 1);
+
+            for (let i = start; i <= end; i++) { createCardDOM(i); }
+            handleAutoPlay();
+        }
+
+        function createCardDOM(index) {
+            if (document.getElementById(`card-${index}`)) return;
+            const v = displayData[index];
+            const card = document.createElement('div');
+            card.className = 'video-card paused';
+            card.id = `card-${index}`;
+            card.dataset.index = index;
+            card.style.top = `${index * 100}dvh`; 
+            
+            const jsSafeName = encodeURIComponent(v.filename);
+            const deleteBtnHtml = currentFilter === 'disliked' 
+                ? `<button class="action-btn text-green-400" onclick="handleDeleteAction(this, '${jsSafeName}', ${index})"><div class="icon-circle">♻️</div><span class="text-[10px] font-bold shadow-black">恢复</span></button>`
+                : `<button class="action-btn btn-dislike" onclick="handleDeleteAction(this, '${jsSafeName}', ${index})"><div class="icon-circle">💔</div><span class="text-[10px] font-bold shadow-black">不喜欢</span></button>`;
+
+            let cleanTitle = v.filename.replace(/\.(mp4|mov)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
+            
+            // 归集全部该视频的关联Tag
+            let allDisplayTags = new Set();
+            if(v.category && v.category !== '未分类') allDisplayTags.add(v.category);
+            v.mergedTags.forEach(t => allDisplayTags.add(t));
+
+            card.innerHTML = `
+                <div class="blur-bg" style="background-image: url('${v.url}')"></div>
+                <video src="${v.url}" class="video-player" loop playsinline preload="${index === currentIndex ? 'auto' : 'metadata'}"></video>
                 
-                const jsSafeName = encodeURIComponent(v.filename);
+                <div class="click-area" id="area-${index}"></div>
+                
+                <div class="play-icon"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+                <div class="seek-toast" id="toast-${index}"></div>
 
-                card.innerHTML = `
-                    <div class="blur-bg" style="background-image: url('${v.url}')"></div>
-                    <video src="${v.url}" class="video-player" loop playsinline preload="${index < 2 ? 'auto' : 'none'}"></video>
-                    <div class="click-area" onclick="togglePlay(this)"></div>
-                    <div class="play-icon"><svg class="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-                    
-                    <div class="action-sidebar">
-                        <button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="toggleLike(this, '${jsSafeName}')">
-                            <div class="icon-circle">❤️</div><span class="text-[10px] font-bold">喜欢</span>
-                        </button>
-                        <button class="action-btn" onclick="deleteVideo(this, '${jsSafeName}', ${index})">
-                            <div class="icon-circle">🗑️</div><span class="text-[10px] font-bold">移除</span>
-                        </button>
-                    </div>
+                <div class="action-sidebar">
+                    <button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="toggleLike(this, '${jsSafeName}')">
+                        <div class="icon-circle">❤️</div><span class="text-[10px] font-bold shadow-black">喜欢</span>
+                    </button>
+                    ${deleteBtnHtml}
+                </div>
 
-                    <div class="info-bottom">
-                        <h2 class="text-sm font-bold mb-2 truncate">${v.filename.replace(/\.[^/.]+$/, "")}</h2>
-                        <div class="flex gap-2 flex-wrap">
-                            <span class="text-blue-400 font-bold text-[10px] bg-blue-900/40 px-2 py-0.5 rounded">#${v.category}</span>
-                            ${(v.tags||[]).map(t => `<span class="bg-white/10 px-2 py-0.5 rounded text-[10px] backdrop-blur-sm">${t}</span>`).join('')}
-                        </div>
+                <div class="info-bottom pointer-events-auto">
+                    <h2 class="text-[15px] font-bold mb-2 line-clamp-2 drop-shadow-md">${cleanTitle}</h2>
+                    <div class="flex gap-1.5 flex-wrap">
+                        ${Array.from(allDisplayTags).map(t => `<span class="bg-black/30 px-2.5 py-1 rounded-md text-[11px] backdrop-blur-md border border-white/20 cursor-pointer hover:bg-white/30 shadow-md transition-colors" onclick="event.stopPropagation(); setTag('${t}')">#${t}</span>`).join('')}
                     </div>
-                `;
-                feed.appendChild(card);
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress-bar" id="prog-${index}"></div>
+                </div>
+            `;
+            feed.appendChild(card);
+            
+            const video = card.querySelector('video');
+            const prog = card.querySelector(`#prog-${index}`);
+            video.addEventListener('timeupdate', () => {
+                if(video.duration) prog.style.width = `${(video.currentTime / video.duration) * 100}%`;
             });
-
-            feed.scrollTo(0, 0);
-            setupIntersectionObserver();
+            
+            bindSwipeSeek(card.querySelector(`#area-${index}`), video, card.querySelector(`#toast-${index}`));
         }
 
-        // ================= 核心：播放与同步逻辑 =================
+        // ================= 鼠标/触摸拖拽进度引擎 (含误触分离) =================
+        function bindSwipeSeek(touchArea, video, toastEl) {
+            let startX = 0, startY = 0;
+            let isSeeking = false;
+            let toastTimer;
+            let justSeeked = false; 
+
+            const handleStart = (x, y) => { startX = x; startY = y; isSeeking = false; };
+            const handleMove = (x, y, e) => {
+                if(!startX || !startY) return;
+                const diffX = x - startX;
+                const diffY = y - startY;
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 15) {
+                    e.preventDefault();
+                    isSeeking = true;
+                }
+            };
+            const handleEnd = (x) => {
+                if (!isSeeking || !video.duration) { startX = 0; startY = 0; return; }
+                const diffX = x - startX;
+                if (Math.abs(diffX) > 40) {
+                    const step = video.duration * 0.2; 
+                    let newTime = diffX > 0 ? video.currentTime + step : video.currentTime - step;
+                    video.currentTime = Math.max(0, Math.min(newTime, video.duration));
+                    
+                    toastEl.innerText = diffX > 0 ? '前进 20%' : '后退 20%';
+                    toastEl.style.opacity = 1;
+                    clearTimeout(toastTimer);
+                    toastTimer = setTimeout(() => toastEl.style.opacity = 0, 500);
+                    
+                    justSeeked = true;
+                    setTimeout(() => { justSeeked = false; }, 200); 
+                }
+                startX = 0; startY = 0; isSeeking = false;
+            };
+
+            touchArea.addEventListener('touchstart', e => handleStart(e.touches[0].clientX, e.touches[0].clientY), {passive: true});
+            touchArea.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY, e), {passive: false});
+            touchArea.addEventListener('touchend', e => handleEnd(e.changedTouches[0].clientX));
+
+            let isMouseDown = false;
+            touchArea.addEventListener('mousedown', e => { isMouseDown = true; handleStart(e.clientX, e.clientY); });
+            touchArea.addEventListener('mousemove', e => { if(isMouseDown) handleMove(e.clientX, e.clientY, e); });
+            const mouseEnd = e => { if(isMouseDown) { isMouseDown = false; handleEnd(e.clientX); } };
+            touchArea.addEventListener('mouseup', mouseEnd);
+            touchArea.addEventListener('mouseleave', mouseEnd);
+
+            touchArea.addEventListener('click', (e) => {
+                if (justSeeked) { e.preventDefault(); return; } 
+                togglePlay(touchArea);
+            });
+        }
+
+        // ================= 滚动刷新与播放 =================
+        let scrollTimer;
+        feed.addEventListener('scroll', () => {
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(() => {
+                const newIndex = Math.round(feed.scrollTop / window.innerHeight);
+                if (newIndex !== currentIndex && newIndex >= 0 && newIndex < displayData.length) {
+                    currentIndex = newIndex;
+                    renderVirtualList();
+                }
+            }, 100);
+        });
+
+        function handleAutoPlay() {
+            document.querySelectorAll('.video-card').forEach(card => {
+                const vid = card.querySelector('video');
+                const idx = parseInt(card.dataset.index);
+                if (idx === currentIndex) {
+                    vid.play().then(() => {
+                        card.classList.remove('paused');
+                        if(currentFilter !== 'disliked') recordAction(decodeURIComponent(vid.src.split('/').pop()), 'play');
+                    }).catch(()=>card.classList.add('paused'));
+                } else {
+                    vid.pause(); vid.currentTime = 0; card.classList.add('paused');
+                }
+            });
+        }
+
         function togglePlay(clickAreaEl) {
             const card = clickAreaEl.closest('.video-card');
             const video = card.querySelector('video');
@@ -239,100 +418,45 @@
             else { video.pause(); card.classList.add('paused'); }
         }
 
-        function setupIntersectionObserver() {
-            if (observer) observer.disconnect();
-            observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    const video = entry.target.querySelector('video');
-                    const card = entry.target;
-                    const filename = decodeURIComponent(video.src.split('/').pop());
-
-                    if (entry.isIntersecting) {
-                        currentIndex = parseInt(card.dataset.index);
-                        video.play().then(() => {
-                            card.classList.remove('paused');
-                            recordAction(filename, 'play');
-                        }).catch(() => card.classList.add('paused'));
-                    } else {
-                        video.pause();
-                        video.currentTime = 0;
-                        card.classList.add('paused');
-                    }
-                });
-            }, { threshold: 0.6 }); 
-            document.querySelectorAll('.video-card').forEach(card => observer.observe(card));
-        }
-
-        // ================= 交互控制：滚轮与方向键 =================
-        const feedContainer = document.getElementById('videoFeed');
-        function smoothScrollToIndex(index) {
-            if(index < 0 || index >= displayData.length) return;
-            feedContainer.scrollTo({ top: index * window.innerHeight, behavior: 'smooth' });
-        }
-
-        feedContainer.addEventListener('wheel', (e) => {
-            e.preventDefault(); 
-            if (isWheelScrolling) return;
-            isWheelScrolling = true;
-            currentIndex = e.deltaY > 0 ? currentIndex + 1 : currentIndex - 1;
-            currentIndex = Math.max(0, Math.min(currentIndex, displayData.length - 1));
-            smoothScrollToIndex(currentIndex);
-            setTimeout(() => { isWheelScrolling = false; }, 600); 
-        }, { passive: false });
-
+        // ================= 快捷键 =================
         window.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
-                e.preventDefault();
+                e.preventDefault(); 
                 currentIndex = e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
                 currentIndex = Math.max(0, Math.min(currentIndex, displayData.length - 1));
-                smoothScrollToIndex(currentIndex);
+                feed.scrollTo({ top: currentIndex * window.innerHeight, behavior: 'smooth' });
             } else if (e.key === ' ') {
-                e.preventDefault();
+                e.preventDefault(); 
                 const card = document.getElementById(`card-${currentIndex}`);
                 if (card) togglePlay(card.querySelector('.click-area'));
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                const card = document.getElementById(`card-${currentIndex}`);
+                if (!card) return;
+                const video = card.querySelector('video');
+                const toast = card.querySelector('.seek-toast');
+                if (video && video.duration) {
+                    const step = video.duration * 0.2;
+                    video.currentTime = e.key === 'ArrowRight' ? Math.min(video.currentTime + step, video.duration) : Math.max(0, video.currentTime - step);
+                    toast.innerText = e.key === 'ArrowRight' ? '前进 20%' : '后退 20%';
+                    toast.style.opacity = 1;
+                    setTimeout(() => toast.style.opacity = 0, 500);
+                }
             }
         });
 
         // ================= 动作逻辑 =================
-        function recordAction(filename, action) {
-            let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
-            queue.push({ filename, action, timestamp: Date.now() });
-            localStorage.setItem('videoActionsQueue', JSON.stringify(queue));
-            if(navigator.onLine) fetch('/api/video/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(queue) }).then(() => localStorage.setItem('videoActionsQueue', '[]')).catch(()=>{});
-        }
-
         function toggleLike(btn, encodedName) {
-            const filename = decodeURIComponent(encodedName);
             btn.classList.toggle('liked');
-            recordAction(filename, btn.classList.contains('liked') ? 'like' : 'unlike');
+            recordAction(decodeURIComponent(encodedName), btn.classList.contains('liked') ? 'like' : 'unlike');
         }
 
-        function deleteVideo(btn, encodedName, index) {
+        function handleDeleteAction(btn, encodedName, index) {
             const filename = decodeURIComponent(encodedName);
-            const card = document.getElementById(`card-${index}`);
-            recordAction(filename, 'delete');
-            
-            // 核心修改：移除复杂的飞出动画，直接移除并让 CSS Scroll Snap 处理位置
-            card.remove();
-            
-            // 同步 displayData，防止索引错位
+            recordAction(filename, currentFilter === 'disliked' ? 'undelete' : 'delete');
             displayData.splice(index, 1);
-            
-            // 重新刷新后续卡片的 ID 和 Index 属性，确保方向键功能正常
-            document.querySelectorAll('.video-card').forEach((c, i) => {
-                c.id = `card-${i}`;
-                c.dataset.index = i;
-            });
-
-            // 既然当前卡片没了，自动平滑对齐到下一个（其实 Scroll Snap 会帮我们对齐，这里只是确保 currentIndex 准确）
-            if (currentIndex >= displayData.length) currentIndex = displayData.length - 1;
-        }
-
-        function switchFilter(type) {
-            currentFilter = type;
-            document.getElementById('nav-all').classList.toggle('active', type === 'all');
-            document.getElementById('nav-unplayed').classList.toggle('active', type === 'unplayed');
-            initVideos();
+            if (currentIndex >= displayData.length) currentIndex = Math.max(0, displayData.length - 1);
+            renderVirtualList();
+            feed.scrollTo({ top: currentIndex * window.innerHeight, behavior: 'auto' });
         }
 
         initVideos();

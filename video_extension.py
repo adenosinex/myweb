@@ -4,14 +4,19 @@ import json
 import time
 import dashscope
 import requests
+import urllib.parse
+import csv
+import io
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from concurrent.futures import ThreadPoolExecutor
-import urllib.parse
 
 video_bp = Blueprint('video', __name__)
 DB_PATH = 'universal_data.db'
 
+# ================= 配置区 =================
+# 指向你的轻量级局域网资源节点
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
+
 executor = ThreadPoolExecutor(max_workers=2)
 
 def init_video_db():
@@ -34,6 +39,7 @@ def init_video_db():
         ''')
 init_video_db()
 
+# ================= AI 异步打标任务 =================
 def ai_tag_videos_task():
     try:
         resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=10, proxies={"http": None, "https": None})
@@ -52,22 +58,15 @@ def ai_tag_videos_task():
     if not untagged: return
 
     batch = untagged[:40]
-    
-    # 核心优化：让大模型重点提炼细分标签，用于前端的音乐模块同款分类栏
     prompt = f"""
     你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如: 影视, 搞笑, 学习, 颜值, 音乐, 随拍) 
-    和 3 到 5 个【子标签】(如: 混剪, 剧情, 舞蹈, 宠物, 编程 等具体词汇)。
-    
-    务必返回纯JSON，不要Markdown！格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作", "高燃"]}}}}
+    和 3 到 5 个【子标签】(如: 混剪, 剧情, 舞蹈, 宠物, 编程 等)。
+    务必返回纯JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
     文件名列表：{json.dumps(batch, ensure_ascii=False)}
     """
     
     try:
-        response = dashscope.Generation.call(
-            model='qwen-plus',
-            prompt=prompt,
-            result_format='message'
-        )
+        response = dashscope.Generation.call(model='qwen-plus', prompt=prompt, result_format='message')
         result_text = response.output.choices[0].message.content.strip()
         import re
         match = re.search(r'\{.*\}', result_text, re.DOTALL)
@@ -85,6 +84,7 @@ def ai_tag_videos_task():
     except Exception as e:
         print(f"[视频AI失败] {str(e)}")
 
+# ================= API 接口 =================
 @video_bp.route('/api/video/scan', methods=['POST'])
 def trigger_scan():
     executor.submit(ai_tag_videos_task)
@@ -92,7 +92,7 @@ def trigger_scan():
 
 @video_bp.route('/api/video/list', methods=['GET'])
 def get_video_list():
-    filter_type = request.args.get('filter', 'all')
+    filter_type = request.args.get('filter', 'all') # 'all', 'unplayed', 'disliked'
     
     try:
         resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=5, proxies={"http": None, "https": None})
@@ -101,36 +101,44 @@ def get_video_list():
     
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        query = '''
             SELECT v.filename, v.category, v.tags, s.is_liked, s.is_deleted, s.play_count 
-            FROM video_store v 
-            LEFT JOIN video_stats s ON v.filename = s.filename
-        ''')
+            FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename
+        '''
+        # 如果是不喜欢列表，单独排序
+        if filter_type == 'disliked':
+            query += " WHERE s.is_deleted = 1 ORDER BY s.last_played_at DESC"
+            
+        cursor.execute(query)
         db_data = {row[0]: {"category": row[1], "tags": json.loads(row[2]) if row[2] else [], 
                             "is_liked": row[3] or 0, "is_deleted": row[4] or 0, "play_count": row[5] or 0} 
                    for row in cursor.fetchall()}
     
     result = []
-    for f in all_files:
-        meta = db_data.get(f, {"category": "未分类", "tags": [], "is_liked": 0, "is_deleted": 0, "play_count": 0})
-        
-        if meta["is_deleted"] == 1: continue 
-        if filter_type == 'unplayed' and meta["play_count"] > 0: continue
-        
-       # 核心修复1：使用 safe='' 强制编码所有特殊字符，包括斜杠和问号
-        encoded_name = urllib.parse.quote(f, safe='') 
-        
-        result.append({
-            "filename": f,
-            "url": f"/stream/video/{encoded_name}", 
-            "category": meta["category"],
-            "tags": meta["tags"],
-            "is_liked": bool(meta["is_liked"]),
-            "play_count": meta["play_count"]
-        })
+    # 针对普通列表和未播放列表的逻辑
+    if filter_type != 'disliked':
+        for f in all_files:
+            meta = db_data.get(f, {"category": "随拍", "tags": [], "is_liked": 0, "is_deleted": 0, "play_count": 0})
+            if meta["is_deleted"] == 1: continue 
+            if filter_type == 'unplayed' and meta["play_count"] > 0: continue
+            
+            url_safe_name = urllib.parse.quote(f, safe='') # 极致转义，防 # 截断
+            result.append({
+                "filename": f, "url": f"/stream/video/{url_safe_name}", 
+                "category": meta["category"], "tags": meta["tags"],
+                "is_liked": bool(meta["is_liked"]), "play_count": meta["play_count"]
+            })
+    else:
+        # 不喜欢列表只读取数据库里标记过删除的
+        for f, meta in db_data.items():
+            if meta["is_deleted"] == 1:
+                url_safe_name = urllib.parse.quote(f, safe='')
+                result.append({
+                    "filename": f, "url": f"/stream/video/{url_safe_name}", 
+                    "category": meta["category"], "tags": meta["tags"],
+                    "is_liked": bool(meta["is_liked"]), "play_count": meta["play_count"]
+                })
     return jsonify(result)
-
-
 
 @video_bp.route('/api/video/sync', methods=['POST'])
 def sync_video_actions():
@@ -144,16 +152,35 @@ def sync_video_actions():
             if action == 'play': conn.execute("UPDATE video_stats SET play_count = play_count + 1, last_played_at = ? WHERE filename = ?", (time.time(), fname))
             elif action == 'like': conn.execute("UPDATE video_stats SET is_liked = 1 WHERE filename = ?", (fname,))
             elif action == 'unlike': conn.execute("UPDATE video_stats SET is_liked = 0 WHERE filename = ?", (fname,))
-            elif action == 'delete': conn.execute("UPDATE video_stats SET is_deleted = 1 WHERE filename = ?", (fname,))
+            elif action == 'delete': conn.execute("UPDATE video_stats SET is_deleted = 1, last_played_at = ? WHERE filename = ?", (time.time(), fname))
+            elif action == 'undelete': conn.execute("UPDATE video_stats SET is_deleted = 0 WHERE filename = ?", (fname,))
     return jsonify({"status": "success"})
+
+@video_bp.route('/api/video/export_csv', methods=['GET'])
+def export_video_csv():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['文件名', '分类', '播放次数', '是否喜欢', '是否隐藏(删除)', '最后活动时间'])
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT v.filename, v.category, s.play_count, s.is_liked, s.is_deleted, s.last_played_at
+            FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename
+        ''')
+        for row in cursor.fetchall():
+            dt = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[5])) if row[5] else '-'
+            writer.writerow([row[0], row[1], row[2] or 0, '是' if row[3] else '否', '是' if row[4] else '否', dt])
+            
+    response = Response(output.getvalue().encode('utf-8-sig'), mimetype='text/csv')
+    response.headers['Content-Disposition'] = 'attachment; filename=video_stats.csv'
+    return response
 
 @video_bp.route('/stream/video/<path:video_name>', methods=['GET'])
 def proxy_stream_video(video_name):
-    # 核心修复2：video_name 进来时可能已经被 Flask 自动解码了一次
-    # 如果文件名包含 #，资源节点会报错。我们在这里重新编码发给资源节点
+    # Flask 解码后重编码，防止二次转发时被资源节点截断
     encoded_name = urllib.parse.quote(video_name)
     url = f"{RESOURCE_NODE_URL}/stream/video/{encoded_name}"
-    
     headers = {key: value for (key, value) in request.headers if key.lower() != 'host'}
     try:
         req = requests.get(url, headers=headers, stream=True, proxies={"http": None, "https": None})
