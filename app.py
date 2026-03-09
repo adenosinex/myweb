@@ -1,24 +1,59 @@
-# app.py
-from flask import Flask, request, jsonify, send_from_directory, redirect, make_response
+from flask import Flask, request, jsonify, send_from_directory, redirect, make_response, Blueprint
 import sqlite3
 import os
 import json
+import importlib
 from dotenv import load_dotenv
 
 load_dotenv()  # 自动寻找当前目录下的 .env 并注入到 os.environ
-# ================= 引入外部模块 =================
-from player_extension import player_bp  # 导入播放器蓝图
-from tags_extension import tags_bp      # 导入AI打标蓝图
 
 app = Flask(__name__)
 DB_PATH = 'universal_data.db'
 PAGES_DIR = 'pages'
-ACCESS_CODE =   os.environ.get('ACCESS_CODE') or "8888"
+ACCESS_CODE = os.environ.get('ACCESS_CODE') or "8888"
 
-# 注册外部蓝图路由到当前 App
-app.register_blueprint(player_bp)
-app.register_blueprint(tags_bp)
+# ================= 动态加载外部蓝图 (Extensions) =================
+def load_extensions(app):
+    """
+    扫描当前目录，自动导入所有以 _extension.py 结尾的文件，
+    并将其中的 Blueprint 实例注册到 app 中。
+    """
+    current_dir = os.path.dirname(os.path.abspath(__name__))
+    
+    for filename in os.listdir(current_dir):
+        # 匹配后缀为 _extension.py 的文件
+        if filename.endswith('_extension.py'):
+            module_name = filename[:-3]  # 去掉 .py 后缀
+            try:
+                # 动态导入模块
+                module = importlib.import_module(module_name)
+                
+                # 遍历模块内的所有对象，寻找 Blueprint 实例
+                blueprint_found = False
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+                    if isinstance(attr, Blueprint):
+                        app.register_blueprint(attr)
+                        print(f"✅ 已自动挂载蓝图: {attr.name} (来自 {filename})")
+                        blueprint_found = True
+                
+                if not blueprint_found:
+                    print(f"⚠️ 警告: 在 {filename} 中未找到可用的 Blueprint 实例。")
+                    
+            except Exception as e:
+                print(f"❌ 挂载蓝图失败 {filename}: {str(e)}")
 
+    # 针对之前未按规范命名的文件（如 aiocr.py），建议将其重命名为 aiocr_extension.py。
+    # 如果暂时不方便重命名，可以在下方手动保留它的导入和注册：
+    try:
+        from aiocr import manuals_bp
+        app.register_blueprint(manuals_bp)
+        print("✅ 已手动挂载蓝图: manuals_bp (来自 aiocr.py)")
+    except ImportError:
+        pass # 如果你已经将其重命名为 aiocr_extension.py，这里会自动跳过不报错
+
+# 执行动态加载
+load_extensions(app)
 # ================= 数据库初始化 =================
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
@@ -117,15 +152,49 @@ def get_data(collection):
     return jsonify(result)
 
 # ================= 3. 静态页面路由 =================
+
+def serve_html_with_icon(filename):
+    """读取 HTML 文件，若存在同名 svg，则向其动态插入 icon 标签"""
+    if not filename.endswith('.html'):
+        filename += '.html'
+        
+    html_path = os.path.join(PAGES_DIR, filename)
+    if not os.path.exists(html_path):
+        return "Page not found", 404
+
+    # 提取基础文件名，例如 'player.html' -> 'player'
+    base_name = filename[:-5] 
+    svg_path = os.path.join('static', f'{base_name}.svg')
+
+    # 如果 static 目录下存在同名的 svg 图标
+    if os.path.exists(svg_path):
+        with open(html_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 准备要插入的 link 标签
+        icon_tag = f'<link rel="icon" href="/static/{base_name}.svg" type="image/svg+xml">'
+        
+        # 查找 </head> 并在其前面硬编码插入标签
+        if '</head>' in content:
+            content = content.replace('</head>', f'    {icon_tag}\n</head>', 1)
+        else:
+            # 如果极端情况没有 </head> 标签，直接插在最前面
+            content = icon_tag + '\n' + content
+            
+        return content
+
+    # 如果没有对应的 svg，按原样发送文件
+    return send_from_directory(PAGES_DIR, filename)
+
 @app.route('/')
 def index():
-    return send_from_directory(PAGES_DIR, 'index.html')
+    return serve_html_with_icon('index.html')
 
 @app.route('/<path:filename>')
 def serve_pages(filename):
-    if not filename.endswith('.html'):
-        filename += '.html'
-    return send_from_directory(PAGES_DIR, filename)
+    return serve_html_with_icon(filename)
+
+ 
 
 if __name__ == '__main__':
     os.makedirs(PAGES_DIR, exist_ok=True)

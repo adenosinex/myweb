@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智能说明书智库</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.css">
+    <style>
+        .manual-img { transition: transform 0.3s ease; cursor: zoom-in; }
+        .prose table { border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #e5e7eb; }
+        .prose th, .prose td { border: 1px solid #e5e7eb; padding: 0.5rem; text-align: left; }
+        .prose th { background-color: #f9fafb; }
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        .filter-tag { transition: all 0.2s ease-in-out; }
+        
+        /* 手机端对照模式控制 */
+        @media (max-width: 767px) {
+            #modalBody[data-view="text"] #modalImgContainer { display: none; }
+            #modalBody[data-view="image"] #modalTextContainer { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+    <nav class="bg-white shadow-sm border-b border-gray-200 px-4 md:px-6 py-4 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center gap-4 justify-between">
+            <div class="flex items-center justify-between flex-1">
+                <h1 class="text-xl font-bold text-gray-800 tracking-tight flex-shrink-0 mr-6">📚 智能说明书</h1>
+                <button onclick="openUploadModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-4 rounded-full shadow-md shadow-blue-200 transition-all flex items-center gap-1 shrink-0 md:order-last">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>批量录入
+                </button>
+                <div class="hidden md:block flex-1 max-w-xl mx-4">
+                    <input type="text" id="searchInput" class="w-full bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm transition-all shadow-sm outline-none" placeholder="🔍 搜索全文或文件名..." oninput="renderGallery()">
+                </div>
+            </div>
+            <div class="md:hidden w-full">
+                <input type="text" id="searchInputMobile" class="w-full bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm transition-all shadow-sm outline-none" placeholder="🔍 搜索全文或文件名..." oninput="syncSearch(this.value)">
+            </div>
+        </div>
+        <div class="max-w-7xl mx-auto mt-4 flex gap-2 items-center flex-wrap" id="tagFilterContainer"></div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 md:px-6 py-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-5 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-50 p-2.5 rounded-xl text-blue-600 hidden sm:block">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-gray-800">整体识别进度</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">队列等待: <span id="queueCount" class="font-bold text-gray-700">0</span> 份 | 正在执行: <span id="processingCount" class="font-bold text-blue-600 animate-pulse">0</span> 份</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 sm:border-l sm:pl-6 border-gray-100 w-full sm:w-auto">
+                <div class="text-xs text-gray-500 font-mono bg-gray-50 px-3 py-2 rounded-lg w-full">
+                    最近耗时 -> 👁️ OCR: <span id="lastOcrTime" class="text-gray-800 font-bold">--</span> | 🧠 NLP: <span id="lastNlpTime" class="text-gray-800 font-bold">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="gallery" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"></div>
+    </main>
+
+    <div id="uploadModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col shadow-2xl scale-100">
+            <div class="p-5 border-b flex justify-between items-center bg-gray-50/50">
+                <h3 class="font-bold text-gray-800 flex items-center gap-2">上传说明书</h3>
+                <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-900 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-2xl p-8 text-center hover:bg-blue-50 hover:border-blue-400 transition-all cursor-pointer mb-4" onclick="document.getElementById('fileInput').click()">
+                    <svg class="mx-auto h-12 w-12 text-blue-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                    <p class="text-sm font-semibold text-gray-700">点击选择图片</p>
+                    <input type="file" id="fileInput" accept="image/*" multiple class="hidden" onchange="handleFilesSelection()">
+                </div>
+                <div id="fileListContainer" class="max-h-40 overflow-y-auto mb-4 hidden pr-1 custom-scrollbar">
+                    <ul id="fileList" class="space-y-2"></ul>
+                </div>
+                <button onclick="confirmStartProcessing()" class="w-full bg-gray-300 text-gray-500 font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed" id="btnConfirmStart" disabled>
+                    等待选择文件...
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tagsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden flex items-end md:items-center justify-center sm:p-4">
+        <div class="bg-white w-full max-w-3xl rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+            <div class="p-5 border-b flex justify-between items-center bg-gray-50/50">
+                <h3 class="font-bold text-gray-800">全部分类字典</h3>
+                <button onclick="closeTagsModal()" class="text-gray-400 hover:text-gray-900 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh] custom-scrollbar">
+                <div id="allTagsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="detailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] hidden flex items-center justify-center md:p-4 transition-all">
+        <div class="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+            
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50/90 z-10">
+                <h3 class="font-bold text-gray-800 flex items-center gap-2 truncate pr-4">
+                    <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span id="modalTitle" class="truncate max-w-[200px] md:max-w-md">文档详情</span>
+                </h3>
+                <div class="flex items-center gap-3">
+                    <button onclick="copyContent()" id="copyBtnPc" class="text-xs font-bold text-blue-600 bg-white px-3 py-1.5 hover:bg-blue-50 rounded-lg border border-blue-200 transition-all hidden md:block">📋 复制提取结果</button>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-900 bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center transition-colors">&times;</button>
+                </div>
+            </div>
+
+            <div class="md:hidden flex bg-gray-100 p-2 gap-2 border-b">
+                <button onclick="setModalView('text')" id="btnViewText" class="flex-1 py-1.5 bg-white shadow rounded-lg text-sm font-bold text-blue-600 transition-all">📄 识别文档</button>
+                <button onclick="setModalView('image')" id="btnViewImg" class="flex-1 py-1.5 text-gray-500 hover:bg-gray-200 rounded-lg text-sm font-bold transition-all">🖼️ 原始图片</button>
+            </div>
+
+            <div id="modalBody" data-view="text" class="flex-1 flex flex-col md:flex-row overflow-hidden relative bg-white">
+                
+                <div id="modalImgContainer" class="w-full md:w-5/12 lg:w-1/2 h-full bg-gray-900 flex items-center justify-center relative md:border-r border-gray-200">
+                    <img id="modalDetailImg" src="" class="max-w-full max-h-full object-contain cursor-zoom-in" title="点击全屏放大">
+                </div>
+                
+                <div id="modalTextContainer" class="w-full md:w-7/12 lg:w-1/2 h-full overflow-y-auto p-5 md:p-8 custom-scrollbar">
+                    <div id="modalContent" class="prose prose-blue prose-sm md:prose-base max-w-none text-gray-700 selection:bg-blue-100"></div>
+                </div>
+            </div>
+
+            <div class="md:hidden p-3 bg-gray-50 border-t flex justify-end" id="mobileFooter">
+                <button onclick="copyContent()" id="copyBtnMobile" class="text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-6 py-2.5 rounded-xl shadow w-full transition-all">📋 一键复制全文</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.js"></script>
+    <script>
+        let viewer, pollInterval, modalViewer;
+        let allManualsData = []; 
+        let activeTag = '全部'; 
+        let validIdsToProcess = []; 
+
+        // 统一的浮点数格式化工具
+        const formatSec = (val) => val ? parseFloat(val).toFixed(2) + 's' : '--';
+
+        function syncSearch(val) { 
+            document.getElementById('searchInput').value = val; 
+            document.getElementById('searchInputMobile').value = val; 
+            renderGallery(); 
+        }
+
+        // ======================== 原图指纹计算与压缩 ========================
+        async function calculateOriginalHash(file) {
+            const buffer = await file.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let w = img.width, h = img.height;
+                        if (w > h && w > 2048) { h = Math.round(h * 2048 / w); w = 2048; } 
+                        else if (h > 2048) { w = Math.round(w * 2048 / h); h = 2048; }
+                        const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+                        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+                        cvs.toBlob(blob => resolve(new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' })), 'image/jpeg', 0.85);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleFilesSelection() {
+            const input = document.getElementById('fileInput');
+            if (!input.files.length) return;
+            
+            const fileList = document.getElementById('fileList');
+            document.getElementById('fileListContainer').classList.remove('hidden');
+            fileList.innerHTML = '';
+            validIdsToProcess = []; 
+            
+            const btnStart = document.getElementById('btnConfirmStart');
+            btnStart.disabled = true;
+            btnStart.className = "w-full bg-gray-100 text-gray-400 font-bold py-3.5 px-4 rounded-xl flex justify-center items-center cursor-not-allowed";
+            btnStart.innerHTML = `<span class="animate-pulse">计算指纹并上传...</span>`;
+
+            for (let i = 0; i < input.files.length; i++) {
+                const f = input.files[i];
+                fileList.innerHTML += `
+                    <li class="flex flex-col bg-blue-50 p-2.5 rounded-xl border border-blue-200" id="file-item-${i}">
+                        <div class="flex justify-between items-center w-full">
+                            <span class="text-xs font-medium text-gray-600 truncate px-1 max-w-[200px]">${f.name}</span>
+                            <span class="text-[10px] text-blue-500 animate-pulse" id="file-status-${i}">校验中...</span>
+                        </div>
+                    </li>`;
+            }
+
+            for (let i = 0; i < input.files.length; i++) {
+                const statusSpan = document.getElementById(`file-status-${i}`);
+                const itemLi = document.getElementById(`file-item-${i}`);
+                try {
+                    const file = input.files[i];
+                    const originalHash = await calculateOriginalHash(file);
+                    const compressed = await compressImage(file);
+                    
+                    const fd = new FormData(); 
+                    fd.append('file', compressed);
+                    fd.append('original_hash', originalHash);
+                    fd.append('original_filename', file.name);
+
+                    const res = await fetch('/api/manuals/upload', { method: 'POST', body: fd });
+                    const resData = await res.json();
+                    
+                    if(resData.status === 'duplicate') {
+                        itemLi.className = "flex flex-col bg-amber-50 p-2.5 rounded-xl border border-amber-200";
+                        statusSpan.className = "text-[10px] text-amber-600 font-bold bg-amber-100 px-2 py-0.5 rounded";
+                        statusSpan.innerText = "🔁 重复拦截";
+                    } else if (resData.status === 'success') {
+                        itemLi.className = "flex flex-col bg-green-50 p-2.5 rounded-xl border border-green-300";
+                        statusSpan.className = "text-[10px] text-green-600 font-bold bg-green-100 px-2 py-0.5 rounded";
+                        statusSpan.innerText = "✅ 就绪";
+                        validIdsToProcess.push(resData.id); 
+                    }
+                } catch(e) { 
+                    itemLi.className = "flex flex-col bg-red-50 p-2.5 rounded-xl border border-red-300";
+                    statusSpan.className = "text-[10px] text-red-600 font-bold bg-red-100 px-2 py-0.5 rounded";
+                    statusSpan.innerText = "❌ 失败";
+                }
+            }
+            
+            if (validIdsToProcess.length > 0) {
+                btnStart.disabled = false;
+                btnStart.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex justify-center items-center";
+                btnStart.innerHTML = `🚀 开始数字化 (${validIdsToProcess.length} 张)`;
+            } else {
+                btnStart.innerHTML = `无有效文件`;
+                setTimeout(() => { closeUploadModal(); }, 2000); 
+            }
+            input.value = '';
+        }
+
+        async function confirmStartProcessing() {
+            if (validIdsToProcess.length === 0) return;
+            const btnStart = document.getElementById('btnConfirmStart');
+            btnStart.disabled = true;
+            btnStart.innerHTML = `<span class="animate-pulse">已推送至队列...</span>`;
+            
+            await fetch('/api/manuals/start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids: validIdsToProcess}) });
+            closeUploadModal(); loadManuals(); startPolling();
+        }
+
+        function updateDashboardStats() {
+            document.getElementById('queueCount').innerText = allManualsData.filter(m => m.status === 'pending').length;
+            document.getElementById('processingCount').innerText = allManualsData.filter(m => m.status.startsWith('processing')).length;
+            const completed = allManualsData.filter(m => m.status === 'completed');
+            if (completed.length > 0) {
+                // 应用格式化
+                document.getElementById('lastOcrTime').innerText = formatSec(completed[0].metrics.ocr_sec);
+                document.getElementById('lastNlpTime').innerText = formatSec(completed[0].metrics.nlp_sec);
+            }
+        }
+
+        // ======================== 渲染与分类 ========================
+        function renderTags() {
+            let totalPhotos = 0; const tagCounts = {};
+            allManualsData.forEach(item => {
+                if (item.status === 'completed') {
+                    totalPhotos++;
+                    if (item.tags && item.tags.length > 0) item.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1);
+                    else tagCounts['未分类'] = (tagCounts['未分类'] || 0) + 1;
+                }
+            });
+
+            const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
+            const visibleTags = sortedTags.slice(0, 5);
+            const topContainer = document.getElementById('tagFilterContainer');
+            const getBtnClass = (t) => activeTag === t ? "bg-gray-900 text-white shadow-md" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100";
+            
+            let topHtml = `<span class="filter-tag cursor-pointer px-4 py-1.5 rounded-full text-xs font-bold border ${getBtnClass('全部')}" onclick="setFilterTag('全部')">全部 (${totalPhotos})</span>`;
+            visibleTags.forEach(([tag, count]) => {
+                topHtml += `<span class="filter-tag cursor-pointer px-4 py-1.5 rounded-full text-[11px] font-bold border ${getBtnClass(tag)}" onclick="setFilterTag('${tag}')">${tag} <span class="opacity-60 ml-0.5">${count}</span></span>`;
+            });
+            if (sortedTags.length > 5) topHtml += `<button onclick="openTagsModal()" class="px-3 py-1.5 rounded-full text-[11px] font-bold border bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100">更多 (${sortedTags.length})</button>`;
+            topContainer.innerHTML = topHtml;
+
+            const gridContainer = document.getElementById('allTagsGrid');
+            const getGridClass = (t) => activeTag === t ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100";
+            let gridHtml = `<div class="cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold border flex justify-between items-center ${getGridClass('全部')}" onclick="setFilterTag('全部'); closeTagsModal();"><span>全部档案</span> <span class="bg-black/10 px-2 py-0.5 rounded-full text-xs">${totalPhotos}</span></div>`;
+            sortedTags.forEach(([tag, count]) => {
+                gridHtml += `<div class="cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold border flex justify-between items-center ${getGridClass(tag)}" onclick="setFilterTag('${tag}'); closeTagsModal();">
+                    <span class="truncate pr-2">${tag}</span><span class="bg-black/10 px-2 py-0.5 rounded-full text-xs">${count}</span>
+                </div>`;
+            });
+            gridContainer.innerHTML = gridHtml;
+        }
+
+        function setFilterTag(tag) { activeTag = tag; renderTags(); renderGallery(); }
+        function openTagsModal() { document.getElementById('tagsModal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+        function closeTagsModal() { document.getElementById('tagsModal').classList.add('hidden'); document.body.style.overflow = 'auto'; }
+        function openUploadModal() { 
+            document.getElementById('uploadModal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; 
+            document.getElementById('fileListContainer').classList.add('hidden');
+            document.getElementById('btnConfirmStart').innerHTML = "等待选择文件..."; document.getElementById('btnConfirmStart').disabled = true;
+            document.getElementById('btnConfirmStart').className = "w-full bg-gray-300 text-gray-500 font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex justify-center items-center cursor-not-allowed";
+        }
+        function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); document.body.style.overflow = 'auto'; }
+
+        function renderGallery() {
+            const gallery = document.getElementById('gallery');
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            let needPolling = false;
+
+            const filteredData = allManualsData.filter(item => {
+                const textContext = (item.ocr_text || "") + (item.tags ? item.tags.join(' ') : "") + (item.filename || "");
+                const matchKeyword = textContext.toLowerCase().includes(keyword);
+                const matchTag = activeTag === '全部' || (item.tags && item.tags.includes(activeTag));
+                return matchKeyword && matchTag;
+            });
+
+            gallery.innerHTML = filteredData.map(item => {
+                if (item.status === 'pending' || item.status.startsWith('processing')) needPolling = true;
+                
+                let statusOverlay = '';
+                if (item.status === 'pending') statusOverlay = '排队准备中...';
+                else if (item.status === 'processing_ocr') statusOverlay = '👁️ 提取文字中...';
+                else if (item.status === 'processing_nlp') statusOverlay = '🧠 智能分类中...';
+
+                const tagsHTML = (item.tags || []).map(t => `<span class="bg-gray-100 text-gray-600 text-[9px] px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[60px]">${t}</span>`).join('');
+                
+                // 卡片级时间格式化
+                const ocrSec = formatSec(item.metrics.ocr_sec);
+                const nlpSec = formatSec(item.metrics.nlp_sec);
+
+                return `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                    <button class="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur shadow rounded-full p-2 text-red-500 hover:bg-red-50 transition-opacity" onclick="deleteManual('${item.id}', event)" title="永久删除">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                    <button class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur shadow rounded-full p-2 text-gray-500 hover:bg-blue-50 transition-opacity" onclick="retryManual('${item.id}', event)" title="重新识别">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </button>
+                    
+                    <div class="relative h-32 sm:h-44 overflow-hidden bg-gray-50">
+                        <img src="${item.url}" alt="${item.filename}" class="w-full h-full object-cover manual-img">
+                        ${statusOverlay ? `<div class="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-xs text-white animate-pulse font-bold tracking-widest">${statusOverlay}</div>` : ''}
+                        ${item.status === 'failed' ? `<div class="absolute inset-0 bg-red-900/60 backdrop-blur-sm flex items-center justify-center text-xs text-white font-bold tracking-widest">❌ 处理失败</div>` : ''}
+                    </div>
+                    
+                    <div class="p-3 sm:p-4 flex-1 flex flex-col">
+                        <div class="text-[11px] font-bold text-gray-700 truncate mb-2" title="${item.filename}">📄 ${item.filename}</div>
+                        <div class="flex flex-wrap gap-1 mb-2 h-6 overflow-hidden">${tagsHTML}</div>
+                        <button onclick="showDetail('${item.id}')" class="mt-auto w-full py-2 bg-blue-50/50 hover:bg-blue-600 hover:text-white text-blue-600 text-[11px] font-bold rounded-xl transition-all border border-blue-100 disabled:opacity-50" ${item.status!=='completed'?'disabled':''}>
+                            查看文档
+                        </button>
+                        <div class="mt-3 pt-3 border-t text-[9px] text-gray-400 flex justify-between items-center font-mono">
+                            <span title="文字提取用时">👁️ ${ocrSec}</span><span title="智能分类用时">🧠 ${nlpSec}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            if (viewer) viewer.destroy();
+            viewer = new Viewer(gallery, { filter(img) { return img.classList.contains('manual-img'); }, navbar: true, title: true });
+            return needPolling;
+        }
+
+        async function loadManuals() {
+            const res = await fetch('/api/manuals');
+            allManualsData = await res.json();
+            renderTags(); updateDashboardStats(); return renderGallery();
+        }
+
+        async function deleteManual(id, event) {
+            event.stopPropagation();
+            if(!confirm("⚠️ 永久删除此说明书？")) return;
+            await fetch(`/api/manuals/${id}`, { method: 'DELETE' });
+            loadManuals();
+        }
+
+        async function retryManual(id, event) {
+            event.stopPropagation();
+            if(!confirm("重新提取文字？")) return;
+            await fetch('/api/manuals/retry', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
+            loadManuals(); startPolling();
+        }
+
+        // ======================== 双排对照模式逻辑 ========================
+        
+        function setModalView(view) {
+            document.getElementById('modalBody').setAttribute('data-view', view);
+            const btnImg = document.getElementById('btnViewImg');
+            const btnText = document.getElementById('btnViewText');
+            if (view === 'image') {
+                btnImg.className = "flex-1 py-1.5 bg-white shadow rounded-lg text-sm font-bold text-blue-600 transition-all";
+                btnText.className = "flex-1 py-1.5 text-gray-500 hover:bg-gray-200 rounded-lg text-sm font-bold transition-all";
+                document.getElementById('mobileFooter').classList.add('hidden'); // 看图时隐藏复制按钮
+            } else {
+                btnText.className = "flex-1 py-1.5 bg-white shadow rounded-lg text-sm font-bold text-blue-600 transition-all";
+                btnImg.className = "flex-1 py-1.5 text-gray-500 hover:bg-gray-200 rounded-lg text-sm font-bold transition-all";
+                document.getElementById('mobileFooter').classList.remove('hidden');
+            }
+        }
+
+        function showDetail(id) {
+            const item = allManualsData.find(m => m.id === id);
+            if (!item) return;
+            document.getElementById('modalTitle').innerText = item.filename;
+            document.getElementById('modalContent').innerHTML = marked.parse(item.ocr_text || "提取中...");
+            
+            // 绑定弹窗内侧原图
+            const imgEl = document.getElementById('modalDetailImg');
+            imgEl.src = item.url;
+            
+            // 手机端默认进入"识别文档"视图
+            setModalView('text');
+            
+            // 为弹窗内的图片单独绑定一个可以全屏放大的 Viewer
+            if(modalViewer) modalViewer.destroy();
+            modalViewer = new Viewer(imgEl, { navbar: false, title: false, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1 } });
+
+            document.getElementById('detailModal').classList.remove('hidden'); 
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() { document.getElementById('detailModal').classList.add('hidden'); document.body.style.overflow = 'auto'; }
+        
+        function copyContent() { 
+            navigator.clipboard.writeText(document.getElementById('modalContent').innerText); 
+            const btns = [document.getElementById('copyBtnPc'), document.getElementById('copyBtnMobile')];
+            btns.forEach(btn => { if(btn) btn.innerText = "✅ 已复制"; });
+            setTimeout(() => { 
+                if(btns[0]) btns[0].innerText = "📋 复制提取结果"; 
+                if(btns[1]) btns[1].innerText = "📋 一键复制全文"; 
+            }, 2000); 
+        }
+
+        function startPolling() { if (pollInterval) clearInterval(pollInterval); pollInterval = setInterval(async () => { if (!(await loadManuals())) clearInterval(pollInterval); }, 3000); }
+
+        loadManuals();
+    </script>
+</body>
+</html>

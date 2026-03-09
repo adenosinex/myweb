@@ -3,13 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>个人控制台</title>
-       <link rel="icon" href="/static/index.svg" type="image/svg+xml">
     <style>
         body { font-family: system-ui; background: #f0f2f5; color: #333; max-width: 800px; margin: 40px auto; padding: 20px; }
         .header { text-align: center; margin-bottom: 40px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
-        .card { background: white; padding: 30px 20px; border-radius: 12px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s; font-weight: bold; font-size: 18px;}
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
+        .card { 
+            background: white; padding: 25px 15px; border-radius: 16px; 
+            text-align: center; text-decoration: none; color: #333; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
         .card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); color: #007bff;}
+        .card img { width: 50px; height: 50px; margin-bottom: 12px; }
+        .card .icon-placeholder { font-size: 40px; margin-bottom: 12px; display: none; }
+        .card-title { font-weight: bold; font-size: 16px; }
         .hint { text-align: center; color: #888; margin-top: 50px; font-size: 14px; }
     </style>
 </head>
@@ -24,22 +31,24 @@
     </div>
 
     <div class="hint">
-        💡 拓展新应用：只需在 <code>pages/</code> 目录下新建一个 <code>.html</code> 文件，刷新本页即可自动识别。
+        💡 拓展新应用：只需在 <code>pages/</code> 目录下新建一个 <code>.html</code> 文件并放入同名 <code>.svg</code> 图标到 <code>static/</code> 即可。
     </div>
 
     <script>
-        // 自动拉取 pages 目录下的所有文件并生成导航按钮
         fetch('/api/_sys/pages')
             .then(res => res.json())
             .then(pages => {
                 const grid = document.getElementById('appGrid');
                 if (pages.length === 0) {
-                    grid.innerHTML = '<p style="color:#999; grid-column: 1/-1;">还没有创建任何子页面，去 code-server 里建一个吧！</p>';
+                    grid.innerHTML = '<p style="color:#999; grid-column: 1/-1;">还没有子页面</p>';
                     return;
                 }
                 grid.innerHTML = pages.map(page => `
                     <a href="/${page}" class="card" target="_blank">
-                        📄 ${page.toUpperCase()}
+                        <img src="/static/${page}.svg" 
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div class="icon-placeholder">📄</div>
+                        <div class="card-title">${page.toUpperCase()}</div>
                     </a>
                 `).join('');
             });
