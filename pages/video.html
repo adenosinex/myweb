@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>云端幻境 - 短视频</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; background-color: #000; color: white; overflow: hidden; font-family: -apple-system, sans-serif; }
+        
+        /* ============== 顶部导航与标签栏 ============== */
+        .top-nav {
+            position: absolute; top: 0; left: 0; right: 0; z-index: 40;
+            background: linear-gradient(to bottom, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0));
+            padding-top: env(safe-area-inset-top, 15px); pointer-events: none;
+        }
+        .main-tabs { display: flex; justify-content: center; gap: 25px; padding: 15px 0 10px; pointer-events: auto; }
+        .tab-item { font-size: 16px; color: rgba(255,255,255,0.5); font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .tab-item.active { color: white; font-size: 18px; text-shadow: 0 2px 8px rgba(255,255,255,0.3); }
+
+        .tag-row { display: flex; align-items: center; gap: 10px; padding: 0 15px 15px; pointer-events: auto; }
+        .tag-scroll { display: flex; overflow-x: auto; gap: 10px; flex: 1; scrollbar-width: none; }
+        .tag-scroll::-webkit-scrollbar { display: none; }
+        
+        .cat-pill {
+            padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 20px;
+            font-size: 12px; white-space: nowrap; transition: 0.2s; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .cat-pill.active { background: #3b82f6; color: white; border-color: #60a5fa; }
+
+        /* ============== 侧边抽屉式分类网格 ============== */
+        .drawer {
+            position: fixed; inset: 0; background: #0b1120; z-index: 100;
+            transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+            padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px;
+        }
+        .drawer.open { transform: translateY(0); }
+        .drawer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; overflow-y: auto; max-height: 80vh; }
+        .grid-item { 
+            background: rgba(255,255,255,0.05); padding: 15px 10px; border-radius: 12px; text-align: center;
+            display: flex; flex-direction: column; gap: 5px; cursor: pointer;
+        }
+        .grid-item.active { border: 1px solid #3b82f6; background: rgba(59, 130, 246, 0.1); }
+
+        /* ============== 视频流容器 ============== */
+        .video-feed {
+            height: 100dvh; width: 100vw; overflow-y: scroll;
+            scroll-snap-type: y mandatory; scroll-behavior: smooth; scrollbar-width: none;
+        }
+        .video-feed::-webkit-scrollbar { display: none; }
+
+        .video-card {
+            height: 100dvh; width: 100vw; scroll-snap-align: start;
+            position: relative; display: flex; justify-content: center; align-items: center;
+            padding: calc(env(safe-area-inset-top, 15px) + 110px) 0 80px 0; overflow: hidden;
+        }
+
+        .blur-bg {
+            position: absolute; inset: 0; z-index: 1;
+            background-size: cover; background-position: center;
+            filter: blur(40px) brightness(0.3); transform: scale(1.1);
+        }
+
+        .video-player { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; border-radius: 12px; pointer-events: none; }
+        .click-area { position: absolute; inset: 0; z-index: 10; cursor: pointer; }
+        .play-icon {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 11; opacity: 0; pointer-events: none; color: rgba(255,255,255,0.7);
+        }
+        .video-card.paused .play-icon { opacity: 1; transform: translate(-50%, -50%) scale(1.2); transition: 0.2s; }
+
+        /* ============== UI 悬浮层 ============== */
+        .action-sidebar {
+            position: absolute; right: 15px; bottom: 130px; z-index: 20;
+            display: flex; flex-direction: column; gap: 20px; align-items: center;
+        }
+        .action-btn { background: none; border: none; color: white; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .icon-circle { width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; }
+        .action-btn.liked .icon-circle { color: #ef4444; }
+
+        .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 4px rgba(0,0,0,0.8); pointer-events: none; }
+    </style>
+</head>
+<body class="selection:bg-blue-500">
+
+    <div class="drawer" id="drawer">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold">全部分类</h2>
+            <button onclick="toggleDrawer()" class="p-2 bg-white/10 rounded-full">✕</button>
+        </div>
+        <div class="drawer-grid" id="drawerGrid"></div>
+    </div>
+
+    <div class="top-nav">
+        <div class="main-tabs">
+            <div class="tab-item active" onclick="switchFilter('all')" id="nav-all">推荐</div>
+            <div class="tab-item" onclick="switchFilter('unplayed')" id="nav-unplayed">新鲜</div>
+            <div class="flex gap-2 absolute right-4 top-4 pointer-events-auto">
+                <a href="/video-cache.html" class="text-[10px] bg-white/10 border border-white/10 backdrop-blur px-2 py-1 rounded-md">管理📦</a>
+            </div>
+        </div>
+        <div class="tag-row">
+            <div class="tag-scroll" id="categoryBar"></div>
+            <button onclick="toggleDrawer()" class="p-1.5 bg-white/10 rounded-lg">⊞</button>
+        </div>
+    </div>
+
+    <div class="video-feed" id="videoFeed"></div>
+
+    <script>
+        let allVideoData = [];
+        let displayData = [];
+        let currentFilter = 'all';
+        let activeTag = '全部';
+        let observer;
+        let currentIndex = 0; 
+        let isWheelScrolling = false;
+
+        // ================= 核心：数据初始化 =================
+        async function initVideos() {
+            try {
+                const res = await fetch(`/api/video/list?filter=${currentFilter}`);
+                allVideoData = await res.json();
+            } catch (e) {
+                const cache = await caches.open('video-cache-v1');
+                const keys = await cache.keys();
+                allVideoData = keys.map(req => ({
+                    filename: decodeURIComponent(req.url.split('/').pop()),
+                    url: req.url, category: '离线', tags: ['缓存'], is_liked: false
+                }));
+            }
+            renderTagsAndDrawer();
+            filterByTag();
+        }
+
+        function toggleDrawer() {
+            document.getElementById('drawer').classList.toggle('open');
+        }
+
+        // ================= 增强版分类显示与计票 =================
+        function renderTagsAndDrawer() {
+            const counts = {};
+            let total = 0;
+            allVideoData.forEach(v => {
+                total++;
+                if (v.category) counts[v.category] = (counts[v.category] || 0) + 1;
+                if (v.tags) v.tags.forEach(t => counts[t] = (counts[t] || 0) + 1);
+            });
+
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+            // 1. 顶部横排 (仅显示前8个，保持整洁)
+            const bar = document.getElementById('categoryBar');
+            let barHtml = `<div class="cat-pill ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部')">全部</div>`;
+            sorted.slice(0, 8).forEach(([tag]) => {
+                barHtml += `<div class="cat-pill ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}')">${tag}</div>`;
+            });
+            bar.innerHTML = barHtml;
+
+            // 2. 抽屉网格 (显示全部及统计数据)
+            const grid = document.getElementById('drawerGrid');
+            let gridHtml = `
+                <div class="grid-item ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部'); toggleDrawer()">
+                    <span class="text-sm font-bold">全部</span>
+                    <span class="text-[10px] opacity-50">${total} 视频</span>
+                </div>`;
+            sorted.forEach(([tag, count]) => {
+                gridHtml += `
+                    <div class="grid-item ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}'); toggleDrawer()">
+                        <span class="text-sm font-bold">${tag}</span>
+                        <span class="text-[10px] opacity-50">${count} 视频</span>
+                    </div>`;
+            });
+            grid.innerHTML = gridHtml;
+        }
+
+        function setTag(tag) {
+            activeTag = tag;
+            renderTagsAndDrawer();
+            filterByTag();
+        }
+
+        function filterByTag() {
+            displayData = activeTag === '全部' ? allVideoData : 
+                          allVideoData.filter(v => v.category === activeTag || (v.tags && v.tags.includes(activeTag)));
+            currentIndex = 0; 
+            renderFeed();
+        }
+
+        // ================= 播放器渲染逻辑 =================
+        function renderFeed() {
+            const feed = document.getElementById('videoFeed');
+            feed.innerHTML = '';
+
+            displayData.forEach((v, index) => {
+                const card = document.createElement('div');
+                card.className = 'video-card paused';
+                card.id = `card-${index}`;
+                card.dataset.index = index;
+                
+                const jsSafeName = encodeURIComponent(v.filename);
+
+                card.innerHTML = `
+                    <div class="blur-bg" style="background-image: url('${v.url}')"></div>
+                    <video src="${v.url}" class="video-player" loop playsinline preload="${index < 2 ? 'auto' : 'none'}"></video>
+                    <div class="click-area" onclick="togglePlay(this)"></div>
+                    <div class="play-icon"><svg class="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+                    
+                    <div class="action-sidebar">
+                        <button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="toggleLike(this, '${jsSafeName}')">
+                            <div class="icon-circle">❤️</div><span class="text-[10px] font-bold">喜欢</span>
+                        </button>
+                        <button class="action-btn" onclick="deleteVideo(this, '${jsSafeName}', ${index})">
+                            <div class="icon-circle">🗑️</div><span class="text-[10px] font-bold">移除</span>
+                        </button>
+                    </div>
+
+                    <div class="info-bottom">
+                        <h2 class="text-sm font-bold mb-2 truncate">${v.filename.replace(/\.[^/.]+$/, "")}</h2>
+                        <div class="flex gap-2 flex-wrap">
+                            <span class="text-blue-400 font-bold text-[10px] bg-blue-900/40 px-2 py-0.5 rounded">#${v.category}</span>
+                            ${(v.tags||[]).map(t => `<span class="bg-white/10 px-2 py-0.5 rounded text-[10px] backdrop-blur-sm">${t}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+                feed.appendChild(card);
+            });
+
+            feed.scrollTo(0, 0);
+            setupIntersectionObserver();
+        }
+
+        // ================= 核心：播放与同步逻辑 =================
+        function togglePlay(clickAreaEl) {
+            const card = clickAreaEl.closest('.video-card');
+            const video = card.querySelector('video');
+            if (video.paused) { video.play(); card.classList.remove('paused'); } 
+            else { video.pause(); card.classList.add('paused'); }
+        }
+
+        function setupIntersectionObserver() {
+            if (observer) observer.disconnect();
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const video = entry.target.querySelector('video');
+                    const card = entry.target;
+                    const filename = decodeURIComponent(video.src.split('/').pop());
+
+                    if (entry.isIntersecting) {
+                        currentIndex = parseInt(card.dataset.index);
+                        video.play().then(() => {
+                            card.classList.remove('paused');
+                            recordAction(filename, 'play');
+                        }).catch(() => card.classList.add('paused'));
+                    } else {
+                        video.pause();
+                        video.currentTime = 0;
+                        card.classList.add('paused');
+                    }
+                });
+            }, { threshold: 0.6 }); 
+            document.querySelectorAll('.video-card').forEach(card => observer.observe(card));
+        }
+
+        // ================= 交互控制：滚轮与方向键 =================
+        const feedContainer = document.getElementById('videoFeed');
+        function smoothScrollToIndex(index) {
+            if(index < 0 || index >= displayData.length) return;
+            feedContainer.scrollTo({ top: index * window.innerHeight, behavior: 'smooth' });
+        }
+
+        feedContainer.addEventListener('wheel', (e) => {
+            e.preventDefault(); 
+            if (isWheelScrolling) return;
+            isWheelScrolling = true;
+            currentIndex = e.deltaY > 0 ? currentIndex + 1 : currentIndex - 1;
+            currentIndex = Math.max(0, Math.min(currentIndex, displayData.length - 1));
+            smoothScrollToIndex(currentIndex);
+            setTimeout(() => { isWheelScrolling = false; }, 600); 
+        }, { passive: false });
+
+        window.addEventListener('keydown', (e) => {
+            if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+                currentIndex = e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
+                currentIndex = Math.max(0, Math.min(currentIndex, displayData.length - 1));
+                smoothScrollToIndex(currentIndex);
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                const card = document.getElementById(`card-${currentIndex}`);
+                if (card) togglePlay(card.querySelector('.click-area'));
+            }
+        });
+
+        // ================= 动作逻辑 =================
+        function recordAction(filename, action) {
+            let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
+            queue.push({ filename, action, timestamp: Date.now() });
+            localStorage.setItem('videoActionsQueue', JSON.stringify(queue));
+            if(navigator.onLine) fetch('/api/video/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(queue) }).then(() => localStorage.setItem('videoActionsQueue', '[]')).catch(()=>{});
+        }
+
+        function toggleLike(btn, encodedName) {
+            const filename = decodeURIComponent(encodedName);
+            btn.classList.toggle('liked');
+            recordAction(filename, btn.classList.contains('liked') ? 'like' : 'unlike');
+        }
+
+        function deleteVideo(btn, encodedName, index) {
+            const filename = decodeURIComponent(encodedName);
+            const card = document.getElementById(`card-${index}`);
+            recordAction(filename, 'delete');
+            
+            // 核心修改：移除复杂的飞出动画，直接移除并让 CSS Scroll Snap 处理位置
+            card.remove();
+            
+            // 同步 displayData，防止索引错位
+            displayData.splice(index, 1);
+            
+            // 重新刷新后续卡片的 ID 和 Index 属性，确保方向键功能正常
+            document.querySelectorAll('.video-card').forEach((c, i) => {
+                c.id = `card-${i}`;
+                c.dataset.index = i;
+            });
+
+            // 既然当前卡片没了，自动平滑对齐到下一个（其实 Scroll Snap 会帮我们对齐，这里只是确保 currentIndex 准确）
+            if (currentIndex >= displayData.length) currentIndex = displayData.length - 1;
+        }
+
+        function switchFilter(type) {
+            currentFilter = type;
+            document.getElementById('nav-all').classList.toggle('active', type === 'all');
+            document.getElementById('nav-unplayed').classList.toggle('active', type === 'unplayed');
+            initVideos();
+        }
+
+        initVideos();
+    </script>
+</body>
+</html>
