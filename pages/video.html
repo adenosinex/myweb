@@ -8,40 +8,23 @@
     <style>
         body, html { margin: 0; padding: 0; height: 100%; background-color: #000; color: white; overflow: hidden; font-family: -apple-system, sans-serif; touch-action: pan-y; }
         
-        /* 顶部导航 */
         .top-nav { position: absolute; top: 0; left: 0; right: 0; z-index: 40; background: linear-gradient(to bottom, rgba(0,0,0, 0.8), transparent); padding-top: env(safe-area-inset-top, 15px); pointer-events: none; }
         .main-tabs { display: flex; justify-content: center; gap: 25px; padding: 15px 0 10px; pointer-events: auto; }
         .tab-item { font-size: 16px; color: rgba(255,255,255,0.5); font-weight: bold; cursor: pointer; transition: 0.2s; }
         .tab-item.active { color: white; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
 
-        /* 横向 Tag 栏 */
         .tag-row { display: flex; align-items: center; gap: 10px; padding: 0 15px 15px; pointer-events: auto; }
         .tag-scroll { display: flex; overflow-x: auto; gap: 10px; flex: 1; scrollbar-width: none; padding-bottom: 5px; }
         .tag-scroll::-webkit-scrollbar { display: none; }
         .cat-pill { padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 12px; white-space: nowrap; transition: 0.2s; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(4px); }
         .cat-pill.active { background: #3b82f6; color: white; border-color: #60a5fa; font-weight: bold; box-shadow: 0 0 15px rgba(59,130,246,0.6); }
 
-        /* 🎯 悬浮筛选提示牌 */
-        .filter-toast {
-            position: absolute; top: calc(env(safe-area-inset-top, 15px) + 60px); left: 50%; transform: translateX(-50%);
-            background: rgba(59, 130, 246, 0.85); backdrop-filter: blur(10px);
-            padding: 6px 14px 6px 16px; border-radius: 24px; font-size: 13px; font-weight: bold;
-            display: flex; align-items: center; gap: 8px; z-index: 45;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            pointer-events: auto; border: 1px solid rgba(255,255,255,0.3);
-        }
-        .filter-toast.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -20px) scale(0.9); }
-        .filter-close-btn { background: rgba(255,255,255,0.2); width: 22px; height: 22px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
-        .filter-close-btn:active { transform: scale(0.8); background: rgba(255,255,255,0.4); }
-
-        /* 抽屉 */
         .drawer { position: fixed; inset: 0; background: #0b1120; z-index: 100; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1); padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px; }
         .drawer.open { transform: translateY(0); }
         .drawer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; overflow-y: auto; max-height: 80vh; }
         .grid-item { background: rgba(255,255,255,0.05); padding: 15px 10px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: 0.2s;}
         .grid-item.active { border: 1px solid #60a5fa; background: rgba(59, 130, 246, 0.2); box-shadow: inset 0 0 10px rgba(59,130,246,0.2); }
 
-        /* 虚拟列表视频容器 */
         .video-feed { height: 100dvh; width: 100vw; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; position: relative; }
         .video-feed::-webkit-scrollbar { display: none; }
 
@@ -54,7 +37,6 @@
         .play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 11; opacity: 0; pointer-events: none; color: rgba(255,255,255,0.7); transition: 0.2s; }
         .video-card.paused .play-icon { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
 
-        /* 右侧按钮 */
         .action-sidebar { position: absolute; right: 15px; bottom: 120px; z-index: 20; display: flex; flex-direction: column; gap: 20px; align-items: center; }
         .action-btn { background: none; border: none; color: white; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .icon-circle { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; transition: 0.3s;}
@@ -62,15 +44,14 @@
         @keyframes heartPop { 0% { transform: scale(1); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
         .action-btn.liked .icon-circle { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); color: #ef4444; background: rgba(239,68,68,0.2); }
         .btn-dislike:active .icon-circle { background: rgba(255,255,255,0.3); }
+        .disliked-anim { transform: scale(0.8) translateY(100px); opacity: 0; filter: grayscale(1); transition: 0.5s cubic-bezier(0.6, -0.28, 0.735, 0.045); pointer-events: none; }
+        .recover-anim { transform: translateX(100%); opacity: 0; transition: 0.4s ease; pointer-events: none; }
         
-        /* 底部信息栏 */
         .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
 
-        /* 进度条 */
         .progress-container { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.2); z-index: 30; }
         .progress-bar { height: 100%; background: rgba(255,255,255,0.9); width: 0%; box-shadow: 0 0 8px rgba(255,255,255,0.8); }
         
-        /* 拖拽快进提示 */
         .seek-toast { 
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
             color: rgba(255,255,255,0.9); font-size: 16px; font-weight: bold; letter-spacing: 1px;
@@ -103,31 +84,22 @@
         </div>
     </div>
 
-    <div id="filterToast" class="filter-toast hidden">
-        <span>🎯 当前分类: <span id="filterName" class="text-white"></span></span>
-        <div onclick="setTag('全部')" class="filter-close-btn">✕</div>
-    </div>
-
     <div class="video-feed" id="videoFeed">
         <div id="scrollPlaceholder" style="width: 100%; position: absolute; top: 0; left: 0; z-index: -1;"></div>
     </div>
 
     <script>
-        let allVideoData = [];
         let displayData = [];
         let currentFilter = 'all';
         let activeTag = '全部';
         
+        let currentPage = 1;
+        let hasMore = true;
+        let isLoading = false;
+
         let currentIndex = 0;
         const feed = document.getElementById('videoFeed');
         const placeholder = document.getElementById('scrollPlaceholder');
-
-        // 提取文件名标签
-        function extractTagsFromFilename(filename) {
-            const matches = filename.match(/#([^#\s.]+)/g);
-            if (!matches) return [];
-            return matches.map(m => m.substring(1));
-        }
 
         window.addEventListener('online', syncOfflineActions);
 
@@ -148,52 +120,69 @@
             syncOfflineActions();
         }
 
-        async function initVideos() {
-            syncOfflineActions();
-            fetch('/api/video/scan', { method: 'POST' }).catch(()=>{});
+        // ================= 分页加载逻辑 =================
+        async function loadVideos(reset = false) {
+            if (isLoading || (!hasMore && !reset)) return;
+            isLoading = true;
+
+            if (reset) {
+                currentPage = 1;
+                displayData = [];
+                currentIndex = 0;
+                feed.scrollTo(0, 0);
+            }
 
             try {
-                const res = await fetch(`/api/video/list?filter=${currentFilter}`);
-                let rawData = await res.json();
-                allVideoData = rawData.map(v => {
-                    const filenameTags = extractTagsFromFilename(v.filename);
-                    const aiTags = v.tags || [];
-                    // 将 AI Tag 和文件名 Tag 无缝合并去重
-                    v.mergedTags = [...new Set([...aiTags, ...filenameTags])];
-                    return v;
-                });
+                // 每次仅请求 10 条数据
+                const res = await fetch(`/api/video/list?filter=${currentFilter}&tag=${encodeURIComponent(activeTag)}&page=${currentPage}&limit=10`);
+                const data = await res.json();
+
+                if (reset) {
+                    renderTagsAndDrawer(data.tags_count, data.total);
+                }
+
+                displayData = [...displayData, ...data.items];
+                hasMore = data.has_more;
+                currentPage++;
+
+                renderVirtualList();
             } catch (e) {
+                // 离线容灾：本地缓存
                 const cache = await caches.open('video-cache-v1');
                 const keys = await cache.keys();
-                allVideoData = keys.map(req => {
+                let offlineData = keys.map(req => {
                     const fname = decodeURIComponent(req.url.split('/').pop());
-                    return { filename: fname, url: req.url, category: '离线', mergedTags: extractTagsFromFilename(fname), is_liked: false };
+                    const tags = fname.match(/#([^#\s.]+)/g) ? fname.match(/#([^#\s.]+)/g).map(m=>m.substring(1)) : [];
+                    return { filename: fname, url: req.url, category: '离线', mergedTags: tags, is_liked: false };
                 });
+                
+                if(activeTag !== '全部') offlineData = offlineData.filter(v => v.category === activeTag || v.mergedTags.includes(activeTag));
+                
+                const start = (currentPage - 1) * 10;
+                const sliced = offlineData.slice(start, start + 10);
+                
+                if (reset) renderTagsAndDrawer({'缓存': offlineData.length}, offlineData.length);
+                
+                displayData = [...displayData, ...sliced];
+                hasMore = (start + 10) < offlineData.length;
+                currentPage++;
+                renderVirtualList();
+            } finally {
+                isLoading = false;
             }
-            renderTagsAndDrawer();
-            filterByTag();
         }
 
         function toggleDrawer() { document.getElementById('drawer').classList.toggle('open'); }
 
-        // ================= 分类渲染与状态同步 =================
-        function renderTagsAndDrawer() {
-            const counts = {}; let total = 0;
-            allVideoData.forEach(v => {
-                total++;
-                if (v.category) counts[v.category] = (counts[v.category] || 0) + 1;
-                v.mergedTags.forEach(t => counts[t] = (counts[t] || 0) + 1);
-            });
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        function renderTagsAndDrawer(countsMap, total) {
+            const sorted = Object.entries(countsMap || {}).sort((a, b) => b[1] - a[1]);
 
-            // 智能插队：如果当前选中的标签不在前列，强制将其显示在第一位
             let topTags = sorted.slice(0, 10).map(item => item[0]);
             if (activeTag !== '全部' && !topTags.includes(activeTag)) {
                 topTags.unshift(activeTag);
                 if(topTags.length > 10) topTags.pop();
             }
 
-            // 渲染顶部横条
             const bar = document.getElementById('categoryBar');
             let barHtml = `<div class="cat-pill ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部')">全部</div>`;
             topTags.forEach(tag => { 
@@ -201,7 +190,6 @@
             });
             bar.innerHTML = barHtml;
 
-            // 渲染抽屉
             const grid = document.getElementById('drawerGrid');
             let gridHtml = `
                 <div class="grid-item border border-red-500/30" onclick="switchFilter('disliked'); toggleDrawer()">
@@ -210,7 +198,7 @@
                 </div>
                 <div class="grid-item ${activeTag === '全部' && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('全部'); toggleDrawer()">
                     <span class="text-sm font-bold">全部视频</span>
-                    <span class="text-[10px] opacity-50">${total} 视频</span>
+                    <span class="text-[10px] opacity-50">${total || 0} 视频</span>
                 </div>`;
             sorted.forEach(([tag, count]) => {
                 gridHtml += `<div class="grid-item ${activeTag === tag && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('${tag}'); toggleDrawer()">
@@ -228,33 +216,16 @@
                 document.getElementById('nav-all').classList.remove('active');
                 document.getElementById('nav-unplayed').classList.remove('active');
             }
-            initVideos();
+            activeTag = '全部';
+            loadVideos(true);
         }
 
         function setTag(tag) { 
             activeTag = tag; 
-            
-            // 核心：控制悬浮提示牌的显隐
-            const toast = document.getElementById('filterToast');
-            if (tag !== '全部') {
-                document.getElementById('filterName').innerText = '#' + tag;
-                toast.classList.remove('hidden');
-            } else {
-                toast.classList.add('hidden');
-            }
-
-            renderTagsAndDrawer(); 
-            filterByTag(); 
+            loadVideos(true); 
         }
 
-        function filterByTag() {
-            displayData = activeTag === '全部' ? allVideoData : allVideoData.filter(v => v.category === activeTag || v.mergedTags.includes(activeTag));
-            currentIndex = 0; 
-            feed.scrollTo(0, 0); 
-            renderVirtualList();
-        }
-
-        // ================= 虚拟列表与视频卡片构建 =================
+        // ================= 虚拟列表与触底加载 =================
         function renderVirtualList() {
             placeholder.style.height = `${displayData.length * 100}dvh`;
             document.querySelectorAll('.video-card').forEach(el => el.remove());
@@ -287,7 +258,6 @@
 
             let cleanTitle = v.filename.replace(/\.(mp4|mov)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
             
-            // 归集全部该视频的关联Tag
             let allDisplayTags = new Set();
             if(v.category && v.category !== '未分类') allDisplayTags.add(v.category);
             v.mergedTags.forEach(t => allDisplayTags.add(t));
@@ -297,7 +267,6 @@
                 <video src="${v.url}" class="video-player" loop playsinline preload="${index === currentIndex ? 'auto' : 'metadata'}"></video>
                 
                 <div class="click-area" id="area-${index}"></div>
-                
                 <div class="play-icon"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
                 <div class="seek-toast" id="toast-${index}"></div>
 
@@ -311,13 +280,11 @@
                 <div class="info-bottom pointer-events-auto">
                     <h2 class="text-[15px] font-bold mb-2 line-clamp-2 drop-shadow-md">${cleanTitle}</h2>
                     <div class="flex gap-1.5 flex-wrap">
-                        ${Array.from(allDisplayTags).map(t => `<span class="bg-black/30 px-2.5 py-1 rounded-md text-[11px] backdrop-blur-md border border-white/20 cursor-pointer hover:bg-white/30 shadow-md transition-colors" onclick="event.stopPropagation(); setTag('${t}')">#${t}</span>`).join('')}
+                        ${Array.from(allDisplayTags).map(t => `<span class="text-gray-200 font-medium bg-black/40 px-2 py-0.5 rounded text-[11px] backdrop-blur-md border border-white/10 cursor-pointer hover:bg-white/30 shadow-md transition-colors" onclick="event.stopPropagation(); setTag('${t}')">#${t}</span>`).join('')}
                     </div>
                 </div>
 
-                <div class="progress-container">
-                    <div class="progress-bar" id="prog-${index}"></div>
-                </div>
+                <div class="progress-container"><div class="progress-bar" id="prog-${index}"></div></div>
             `;
             feed.appendChild(card);
             
@@ -330,7 +297,7 @@
             bindSwipeSeek(card.querySelector(`#area-${index}`), video, card.querySelector(`#toast-${index}`));
         }
 
-        // ================= 鼠标/触摸拖拽进度引擎 (含误触分离) =================
+        // ================= 拖拽与播放控制 =================
         function bindSwipeSeek(touchArea, video, toastEl) {
             let startX = 0, startY = 0;
             let isSeeking = false;
@@ -383,7 +350,6 @@
             });
         }
 
-        // ================= 滚动刷新与播放 =================
         let scrollTimer;
         feed.addEventListener('scroll', () => {
             clearTimeout(scrollTimer);
@@ -392,6 +358,11 @@
                 if (newIndex !== currentIndex && newIndex >= 0 && newIndex < displayData.length) {
                     currentIndex = newIndex;
                     renderVirtualList();
+                    
+                    // 触底加载
+                    if (currentIndex >= displayData.length - 3 && hasMore && !isLoading) {
+                        loadVideos(false);
+                    }
                 }
             }, 100);
         });
@@ -418,7 +389,6 @@
             else { video.pause(); card.classList.add('paused'); }
         }
 
-        // ================= 快捷键 =================
         window.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
                 e.preventDefault(); 
@@ -444,7 +414,6 @@
             }
         });
 
-        // ================= 动作逻辑 =================
         function toggleLike(btn, encodedName) {
             btn.classList.toggle('liked');
             recordAction(decodeURIComponent(encodedName), btn.classList.contains('liked') ? 'like' : 'unlike');
@@ -453,13 +422,26 @@
         function handleDeleteAction(btn, encodedName, index) {
             const filename = decodeURIComponent(encodedName);
             recordAction(filename, currentFilter === 'disliked' ? 'undelete' : 'delete');
-            displayData.splice(index, 1);
-            if (currentIndex >= displayData.length) currentIndex = Math.max(0, displayData.length - 1);
-            renderVirtualList();
-            feed.scrollTo({ top: currentIndex * window.innerHeight, behavior: 'auto' });
+            
+            if (currentFilter === 'disliked') {
+                document.getElementById(`card-${index}`).classList.add('recover-anim');
+            } else {
+                document.getElementById(`card-${index}`).classList.add('disliked-anim');
+            }
+            
+            setTimeout(() => {
+                displayData.splice(index, 1);
+                if (currentIndex >= displayData.length) currentIndex = Math.max(0, displayData.length - 1);
+                renderVirtualList();
+                feed.scrollTo({ top: currentIndex * window.innerHeight, behavior: 'auto' });
+                
+                // 如果删到底了且还有数据没加载
+                if (displayData.length < 3 && hasMore) loadVideos(false);
+            }, 450);
         }
 
-        initVideos();
+        fetch('/api/video/scan', { method: 'POST' }).catch(()=>{});
+        loadVideos(true);
     </script>
 </body>
 </html>

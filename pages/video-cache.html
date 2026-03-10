@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>视频缓存库管理</title>
+    <title>视频管理与数据流</title>
     <style>
         :root { --bg: #000000; --card-bg: #111827; --text-main: #f8fafc; --text-sub: #94a3b8; --accent: #3b82f6; --danger: #ef4444; --success: #10b981; }
         body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text-main); padding: 20px; }
@@ -14,8 +14,16 @@
         .btn-primary { background: var(--accent); border: none; font-weight: bold; }
         .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
         
-        .section-title { font-size: 14px; color: var(--text-sub); margin: 25px 0 12px 0; font-weight: 500; display: flex; align-items: center; gap: 6px;}
+        .section-title { font-size: 14px; color: var(--text-sub); margin: 25px 0 12px 0; font-weight: 500; display: flex; align-items: center; justify-content: space-between; }
         
+        /* 🔥 超强 AI 监控面板样式 */
+        .ai-panel { background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px; transition: 0.3s; }
+        .ai-text { font-size: 13px; color: #d8b4fe; margin-bottom: 10px; font-weight: bold; font-family: monospace; display: flex; justify-content: space-between; align-items: flex-end;}
+        .ai-stats { font-size: 10px; color: #a78bfa; font-weight: normal; background: rgba(0,0,0,0.3); padding: 3px 8px; border-radius: 6px; }
+        .ai-bar-bg { width: 100%; height: 6px; background: rgba(0,0,0,0.4); border-radius: 3px; overflow: hidden; margin-bottom: 6px;}
+        .ai-bar-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #d946ef); width: 0%; transition: width 0.4s ease; }
+        .ai-log { font-size: 11px; color: #a78bfa; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
         .category-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
         .cat-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 12px; border-radius: 12px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; transition: 0.2s;}
         .cat-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--accent); }
@@ -23,7 +31,7 @@
         .cat-stats { font-size: 11px; color: var(--text-sub); }
         .cat-stats.full { color: var(--success); font-weight: bold; }
 
-        .task-panel { display: none; background: rgba(17, 24, 39, 0.95); border: 1px solid var(--accent); border-radius: 16px; padding: 18px; margin-bottom: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.6); position: sticky; top: 10px; z-index: 100; backdrop-filter: blur(10px); }
+        .task-panel { display: none; background: rgba(17, 24, 39, 0.95); border: 1px solid var(--accent); border-radius: 16px; padding: 18px; margin-bottom: 25px; position: sticky; top: 10px; z-index: 100; backdrop-filter: blur(10px); }
         .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .task-title { font-size: 15px; font-weight: bold; color: var(--accent); }
         .progress-text { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -46,6 +54,23 @@
         </div>
     </div>
 
+    <div class="section-title">
+        <span>🤖 AI 智能打标与分类</span>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" style="padding: 4px 10px; font-size:11px;" id="btnAiStart" onclick="controlAIScan('start')">▶ 开始索引</button>
+            <button class="btn btn-danger" style="padding: 4px 10px; font-size:11px; display:none;" id="btnAiStop" onclick="controlAIScan('stop')">⏹ 强行终止</button>
+        </div>
+    </div>
+    
+    <div class="ai-panel" id="aiPanel">
+        <div class="ai-text">
+            <span id="aiProgressText">等待拉取状态...</span>
+            <span class="ai-stats" id="aiStatsText">耗时: 0.0s | 成功: 0</span>
+        </div>
+        <div class="ai-bar-bg"><div class="ai-bar-fill" id="aiProgressFill"></div></div>
+        <div class="ai-log" id="aiLogText">无近期活动</div>
+    </div>
+
     <div class="task-panel" id="taskPanel">
         <div class="task-header">
             <div class="task-title" id="taskTitle">正在同步视频资源...</div>
@@ -55,14 +80,11 @@
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
     </div>
 
-    <div class="section-title">
-        <span>按分类智能离线</span>
-    </div>
+    <div class="section-title"><span>📂 按分类智能离线</span></div>
     
-    <div class="category-actions" id="categoryActions">
-        </div>
+    <div class="category-actions" id="categoryActions"></div>
 
-    <div class="section-title" style="justify-content: space-between; margin-top: 30px;">
+    <div class="section-title" style="margin-top: 30px;">
         <span id="cacheCount">本地已存视频 (0)</span>
         <button class="btn btn-danger" style="padding: 4px 10px; font-size:11px;" onclick="clearAllCache()">清空缓存</button>
     </div>
@@ -73,20 +95,88 @@
     let allVideos = [];
     let cachedUrls = new Set();
     let abortSignal = false;
+    let aiPollTimer = null;
 
     async function init() {
         await refreshCacheList();
+        await refreshVideoList();
+        checkAiStatus(); 
+    }
+
+    function exportData() { window.location.href = '/api/video/export_csv'; }
+
+    // ================= 🌟 强化版 AI 状态轮询引擎 =================
+    async function checkAiStatus() {
         try {
-            const res = await fetch('/api/video/list');
-            allVideos = await res.json();
-            renderCategories();
+            const res = await fetch('/api/video/scan/status');
+            const state = await res.json();
+            
+            const btnStart = document.getElementById('btnAiStart');
+            const btnStop = document.getElementById('btnAiStop');
+            const mainText = document.getElementById('aiProgressText');
+            const statsText = document.getElementById('aiStatsText');
+            const logText = document.getElementById('aiLogText');
+            const fill = document.getElementById('aiProgressFill');
+            
+            if (state.is_running) {
+                btnStart.style.display = 'none';
+                btnStop.style.display = 'inline-flex';
+                
+                let percent = state.total > 0 ? (state.processed / state.total) * 100 : 0;
+                fill.style.width = `${percent}%`;
+                
+                mainText.innerText = `[${state.processed}/${state.total}] 运行中...`;
+                statsText.innerText = `耗时: ${state.total_time_sec}s | 成功: ${state.success_count}`;
+                logText.innerText = `🔄 ${state.status_msg}`;
+                
+                // 如果检测到报错，文字变红以示警告
+                if (state.status_msg.includes('❌') || state.status_msg.includes('⚠️')) {
+                    logText.style.color = '#ef4444';
+                } else {
+                    logText.style.color = '#a78bfa';
+                }
+
+                if (!aiPollTimer) aiPollTimer = setInterval(checkAiStatus, 1500);
+            } else {
+                btnStart.style.display = 'inline-flex';
+                btnStop.style.display = 'none';
+                
+                mainText.innerText = state.total > 0 && state.processed >= state.total ? "🎉 索引完成" : "💤 空闲状态";
+                statsText.innerText = `总耗时: ${state.total_time_sec}s | 共计成功: ${state.success_count}`;
+                logText.innerText = state.status_msg || "随时可以开始大模型分析";
+                logText.style.color = '#a78bfa';
+                
+                if (state.total > 0 && state.processed >= state.total) fill.style.width = '100%';
+                
+                if (aiPollTimer) {
+                    clearInterval(aiPollTimer);
+                    aiPollTimer = null;
+                    refreshVideoList(); // 任务结束自动刷新底部分类块
+                }
+            }
         } catch (e) {
-            console.error("无法连接服务器");
+            console.error("AI状态请求失败", e);
         }
     }
 
-    function exportData() {
-        window.location.href = '/api/video/export_csv';
+    async function controlAIScan(action) {
+        document.getElementById('aiLogText').innerText = "🚀 指令已发送，正在响应...";
+        await fetch('/api/video/scan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: action})
+        });
+        setTimeout(checkAiStatus, 500);
+    }
+    // =====================================================
+
+    async function refreshVideoList() {
+        try {
+            const res = await fetch('/api/video/list?limit=10000');
+            const data = await res.json();
+            allVideos = data.items || [];
+            renderCategories(data.tags_count);
+        } catch (e) { console.error("无法拉取视频列表"); }
     }
 
     async function refreshCacheList() {
@@ -94,24 +184,25 @@
         const requests = await cache.keys();
         cachedUrls = new Set(requests.map(req => new URL(req.url).pathname));
         renderListUI(requests);
-        if(allVideos.length > 0) renderCategories(); 
     }
 
-    function renderCategories() {
+    function renderCategories(tagsCountMap) {
         const container = document.getElementById('categoryActions');
-        const counts = {};
-        allVideos.forEach(v => { if(v.category) counts[v.category] = (counts[v.category] || 0) + 1; });
-
         container.innerHTML = '';
-        Object.entries(counts).sort((a,b) => b[1]-a[1]).forEach(([cat, total]) => {
-            const cachedInCat = allVideos.filter(v => v.category === cat && cachedUrls.has(v.url)).length;
-            const isFull = cachedInCat === total;
+        
+        if (!tagsCountMap) return;
+
+        Object.entries(tagsCountMap).sort((a,b) => b[1]-a[1]).forEach(([cat, total]) => {
+            if(cat === '全部' || total === 0) return;
+            
+            const cachedInCat = allVideos.filter(v => (v.category === cat || v.mergedTags.includes(cat)) && cachedUrls.has(v.url)).length;
+            const isFull = cachedInCat === total && total > 0;
 
             container.innerHTML += `
                 <button class="cat-btn" onclick="startSmartDownload('${cat}')">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats ${isFull ? 'full' : ''}">
-                        ${isFull ? '✓ 已全部离线' : `📥 ${cachedInCat} / ${total}`}
+                        ${isFull ? '✓ 已全部离线' : `📥 离线 ${cachedInCat} / 总 ${total}`}
                     </span>
                 </button>
             `;
@@ -131,7 +222,6 @@
         requests.reverse().forEach(req => {
             const urlPath = new URL(req.url).pathname;
             const fileName = decodeURIComponent(urlPath.split('/').pop());
-            
             const item = document.createElement('div');
             item.className = 'list-item';
             item.innerHTML = `
@@ -146,12 +236,10 @@
     }
 
     async function startSmartDownload(cat) {
-        let targets = allVideos.filter(v => v.category === cat && !cachedUrls.has(v.url));
+        let targets = allVideos.filter(v => (v.category === cat || v.mergedTags.includes(cat)) && !cachedUrls.has(v.url));
         if (targets.length === 0) return alert("该分类已全部离线");
 
-        // 智能下载提示：询问是下载全部还是只下载未播放的
         const downloadAll = confirm(`【${cat}】有 ${targets.length} 个未缓存视频。\n\n点击 [确定] 下载全部\n点击 [取消] 仅下载从未播放过的新视频`);
-        
         if (!downloadAll) {
             targets = targets.filter(v => (v.play_count || 0) === 0);
             if (targets.length === 0) return alert("当前分类没有未播放过的新视频可供下载。");
@@ -168,7 +256,7 @@
 
         for (const video of targets) {
             if (abortSignal) break;
-            text.innerText = `[${count+1}/${targets.length}] 正在下载: ${video.filename}`;
+            text.innerText = `[${count+1}/${targets.length}] 正在下载: ${decodeURIComponent(video.filename)}`;
             try {
                 const response = await fetch(video.url);
                 if (response.ok) { await cache.put(video.url, response); count++; }

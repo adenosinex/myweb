@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, send_from_directory, redirect, make_response, Blueprint
-import sqlite3
+import sqlite3,time
 import os
 import json
 import importlib
@@ -150,7 +150,34 @@ def get_data(collection):
         item['_time'] = row[1]
         result.append(item)
     return jsonify(result)
+# 2. 在路由区域，加入这两个 KV 专属接口
+@app.route('/api/kv/<key>', methods=['POST'])
+def set_kv(key):
+    data = request.json
+    payload = json.dumps(data.get('payload', {}), ensure_ascii=False)
+    expire_at = data.get('expire_at') # 接收 Unix 时间戳（秒），可为 None
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute('INSERT OR REPLACE INTO kv_store (k, v, expire_at) VALUES (?, ?, ?)', 
+                     (key, payload, expire_at))
+    return jsonify({"status": "success"})
 
+@app.route('/api/kv/<key>', methods=['GET'])
+def get_kv(key):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT v, expire_at FROM kv_store WHERE k=?', (key,))
+        row = cursor.fetchone()
+        
+        if row:
+            v, expire_at = row
+            # 核心安全逻辑：如果设置了过期时间，且当前时间已超过
+            if expire_at and time.time() > expire_at:
+                conn.execute('DELETE FROM kv_store WHERE k=?', (key,))
+                return jsonify({"error": "提取码已过期，数据已永久销毁"}), 404
+            
+            return jsonify(json.loads(v))
+        return jsonify({"error": "提取码不存在或已被销毁"}), 404
 # ================= 3. 静态页面路由 =================
 
 def serve_html_with_icon(filename):
