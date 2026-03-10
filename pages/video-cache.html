@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>视频管理与数据流</title>
     <style>
-        :root { --bg: #000000; --card-bg: #111827; --text-main: #f8fafc; --text-sub: #94a3b8; --accent: #3b82f6; --danger: #ef4444; --success: #10b981; }
+        :root { --bg: #000000; --card-bg: #111827; --text-main: #f8fafc; --text-sub: #94a3b8; --accent: #3b82f6; --danger: #ef4444; --success: #10b981; --ai-purple: #8b5cf6; }
         body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text-main); padding: 20px; -webkit-font-smoothing: antialiased; }
         
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
@@ -15,6 +15,7 @@
         
         .section-title { font-size: 14px; color: var(--text-sub); margin: 25px 0 12px 0; font-weight: 500; display: flex; align-items: center; justify-content: space-between; }
         
+        /* AI 面板 */
         .ai-panel { background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
         .ai-text { font-size: 13px; color: #d8b4fe; margin-bottom: 10px; font-weight: bold; font-family: monospace; display: flex; justify-content: space-between; align-items: flex-end;}
         .ai-stats { font-size: 10px; color: #a78bfa; font-weight: normal; background: rgba(0,0,0,0.3); padding: 3px 8px; border-radius: 6px; }
@@ -22,12 +23,21 @@
         .ai-bar-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #d946ef); width: 0%; transition: width 0.4s ease; }
         .ai-log { font-size: 11px; color: #a78bfa; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+        /* 实时结果展示卡片 */
+        .result-container { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; background: rgba(255,255,255,0.02); border-radius: 10px; padding: 8px; border: 1px dashed rgba(139, 92, 246, 0.2); }
+        .result-item { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border-left: 3px solid var(--ai-purple); animation: slideIn 0.3s ease-out; }
+        .result-fname { font-size: 11px; color: var(--text-sub); margin-bottom: 4px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .result-tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .tag-cat { background: var(--ai-purple); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+        .tag-sub { background: rgba(139, 92, 246, 0.2); color: #d8b4fe; padding: 2px 6px; border-radius: 4px; font-size: 10px; border: 1px solid rgba(139, 92, 246, 0.3); }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* 通用列表与分类 */
         .category-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
         .cat-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 12px; border-radius: 12px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; transition: 0.2s;}
         .cat-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--accent); }
-        .cat-name { font-weight: 600; font-size: 14px; }
-        .cat-stats { font-size: 11px; color: var(--text-sub); }
-
+        
         .task-panel { display: none; background: rgba(17, 24, 39, 0.95); border: 1px solid var(--accent); border-radius: 16px; padding: 18px; margin-bottom: 25px; position: sticky; top: 10px; z-index: 100; backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.03); margin-bottom: 8px; border-radius: 10px; font-size: 13px; border: 1px solid rgba(255,255,255,0.05); }
         .warning-banner { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; padding: 12px; border-radius: 8px; font-size: 12px; margin-bottom: 20px; display: none; }
@@ -53,14 +63,18 @@
         </div>
     </div>
     
- <div class="ai-panel">
+    <div class="ai-panel">
         <div class="ai-text">
             <span id="aiProgressText">正在同步状态...</span>
             <span class="ai-stats" id="aiModelBadge" style="background: rgba(139, 92, 246, 0.3); border: 1px solid #8b5cf6; display:none;">-</span>
             <span class="ai-stats" id="aiStatsText">耗时: 0s | 成功: 0</span>
         </div>
         <div class="ai-bar-bg"><div class="ai-bar-fill" id="aiProgressFill"></div></div>
-        <div class="ai-log" id="aiLogText">就绪</div>
+        <div id="aiLogText" class="ai-log" style="margin-bottom: 12px;">就绪</div>
+
+        <div class="result-container" id="aiResultStream">
+            <div style="color:var(--text-sub); font-size:11px; text-align:center; padding:10px;">暂无实时识别结果</div>
+        </div>
     </div>
 
     <div class="task-panel" id="taskPanel">
@@ -85,7 +99,7 @@
     const CACHE_NAME = 'video-cache-v1';
     let cachedUrls = new Set();
     let abortSignal = false;
-    // 增加 Secure Context 检查，防止在不安全域名下崩溃
+    let lastSuccessCount = 0; // 用于判断是否需要刷新实时结果
     const isCacheSupported = (window.isSecureContext && typeof window.caches !== 'undefined');
 
     async function init() {
@@ -98,119 +112,131 @@
 
     function exportData() { window.location.href = '/api/video/export_csv'; }
 
-    // 核心优化：只拉取统计数据，不拉取全量视频
     async function refreshCategoryStats() {
         try {
             const res = await fetch('/api/video/stats');
             const stats = await res.json();
             const container = document.getElementById('categoryActions');
-            
             if (Object.keys(stats).length === 0) {
                 container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; padding:20px;">暂无大型分类</div>';
                 return;
             }
-
             container.innerHTML = Object.entries(stats).sort((a,b) => b[1]-a[1]).map(([cat, total]) => `
                 <button class="cat-btn" ${isCacheSupported ? `onclick="startSmartDownload('${cat}')"` : ''}>
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats">📋 总计 ${total} 视频</span>
                 </button>
             `).join('');
-        } catch (e) { console.error("统计拉取失败"); }
+        } catch (e) {}
     }
 
-    // 只有点击下载时，才去拉取某个分类的详细明细
-    async function startSmartDownload(cat) {
-        if (!isCacheSupported) return;
-        document.getElementById('aiLogText').innerText = `正在下钻拉取【${cat}】明细...`;
-        
-        try {
-            const res = await fetch(`/api/video/list?tag=${encodeURIComponent(cat)}&limit=10000&need_tags=0`);
-            const data = await res.json();
-            const targets = data.items.filter(v => !cachedUrls.has(v.url));
-
-            if (targets.length === 0) return alert("该分类已全部离线");
-            if (!confirm(`准备离线【${cat}】下的 ${targets.length} 个视频？`)) return;
-
-            abortSignal = false;
-            document.getElementById('taskPanel').style.display = 'block';
-            const cache = await caches.open(CACHE_NAME);
-            let count = 0;
-
-            for (const video of targets) {
-                if (abortSignal) break;
-                document.getElementById('progressText').innerText = `下载中: ${decodeURIComponent(video.filename)}`;
-                try {
-                    const response = await fetch(video.url);
-                    if (response.ok) { await cache.put(video.url, response); count++; }
-                } catch(e) {}
-                document.getElementById('progressFill').style.width = `${(count / targets.length) * 100}%`;
-            }
-            document.getElementById('taskPanel').style.display = 'none';
-            refreshCacheList();
-        } catch(e) { alert("拉取分类明细失败"); }
-    }
+// 在 script 标签顶部或全局作用域定义一个变量来存储上一次的结果指纹
+let lastResultsFingerprint = "";
 
 async function checkAiStatus() {
-        try {
-            const res = await fetch('/api/video/scan/status');
-            if (!res.ok) throw new Error("Backend Error");
-            const state = await res.json();
-            
-            const btnStart = document.getElementById('btnAiStart');
-            const btnStop = document.getElementById('btnAiStop');
-            const logText = document.getElementById('aiLogText');
-            const fill = document.getElementById('aiProgressFill');
-            const progressText = document.getElementById('aiProgressText');
-            const statsText = document.getElementById('aiStatsText');
-            const modelBadge = document.getElementById('aiModelBadge'); // 获取模型徽章
-            
-            // 🌟 核心修复：安全更新模型名
-            if (modelBadge) {
-                modelBadge.innerText = state.ai_model || 'qwen-plus';
-                modelBadge.style.display = (state.is_running || state.processed > 0) ? 'inline-flex' : 'none';
-            }
-
-            if (state.is_running) {
-                btnStart.style.display = 'none';
-                btnStop.style.display = 'inline-flex';
-                let percent = state.total > 0 ? (state.processed / state.total) * 100 : 0;
-                fill.style.width = `${percent}%`;
-                
-                progressText.innerText = `[${state.processed}/${state.total}] 分析中...`;
-                statsText.innerText = `耗时: ${state.total_time_sec}s | 成功: ${state.success_count}`;
-                logText.innerText = `🔄 ${state.status_msg}`;
-                
-                // 错误标红
-                if (state.status_msg.includes('❌') || state.status_msg.includes('⚠️')) {
-                    logText.style.color = '#ef4444';
-                } else {
-                    logText.style.color = '#c084fc';
-                }
-            } else {
-                btnStart.style.display = 'inline-flex';
-                btnStop.style.display = 'none';
-                logText.style.color = '#a78bfa';
-                
-                if (state.total > 0 && state.processed >= state.total) {
-                    fill.style.width = '100%';
-                    progressText.innerText = "🎉 索引完成";
-                    if (logText.innerText.includes('分析中')) refreshCategoryStats();
-                } else {
-                    progressText.innerText = "空闲状态";
-                }
-                
-                logText.innerText = state.status_msg || "就绪";
-                statsText.innerText = `总耗时: ${state.total_time_sec || 0}s | 成功: ${state.success_count || 0}`;
-            }
-        } catch (e) {
-            // 只有真正网络断开或严重错误时，才会走到这里
-            document.getElementById('aiProgressText').innerText = "⚠️ 连接断开";
-            document.getElementById('aiLogText').innerText = "无法连接到后端，请检查服务状态";
-            console.error("AI Status Error:", e);
+    try {
+        const res = await fetch('/api/video/scan/status');
+        if (!res.ok) throw new Error("Backend Error");
+        const state = await res.json();
+        
+        const btnStart = document.getElementById('btnAiStart');
+        const btnStop = document.getElementById('btnAiStop');
+        const logText = document.getElementById('aiLogText');
+        const fill = document.getElementById('aiProgressFill');
+        const progressText = document.getElementById('aiProgressText');
+        const modelBadge = document.getElementById('aiModelBadge');
+        
+        // 1. 安全更新模型名 (按需修改)
+        if (modelBadge && modelBadge.innerText !== (state.ai_model || 'qwen-plus')) {
+            modelBadge.innerText = state.ai_model || 'qwen-plus';
+            modelBadge.style.display = (state.is_running || state.processed > 0) ? 'inline-flex' : 'none';
         }
+
+        // 2. 🌟 核心防闪烁逻辑：比对最新 5 条结果
+        if (state.recent_results && state.recent_results.length > 0) {
+            // 将结果转换为 JSON 字符串作为指纹进行比对
+            const currentFingerprint = JSON.stringify(state.recent_results);
+            
+            if (currentFingerprint !== lastResultsFingerprint) {
+                const container = document.getElementById('aiResultStream');
+                container.innerHTML = state.recent_results.map(item => {
+                    const subTags = item.ai_tags ? item.ai_tags.map(t => `<span class="tag-sub">${t}</span>`).join('') : '';
+                    return `
+                        <div class="result-item">
+                            <span class="result-fname">${item.filename}</span>
+                            <div class="result-tags">
+                                <span class="tag-cat">${item.category}</span>
+                                ${subTags}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // 更新指纹，防止下次重复渲染
+                lastResultsFingerprint = currentFingerprint;
+            }
+        }
+
+        // 3. 更新进度条与状态文案 (只有变化时才修改 innerText 也能减少开销)
+        if (state.is_running) {
+            btnStart.style.display = 'none';
+            btnStop.style.display = 'inline-flex';
+            
+            const newWidth = `${state.total > 0 ? (state.processed / state.total) * 100 : 0}%`;
+            if (fill.style.width !== newWidth) fill.style.width = newWidth;
+
+            const newProgress = `[${state.processed}/${state.total}] 分析中...`;
+            if (progressText.innerText !== newProgress) progressText.innerText = newProgress;
+
+            const newStats = `耗时: ${state.total_time_sec}s | 成功: ${state.success_count}`;
+            const statsEl = document.getElementById('aiStatsText');
+            if (statsEl.innerText !== newStats) statsEl.innerText = newStats;
+
+            const newLog = `🔄 ${state.status_msg}`;
+            if (logText.innerText !== newLog) logText.innerText = newLog;
+        } else {
+            btnStart.style.display = 'inline-flex';
+            btnStop.style.display = 'none';
+            if (state.total > 0 && state.processed >= state.total) {
+                if (fill.style.width !== '100%') fill.style.width = '100%';
+                if (progressText.innerText !== "🎉 索引完成") progressText.innerText = "🎉 索引完成";
+            } else {
+                if (progressText.innerText !== "空闲状态") progressText.innerText = "空闲状态";
+            }
+            if (logText.innerText !== (state.status_msg || "就绪")) logText.innerText = state.status_msg || "就绪";
+        }
+    } catch (e) {
+        const pText = document.getElementById('aiProgressText');
+        if (pText.innerText !== "⚠️ 连接断开") pText.innerText = "⚠️ 连接断开";
     }
-    
+}
+   
+   
+    // 🌟 获取并渲染最新的识别结果
+    async function updateResultStream() {
+        try {
+            // 请求最新的 5 条记录进行展示
+            const res = await fetch('/api/video/list?limit=5&need_tags=0');
+            const data = await res.json();
+            const container = document.getElementById('aiResultStream');
+            
+            if (data.items && data.items.length > 0) {
+                container.innerHTML = data.items.map(item => {
+                    const subTags = item.ai_tags ? item.ai_tags.map(t => `<span class="tag-sub">${t}</span>`).join('') : '';
+                    return `
+                        <div class="result-item">
+                            <span class="result-fname">${item.filename}</span>
+                            <div class="result-tags">
+                                <span class="tag-cat">${item.category}</span>
+                                ${subTags}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (e) { console.error("无法更新结果流", e); }
+    }
+
     async function controlAIScan(action) {
         await fetch('/api/video/scan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: action}) });
         checkAiStatus();
@@ -223,8 +249,6 @@ async function checkAiStatus() {
         cachedUrls = new Set(requests.map(req => new URL(req.url).pathname));
         const listEl = document.getElementById('cachedList');
         document.getElementById('cacheCount').innerText = `离线记录 (${requests.length})`;
-        
-        // 性能：只显示前 50 条
         listEl.innerHTML = requests.reverse().slice(0, 50).map(req => {
             const path = new URL(req.url).pathname;
             return `<div class="list-item">
@@ -232,6 +256,30 @@ async function checkAiStatus() {
                 <button class="btn btn-danger" style="border:none;background:transparent" onclick="deleteCache('${path}')">移除</button>
             </div>`;
         }).join('') + (requests.length > 50 ? '<div style="text-align:center;font-size:10px;opacity:0.5">...仅显示最新50条记录</div>' : '');
+    }
+
+    async function startSmartDownload(cat) {
+        if (!isCacheSupported) return;
+        try {
+            const res = await fetch(`/api/video/list?tag=${encodeURIComponent(cat)}&limit=10000&need_tags=0`);
+            const data = await res.json();
+            const targets = data.items.filter(v => !cachedUrls.has(v.url));
+            if (targets.length === 0) return alert("该分类已全部离线");
+            if (!confirm(`准备离线【${cat}】下的 ${targets.length} 个视频？`)) return;
+            abortSignal = false;
+            document.getElementById('taskPanel').style.display = 'block';
+            const cache = await caches.open(CACHE_NAME);
+            let count = 0;
+            for (const video of targets) {
+                if (abortSignal) break;
+                document.getElementById('progressText').innerText = `下载中: ${decodeURIComponent(video.filename)}`;
+                const response = await fetch(video.url);
+                if (response.ok) { await cache.put(video.url, response); count++; }
+                document.getElementById('progressFill').style.width = `${(count / targets.length) * 100}%`;
+            }
+            document.getElementById('taskPanel').style.display = 'none';
+            refreshCacheList();
+        } catch(e) { alert("操作失败"); }
     }
 
     function abortDownload() { abortSignal = true; }

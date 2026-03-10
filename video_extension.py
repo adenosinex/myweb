@@ -8,8 +8,10 @@ import urllib.parse
 import re
 import csv
 import io
+import threading  # 🌟 新增：用于多线程状态锁
+from openai import OpenAI
 from flask import Blueprint, request, jsonify, Response, stream_with_context
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed # 🌟 新增 as_completed
 
 video_bp = Blueprint('video', __name__)
 DB_PATH = 'universal_data.db'
@@ -17,11 +19,21 @@ RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 
 # 🌟 核心修复：更正为阿里支持的真实模型名称
 DEFAULT_NLP_MODEL = 'qwen3.5-27b' 
+# DEFAULT_NLP_MODEL = 'qwen-plus'  # 或 'qwen3.5-plus'，建议先用 qwen-plus 测试
+DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-executor = ThreadPoolExecutor(max_workers=2)
+# 🌟 初始化 OpenAI 客户端
+client = OpenAI(
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url=DASHSCOPE_BASE_URL,
+)
 
-# ================= 🌟 增强版 AI 任务状态机 =================
-# 确保所有字段初始化，防止前端 JS 读取 undefined 报错
+# 🌟 核心修改：定义线程池和全局锁
+executor = ThreadPoolExecutor(max_workers=6)
+state_lock = threading.Lock()
+
+# ================= 🌟 AI 任务状态机 =================
+# ================= 🌟 AI 任务状态机 =================
 ai_scan_state = {
     "is_running": False,
     "total": 0,
@@ -29,7 +41,8 @@ ai_scan_state = {
     "success_count": 0,   
     "status_msg": "就绪，等待扫描",
     "total_time_sec": 0,
-    "ai_model": DEFAULT_NLP_MODEL  
+    "ai_model": DEFAULT_NLP_MODEL,
+    "recent_results": []  # 🌟 新增：用于存放最新解析的5条结果
 }
 
 def init_video_db():
@@ -43,26 +56,93 @@ def init_video_db():
         conn.execute('CREATE TABLE IF NOT EXISTS video_stats (filename TEXT PRIMARY KEY, is_liked INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, play_count INTEGER DEFAULT 0, last_played_at REAL DEFAULT 0)')
 init_video_db()
 
+# 🌟 核心修改：分离出的单批次处理函数，供线程池并发调用
+def process_single_batch(batch, batch_id):
+    global ai_scan_state
+    
+    if not ai_scan_state["is_running"]:
+        return
+
+    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如: 影视, 搞笑, 学习, 颜值, 音乐, 随拍) 和 3 到 5 个【子标签】。
+    务必返回纯JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
+    文件名列表：{json.dumps(batch, ensure_ascii=False)}"""
+    
+    batch_start_time = time.time()
+    try:
+        completion = client.chat.completions.create(
+            model=DEFAULT_NLP_MODEL,
+            messages=[
+                {'role': 'system', 'content': '你是一个只返回纯JSON的分析助手。'},
+                {'role': 'user', 'content': prompt}
+            ],
+            response_format={ "type": "json_object" }
+        )
+        
+        elapsed = round(time.time() - batch_start_time, 2)
+        result_text = completion.choices[0].message.content.strip()
+        
+        match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if match:
+            ai_data = json.loads(match.group(0))
+            last_fname, last_tags_str = "", ""
+            
+            # 使用带超时设置的独立连接，避免多线程写入锁冲突
+            with sqlite3.connect(DB_PATH, timeout=30) as conn:
+                for fname, info in ai_data.items():
+                    tags = info.get('tags', [])
+                    if not isinstance(tags, list): tags = [tags]
+                    
+                    conn.execute("""
+                        INSERT OR REPLACE INTO video_store (filename, category, tags, ai_model, ai_time_sec) 
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), DEFAULT_NLP_MODEL, elapsed))
+                    
+                    last_fname, last_tags_str = fname, " ".join([f"#{t}" for t in tags[:3]])
+            
+           # 使用锁安全地更新全局状态
+            with state_lock:
+                ai_scan_state["success_count"] += len(ai_data)
+                ai_scan_state["processed"] += len(batch)
+                ai_scan_state["status_msg"] = f"✅ {last_fname[:20]}... {last_tags_str}"
+                
+                # 🌟 新增：把当前批次的结果推入展示队列（头部插入），只保留最新的5个
+                for fname, info in ai_data.items():
+                    tags = info.get('tags', [])
+                    if not isinstance(tags, list): tags = [tags]
+                    ai_scan_state["recent_results"].insert(0, {
+                        "filename": fname,
+                        "category": info.get('category', '未分类'),
+                        "ai_tags": tags[:5]
+                    })
+                # 截断队列，防止内存溢出
+                ai_scan_state["recent_results"] = ai_scan_state["recent_results"][:5]
+            
+    except Exception as e:
+        elapsed = round(time.time() - batch_start_time, 2)
+        err_msg = str(e)
+        with state_lock:
+            ai_scan_state["processed"] += len(batch)
+            ai_scan_state["status_msg"] = f"❌ API报错: {err_msg[:40]}"
+        if "RateLimit" in err_msg: time.sleep(5)
+
+# 🌟 核心修改：任务调度主函数
 def ai_tag_videos_task():
     global ai_scan_state
     
-    # 初始化任务状态
     ai_scan_state.update({
         "is_running": True, "total": 0, "processed": 0, 
-        "success_count": 0, "status_msg": "正在同步视频列表...", 
-        "total_time_sec": 0, "ai_model": DEFAULT_NLP_MODEL
+        "success_count": 0, "status_msg": "正在同步列表...", 
+        "total_time_sec": 0, "ai_model": DEFAULT_NLP_MODEL,
+        "recent_results": [] # 🌟 每次启动任务清空历史展示
     })
     
     task_start_time = time.time()
     
     try:
         resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=10, proxies={"http": None, "https": None})
-        if resp.status_code != 200: 
-            ai_scan_state.update({"is_running": False, "status_msg": f"资源节点异常: {resp.status_code}"})
-            return
-        all_files = resp.json()
+        all_files = resp.json() if resp.status_code == 200 else []
     except Exception as e: 
-        ai_scan_state.update({"is_running": False, "status_msg": f"无法访问资源节点: {str(e)[:30]}"})
+        ai_scan_state.update({"is_running": False, "status_msg": "无法访问资源节点"})
         return
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -73,81 +153,40 @@ def ai_tag_videos_task():
     untagged = [f for f in all_files if f not in existing]
     
     if not untagged: 
-        ai_scan_state.update({"is_running": False, "status_msg": "🎉 所有视频均已打标完成"})
+        ai_scan_state.update({"is_running": False, "status_msg": "🎉 所有视频均已打标"})
         return
 
-    ai_scan_state["total"] = len(untagged)
-    batch_size = 10
-
-    for i in range(0, len(untagged), batch_size):
+    ai_scan_state.update({
+        "total": len(untagged),
+        "status_msg": "🚀 多线程并发分析已启动..."
+    })
+    
+    batch_size = 8
+    # 拆分所有批次
+    batches = [untagged[i:i+batch_size] for i in range(0, len(untagged), batch_size)]
+    
+    futures = []
+    # 🌟 提交所有批次到线程池并发执行
+    for idx, batch in enumerate(batches):
         if not ai_scan_state["is_running"]:
-            ai_scan_state["status_msg"] = "⚠️ 任务已手动强行终止"
-            return
-            
-        batch = untagged[i:i+batch_size]
-        ai_scan_state["status_msg"] = f"⏳ 正在分析: {batch[0][:20]}..."
+            break
+        futures.append(executor.submit(process_single_batch, batch, idx + 1))
+        # 轻微休眠，防止瞬间发出大量请求导致 QPS 限制
+        time.sleep(0.5)
         
-        prompt = f"""
-        你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如: 影视, 搞笑, 学习, 颜值, 音乐, 随拍) 
-        和 3 到 5 个【子标签】(如: 混剪, 剧情, 舞蹈, 宠物, 编程 等)。
-        务必返回纯JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
-        文件名列表：{json.dumps(batch, ensure_ascii=False)}
-        """
-        
-        batch_start_time = time.time()
-        try:
-            # 🌟 核心修复：增加对 Response 的安全性校验
-            response = dashscope.Generation.call(model=DEFAULT_NLP_MODEL, prompt=prompt, result_format='message')
-            
-            if response is None:
-                raise Exception("DashScope 返回为空，请检查网络或API Key")
-            
-            if response.status_code != 200:
-                raise Exception(f"API错误: {response.message}")
+        # 定期更新总耗时
+        with state_lock:
+             ai_scan_state["total_time_sec"] = round(time.time() - task_start_time, 1)
 
-            elapsed = round(time.time() - batch_start_time, 2)
-            result_text = response.output.choices[0].message.content.strip()
-            match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            
-            if match:
-                ai_data = json.loads(match.group(0))
-                last_fname, last_tags_str = "", ""
-                
-                with sqlite3.connect(DB_PATH) as conn:
-                    for fname, info in ai_data.items():
-                        tags = info.get('tags', [])
-                        if not isinstance(tags, list): tags = [tags]
-                        
-                        conn.execute("""
-                            INSERT OR REPLACE INTO video_store (filename, category, tags, ai_model, ai_time_sec) 
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), DEFAULT_NLP_MODEL, elapsed))
-                        
-                        last_fname = fname
-                        last_tags_str = " ".join([f"#{t}" for t in tags[:3]])
-                
-                ai_scan_state["success_count"] += len(ai_data)
-                ai_scan_state["status_msg"] = f"✅ {last_fname[:25]}... {last_tags_str}"
-            else:
-                ai_scan_state["status_msg"] = f"❌ 返回格式异常 ({elapsed}s)"
-                
-        except Exception as e:
-            elapsed = round(time.time() - batch_start_time, 2)
-            err_msg = str(e)
-            ai_scan_state["status_msg"] = f"❌ API报错: {err_msg[:40]}"
-            # 如果是限流，额外等待
-            if "RateQuota" in err_msg or "Throttling" in err_msg:
-                time.sleep(5)
-                
-        ai_scan_state["processed"] += len(batch)
-        ai_scan_state["total_time_sec"] = round(time.time() - task_start_time, 1)
-        
-        if ai_scan_state["processed"] < ai_scan_state["total"]:
-            time.sleep(1.5) # 防封锁休眠
+    # 等待所有提交的线程完成
+    for future in as_completed(futures):
+         with state_lock:
+             ai_scan_state["total_time_sec"] = round(time.time() - task_start_time, 1)
             
     if ai_scan_state["is_running"]:
         ai_scan_state["is_running"] = False
         ai_scan_state["status_msg"] = f"🎉 成功打标 {ai_scan_state['success_count']} 个视频！"
+
 
 # ================= 接口：控制与统计 (保持原逻辑) =================
 @video_bp.route('/api/video/scan', methods=['POST'])
@@ -155,7 +194,8 @@ def control_scan():
     global ai_scan_state
     req_data = request.get_json(silent=True) or {}
     if req_data.get('action') == 'start' and not ai_scan_state["is_running"]:
-        executor.submit(ai_tag_videos_task)
+        # 🌟 核心修改：使用独立线程启动主调度函数，防止阻塞 Flask 主线程
+        threading.Thread(target=ai_tag_videos_task, daemon=True).start()
     elif req_data.get('action') == 'stop':
         ai_scan_state["is_running"] = False
     return jsonify({"status": "ok"})
