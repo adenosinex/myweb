@@ -46,23 +46,19 @@
         /* ==========================================================================
            5. 悬浮 UI 与交互组件 (Overlay & Components)
            ========================================================================== */
-        /* 播放提示与进度反馈 */
         .play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 11; opacity: 0; pointer-events: none; color: rgba(255,255,255,0.7); transition: 0.2s; }
         .video-card.paused .play-icon { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
         .seek-toast { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.9); font-size: 16px; font-weight: bold; letter-spacing: 1px; z-index: 50; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
         
-        /* 底部信息栏与标签 */
         .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
         .tag-group { display: flex; flex-wrap: wrap; gap: 6px; }
         .ai-tag { background: rgba(59, 130, 246, 0.3); border: 1px solid rgba(96, 165, 250, 0.2); color: #93c5fd; }
         .file-tag { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.05); color: #d1d5db; }
         
-        /* 右侧操作按钮 */
         .action-sidebar { position: absolute; right: 15px; bottom: 120px; z-index: 20; display: flex; flex-direction: column; gap: 20px; align-items: center; }
         .action-btn { background: none; border: none; color: white; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .icon-circle { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; transition: 0.3s;}
         
-        /* 底部进度条 */
         .progress-container { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.1); z-index: 30; }
         .progress-bar { height: 100%; background: rgba(255,255,255,0.7); width: 0%; transition: width 0.1s linear; }
 
@@ -81,22 +77,22 @@
     <div class="drawer" id="drawer">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-bold">全部分类</h2>
-            <button onclick="toggleDrawer()" class="p-2 bg-white/10 rounded-full">✕</button>
+            <button onclick="AppActions.toggleDrawer()" class="p-2 bg-white/10 rounded-full">✕</button>
         </div>
         <div class="drawer-grid" id="drawerGrid"></div>
     </div>
 
     <div class="top-nav">
         <div class="main-tabs">
-            <div class="tab-item active" onclick="switchFilter('all')" id="nav-all">推荐</div>
-            <div class="tab-item" onclick="switchFilter('unplayed')" id="nav-unplayed">新鲜</div>
+            <div class="tab-item active" onclick="AppActions.switchFilter('all')" id="nav-all">推荐</div>
+            <div class="tab-item" onclick="AppActions.switchFilter('unplayed')" id="nav-unplayed">新鲜</div>
             <div class="flex gap-2 absolute right-4 top-4 pointer-events-auto">
                 <a href="/video-cache.html" class="text-[10px] bg-white/20 border border-white/20 backdrop-blur px-2.5 py-1.5 rounded-md hover:bg-white/40 shadow-lg">管理📦</a>
             </div>
         </div>
         <div class="tag-row">
             <div class="tag-scroll" id="categoryBar"></div>
-            <button onclick="toggleDrawer()" class="p-1.5 bg-white/20 rounded-lg shadow-md">⊞</button>
+            <button onclick="AppActions.toggleDrawer()" class="p-1.5 bg-white/20 rounded-lg shadow-md">⊞</button>
         </div>
     </div>
 
@@ -104,422 +100,412 @@
 
     <script>
         /* ==========================================================================
-           1. 全局状态与核心变量定义
+           1. 全局状态容器 (Centralized State)
            ========================================================================== */
-        let displayData = [];         // 当前渲染的视频数据列表
-        let currentFilter = 'all';    // 顶部主干筛选状态: all | unplayed | disliked
-        let activeTag = '全部';       // 当前激活的具体分类标签
-        
-        let currentPage = 1;          // 分页加载：当前页码
-        let hasMore = true;           // 分页加载：是否还有更多数据
-        let isLoading = false;        // 防止并发请求的锁
-        
-        let currentIndex = 0;         // 当前正在播放的视频索引
-        let observer = null;          // 核心相交观察器 (IntersectionObserver)
-        const feed = document.getElementById('videoFeed'); // 视频流容器DOM
-        let isFirstAppLoad = true;
-        /* ==========================================================================
-           2. 离线队列与网络同步引擎
-           ========================================================================== */
-        window.addEventListener('online', syncOfflineActions);
-
-        // 异步上报本地缓存的动作 (喜欢/取消喜欢/删除等)
-        async function syncOfflineActions() {
-            if (!navigator.onLine) return;
-            let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
-            if (queue.length === 0) return;
-            try {
-                const res = await fetch('/api/video/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(queue) });
-                if (res.ok) localStorage.setItem('videoActionsQueue', '[]');
-            } catch (e) { console.error('同步失败', e); }
-        }
-
-        // 记录动作到本地缓存，并尝试触发同步
-        function recordAction(filename, action) {
-            let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
-            queue.push({ filename, action, timestamp: Date.now() });
-            localStorage.setItem('videoActionsQueue', JSON.stringify(queue));
-            syncOfflineActions();
-        }
+        const AppState = {
+            data: [],               // 存储视频列表数据
+            filter: 'all',          // 主列表状态: all | unplayed | disliked
+            tag: '全部',            // 激活的分类标签
+            page: 1,                // 当前加载页码
+            hasMore: true,          // 是否还有下一页
+            isLoading: false,       // 避免重复请求的锁
+            currentIndex: 0,        // 当前焦点视频索引
+            isFirstLoad: true,      // 记录是否为初次打开，用于触发随机排序
+            observer: null,         // 交叉观察器实例
+            DOMFeed: document.getElementById('videoFeed')
+        };
 
         /* ==========================================================================
-           3. 数据加载与初始化
+           2. 数据同步与动作上报引擎 (Sync Engine)
            ========================================================================== */
-        function extractTagsFromFilename(filename) {
-            const matches = filename.match(/#([^#\s.]+)/g);
-            return matches ? matches.map(m => m.substring(1)) : [];
-        }
+        const SyncEngine = {
+            init: () => window.addEventListener('online', SyncEngine.flush),
+            
+            flush: async () => {
+                if (!navigator.onLine) return;
+                let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
+                if (queue.length === 0) return;
+                try {
+                    const res = await fetch('/api/video/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(queue) });
+                    if (res.ok) localStorage.setItem('videoActionsQueue', '[]');
+                } catch (e) { console.error('同步失败', e); }
+            },
 
-     async function loadVideos(reset = false) {
-            if (isLoading || (!hasMore && !reset)) return;
-            isLoading = true;
-
-            if (reset) {
-                currentPage = 1; 
-                displayData = []; 
-                currentIndex = 0; 
-                feed.innerHTML = ''; 
+            record: (filename, action) => {
+                let queue = JSON.parse(localStorage.getItem('videoActionsQueue') || '[]');
+                queue.push({ filename, action, timestamp: Date.now() });
+                localStorage.setItem('videoActionsQueue', JSON.stringify(queue));
+                SyncEngine.flush();
             }
+        };
 
-            try {
-                // 先获取第1页数据，主要为了拿到后台的 data.total（总视频数）
-                let res = await fetch(`/api/video/list?filter=${currentFilter}&tag=${encodeURIComponent(activeTag)}&page=${currentPage}&limit=10`);
-                let data = await res.json();
+        /* ==========================================================================
+           3. 核心业务逻辑控制器 (App Actions)
+           ========================================================================== */
+        const AppActions = {
+            // 解析文件名内的 #标签
+            parseTags: (filename) => {
+                const matches = filename.match(/#([^#\s.]+)/g);
+                return matches ? matches.map(m => m.substring(1)) : [];
+            },
 
-                // ================= 核心修改：首页动态起始页逻辑 =================
-                // 仅在网页刚打开，且是默认的“推荐-全部”列表时触发
-                if (reset && isFirstAppLoad && currentFilter === 'all' && activeTag === '全部' && data.total > 10) {
-                    isFirstAppLoad = false; 
-                    const maxPage = Math.ceil(data.total / 10);
+            // 切换顶部过滤器
+            switchFilter: (type) => {
+                AppState.filter = type;
+                document.getElementById('nav-all').classList.toggle('active', type === 'all');
+                document.getElementById('nav-unplayed').classList.toggle('active', type === 'unplayed');
+                if (type === 'disliked') {
+                    document.getElementById('nav-all').classList.remove('active');
+                    document.getElementById('nav-unplayed').classList.remove('active');
+                }
+                AppState.tag = '全部';
+                DataLoader.fetchNextPage(true);
+            },
+
+            // 切换具体分类
+            setTag: (tag) => {
+                AppState.tag = tag;
+                DataLoader.fetchNextPage(true);
+            },
+
+            toggleDrawer: () => document.getElementById('drawer').classList.toggle('open'),
+
+            // 卡片交互动作
+            toggleLike: (btn, encodedName) => {
+                const isLiked = btn.classList.toggle('liked');
+                btn.querySelector('.icon-circle').innerText = isLiked ? '❤️' : '🤍';
+                SyncEngine.record(decodeURIComponent(encodedName), isLiked ? 'like' : 'unlike');
+            },
+
+            deleteCard: (btn, encodedName, index) => {
+                SyncEngine.record(decodeURIComponent(encodedName), AppState.filter === 'disliked' ? 'undelete' : 'delete');
+                const targetCard = document.getElementById(`card-${index}`);
+                targetCard.classList.add(AppState.filter === 'disliked' ? 'recover-anim' : 'disliked-anim');
+                
+                setTimeout(() => {
+                    AppState.data.splice(index, 1);
+                    targetCard.remove();
+                    // 重建索引映射
+                    document.querySelectorAll('.video-card').forEach((c, i) => {
+                        c.id = `card-${i}`;
+                        c.dataset.index = i;
+                    });
+                    if (AppState.data.length < 3 && AppState.hasMore) DataLoader.fetchNextPage(false);
+                }, 400);
+            }
+        };
+
+  /* ==========================================================================
+           4. 数据加载与生命周期模块 (Data Loader)
+           ========================================================================== */
+        const DataLoader = {
+            bootstrap: async () => {
+                SyncEngine.init();
+                fetch('/api/video/scan', { method: 'POST' }).catch(()=>{});
+                await DataLoader.fetchNextPage(true);
+            },
+
+            fetchNextPage: async (reset = false) => {
+                if (AppState.isLoading || (!AppState.hasMore && !reset)) return;
+                AppState.isLoading = true;
+
+                if (reset) {
+                    AppState.page = 1;
+                    AppState.data = [];
+                    AppState.currentIndex = 0;
+                    AppState.DOMFeed.innerHTML = '';
+                }
+
+                try {
+                    // 核心修改：追加 &need_tags=1/0，只有在 reset (第一页/换标签) 时才让后端算 Tag
+                    const needTagsParam = reset ? '&need_tags=1' : '&need_tags=0';
+                    let reqUrl = `/api/video/list?filter=${AppState.filter}&tag=${encodeURIComponent(AppState.tag)}&page=${AppState.page}&limit=5${needTagsParam}`;
                     
-                    // 【默认模式：每次随机一页开始】
-                    currentPage = Math.floor(Math.random() * maxPage) + 1;
-                    
-                    // 【备选模式：如果你想记住上次刷到了第几页，请注释掉上面那行，并取消下面两行的注释】
-                    // let savedPage = parseInt(localStorage.getItem('lastVideoPage')) || 1;
-                    // currentPage = savedPage > maxPage ? 1 : savedPage;
+                    let res = await fetch(reqUrl);
+                    let data = await res.json();
 
-                    // 如果计算出的起始页不是第1页，重新向后端请求该页数据
-                    if (currentPage > 1) {
-                        res = await fetch(`/api/video/list?filter=${currentFilter}&tag=${encodeURIComponent(activeTag)}&page=${currentPage}&limit=10`);
-                        data = await res.json();
-                    }
-                } else if (reset) {
-                    isFirstAppLoad = false; // 用户主动点击其他分类时，取消首次加载标识
-                }
-                // ============================================================
-
-                if (reset) renderTagsAndDrawer(data.tags_count, data.total);
-
-                const newItems = data.items;
-                const startIndex = displayData.length;
-                displayData = [...displayData, ...newItems];
-                hasMore = data.has_more;
-                currentPage++; // 接着起始页顺序往后翻
-                
-                // 将当前播放到的页数存入本地缓存（为备选模式服务）
-                if (currentFilter === 'all' && activeTag === '全部') {
-                    localStorage.setItem('lastVideoPage', hasMore ? currentPage : 1);
-                }
-
-                // 增量追加构建 DOM
-                newItems.forEach((v, idx) => createCardDOM(v, startIndex + idx));
-                
-                if (reset && displayData.length === 0) {
-                    feed.innerHTML = `<div class="h-full w-full flex items-center justify-center text-gray-500 font-bold">${currentFilter==='disliked' ? '回收站空' : '无匹配视频'}</div>`;
-                }
-
-                setupIntersectionObserver();
-            } catch (e) {
-                // 离线容灾降级处理（这部分原本的代码保持不变）
-                const cache = await caches.open('video-cache-v1');
-                const keys = await cache.keys();
-                let offlineData = keys.map(req => {
-                    const fname = decodeURIComponent(req.url.split('/').pop());
-                    const tags = extractTagsFromFilename(fname);
-                    return { filename: fname, url: req.url, category: '未分类', ai_tags: [], filename_tags: tags, mergedTags: tags, is_liked: false };
-                });
-                
-                if(activeTag !== '全部') offlineData = offlineData.filter(v => v.category === activeTag || v.mergedTags.includes(activeTag));
-                const start = (currentPage - 1) * 10;
-                const sliced = offlineData.slice(start, start + 10);
-                
-                if (reset) renderTagsAndDrawer({'缓存': offlineData.length}, offlineData.length);
-                displayData = [...displayData, ...sliced];
-                hasMore = (start + 10) < offlineData.length;
-                currentPage++;
-                
-                sliced.forEach((v, idx) => createCardDOM(v, start + idx));
-                setupIntersectionObserver();
-            } finally {
-                isLoading = false;
-            }
-        }
-        /* ==========================================================================
-           4. 分类面板与标签逻辑
-           ========================================================================== */
-        function toggleDrawer() { document.getElementById('drawer').classList.toggle('open'); }
-
-        function renderTagsAndDrawer(countsMap, total) {
-            const sorted = Object.entries(countsMap || {}).sort((a, b) => b[1] - a[1]);
-            let topTags = sorted.slice(0, 10).map(item => item[0]);
-            
-            // 智能插队：保证当前选中标签始终可见
-            if (activeTag !== '全部' && !topTags.includes(activeTag)) {
-                topTags.unshift(activeTag);
-                if(topTags.length > 10) topTags.pop();
-            }
-
-            // 渲染横向滚动条
-            const bar = document.getElementById('categoryBar');
-            bar.innerHTML = `<div class="cat-pill ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部')">全部</div>` + 
-                topTags.map(tag => `<div class="cat-pill ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}')">${tag}</div>`).join('');
-
-            // 渲染全屏抽屉网格
-            const grid = document.getElementById('drawerGrid');
-            grid.innerHTML = `
-                <div class="grid-item border border-red-500/30" onclick="switchFilter('disliked'); toggleDrawer()">
-                    <span class="text-sm font-bold text-red-400">已不喜欢 🗑️</span>
-                    <span class="text-[10px] opacity-50 text-red-200">误触可找回</span>
-                </div>
-                <div class="grid-item ${activeTag === '全部' && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('全部'); toggleDrawer()">
-                    <span class="text-sm font-bold">全部视频</span>
-                    <span class="text-[10px] opacity-50">${total || 0} 视频</span>
-                </div>` + 
-                sorted.map(([tag, count]) => `
-                <div class="grid-item ${activeTag === tag && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('${tag}'); toggleDrawer()">
-                    <span class="text-sm font-bold">${tag}</span><span class="text-[10px] opacity-50">${count} 视频</span>
-                </div>`).join('');
-        }
-
-        // 切换顶级过滤条件 (推荐 / 新鲜 / 不喜欢)
-        function switchFilter(type) {
-            currentFilter = type;
-            document.getElementById('nav-all').classList.toggle('active', type === 'all');
-            document.getElementById('nav-unplayed').classList.toggle('active', type === 'unplayed');
-            if (type === 'disliked') {
-                document.getElementById('nav-all').classList.remove('active');
-                document.getElementById('nav-unplayed').classList.remove('active');
-            }
-            activeTag = '全部';
-            loadVideos(true);
-        }
-
-        function setTag(tag) { activeTag = tag; loadVideos(true); }
-
-        /* ==========================================================================
-           5. 视频渲染引擎 (DOM 构建)
-           ========================================================================== */
-        function createCardDOM(v, index) {
-            if (document.getElementById(`card-${index}`)) return;
-            
-            const card = document.createElement('div');
-            card.className = 'video-card paused';
-            card.id = `card-${index}`;
-            card.dataset.index = index;
-            
-            const jsSafeName = encodeURIComponent(v.filename);
-            const deleteBtnHtml = currentFilter === 'disliked' 
-                ? `<button class="action-btn text-green-400" onclick="handleDeleteAction(this, '${jsSafeName}', ${index})"><div class="icon-circle">♻️</div><span class="text-[10px] font-bold shadow-black">恢复</span></button>`
-                : `<button class="action-btn btn-dislike" onclick="handleDeleteAction(this, '${jsSafeName}', ${index})"><div class="icon-circle">💔</div><span class="text-[10px] font-bold shadow-black">不喜欢</span></button>`;
-
-            let cleanTitle = v.filename.replace(/\.(mp4|mov)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
-            
-            // 构建双层展示标签 (AI标记 与 文件提取)
-            let aiTagsHtml = '';
-            if (v.category && v.category !== '未分类') aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); setTag('${v.category}')">#${v.category}</span>`;
-            (v.ai_tags || []).forEach(t => aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); setTag('${t}')">#${t}</span>`);
-
-            let fnTagsHtml = '';
-            (v.filename_tags || []).forEach(t => fnTagsHtml += `<span class="file-tag px-2 py-0.5 rounded text-[10px] cursor-pointer" onclick="event.stopPropagation(); setTag('${t}')"><small class='opacity-50'>[F]</small> ${t}</span>`);
-
-            card.innerHTML = `
-                <div class="blur-bg" style="background-image: url('${v.url}')"></div>
-                <video src="${v.url}" class="video-player" loop playsinline preload="metadata"></video>
-                
-                <div class="click-area" id="area-${index}"></div>
-                <div class="play-icon"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-                <div class="seek-toast" id="toast-${index}"></div>
-
-                <div class="action-sidebar">
-                    <button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="toggleLike(this, '${jsSafeName}')">
-                        <div class="icon-circle">${v.is_liked ? '❤️' : '🤍'}</div>
-                        <span class="text-[10px] font-bold shadow-black">喜欢</span>
-                    </button>
-                    ${deleteBtnHtml}
-                </div>
-
-                <div class="info-bottom pointer-events-auto">
-                    <h2 class="text-[15px] font-bold mb-3 line-clamp-2 drop-shadow-md">${cleanTitle}</h2>
-                    ${aiTagsHtml ? `<div class="tag-group mb-2">${aiTagsHtml}</div>` : ''}
-                    ${fnTagsHtml ? `<div class="tag-group pt-2 border-t border-white/10">${fnTagsHtml}</div>` : ''}
-                </div>
-                <div class="progress-container"><div class="progress-bar" id="prog-${index}"></div></div>
-            `;
-            feed.appendChild(card);
-            
-            // 绑定进度条事件
-            const video = card.querySelector('video');
-            const prog = card.querySelector(`#prog-${index}`);
-            video.addEventListener('timeupdate', () => {
-                if(video.duration) prog.style.width = `${(video.currentTime / video.duration) * 100}%`;
-            });
-            
-            // 绑定触控/拖拽事件
-            bindSwipeSeek(card.querySelector(`#area-${index}`), video, card.querySelector(`#toast-${index}`));
-            
-            // 将新卡片加入相交观察队列
-            if (observer) observer.observe(card);
-        }
-
-        /* ==========================================================================
-           6. 播放控制与相交检测 (Intersection Observer)
-           ========================================================================== */
-        function setupIntersectionObserver() {
-            if (observer) observer.disconnect();
-            
-            observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    const card = entry.target;
-                    const video = card.querySelector('video');
-                    const idx = parseInt(card.dataset.index);
-
-                    // 元素露脸超过60%时判定为“当前观看”
-                    if (entry.isIntersecting) {
-                        currentIndex = idx;
-                        video.play().then(() => {
-                            card.classList.remove('paused');
-                            if(currentFilter !== 'disliked') recordAction(decodeURIComponent(video.src.split('/').pop()), 'play');
-                        }).catch(() => card.classList.add('paused'));
+                    if (reset && AppState.isFirstLoad && AppState.filter === 'all' && AppState.tag === '全部' && data.total > 5) {
+                        AppState.isFirstLoad = false;
+                        const maxPage = Math.ceil(data.total / 10);
+                        AppState.page = Math.floor(Math.random() * maxPage) + 1; 
                         
-                        // 无感触底加载下 10 个数据
-                        if (idx >= displayData.length - 3 && hasMore && !isLoading) {
-                            loadVideos(false);
+                        if (AppState.page > 1) {
+                            // 由于此时依然是重置后的初始化，也带上 need_tags=1
+                            reqUrl = `/api/video/list?filter=${AppState.filter}&tag=${encodeURIComponent(AppState.tag)}&page=${AppState.page}&limit=10&need_tags=1`;
+                            res = await fetch(reqUrl);
+                            data = await res.json();
                         }
-                    } else {
-                        // 滚出视口，立刻暂停释放资源
-                        video.pause();
-                        video.currentTime = 0;
-                        card.classList.add('paused');
+                    } else if (reset) {
+                        AppState.isFirstLoad = false;
                     }
-                });
-            }, { root: feed, threshold: 0.6 });
 
-            document.querySelectorAll('.video-card').forEach(card => observer.observe(card));
-        }
+                    // 只有 reset 且 data.tags_count 不为空时才重绘侧边栏，节省 DOM 性能
+                    if (reset && Object.keys(data.tags_count).length > 0) {
+                        UIRenderer.renderCategoryPanels(data.tags_count, data.total);
+                    }
 
-        function togglePlay(clickAreaEl) {
-            const card = clickAreaEl.closest('.video-card');
-            const video = card.querySelector('video');
-            if (video.paused) { video.play(); card.classList.remove('paused'); } 
-            else { video.pause(); card.classList.add('paused'); }
-        }
+                    const newItems = data.items;
+                    const startIndex = AppState.data.length;
+                    AppState.data = [...AppState.data, ...newItems];
+                    AppState.hasMore = data.has_more;
+                    AppState.page++;
 
-        /* ==========================================================================
-           7. 触控与鼠标交互引擎 (手势/滚动/按键)
-           ========================================================================== */
-        // 引擎 1：横向拖拽/滑动调整进度
-        function bindSwipeSeek(touchArea, video, toastEl) {
-            let startX = 0, startY = 0;
-            let isSeeking = false, toastTimer, justSeeked = false; 
+                    newItems.forEach((v, idx) => UIRenderer.buildCardDOM(v, startIndex + idx));
 
-            const handleStart = (x, y) => { startX = x; startY = y; isSeeking = false; };
-            const handleMove = (x, y, e) => {
-                if(!startX || !startY) return;
-                const diffX = x - startX, diffY = y - startY;
-                // 防抖：必须横向位移大于纵向才认为是调整进度
-                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 15) {
-                    e.preventDefault(); isSeeking = true;
-                }
-            };
-            const handleEnd = (x) => {
-                if (!isSeeking || !video.duration) { startX = 0; startY = 0; return; }
-                const diffX = x - startX;
-                if (Math.abs(diffX) > 40) {
-                    const step = video.duration * 0.2; // 跃进20%
-                    video.currentTime = Math.max(0, Math.min(video.currentTime + (diffX > 0 ? step : -step), video.duration));
+                    if (reset && AppState.data.length === 0) {
+                        AppState.DOMFeed.innerHTML = `<div class="h-full w-full flex items-center justify-center text-gray-500 font-bold">${AppState.filter === 'disliked' ? '回收站空' : '无匹配视频'}</div>`;
+                    }
+
+                    InteractionEngine.initIntersectionObserver();
+                } catch (e) {
+                    const cache = await caches.open('video-cache-v1');
+                    const keys = await cache.keys();
+                    let offlineData = keys.map(req => {
+                        const fname = decodeURIComponent(req.url.split('/').pop());
+                        const matches = fname.match(/#([^#\s.]+)/g);
+                        const tags = matches ? matches.map(m => m.substring(1)) : [];
+                        return { filename: fname, url: req.url, category: '未分类', ai_tags: [], filename_tags: tags, mergedTags: tags, is_liked: false };
+                    });
                     
-                    toastEl.innerText = diffX > 0 ? '前进 20%' : '后退 20%';
-                    toastEl.style.opacity = 1;
-                    clearTimeout(toastTimer);
-                    toastTimer = setTimeout(() => toastEl.style.opacity = 0, 500);
+                    if(AppState.tag !== '全部') offlineData = offlineData.filter(v => v.category === AppState.tag || v.mergedTags.includes(AppState.tag));
+                    const start = (AppState.page - 1) * 10;
+                    const sliced = offlineData.slice(start, start + 10);
                     
-                    justSeeked = true; // 锁定，防止触发点击事件
-                    setTimeout(() => { justSeeked = false; }, 200); 
-                }
-                startX = 0; startY = 0; isSeeking = false;
-            };
-
-            // Touch API
-            touchArea.addEventListener('touchstart', e => handleStart(e.touches[0].clientX, e.touches[0].clientY), {passive: true});
-            touchArea.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY, e), {passive: false});
-            touchArea.addEventListener('touchend', e => handleEnd(e.changedTouches[0].clientX));
-
-            // Mouse API
-            let isMouseDown = false;
-            touchArea.addEventListener('mousedown', e => { isMouseDown = true; handleStart(e.clientX, e.clientY); });
-            touchArea.addEventListener('mousemove', e => { if(isMouseDown) handleMove(e.clientX, e.clientY, e); });
-            const mouseEnd = e => { if(isMouseDown) { isMouseDown = false; handleEnd(e.clientX); } };
-            touchArea.addEventListener('mouseup', mouseEnd);
-            touchArea.addEventListener('mouseleave', mouseEnd);
-
-            touchArea.addEventListener('click', (e) => {
-                if (justSeeked) { e.preventDefault(); return; } 
-                togglePlay(touchArea);
-            });
-        }
-
-        // 引擎 2：桌面端鼠标防多滚锁
-        let wheelLock = false;
-        feed.addEventListener('wheel', (e) => {
-            if (window.matchMedia("(hover: none)").matches) return; // 手机原生滑动放行
-            e.preventDefault(); 
-            if (wheelLock) return;
-            wheelLock = true;
-
-            const targetIndex = Math.max(0, Math.min(e.deltaY > 0 ? currentIndex + 1 : currentIndex - 1, displayData.length - 1));
-            const targetCard = document.getElementById(`card-${targetIndex}`);
-            if (targetCard) feed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
-            
-            setTimeout(() => { wheelLock = false; }, 500); 
-        }, { passive: false });
-
-        // 引擎 3：键盘控制映射
-        window.addEventListener('keydown', (e) => {
-            if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
-                e.preventDefault(); 
-                const targetIndex = Math.max(0, Math.min(e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1, displayData.length - 1));
-                const targetCard = document.getElementById(`card-${targetIndex}`);
-                if (targetCard) feed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
-            } else if (e.key === ' ') {
-                e.preventDefault(); 
-                const card = document.getElementById(`card-${currentIndex}`);
-                if (card) togglePlay(card.querySelector('.click-area'));
-            } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                const card = document.getElementById(`card-${currentIndex}`);
-                if (!card) return;
-                const video = card.querySelector('video'), toast = card.querySelector('.seek-toast');
-                if (video && video.duration) {
-                    const step = video.duration * 0.2;
-                    video.currentTime = Math.max(0, Math.min(video.currentTime + (e.key === 'ArrowRight' ? step : -step), video.duration));
-                    toast.innerText = e.key === 'ArrowRight' ? '前进 20%' : '后退 20%';
-                    toast.style.opacity = 1; setTimeout(() => toast.style.opacity = 0, 500);
+                    if (reset) UIRenderer.renderCategoryPanels({'缓存': offlineData.length}, offlineData.length);
+                    AppState.data = [...AppState.data, ...sliced];
+                    AppState.hasMore = (start + 10) < offlineData.length;
+                    AppState.page++;
+                    
+                    sliced.forEach((v, idx) => UIRenderer.buildCardDOM(v, start + idx));
+                    InteractionEngine.initIntersectionObserver();
+                } finally {
+                    AppState.isLoading = false;
                 }
             }
-        });
-
+        };
         /* ==========================================================================
-           8. 业务动作流 (喜欢 / 不喜欢 / 恢复)
+           5. 界面渲染引擎 (UI Renderer)
            ========================================================================== */
-        function toggleLike(btn, encodedName) {
-            const isLikedNow = btn.classList.toggle('liked');
-            btn.querySelector('.icon-circle').innerText = isLikedNow ? '❤️' : '🤍';
-            recordAction(decodeURIComponent(encodedName), isLikedNow ? 'like' : 'unlike');
-        }
-
-        function handleDeleteAction(btn, encodedName, index) {
-            recordAction(decodeURIComponent(encodedName), currentFilter === 'disliked' ? 'undelete' : 'delete');
-            const targetCard = document.getElementById(`card-${index}`);
-            targetCard.classList.add(currentFilter === 'disliked' ? 'recover-anim' : 'disliked-anim');
-            
-            setTimeout(() => {
-                displayData.splice(index, 1);
-                targetCard.remove();
+        const UIRenderer = {
+            renderCategoryPanels: (countsMap, total) => {
+                const sorted = Object.entries(countsMap || {}).sort((a, b) => b[1] - a[1]);
+                let topTags = sorted.slice(0, 10).map(item => item[0]);
                 
-                // 重新校准后续卡片 index
-                document.querySelectorAll('.video-card').forEach((c, i) => {
-                    c.id = `card-${i}`;
-                    c.dataset.index = i;
+                if (AppState.tag !== '全部' && !topTags.includes(AppState.tag)) {
+                    topTags.unshift(AppState.tag);
+                    if(topTags.length > 10) topTags.pop();
+                }
+
+                const bar = document.getElementById('categoryBar');
+                bar.innerHTML = `<div class="cat-pill ${AppState.tag === '全部' ? 'active' : ''}" onclick="AppActions.setTag('全部')">全部</div>` + 
+                    topTags.map(tag => `<div class="cat-pill ${AppState.tag === tag ? 'active' : ''}" onclick="AppActions.setTag('${tag}')">${tag}</div>`).join('');
+
+                const grid = document.getElementById('drawerGrid');
+                grid.innerHTML = `
+                    <div class="grid-item border border-red-500/30" onclick="AppActions.switchFilter('disliked'); AppActions.toggleDrawer()">
+                        <span class="text-sm font-bold text-red-400">已不喜欢 🗑️</span>
+                        <span class="text-[10px] opacity-50 text-red-200">误触可找回</span>
+                    </div>
+                    <div class="grid-item ${AppState.tag === '全部' && AppState.filter !== 'disliked' ? 'active' : ''}" onclick="AppActions.switchFilter('all'); AppActions.setTag('全部'); AppActions.toggleDrawer()">
+                        <span class="text-sm font-bold">全部视频</span>
+                        <span class="text-[10px] opacity-50">${total || 0} 视频</span>
+                    </div>` + 
+                    sorted.map(([tag, count]) => `
+                    <div class="grid-item ${AppState.tag === tag && AppState.filter !== 'disliked' ? 'active' : ''}" onclick="AppActions.switchFilter('all'); AppActions.setTag('${tag}'); AppActions.toggleDrawer()">
+                        <span class="text-sm font-bold">${tag}</span><span class="text-[10px] opacity-50">${count} 视频</span>
+                    </div>`).join('');
+            },
+
+            buildCardDOM: (v, index) => {
+                if (document.getElementById(`card-${index}`)) return;
+                
+                const card = document.createElement('div');
+                card.className = 'video-card paused';
+                card.id = `card-${index}`;
+                card.dataset.index = index;
+                
+                const jsSafeName = encodeURIComponent(v.filename);
+                const isDislikeMode = AppState.filter === 'disliked';
+                
+                const deleteBtnHtml = isDislikeMode
+                    ? `<button class="action-btn text-green-400" onclick="AppActions.deleteCard(this, '${jsSafeName}', ${index})"><div class="icon-circle">♻️</div><span class="text-[10px] font-bold shadow-black">恢复</span></button>`
+                    : `<button class="action-btn btn-dislike" onclick="AppActions.deleteCard(this, '${jsSafeName}', ${index})"><div class="icon-circle">💔</div><span class="text-[10px] font-bold shadow-black">不喜欢</span></button>`;
+
+                let cleanTitle = v.filename.replace(/\.(mp4|mov)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
+                
+                let aiTagsHtml = '';
+                if (v.category && v.category !== '未分类') aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); AppActions.setTag('${v.category}')">#${v.category}</span>`;
+                (v.ai_tags || []).forEach(t => aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); AppActions.setTag('${t}')">#${t}</span>`);
+
+                let fnTagsHtml = '';
+                (v.filename_tags || []).forEach(t => fnTagsHtml += `<span class="file-tag px-2 py-0.5 rounded text-[10px] cursor-pointer" onclick="event.stopPropagation(); AppActions.setTag('${t}')"><small class='opacity-50'>[F]</small> ${t}</span>`);
+
+                card.innerHTML = `
+                    <div class="blur-bg" style="background-image: url('${v.url}')"></div>
+                    <video src="${v.url}" class="video-player" loop playsinline preload="metadata"></video>
+                    
+                    <div class="click-area" id="area-${index}"></div>
+                    <div class="play-icon"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+                    <div class="seek-toast" id="toast-${index}"></div>
+
+                    <div class="action-sidebar">
+                        <button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="AppActions.toggleLike(this, '${jsSafeName}')">
+                            <div class="icon-circle">${v.is_liked ? '❤️' : '🤍'}</div>
+                            <span class="text-[10px] font-bold shadow-black">喜欢</span>
+                        </button>
+                        ${deleteBtnHtml}
+                    </div>
+
+                    <div class="info-bottom pointer-events-auto">
+                        <h2 class="text-[15px] font-bold mb-3 line-clamp-2 drop-shadow-md">${cleanTitle}</h2>
+                        ${aiTagsHtml ? `<div class="tag-group mb-2">${aiTagsHtml}</div>` : ''}
+                        ${fnTagsHtml ? `<div class="tag-group pt-2 border-t border-white/10">${fnTagsHtml}</div>` : ''}
+                    </div>
+                    <div class="progress-container"><div class="progress-bar" id="prog-${index}"></div></div>
+                `;
+                AppState.DOMFeed.appendChild(card);
+                
+                // 绑定进度条事件
+                const video = card.querySelector('video');
+                const prog = card.querySelector(`#prog-${index}`);
+                video.addEventListener('timeupdate', () => {
+                    if(video.duration) prog.style.width = `${(video.currentTime / video.duration) * 100}%`;
                 });
                 
-                // 检查触底补偿加载
-                if (displayData.length < 3 && hasMore) loadVideos(false);
-            }, 400);
-        }
+                // 挂载手势交互
+                InteractionEngine.bindGestures(card.querySelector(`#area-${index}`), video, card.querySelector(`#toast-${index}`));
+                if (AppState.observer) AppState.observer.observe(card);
+            }
+        };
 
-        /* 启动入口 */
-        fetch('/api/video/scan', { method: 'POST' }).catch(()=>{});
-        loadVideos(true);
+        /* ==========================================================================
+           6. 物理交互与观察引擎 (Interaction Engine)
+           ========================================================================== */
+        const InteractionEngine = {
+            // 初始化视频可见性检测，负责自动播放与暂停
+            initIntersectionObserver: () => {
+                if (AppState.observer) AppState.observer.disconnect();
+                
+                AppState.observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const card = entry.target;
+                        const video = card.querySelector('video');
+                        const idx = parseInt(card.dataset.index);
+
+                        if (entry.isIntersecting) {
+                            AppState.currentIndex = idx;
+                            video.play().then(() => {
+                                card.classList.remove('paused');
+                                if(AppState.filter !== 'disliked') SyncEngine.record(decodeURIComponent(video.src.split('/').pop()), 'play');
+                            }).catch(() => card.classList.add('paused'));
+                            
+                            // 触底加载探测
+                            if (idx >= AppState.data.length - 3 && AppState.hasMore) {
+                                DataLoader.fetchNextPage(false);
+                            }
+                        } else {
+                            video.pause();
+                            video.currentTime = 0;
+                            card.classList.add('paused');
+                        }
+                    });
+                }, { root: AppState.DOMFeed, threshold: 0.6 });
+
+                document.querySelectorAll('.video-card').forEach(card => AppState.observer.observe(card));
+            },
+
+            // 绑定拖拽进度条与点击暂停手势
+            bindGestures: (touchArea, video, toastEl) => {
+                let startX = 0, startY = 0, isSeeking = false, toastTimer, justSeeked = false; 
+
+                const handleStart = (x, y) => { startX = x; startY = y; isSeeking = false; };
+                const handleMove = (x, y, e) => {
+                    if(!startX || !startY) return;
+                    const diffX = x - startX, diffY = y - startY;
+                    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 15) {
+                        e.preventDefault(); isSeeking = true;
+                    }
+                };
+                const handleEnd = (x) => {
+                    if (!isSeeking || !video.duration) { startX = 0; startY = 0; return; }
+                    const diffX = x - startX;
+                    if (Math.abs(diffX) > 40) {
+                        const step = video.duration * 0.2; 
+                        video.currentTime = Math.max(0, Math.min(video.currentTime + (diffX > 0 ? step : -step), video.duration));
+                        
+                        toastEl.innerText = diffX > 0 ? '前进 20%' : '后退 20%';
+                        toastEl.style.opacity = 1;
+                        clearTimeout(toastTimer);
+                        toastTimer = setTimeout(() => toastEl.style.opacity = 0, 500);
+                        
+                        justSeeked = true;
+                        setTimeout(() => { justSeeked = false; }, 200); 
+                    }
+                    startX = 0; startY = 0; isSeeking = false;
+                };
+
+                touchArea.addEventListener('touchstart', e => handleStart(e.touches[0].clientX, e.touches[0].clientY), {passive: true});
+                touchArea.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY, e), {passive: false});
+                touchArea.addEventListener('touchend', e => handleEnd(e.changedTouches[0].clientX));
+
+                let isMouseDown = false;
+                touchArea.addEventListener('mousedown', e => { isMouseDown = true; handleStart(e.clientX, e.clientY); });
+                touchArea.addEventListener('mousemove', e => { if(isMouseDown) handleMove(e.clientX, e.clientY, e); });
+                const mouseEnd = e => { if(isMouseDown) { isMouseDown = false; handleEnd(e.clientX); } };
+                touchArea.addEventListener('mouseup', mouseEnd);
+                touchArea.addEventListener('mouseleave', mouseEnd);
+
+                touchArea.addEventListener('click', (e) => {
+                    if (justSeeked) { e.preventDefault(); return; } 
+                    const card = touchArea.closest('.video-card');
+                    video.paused ? (video.play(), card.classList.remove('paused')) : (video.pause(), card.classList.add('paused'));
+                });
+            },
+            
+            // 绑定全局硬控 (滚轮锁定与键盘映射)
+            setupGlobalListeners: () => {
+                let wheelLock = false;
+                AppState.DOMFeed.addEventListener('wheel', (e) => {
+                    if (window.matchMedia("(hover: none)").matches) return; 
+                    e.preventDefault(); 
+                    if (wheelLock) return;
+                    wheelLock = true;
+
+                    const targetIndex = Math.max(0, Math.min(e.deltaY > 0 ? AppState.currentIndex + 1 : AppState.currentIndex - 1, AppState.data.length - 1));
+                    const targetCard = document.getElementById(`card-${targetIndex}`);
+                    if (targetCard) AppState.DOMFeed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
+                    
+                    setTimeout(() => { wheelLock = false; }, 500); 
+                }, { passive: false });
+
+                window.addEventListener('keydown', (e) => {
+                    if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+                        e.preventDefault(); 
+                        const targetIndex = Math.max(0, Math.min(e.key === 'ArrowDown' ? AppState.currentIndex + 1 : AppState.currentIndex - 1, AppState.data.length - 1));
+                        const targetCard = document.getElementById(`card-${targetIndex}`);
+                        if (targetCard) AppState.DOMFeed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
+                    } else if (e.key === ' ') {
+                        e.preventDefault(); 
+                        const card = document.getElementById(`card-${AppState.currentIndex}`);
+                        if (card) card.querySelector('.click-area').click();
+                    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                        const card = document.getElementById(`card-${AppState.currentIndex}`);
+                        if (!card) return;
+                        const video = card.querySelector('video'), toast = card.querySelector('.seek-toast');
+                        if (video && video.duration) {
+                            const step = video.duration * 0.2;
+                            video.currentTime = Math.max(0, Math.min(video.currentTime + (e.key === 'ArrowRight' ? step : -step), video.duration));
+                            toast.innerText = e.key === 'ArrowRight' ? '前进 20%' : '后退 20%';
+                            toast.style.opacity = 1; setTimeout(() => toast.style.opacity = 0, 500);
+                        }
+                    }
+                });
+            }
+        };
+
+        // 启动系统
+        InteractionEngine.setupGlobalListeners();
+        DataLoader.bootstrap();
     </script>
 </body>
 </html>
