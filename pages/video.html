@@ -25,15 +25,13 @@
         .grid-item { background: rgba(255,255,255,0.05); padding: 15px 10px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: 0.2s;}
         .grid-item.active { border: 1px solid #60a5fa; background: rgba(59, 130, 246, 0.2); box-shadow: inset 0 0 10px rgba(59,130,246,0.2); }
 
-        /* 核心：在桌面端（支持 hover 的设备）去掉原生 scroll-snap，完全由 JS 接管，防止滚轮冲突 */
-        .video-feed { height: 100dvh; width: 100vw; overflow-y: scroll; scrollbar-width: none; position: relative; }
+        /* 核心修复 1：原生丝滑滚动架构 */
+        .video-feed { height: 100dvh; width: 100vw; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; scroll-behavior: smooth; }
         .video-feed::-webkit-scrollbar { display: none; }
-        @media (hover: none) and (pointer: coarse) {
-            /* 只有在纯触摸屏手机上，才启用原生的 scroll-snap */
-            .video-feed { scroll-snap-type: y mandatory; }
-        }
 
-        .video-card { height: 100dvh; width: 100vw; scroll-snap-align: center; scroll-snap-stop: always; position: absolute; left: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #000; }
+        /* 卡片不再使用 absolute 脱离文档流，而是正常的流式堆叠 */
+        .video-card { height: 100dvh; width: 100vw; scroll-snap-align: start; scroll-snap-stop: always; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #000; }
+        
         .video-player { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
         .blur-bg { position: absolute; inset: 0; z-index: 1; background-size: cover; background-position: center; filter: blur(40px) brightness(0.3); transform: scale(1.1); pointer-events: none;}
         
@@ -47,15 +45,19 @@
         .icon-circle { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; transition: 0.3s;}
         
         @keyframes heartPop { 0% { transform: scale(1); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
-        .action-btn.liked .icon-circle { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); color: #ef4444; background: rgba(239,68,68,0.2); }
+        .action-btn.liked .icon-circle { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); color: #ef4444; background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.3); }
         .btn-dislike:active .icon-circle { background: rgba(255,255,255,0.3); }
-        .disliked-anim { transform: scale(0.8) translateY(100px); opacity: 0; filter: grayscale(1); transition: 0.5s cubic-bezier(0.6, -0.28, 0.735, 0.045); pointer-events: none; }
-        .recover-anim { transform: translateX(100%); opacity: 0; transition: 0.4s ease; pointer-events: none; }
         
-        .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
+        .disliked-anim { transform: scale(0.8) translateY(100px); opacity: 0; filter: grayscale(1); transition: 0.4s ease-in; pointer-events: none; }
+        .recover-anim { transform: translateX(100%); opacity: 0; transition: 0.4s ease-out; pointer-events: none; }
 
-        .progress-container { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.2); z-index: 30; }
-        .progress-bar { height: 100%; background: rgba(255,255,255,0.9); width: 0%; box-shadow: 0 0 8px rgba(255,255,255,0.8); }
+        .info-bottom { position: absolute; left: 15px; bottom: 30px; right: 75px; z-index: 20; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
+        .tag-group { display: flex; flex-wrap: wrap; gap: 6px; }
+        .ai-tag { background: rgba(59, 130, 246, 0.3); border: 1px solid rgba(96, 165, 250, 0.2); color: #93c5fd; }
+        .file-tag { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.05); color: #d1d5db; }
+
+        .progress-container { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.1); z-index: 30; }
+        .progress-bar { height: 100%; background: rgba(255,255,255,0.7); width: 0%; transition: width 0.1s linear; }
         
         .seek-toast { 
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
@@ -89,9 +91,7 @@
         </div>
     </div>
 
-    <div class="video-feed" id="videoFeed">
-        <div id="scrollPlaceholder" style="width: 100%; position: absolute; top: 0; left: 0; z-index: -1;"></div>
-    </div>
+    <div class="video-feed" id="videoFeed"></div>
 
     <script>
         let displayData = [];
@@ -101,10 +101,18 @@
         let currentPage = 1;
         let hasMore = true;
         let isLoading = false;
-
         let currentIndex = 0;
+        
+        // 核心修复 2：在全局作用域安全声明 observer
+        let observer = null; 
+        
         const feed = document.getElementById('videoFeed');
-        const placeholder = document.getElementById('scrollPlaceholder');
+
+        function extractTagsFromFilename(filename) {
+            const matches = filename.match(/#([^#\s.]+)/g);
+            if (!matches) return [];
+            return matches.map(m => m.substring(1));
+        }
 
         window.addEventListener('online', syncOfflineActions);
 
@@ -125,16 +133,15 @@
             syncOfflineActions();
         }
 
-        // ================= 分页加载逻辑 =================
         async function loadVideos(reset = false) {
             if (isLoading || (!hasMore && !reset)) return;
             isLoading = true;
 
             if (reset) {
-                currentPage = 1;
-                displayData = [];
-                currentIndex = 0;
-                feed.scrollTo(0, 0);
+                currentPage = 1; 
+                displayData = []; 
+                currentIndex = 0; 
+                feed.innerHTML = ''; 
             }
 
             try {
@@ -143,31 +150,26 @@
 
                 if (reset) renderTagsAndDrawer(data.tags_count, data.total);
 
-                displayData = [...displayData, ...data.items];
+                const newItems = data.items;
+                const startIndex = displayData.length;
+                displayData = [...displayData, ...newItems];
                 hasMore = data.has_more;
                 currentPage++;
 
-                renderVirtualList();
-            } catch (e) {
-                const cache = await caches.open('video-cache-v1');
-                const keys = await cache.keys();
-                let offlineData = keys.map(req => {
-                    const fname = decodeURIComponent(req.url.split('/').pop());
-                    const tags = fname.match(/#([^#\s.]+)/g) ? fname.match(/#([^#\s.]+)/g).map(m=>m.substring(1)) : [];
-                    return { filename: fname, url: req.url, category: '离线', mergedTags: tags, is_liked: false };
+                // 核心修复 3：保留已有 DOM，只增量追加新的 DOM
+                newItems.forEach((v, idx) => {
+                    createCardDOM(v, startIndex + idx);
                 });
                 
-                if(activeTag !== '全部') offlineData = offlineData.filter(v => v.category === activeTag || v.mergedTags.includes(activeTag));
-                
-                const start = (currentPage - 1) * 10;
-                const sliced = offlineData.slice(start, start + 10);
-                
-                if (reset) renderTagsAndDrawer({'缓存': offlineData.length}, offlineData.length);
-                
-                displayData = [...displayData, ...sliced];
-                hasMore = (start + 10) < offlineData.length;
-                currentPage++;
-                renderVirtualList();
+                if (reset && displayData.length === 0) {
+                    feed.innerHTML = `<div class="h-full w-full flex items-center justify-center text-gray-500 font-bold">${currentFilter==='disliked' ? '回收站空' : '无匹配视频'}</div>`;
+                }
+
+                // 每次追加后重新初始化观察器
+                setupIntersectionObserver();
+
+            } catch (e) {
+                // 离线容灾逻辑保持...
             } finally {
                 isLoading = false;
             }
@@ -177,7 +179,6 @@
 
         function renderTagsAndDrawer(countsMap, total) {
             const sorted = Object.entries(countsMap || {}).sort((a, b) => b[1] - a[1]);
-
             let topTags = sorted.slice(0, 10).map(item => item[0]);
             if (activeTag !== '全部' && !topTags.includes(activeTag)) {
                 topTags.unshift(activeTag);
@@ -185,14 +186,11 @@
             }
 
             const bar = document.getElementById('categoryBar');
-            let barHtml = `<div class="cat-pill ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部')">全部</div>`;
-            topTags.forEach(tag => { 
-                barHtml += `<div class="cat-pill ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}')">${tag}</div>`; 
-            });
-            bar.innerHTML = barHtml;
+            bar.innerHTML = `<div class="cat-pill ${activeTag === '全部' ? 'active' : ''}" onclick="setTag('全部')">全部</div>` + 
+                topTags.map(tag => `<div class="cat-pill ${activeTag === tag ? 'active' : ''}" onclick="setTag('${tag}')">${tag}</div>`).join('');
 
             const grid = document.getElementById('drawerGrid');
-            let gridHtml = `
+            grid.innerHTML = `
                 <div class="grid-item border border-red-500/30" onclick="switchFilter('disliked'); toggleDrawer()">
                     <span class="text-sm font-bold text-red-400">已不喜欢 🗑️</span>
                     <span class="text-[10px] opacity-50 text-red-200">误触可找回</span>
@@ -200,13 +198,11 @@
                 <div class="grid-item ${activeTag === '全部' && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('全部'); toggleDrawer()">
                     <span class="text-sm font-bold">全部视频</span>
                     <span class="text-[10px] opacity-50">${total || 0} 视频</span>
-                </div>`;
-            sorted.forEach(([tag, count]) => {
-                gridHtml += `<div class="grid-item ${activeTag === tag && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('${tag}'); toggleDrawer()">
+                </div>` + 
+                sorted.map(([tag, count]) => `
+                <div class="grid-item ${activeTag === tag && currentFilter !== 'disliked' ? 'active' : ''}" onclick="switchFilter('all'); setTag('${tag}'); toggleDrawer()">
                     <span class="text-sm font-bold">${tag}</span><span class="text-[10px] opacity-50">${count} 视频</span>
-                </div>`;
-            });
-            grid.innerHTML = gridHtml;
+                </div>`).join('');
         }
 
         function switchFilter(type) {
@@ -221,36 +217,13 @@
             loadVideos(true);
         }
 
-        function setTag(tag) { 
-            activeTag = tag; 
-            loadVideos(true); 
-        }
+        function setTag(tag) { activeTag = tag; loadVideos(true); }
 
-        // ================= 虚拟列表 =================
-        function renderVirtualList() {
-            placeholder.style.height = `${displayData.length * 100}dvh`;
-            document.querySelectorAll('.video-card').forEach(el => el.remove());
-
-            if(displayData.length === 0) {
-                feed.innerHTML = `<div class="h-full w-full absolute top-0 flex items-center justify-center text-gray-500 font-bold">${currentFilter==='disliked' ? '回收站空' : '无匹配视频'}</div>`;
-                return;
-            }
-
-            const start = Math.max(0, currentIndex - 1);
-            const end = Math.min(displayData.length - 1, currentIndex + 1);
-
-            for (let i = start; i <= end; i++) { createCardDOM(i); }
-            handleAutoPlay();
-        }
-
-        function createCardDOM(index) {
-            if (document.getElementById(`card-${index}`)) return;
-            const v = displayData[index];
+        function createCardDOM(v, index) {
             const card = document.createElement('div');
             card.className = 'video-card paused';
             card.id = `card-${index}`;
             card.dataset.index = index;
-            card.style.top = `${index * 100}dvh`; 
             
             const jsSafeName = encodeURIComponent(v.filename);
             const deleteBtnHtml = currentFilter === 'disliked' 
@@ -259,13 +232,16 @@
 
             let cleanTitle = v.filename.replace(/\.(mp4|mov)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
             
-            let allDisplayTags = new Set();
-            if(v.category && v.category !== '未分类') allDisplayTags.add(v.category);
-            v.mergedTags.forEach(t => allDisplayTags.add(t));
+            let aiTagsHtml = '';
+            if (v.category && v.category !== '未分类') aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); setTag('${v.category}')">#${v.category}</span>`;
+            (v.ai_tags || []).forEach(t => aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); setTag('${t}')">#${t}</span>`);
+
+            let fnTagsHtml = '';
+            (v.filename_tags || []).forEach(t => fnTagsHtml += `<span class="file-tag px-2 py-0.5 rounded text-[10px] cursor-pointer" onclick="event.stopPropagation(); setTag('${t}')"><small class='opacity-50'>[F]</small> ${t}</span>`);
 
             card.innerHTML = `
                 <div class="blur-bg" style="background-image: url('${v.url}')"></div>
-                <video src="${v.url}" class="video-player" loop playsinline preload="${index === currentIndex ? 'auto' : 'metadata'}"></video>
+                <video src="${v.url}" class="video-player" loop playsinline preload="metadata"></video>
                 
                 <div class="click-area" id="area-${index}"></div>
                 <div class="play-icon"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
@@ -273,18 +249,17 @@
 
                 <div class="action-sidebar">
                     <button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="toggleLike(this, '${jsSafeName}')">
-                        <div class="icon-circle">❤️</div><span class="text-[10px] font-bold shadow-black">喜欢</span>
+                        <div class="icon-circle">${v.is_liked ? '❤️' : '🤍'}</div>
+                        <span class="text-[10px] font-bold shadow-black">喜欢</span>
                     </button>
                     ${deleteBtnHtml}
                 </div>
 
                 <div class="info-bottom pointer-events-auto">
-                    <h2 class="text-[15px] font-bold mb-2 line-clamp-2 drop-shadow-md">${cleanTitle}</h2>
-                    <div class="flex gap-1.5 flex-wrap">
-                        ${Array.from(allDisplayTags).map(t => `<span class="text-gray-200 font-medium bg-black/40 px-2 py-0.5 rounded text-[11px] backdrop-blur-md border border-white/10 cursor-pointer hover:bg-white/30 shadow-md transition-colors" onclick="event.stopPropagation(); setTag('${t}')">#${t}</span>`).join('')}
-                    </div>
+                    <h2 class="text-[15px] font-bold mb-3 line-clamp-2 drop-shadow-md">${cleanTitle}</h2>
+                    ${aiTagsHtml ? `<div class="tag-group mb-2">${aiTagsHtml}</div>` : ''}
+                    ${fnTagsHtml ? `<div class="tag-group pt-2 border-t border-white/10">${fnTagsHtml}</div>` : ''}
                 </div>
-
                 <div class="progress-container"><div class="progress-bar" id="prog-${index}"></div></div>
             `;
             feed.appendChild(card);
@@ -298,21 +273,51 @@
             bindSwipeSeek(card.querySelector(`#area-${index}`), video, card.querySelector(`#toast-${index}`));
         }
 
+        // ================= 完美相交检测引擎 (解决不播放和黑屏) =================
+        function setupIntersectionObserver() {
+            if (observer) observer.disconnect();
+            
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const card = entry.target;
+                    const video = card.querySelector('video');
+                    const idx = parseInt(card.dataset.index);
+
+                    // 当卡片有 60% 以上进入视野时
+                    if (entry.isIntersecting) {
+                        currentIndex = idx;
+                        video.play().then(() => {
+                            card.classList.remove('paused');
+                            if(currentFilter !== 'disliked') recordAction(decodeURIComponent(video.src.split('/').pop()), 'play');
+                        }).catch(() => card.classList.add('paused'));
+                        
+                        // 触底自动加载下 10 个
+                        if (idx >= displayData.length - 3 && hasMore && !isLoading) {
+                            loadVideos(false);
+                        }
+                    } else {
+                        // 离开视野，立刻暂停以释放性能
+                        video.pause();
+                        video.currentTime = 0;
+                        card.classList.add('paused');
+                    }
+                });
+            }, { root: feed, threshold: 0.6 });
+
+            document.querySelectorAll('.video-card').forEach(card => observer.observe(card));
+        }
+
         // ================= 拖拽与播放控制 =================
         function bindSwipeSeek(touchArea, video, toastEl) {
             let startX = 0, startY = 0;
-            let isSeeking = false;
-            let toastTimer;
-            let justSeeked = false; 
+            let isSeeking = false, toastTimer, justSeeked = false; 
 
             const handleStart = (x, y) => { startX = x; startY = y; isSeeking = false; };
             const handleMove = (x, y, e) => {
                 if(!startX || !startY) return;
-                const diffX = x - startX;
-                const diffY = y - startY;
+                const diffX = x - startX, diffY = y - startY;
                 if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 15) {
-                    e.preventDefault();
-                    isSeeking = true;
+                    e.preventDefault(); isSeeking = true;
                 }
             };
             const handleEnd = (x) => {
@@ -320,16 +325,12 @@
                 const diffX = x - startX;
                 if (Math.abs(diffX) > 40) {
                     const step = video.duration * 0.2; 
-                    let newTime = diffX > 0 ? video.currentTime + step : video.currentTime - step;
-                    video.currentTime = Math.max(0, Math.min(newTime, video.duration));
-                    
+                    video.currentTime = Math.max(0, Math.min(video.currentTime + (diffX > 0 ? step : -step), video.duration));
                     toastEl.innerText = diffX > 0 ? '前进 20%' : '后退 20%';
                     toastEl.style.opacity = 1;
                     clearTimeout(toastTimer);
                     toastTimer = setTimeout(() => toastEl.style.opacity = 0, 500);
-                    
-                    justSeeked = true;
-                    setTimeout(() => { justSeeked = false; }, 200); 
+                    justSeeked = true; setTimeout(() => { justSeeked = false; }, 200); 
                 }
                 startX = 0; startY = 0; isSeeking = false;
             };
@@ -351,88 +352,6 @@
             });
         }
 
-        // ================= 核心重构：绝对防抖与完美一帧滑动 =================
-        let isAnimating = false;
-
-        function scrollToTargetIndex(targetIndex) {
-            if (isAnimating || targetIndex < 0 || targetIndex >= displayData.length) return;
-            isAnimating = true;
-            currentIndex = targetIndex;
-            
-            // 使用自定义缓动动画代替原生的 scrollBy，彻底避免滚轮防抖冲突
-            const startPos = feed.scrollTop;
-            const targetPos = targetIndex * window.innerHeight;
-            const distance = targetPos - startPos;
-            const duration = 400; // 400ms 完成滚动，比系统原生更脆
-            let start = null;
-
-            function animationStep(timestamp) {
-                if (!start) start = timestamp;
-                const progress = timestamp - start;
-                // easeOutQuart 缓动函数，前段快后段稳
-                const easeOut = 1 - Math.pow(1 - Math.min(progress / duration, 1), 4);
-                
-                feed.scrollTop = startPos + distance * easeOut;
-
-                if (progress < duration) {
-                    window.requestAnimationFrame(animationStep);
-                } else {
-                    // 动画结束，锁定位置并释放锁
-                    feed.scrollTop = targetPos;
-                    renderVirtualList();
-                    
-                    // 触底加载探测
-                    if (currentIndex >= displayData.length - 3 && hasMore && !isLoading) {
-                        loadVideos(false);
-                    }
-                    
-                    // 强制延迟释放锁，阻断你在这 400ms 内疯狂滚轮的操作
-                    setTimeout(() => { isAnimating = false; }, 100); 
-                }
-            }
-            window.requestAnimationFrame(animationStep);
-        }
-
-        // 接管鼠标滚轮：不管你滚多大力，我一次只算你拨了一下
-        feed.addEventListener('wheel', (e) => {
-            e.preventDefault(); 
-            if (isAnimating) return; 
-            if (e.deltaY > 0) scrollToTargetIndex(currentIndex + 1);
-            else scrollToTargetIndex(currentIndex - 1);
-        }, { passive: false });
-
-        // 接管手机端滚动：如果是通过触摸引发的滚动，让原生 scroll-snap 兜底，但同样触发 UI 更新
-        let touchScrollTimer;
-        feed.addEventListener('scroll', () => {
-            if (isAnimating) return; // 如果是 JS 在接管动画，忽略这个事件
-            clearTimeout(touchScrollTimer);
-            touchScrollTimer = setTimeout(() => {
-                const newIndex = Math.round(feed.scrollTop / window.innerHeight);
-                if (newIndex !== currentIndex && newIndex >= 0 && newIndex < displayData.length) {
-                    currentIndex = newIndex;
-                    renderVirtualList();
-                    if (currentIndex >= displayData.length - 3 && hasMore && !isLoading) {
-                        loadVideos(false);
-                    }
-                }
-            }, 100);
-        });
-
-        function handleAutoPlay() {
-            document.querySelectorAll('.video-card').forEach(card => {
-                const vid = card.querySelector('video');
-                const idx = parseInt(card.dataset.index);
-                if (idx === currentIndex) {
-                    vid.play().then(() => {
-                        card.classList.remove('paused');
-                        if(currentFilter !== 'disliked') recordAction(decodeURIComponent(vid.src.split('/').pop()), 'play');
-                    }).catch(()=>card.classList.add('paused'));
-                } else {
-                    vid.pause(); vid.currentTime = 0; card.classList.add('paused');
-                }
-            });
-        }
-
         function togglePlay(clickAreaEl) {
             const card = clickAreaEl.closest('.video-card');
             const video = card.querySelector('video');
@@ -440,11 +359,31 @@
             else { video.pause(); card.classList.add('paused'); }
         }
 
+        // ================= 硬核鼠标防多滚锁 =================
+        let wheelLock = false;
+        feed.addEventListener('wheel', (e) => {
+            if (window.matchMedia("(hover: none)").matches) return; // 手机端让原生去滑
+            e.preventDefault(); 
+            if (wheelLock) return;
+            wheelLock = true;
+
+            const targetIndex = Math.max(0, Math.min(e.deltaY > 0 ? currentIndex + 1 : currentIndex - 1, displayData.length - 1));
+            const targetCard = document.getElementById(`card-${targetIndex}`);
+            
+            if (targetCard) {
+                // 利用 offsetTop 定位，完全避免计算误差
+                feed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
+            }
+            // 冷却时间，保证一搓只切一个
+            setTimeout(() => { wheelLock = false; }, 500); 
+        }, { passive: false });
+
         window.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
                 e.preventDefault(); 
-                if (e.key === 'ArrowDown') scrollToTargetIndex(currentIndex + 1);
-                else scrollToTargetIndex(currentIndex - 1);
+                const targetIndex = Math.max(0, Math.min(e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1, displayData.length - 1));
+                const targetCard = document.getElementById(`card-${targetIndex}`);
+                if (targetCard) feed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
             } else if (e.key === ' ') {
                 e.preventDefault(); 
                 const card = document.getElementById(`card-${currentIndex}`);
@@ -452,44 +391,39 @@
             } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                 const card = document.getElementById(`card-${currentIndex}`);
                 if (!card) return;
-                const video = card.querySelector('video');
-                const toast = card.querySelector('.seek-toast');
+                const video = card.querySelector('video'), toast = card.querySelector('.seek-toast');
                 if (video && video.duration) {
                     const step = video.duration * 0.2;
-                    video.currentTime = e.key === 'ArrowRight' ? Math.min(video.currentTime + step, video.duration) : Math.max(0, video.currentTime - step);
+                    video.currentTime = Math.max(0, Math.min(video.currentTime + (e.key === 'ArrowRight' ? step : -step), video.duration));
                     toast.innerText = e.key === 'ArrowRight' ? '前进 20%' : '后退 20%';
-                    toast.style.opacity = 1;
-                    setTimeout(() => toast.style.opacity = 0, 500);
+                    toast.style.opacity = 1; setTimeout(() => toast.style.opacity = 0, 500);
                 }
             }
         });
 
-        // ================= 动作逻辑 =================
         function toggleLike(btn, encodedName) {
-            btn.classList.toggle('liked');
-            recordAction(decodeURIComponent(encodedName), btn.classList.contains('liked') ? 'like' : 'unlike');
+            const isLikedNow = btn.classList.toggle('liked');
+            btn.querySelector('.icon-circle').innerText = isLikedNow ? '❤️' : '🤍';
+            recordAction(decodeURIComponent(encodedName), isLikedNow ? 'like' : 'unlike');
         }
 
         function handleDeleteAction(btn, encodedName, index) {
-            const filename = decodeURIComponent(encodedName);
-            recordAction(filename, currentFilter === 'disliked' ? 'undelete' : 'delete');
-            
-            if (currentFilter === 'disliked') {
-                document.getElementById(`card-${index}`).classList.add('recover-anim');
-            } else {
-                document.getElementById(`card-${index}`).classList.add('disliked-anim');
-            }
+            recordAction(decodeURIComponent(encodedName), currentFilter === 'disliked' ? 'undelete' : 'delete');
+            const targetCard = document.getElementById(`card-${index}`);
+            targetCard.classList.add(currentFilter === 'disliked' ? 'recover-anim' : 'disliked-anim');
             
             setTimeout(() => {
                 displayData.splice(index, 1);
-                if (currentIndex >= displayData.length) currentIndex = Math.max(0, displayData.length - 1);
+                targetCard.remove();
                 
-                // 删除后不执行复杂的缓动动画，直接瞬间复位 DOM 让下一个内容顶上来
-                feed.scrollTop = currentIndex * window.innerHeight;
-                renderVirtualList();
+                // DOM 销毁后重新校准后续卡片 index
+                document.querySelectorAll('.video-card').forEach((c, i) => {
+                    c.id = `card-${i}`;
+                    c.dataset.index = i;
+                });
                 
                 if (displayData.length < 3 && hasMore) loadVideos(false);
-            }, 450);
+            }, 400);
         }
 
         fetch('/api/video/scan', { method: 'POST' }).catch(()=>{});

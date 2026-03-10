@@ -185,8 +185,21 @@ def get_video_list():
             if meta["is_deleted"] == 1: continue 
             if filter_type == 'unplayed' and meta["play_count"] > 0: continue
             
-        merged_tags = list(set(meta["tags"] + extract_fname_tags(f)))
-        base_list.append({"filename": f, "url": f"/stream/video/{urllib.parse.quote(f, safe='')}", "category": meta["category"], "mergedTags": merged_tags, "is_liked": bool(meta["is_liked"]), "play_count": meta["play_count"], "last_played_at": meta["last_played_at"]})
+        fname_tags = extract_fname_tags(f)
+        ai_tags = meta["tags"]
+        merged_tags = list(set(ai_tags + fname_tags))
+        
+        base_list.append({
+            "filename": f, 
+            "url": f"/stream/video/{urllib.parse.quote(f, safe='')}", 
+            "category": meta["category"], 
+            "ai_tags": ai_tags,            # 新增：独立传递 AI 标签
+            "filename_tags": fname_tags,   # 新增：独立传递 文件名标签
+            "mergedTags": merged_tags, 
+            "is_liked": bool(meta["is_liked"]), 
+            "play_count": meta["play_count"], 
+            "last_played_at": meta["last_played_at"]
+        })
     if filter_type == 'disliked': base_list.sort(key=lambda x: x["last_played_at"], reverse=True)
     tags_count = {}
     for item in base_list:
@@ -201,6 +214,7 @@ def get_video_list():
     end = start + limit
     return jsonify({"items": filtered_list[start:end], "tags_count": tags_count, "has_more": end < len(filtered_list), "total": len(filtered_list)})
 
+    
 @video_bp.route('/api/video/sync', methods=['POST'])
 def sync_video_actions():
     events = request.json
