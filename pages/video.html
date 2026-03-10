@@ -25,8 +25,13 @@
         .grid-item { background: rgba(255,255,255,0.05); padding: 15px 10px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: 0.2s;}
         .grid-item.active { border: 1px solid #60a5fa; background: rgba(59, 130, 246, 0.2); box-shadow: inset 0 0 10px rgba(59,130,246,0.2); }
 
-        .video-feed { height: 100dvh; width: 100vw; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; position: relative; }
+        /* 核心：在桌面端（支持 hover 的设备）去掉原生 scroll-snap，完全由 JS 接管，防止滚轮冲突 */
+        .video-feed { height: 100dvh; width: 100vw; overflow-y: scroll; scrollbar-width: none; position: relative; }
         .video-feed::-webkit-scrollbar { display: none; }
+        @media (hover: none) and (pointer: coarse) {
+            /* 只有在纯触摸屏手机上，才启用原生的 scroll-snap */
+            .video-feed { scroll-snap-type: y mandatory; }
+        }
 
         .video-card { height: 100dvh; width: 100vw; scroll-snap-align: center; scroll-snap-stop: always; position: absolute; left: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #000; }
         .video-player { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
@@ -133,13 +138,10 @@
             }
 
             try {
-                // 每次仅请求 10 条数据
                 const res = await fetch(`/api/video/list?filter=${currentFilter}&tag=${encodeURIComponent(activeTag)}&page=${currentPage}&limit=10`);
                 const data = await res.json();
 
-                if (reset) {
-                    renderTagsAndDrawer(data.tags_count, data.total);
-                }
+                if (reset) renderTagsAndDrawer(data.tags_count, data.total);
 
                 displayData = [...displayData, ...data.items];
                 hasMore = data.has_more;
@@ -147,7 +149,6 @@
 
                 renderVirtualList();
             } catch (e) {
-                // 离线容灾：本地缓存
                 const cache = await caches.open('video-cache-v1');
                 const keys = await cache.keys();
                 let offlineData = keys.map(req => {
@@ -225,7 +226,7 @@
             loadVideos(true); 
         }
 
-        // ================= 虚拟列表与触底加载 =================
+        // ================= 虚拟列表 =================
         function renderVirtualList() {
             placeholder.style.height = `${displayData.length * 100}dvh`;
             document.querySelectorAll('.video-card').forEach(el => el.remove());
@@ -350,16 +351,66 @@
             });
         }
 
-        let scrollTimer;
+        // ================= 核心重构：绝对防抖与完美一帧滑动 =================
+        let isAnimating = false;
+
+        function scrollToTargetIndex(targetIndex) {
+            if (isAnimating || targetIndex < 0 || targetIndex >= displayData.length) return;
+            isAnimating = true;
+            currentIndex = targetIndex;
+            
+            // 使用自定义缓动动画代替原生的 scrollBy，彻底避免滚轮防抖冲突
+            const startPos = feed.scrollTop;
+            const targetPos = targetIndex * window.innerHeight;
+            const distance = targetPos - startPos;
+            const duration = 400; // 400ms 完成滚动，比系统原生更脆
+            let start = null;
+
+            function animationStep(timestamp) {
+                if (!start) start = timestamp;
+                const progress = timestamp - start;
+                // easeOutQuart 缓动函数，前段快后段稳
+                const easeOut = 1 - Math.pow(1 - Math.min(progress / duration, 1), 4);
+                
+                feed.scrollTop = startPos + distance * easeOut;
+
+                if (progress < duration) {
+                    window.requestAnimationFrame(animationStep);
+                } else {
+                    // 动画结束，锁定位置并释放锁
+                    feed.scrollTop = targetPos;
+                    renderVirtualList();
+                    
+                    // 触底加载探测
+                    if (currentIndex >= displayData.length - 3 && hasMore && !isLoading) {
+                        loadVideos(false);
+                    }
+                    
+                    // 强制延迟释放锁，阻断你在这 400ms 内疯狂滚轮的操作
+                    setTimeout(() => { isAnimating = false; }, 100); 
+                }
+            }
+            window.requestAnimationFrame(animationStep);
+        }
+
+        // 接管鼠标滚轮：不管你滚多大力，我一次只算你拨了一下
+        feed.addEventListener('wheel', (e) => {
+            e.preventDefault(); 
+            if (isAnimating) return; 
+            if (e.deltaY > 0) scrollToTargetIndex(currentIndex + 1);
+            else scrollToTargetIndex(currentIndex - 1);
+        }, { passive: false });
+
+        // 接管手机端滚动：如果是通过触摸引发的滚动，让原生 scroll-snap 兜底，但同样触发 UI 更新
+        let touchScrollTimer;
         feed.addEventListener('scroll', () => {
-            clearTimeout(scrollTimer);
-            scrollTimer = setTimeout(() => {
+            if (isAnimating) return; // 如果是 JS 在接管动画，忽略这个事件
+            clearTimeout(touchScrollTimer);
+            touchScrollTimer = setTimeout(() => {
                 const newIndex = Math.round(feed.scrollTop / window.innerHeight);
                 if (newIndex !== currentIndex && newIndex >= 0 && newIndex < displayData.length) {
                     currentIndex = newIndex;
                     renderVirtualList();
-                    
-                    // 触底加载
                     if (currentIndex >= displayData.length - 3 && hasMore && !isLoading) {
                         loadVideos(false);
                     }
@@ -392,9 +443,8 @@
         window.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
                 e.preventDefault(); 
-                currentIndex = e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
-                currentIndex = Math.max(0, Math.min(currentIndex, displayData.length - 1));
-                feed.scrollTo({ top: currentIndex * window.innerHeight, behavior: 'smooth' });
+                if (e.key === 'ArrowDown') scrollToTargetIndex(currentIndex + 1);
+                else scrollToTargetIndex(currentIndex - 1);
             } else if (e.key === ' ') {
                 e.preventDefault(); 
                 const card = document.getElementById(`card-${currentIndex}`);
@@ -414,6 +464,7 @@
             }
         });
 
+        // ================= 动作逻辑 =================
         function toggleLike(btn, encodedName) {
             btn.classList.toggle('liked');
             recordAction(decodeURIComponent(encodedName), btn.classList.contains('liked') ? 'like' : 'unlike');
@@ -432,10 +483,11 @@
             setTimeout(() => {
                 displayData.splice(index, 1);
                 if (currentIndex >= displayData.length) currentIndex = Math.max(0, displayData.length - 1);
-                renderVirtualList();
-                feed.scrollTo({ top: currentIndex * window.innerHeight, behavior: 'auto' });
                 
-                // 如果删到底了且还有数据没加载
+                // 删除后不执行复杂的缓动动画，直接瞬间复位 DOM 让下一个内容顶上来
+                feed.scrollTop = currentIndex * window.innerHeight;
+                renderVirtualList();
+                
                 if (displayData.length < 3 && hasMore) loadVideos(false);
             }, 450);
         }
