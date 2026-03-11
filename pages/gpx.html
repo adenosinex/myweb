@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>轨迹遥测与事件分析引擎</title>
+  <script src="https://unpkg.com/vue@3.2.47/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { background-color: #f0f4f8; min-height: 100vh; padding: 16px 0; }
+    .app-container { max-width: 900px; margin: 0 auto; padding: 0 16px; }
+    .panel-card { margin-bottom: 16px; border-radius: 12px; padding: 20px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    #map { height: 450px; border-radius: 8px; margin-top: 16px; z-index: 1; }
+    .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; height: 100%; transition: all 0.2s; cursor: pointer; }
+    .stat-box:hover { border-color: #3b82f6; background: #eff6ff; transform: translateY(-2px); }
+    .stat-box.active { border-color: #1e40af; background: #dbeafe; box-shadow: 0 0 0 2px rgba(30,64,175,0.2); }
+    .stat-value { font-size: 22px; font-weight: 700; color: #1e40af; }
+    .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+    .section-title { font-size: 1.1rem; font-weight: 700; border-left: 4px solid #1e40af; padding-left: 10px; margin-bottom: 16px; color: #1e293b;}
+    .event-list { max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+    .event-item { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; display: flex; align-items: center; }
+    .event-item:hover { background: #f8fafc; }
+    .event-item:last-child { border-bottom: none; }
+    .event-time { font-weight: 600; color: #3b82f6; width: 70px; flex-shrink: 0; }
+    .marker-pin { filter: hue-rotate(150deg); }
+  </style>
+</head>
+<body>
+  <div class="app-container" id="app">
+    <h2 class="text-center font-bold mb-4" style="color:#0f172a;">⚙️ 轨迹遥测数据中枢</h2>
+    
+    <div class="panel-card">
+      <input type="file" ref="fileInput" accept=".gpx" class="form-control mb-3">
+      <button @click="uploadGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
+        {{ loading ? '数据解算与拓扑映射中...' : '启动分析引擎' }}
+      </button>
+      <div v-if="error" class="text-danger text-center mt-3">{{ error }}</div>
+    </div>
+
+    <div v-if="stats">
+      <div class="panel-card">
+        <div class="section-title">动态事件侦测 (点击高亮列表)</div>
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="stat-box" :class="{active: activeEvent === 'hard_brakes'}" @click="setActiveEvent('hard_brakes')">
+              <div class="stat-value text-danger">{{ stats.counts.hard_brakes }}</div>
+              <div class="stat-label">重刹节点</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="stat-box" :class="{active: activeEvent === 'abnormal_speeds'}" @click="setActiveEvent('abnormal_speeds')">
+              <div class="stat-value text-secondary">{{ stats.counts.abnormal_speeds }}</div>
+              <div class="stat-label">异常速度突变</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')">
+              <div class="stat-value text-success">{{ stats.counts.sharp_curves }}</div>
+              <div class="stat-label">大弯道/发卡弯</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')">
+              <div class="stat-value text-warning">{{ stats.counts.stop_points }}</div>
+              <div class="stat-label">休整停驻(>1min)</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeEvent && eventData[activeEvent].length > 0" class="event-list">
+          <div class="event-item" v-for="(ev, idx) in eventData[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
+            <div class="event-time">{{ ev.offset_min.toFixed(1) }} 分钟</div>
+            <div class="event-desc text-muted ms-2">{{ ev.desc }}</div>
+            <div class="ms-auto text-primary" style="font-size: 12px;">定位 📍</div>
+          </div>
+        </div>
+        <div v-else-if="activeEvent" class="text-center text-muted py-2" style="font-size: 13px;">
+          当前类型无触发节点
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="section-title">宏观路况与评估</div>
+        <div class="row g-2">
+          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.score }}</div><div class="stat-label">综合得分</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.terrain.total_distance }}</div><div class="stat-label">总里程(km)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.avg_speed_kmh }}</div><div class="stat-label">运动均速(km/h)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.terrain.total_climb }}</div><div class="stat-label">累计爬升(m)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.terrain.max_ele }}</div><div class="stat-label">最高海拔(m)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value text-danger">{{ stats.terrain.max_slope }}%</div><div class="stat-label">极限陡坡</div></div></div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="section-title">二维空间映射</div>
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    
+    createApp({
+      data() {
+        return { 
+          loading: false, error: '', 
+          stats: null, eventData: null, activeEvent: null,
+          map: null, trackLayer: null, markerLayer: null 
+        }
+      },
+      mounted() { this.initMap(); },
+      methods: {
+        initMap() {
+          this.map = L.map('map', { preferCanvas: true }).setView([30.0, 110.0], 5);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+          }).addTo(this.map);
+        },
+        getColor(speed) {
+          if (speed > 80) return '#ef4444'; 
+          if (speed > 50) return '#f59e0b'; 
+          if (speed > 20) return '#10b981'; 
+          return '#3b82f6';                 
+        },
+        setActiveEvent(type) {
+          this.activeEvent = this.activeEvent === type ? null : type;
+        },
+        focusMapOnEvent(ev) {
+          if (!this.map) return;
+          // 清除旧的焦点标记
+          if (this.markerLayer) { this.map.removeLayer(this.markerLayer); }
+          
+          this.map.flyTo([ev.lat, ev.lon], 16, { animate: true, duration: 1 });
+          
+          this.markerLayer = L.circleMarker([ev.lat, ev.lon], {
+            radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, opacity: 1, fillOpacity: 0.8
+          }).addTo(this.map).bindPopup(`<b>${ev.offset_min.toFixed(1)} 分钟</b><br>${ev.desc}`).openPopup();
+        },
+        async uploadGPX() {
+          const file = this.$refs.fileInput.files[0];
+          if (!file) return this.error = '请选择文件';
+          this.loading = true; this.error = ''; this.activeEvent = null;
+
+          const formData = new FormData();
+          formData.append('file', file);
+
+          try {
+            const res = await axios.post('/analyze_gpx', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            this.stats = res.data.overall;
+            this.eventData = res.data.events;
+            this.drawMap(res.data.segments);
+          } catch (err) {
+            this.error = err.response?.data?.error || '解析异常';
+          } finally {
+            this.loading = false;
+          }
+        },
+        drawMap(segments) {
+          if (this.trackLayer) this.map.removeLayer(this.trackLayer);
+          if (this.markerLayer) this.map.removeLayer(this.markerLayer);
+          
+          this.trackLayer = L.featureGroup().addTo(this.map);
+          const bounds = L.latLngBounds();
+
+          segments.forEach(seg => {
+            const latlngs = [[seg.lat1, seg.lon1], [seg.lat2, seg.lon2]];
+            bounds.extend(latlngs);
+            L.polyline(latlngs, {
+              color: this.getColor(seg.speed_kmh), weight: 4, opacity: 0.8
+            }).addTo(this.trackLayer);
+          });
+
+          // 强制刷新地图容器并适应轨迹范围，修复灰色和比例异常问题
+          if (segments.length > 0) {
+            setTimeout(() => {
+              this.map.invalidateSize();
+              this.map.fitBounds(bounds, { padding: [20, 20] });
+            }, 300);
+          }
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

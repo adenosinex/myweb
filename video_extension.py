@@ -8,32 +8,27 @@ import urllib.parse
 import re
 import csv
 import io
-import threading  # 🌟 新增：用于多线程状态锁
+import threading
 from openai import OpenAI
 from flask import Blueprint, request, jsonify, Response, stream_with_context
-from concurrent.futures import ThreadPoolExecutor, as_completed # 🌟 新增 as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 video_bp = Blueprint('video', __name__)
 DB_PATH = 'universal_data.db'
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 
-# 🌟 核心修复：更正为阿里支持的真实模型名称
-DEFAULT_NLP_MODEL = 'qwen3.5-27b' 
-# DEFAULT_NLP_MODEL = 'qwen-plus'  # 或 'qwen3.5-plus'，建议先用 qwen-plus 测试
+DEFAULT_NLP_MODEL = 'qwen3.5-397b-a17b' 
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-# 🌟 初始化 OpenAI 客户端
 client = OpenAI(
     api_key=os.getenv("DASHSCOPE_API_KEY"),
     base_url=DASHSCOPE_BASE_URL,
 )
 
-# 🌟 核心修改：定义线程池和全局锁
-executor = ThreadPoolExecutor(max_workers=6)
+max_workers=6
+executor = ThreadPoolExecutor(max_workers=max_workers)
 state_lock = threading.Lock()
 
-# ================= 🌟 AI 任务状态机 =================
-# ================= 🌟 AI 任务状态机 =================
 ai_scan_state = {
     "is_running": False,
     "total": 0,
@@ -42,43 +37,63 @@ ai_scan_state = {
     "status_msg": "就绪，等待扫描",
     "total_time_sec": 0,
     "ai_model": DEFAULT_NLP_MODEL,
-    "recent_results": []  # 🌟 新增：用于存放最新解析的5条结果
+    "recent_results": []
 }
 
 def init_video_db():
     with sqlite3.connect(DB_PATH) as conn:
+        # 创建主表
         conn.execute('CREATE TABLE IF NOT EXISTS video_store (filename TEXT PRIMARY KEY, tags TEXT, category TEXT)')
-        try:
-            conn.execute('ALTER TABLE video_store ADD COLUMN ai_model TEXT')
-            conn.execute('ALTER TABLE video_store ADD COLUMN ai_time_sec REAL')
-        except sqlite3.OperationalError:
-            pass 
+        
+        # 🌟 修改 1: 尝试添加新字段 (ai_model, ai_time_sec, updated_at)
+        # 使用 try-except 防止字段已存在时报错
+        columns_to_add = [
+            ("ai_model", "TEXT"),
+            ("ai_time_sec", "REAL"),
+            ("updated_at", "REAL")  # 🌟 新增：最后更新时间戳字段
+        ]
+        
+        for col_name, col_type in columns_to_add:
+            try:
+                conn.execute(f'ALTER TABLE video_store ADD COLUMN {col_name} {col_type}')
+            except sqlite3.OperationalError:
+                pass # 字段已存在，跳过
+        
+        # 创建统计表
         conn.execute('CREATE TABLE IF NOT EXISTS video_stats (filename TEXT PRIMARY KEY, is_liked INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, play_count INTEGER DEFAULT 0, last_played_at REAL DEFAULT 0)')
+
 init_video_db()
 
-# 🌟 核心修改：分离出的单批次处理函数，供线程池并发调用
 def process_single_batch(batch, batch_id):
     global ai_scan_state
     
     if not ai_scan_state["is_running"]:
         return
 
-    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如: 影视, 搞笑, 学习, 颜值, 音乐, 随拍) 和 3 到 5 个【子标签】。
-    务必返回纯JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
+    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如：影视，搞笑，学习，颜值，音乐，随拍) 和 3 到 5 个【子标签】。
+    务必返回纯 JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
     文件名列表：{json.dumps(batch, ensure_ascii=False)}"""
     
     batch_start_time = time.time()
+    # 🌟 修改 2: 获取当前时间戳，用于记录更新时间
+    current_timestamp = time.time() 
+    
     try:
         completion = client.chat.completions.create(
             model=DEFAULT_NLP_MODEL,
             messages=[
-                {'role': 'system', 'content': '你是一个只返回纯JSON的分析助手。'},
+                {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
                 {'role': 'user', 'content': prompt}
             ],
-            response_format={ "type": "json_object" }
+            response_format={ "type": "json_object" },
+            max_tokens=1000,  # 限制响应Token上限，避免超长返回
+            temperature=0.1   # 降低随机性，减少无意义的标签，间接减少Token
         )
         
-        elapsed = round(time.time() - batch_start_time, 2)
+        batch_duration = time.time() - batch_start_time
+        # 防止除以零 (虽然 batch 通常不为空，但作为防御性编程)
+        count = len(batch) if len(batch) > 0 else 1 
+        elapsed = round(batch_duration / count, 2) # 直接保留2位小数通常更精确，或者 round(..., 1)
         result_text = completion.choices[0].message.content.strip()
         
         match = re.search(r'\{.*\}', result_text, re.DOTALL)
@@ -86,35 +101,33 @@ def process_single_batch(batch, batch_id):
             ai_data = json.loads(match.group(0))
             last_fname, last_tags_str = "", ""
             
-            # 使用带超时设置的独立连接，避免多线程写入锁冲突
             with sqlite3.connect(DB_PATH, timeout=30) as conn:
                 for fname, info in ai_data.items():
                     tags = info.get('tags', [])
                     if not isinstance(tags, list): tags = [tags]
                     
+                    # 🌟 修改 3: 在 INSERT 语句中加入 updated_at 字段
                     conn.execute("""
-                        INSERT OR REPLACE INTO video_store (filename, category, tags, ai_model, ai_time_sec) 
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), DEFAULT_NLP_MODEL, elapsed))
+                        INSERT OR REPLACE INTO video_store (filename, category, tags, ai_model, ai_time_sec, updated_at) 
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), DEFAULT_NLP_MODEL, elapsed, current_timestamp))
                     
                     last_fname, last_tags_str = fname, " ".join([f"#{t}" for t in tags[:3]])
             
-           # 使用锁安全地更新全局状态
             with state_lock:
                 ai_scan_state["success_count"] += len(ai_data)
                 ai_scan_state["processed"] += len(batch)
                 ai_scan_state["status_msg"] = f"✅ {last_fname[:20]}... {last_tags_str}"
                 
-                # 🌟 新增：把当前批次的结果推入展示队列（头部插入），只保留最新的5个
                 for fname, info in ai_data.items():
                     tags = info.get('tags', [])
                     if not isinstance(tags, list): tags = [tags]
                     ai_scan_state["recent_results"].insert(0, {
                         "filename": fname,
                         "category": info.get('category', '未分类'),
-                        "ai_tags": tags[:5]
+                        "ai_tags": tags[:5],
+                        "updated_at": current_timestamp # 可选：如果需要实时状态里也显示时间
                     })
-                # 截断队列，防止内存溢出
                 ai_scan_state["recent_results"] = ai_scan_state["recent_results"][:5]
             
     except Exception as e:
@@ -122,10 +135,9 @@ def process_single_batch(batch, batch_id):
         err_msg = str(e)
         with state_lock:
             ai_scan_state["processed"] += len(batch)
-            ai_scan_state["status_msg"] = f"❌ API报错: {err_msg[:40]}"
+            ai_scan_state["status_msg"] = f"❌ API 报错：{err_msg[:40]}"
         if "RateLimit" in err_msg: time.sleep(5)
 
-# 🌟 核心修改：任务调度主函数
 def ai_tag_videos_task():
     global ai_scan_state
     
@@ -133,7 +145,7 @@ def ai_tag_videos_task():
         "is_running": True, "total": 0, "processed": 0, 
         "success_count": 0, "status_msg": "正在同步列表...", 
         "total_time_sec": 0, "ai_model": DEFAULT_NLP_MODEL,
-        "recent_results": [] # 🌟 每次启动任务清空历史展示
+        "recent_results": []
     })
     
     task_start_time = time.time()
@@ -162,23 +174,18 @@ def ai_tag_videos_task():
     })
     
     batch_size = 8
-    # 拆分所有批次
     batches = [untagged[i:i+batch_size] for i in range(0, len(untagged), batch_size)]
     
     futures = []
-    # 🌟 提交所有批次到线程池并发执行
     for idx, batch in enumerate(batches):
         if not ai_scan_state["is_running"]:
             break
         futures.append(executor.submit(process_single_batch, batch, idx + 1))
-        # 轻微休眠，防止瞬间发出大量请求导致 QPS 限制
         time.sleep(0.5)
         
-        # 定期更新总耗时
         with state_lock:
              ai_scan_state["total_time_sec"] = round(time.time() - task_start_time, 1)
 
-    # 等待所有提交的线程完成
     for future in as_completed(futures):
          with state_lock:
              ai_scan_state["total_time_sec"] = round(time.time() - task_start_time, 1)
@@ -187,14 +194,11 @@ def ai_tag_videos_task():
         ai_scan_state["is_running"] = False
         ai_scan_state["status_msg"] = f"🎉 成功打标 {ai_scan_state['success_count']} 个视频！"
 
-
-# ================= 接口：控制与统计 (保持原逻辑) =================
 @video_bp.route('/api/video/scan', methods=['POST'])
 def control_scan():
     global ai_scan_state
     req_data = request.get_json(silent=True) or {}
     if req_data.get('action') == 'start' and not ai_scan_state["is_running"]:
-        # 🌟 核心修改：使用独立线程启动主调度函数，防止阻塞 Flask 主线程
         threading.Thread(target=ai_tag_videos_task, daemon=True).start()
     elif req_data.get('action') == 'stop':
         ai_scan_state["is_running"] = False
@@ -246,8 +250,16 @@ def get_video_list():
     
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT v.filename, v.category, v.tags, s.is_liked, s.is_deleted, s.play_count FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename')
-        db_data = {row[0]: {"category": row[1], "tags": json.loads(row[2]) if row[2] else [], "is_liked": row[3] or 0, "is_deleted": row[4] or 0, "play_count": row[5] or 0} for row in cursor.fetchall()}
+        # 🌟 修改 4: 查询时也带上 updated_at (虽然前端列表没用到，但以防万一)
+        cursor.execute('SELECT v.filename, v.category, v.tags, s.is_liked, s.is_deleted, s.play_count, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename')
+        db_data = {row[0]: {
+            "category": row[1], 
+            "tags": json.loads(row[2]) if row[2] else [], 
+            "is_liked": row[3] or 0, 
+            "is_deleted": row[4] or 0, 
+            "play_count": row[5] or 0,
+            "updated_at": row[6] # 可选：如果需要返回列表中包含时间
+        } for row in cursor.fetchall()}
     
     def extract_fname_tags(fname): return [m.group(1) for m in re.finditer(r'#([^#\s.]+)', fname)]
     
@@ -284,17 +296,71 @@ def get_video_list():
 def export_video_csv():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['文件名', '主分类', 'AI标签', '提取标签', '播放次数', '是否喜欢', '是否隐藏', '最后活动时间', 'AI模型', 'AI耗时(秒)'])
+    # 🌟 修改 5: 表头增加 "最后更新时间"
+    writer.writerow(['文件名', '主分类', 'AI 标签', '提取标签', '播放次数', '是否喜欢', '是否隐藏', '最后活动时间', 'AI 模型', 'AI 耗时 (秒)', '最后更新时间'])
+    
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT v.filename, v.category, v.tags, s.play_count, s.is_liked, s.is_deleted, s.last_played_at, v.ai_model, v.ai_time_sec FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename')
+        # 🌟 修改 6: SQL 查询增加 v.updated_at
+        cursor.execute('SELECT v.filename, v.category, v.tags, s.play_count, s.is_liked, s.is_deleted, s.last_played_at, v.ai_model, v.ai_time_sec, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename')
+        
         for row in cursor.fetchall():
-            dt = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[6])) if row[6] else '-'
+            # row[6] 是 last_played_at, row[9] 是新的 updated_at
+            dt_play = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[6])) if row[6] else '-'
+            
+            # 🌟 修改 7: 格式化新的更新时间戳
+            dt_update = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[9])) if row[9] else '-'
+            
             ai_tags = " ".join(json.loads(row[2])) if row[2] else ""
             f_tags = " ".join([m.group(1) for m in re.finditer(r'#([^#\s.]+)', row[0])])
-            writer.writerow([row[0], row[1], ai_tags, f_tags, row[3] or 0, '是' if row[4] else '否', '是' if row[5] else '否', dt, row[7] or '-', row[8] or '-'])
+            
+            # 🌟 修改 8: 写入行数据，增加 dt_update
+            writer.writerow([
+                row[0], row[1], ai_tags, f_tags, 
+                row[3] or 0, 
+                '是' if row[4] else '否', 
+                '是' if row[5] else '否', 
+                dt_play, 
+                row[7] or '-', 
+                row[8] or '-',
+                dt_update 
+            ])
+            
     response = Response(output.getvalue().encode('utf-8-sig'), mimetype='text/csv')
     response.headers['Content-Disposition'] = 'attachment; filename=video_stats.csv'
+    return response
+
+# export_csv2 保持原样或同样修改，这里为了统一也加上
+@video_bp.route('/api/video/export_csv2', methods=['GET'])
+def export_video_csv2():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['文件名', '主分类', 'AI 标签', '提取标签', '播放次数', '是否喜欢', '是否隐藏', '最后活动时间', 'AI 模型', 'AI 耗时 (秒)', '最后更新时间'])
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT v.filename, v.category, v.tags, s.play_count, s.is_liked, s.is_deleted, s.last_played_at, v.ai_model, v.ai_time_sec, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename ORDER BY v.updated_at DESC LIMIT 500')
+        
+        for row in cursor.fetchall():
+            dt_play = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[6])) if row[6] else '-'
+            dt_update = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[9])) if row[9] else '-'
+            
+            ai_tags = " ".join(json.loads(row[2])) if row[2] else ""
+            f_tags = " ".join([m.group(1) for m in re.finditer(r'#([^#\s.]+)', row[0])])
+            
+            writer.writerow([
+                row[0], row[1], ai_tags, f_tags, 
+                row[3] or 0, 
+                '是' if row[4] else '否', 
+                '是' if row[5] else '否', 
+                dt_play, 
+                row[7] or '-', 
+                row[8] or '-',
+                dt_update 
+            ])
+            
+    response = Response(output.getvalue().encode('utf-8-sig'), mimetype='text/csv')
+    response.headers['Content-Disposition'] = 'attachment; filename=video_stats_full.csv'
     return response
 
 @video_bp.route('/stream/video/<path:video_name>', methods=['GET'])

@@ -48,7 +48,8 @@
     <div class="header">
         <h2 style="margin:0; font-size:18px;">🎬 视频管理</h2>
         <div class="flex gap-3">
-            <button onclick="exportData()" class="btn" style="border-color: #10b981; color: #10b981;">📊 导出详细报表</button>
+               <button onclick="exportData2()" class="btn" style="border-color: #10b981; color: #10b981;">📊 导出最新500详细报表</button>
+            <button onclick="exportData()" class="btn" style="border-color: #10b981; color: #10b981;">📊 导出全量详细报表</button>
             <a href="/video.html" class="btn">🔙 返回</a>
         </div>
     </div>
@@ -111,7 +112,7 @@
     }
 
     function exportData() { window.location.href = '/api/video/export_csv'; }
-
+function exportData2() { window.location.href = '/api/video/export_csv2'; }
     async function refreshCategoryStats() {
         try {
             const res = await fetch('/api/video/stats');

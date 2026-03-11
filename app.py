@@ -127,6 +127,7 @@ def get_pages_list():
     # 找出所有 html 文件，并排除 index.html 自身
     files = [f for f in os.listdir(PAGES_DIR) if f.endswith('.html') and f != 'index.html']
     # 返回去掉后缀的名称列表
+    files = [f for f in files if not '-' in f]
     return jsonify([f.replace('.html', '') for f in files])
 
 @app.route('/api/<collection>', methods=['POST'])
@@ -191,6 +192,7 @@ def serve_html_with_icon(filename):
 
     # 提取基础文件名，例如 'player.html' -> 'player'
     base_name = filename[:-5] 
+    base_name=base_name.split('-')[0] if '-' in base_name else base_name
     svg_path = os.path.join('static', f'{base_name}.svg')
 
     # 如果 static 目录下存在同名的 svg 图标
