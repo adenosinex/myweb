@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>轨迹遥测与事件分析引擎</title>
   <script src="https://unpkg.com/vue@3.2.47/dist/vue.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/axios@1.6.2/dist/axios.min.js"></script>
+  <link href="https://unpkg.com/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -17,7 +17,7 @@
     .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; height: 100%; transition: all 0.2s; cursor: pointer; }
     .stat-box:hover { border-color: #3b82f6; background: #eff6ff; transform: translateY(-2px); }
     .stat-box.active { border-color: #1e40af; background: #dbeafe; box-shadow: 0 0 0 2px rgba(30,64,175,0.2); }
-    .stat-value { font-size: 22px; font-weight: 700; color: #1e40af; }
+    .stat-value { font-size: 20px; font-weight: 700; color: #1e40af; }
     .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
     .section-title { font-size: 1.1rem; font-weight: 700; border-left: 4px solid #1e40af; padding-left: 10px; margin-bottom: 16px; color: #1e293b;}
     .event-list { max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
@@ -25,7 +25,7 @@
     .event-item:hover { background: #f8fafc; }
     .event-item:last-child { border-bottom: none; }
     .event-time { font-weight: 600; color: #3b82f6; width: 70px; flex-shrink: 0; }
-    .marker-pin { filter: hue-rotate(150deg); }
+    .slope-detail-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; text-align: center;}
   </style>
 </head>
 <body>
@@ -40,37 +40,43 @@
       <div v-if="error" class="text-danger text-center mt-3">{{ error }}</div>
     </div>
 
-    <div v-if="stats">
+    <div v-show="stats">
       <div class="panel-card">
-        <div class="section-title">动态事件侦测 (点击高亮列表)</div>
+        <div class="section-title">动态事件侦测 (点击高亮列表，下钻分析)</div>
         <div class="row g-2 mb-3">
-          <div class="col-6 col-md-3">
+          <div class="col-6 col-md-2">
             <div class="stat-box" :class="{active: activeEvent === 'hard_brakes'}" @click="setActiveEvent('hard_brakes')">
-              <div class="stat-value text-danger">{{ stats.counts.hard_brakes }}</div>
+              <div class="stat-value text-danger">{{ stats?.counts?.hard_brakes }}</div>
               <div class="stat-label">重刹节点</div>
             </div>
           </div>
           <div class="col-6 col-md-3">
             <div class="stat-box" :class="{active: activeEvent === 'abnormal_speeds'}" @click="setActiveEvent('abnormal_speeds')">
-              <div class="stat-value text-secondary">{{ stats.counts.abnormal_speeds }}</div>
-              <div class="stat-label">异常速度突变</div>
+              <div class="stat-value text-secondary">{{ stats?.counts?.abnormal_speeds }}</div>
+              <div class="stat-label">异常速度(突变)</div>
             </div>
           </div>
-          <div class="col-6 col-md-3">
+          <div class="col-6 col-md-2">
             <div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')">
-              <div class="stat-value text-success">{{ stats.counts.sharp_curves }}</div>
-              <div class="stat-label">大弯道/发卡弯</div>
+              <div class="stat-value text-success">{{ stats?.counts?.sharp_curves }}</div>
+              <div class="stat-label">一般发卡弯</div>
             </div>
           </div>
           <div class="col-6 col-md-3">
+            <div class="stat-box" :class="{active: activeEvent === 'steep_curves'}" @click="setActiveEvent('steep_curves')">
+              <div class="stat-value text-danger" style="font-size:22px;">{{ stats?.counts?.steep_curves }}</div>
+              <div class="stat-label fw-bold">危险陡坡弯道</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-2">
             <div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')">
-              <div class="stat-value text-warning">{{ stats.counts.stop_points }}</div>
-              <div class="stat-label">休整停驻(>1min)</div>
+              <div class="stat-value text-warning">{{ stats?.counts?.stop_points }}</div>
+              <div class="stat-label">休整(>1min)</div>
             </div>
           </div>
         </div>
 
-        <div v-if="activeEvent && eventData[activeEvent].length > 0" class="event-list">
+        <div v-if="activeEvent && eventData[activeEvent] && eventData[activeEvent].length > 0" class="event-list">
           <div class="event-item" v-for="(ev, idx) in eventData[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
             <div class="event-time">{{ ev.offset_min.toFixed(1) }} 分钟</div>
             <div class="event-desc text-muted ms-2">{{ ev.desc }}</div>
@@ -83,14 +89,42 @@
       </div>
 
       <div class="panel-card">
-        <div class="section-title">宏观路况与评估</div>
+        <div class="section-title">宏观路况与地形评估</div>
+        
+        <div class="row g-2 mb-3">
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.score }}</div><div class="stat-label">综合得分</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.terrain?.total_distance }}</div><div class="stat-label">总里程(km)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.avg_speed_kmh }}</div><div class="stat-label">运动均速(km/h)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.terrain?.total_climb }}</div><div class="stat-label">累计爬升(m)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value text-danger">{{ stats?.terrain?.max_uphill }}%</div><div class="stat-label">最大上坡</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value text-success">{{ stats?.terrain?.max_downhill }}%</div><div class="stat-label">最大下坡</div></div></div>
+        </div>
+
         <div class="row g-2">
-          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.score }}</div><div class="stat-label">综合得分</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.terrain.total_distance }}</div><div class="stat-label">总里程(km)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.avg_speed_kmh }}</div><div class="stat-label">运动均速(km/h)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.terrain.total_climb }}</div><div class="stat-label">累计爬升(m)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value">{{ stats.terrain.max_ele }}</div><div class="stat-label">最高海拔(m)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box"><div class="stat-value text-danger">{{ stats.terrain.max_slope }}%</div><div class="stat-label">极限陡坡</div></div></div>
+          <div class="col-6 col-md-3">
+            <div class="slope-detail-box">
+              <div class="stat-value text-warning" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_steep }} 次</div>
+              <div class="stat-label text-xs">较陡上坡 (8%~15%)</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="slope-detail-box">
+              <div class="stat-value text-danger" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_extreme }} 次</div>
+              <div class="stat-label text-xs fw-bold">极限上坡 (>15%)</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="slope-detail-box">
+              <div class="stat-value text-info" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_steep }} 次</div>
+              <div class="stat-label text-xs">较陡下坡 (-8%~-15%)</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="slope-detail-box">
+              <div class="stat-value text-primary" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_extreme }} 次</div>
+              <div class="stat-label text-xs fw-bold">极限下坡 (< -15%)</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -112,9 +146,12 @@
           map: null, trackLayer: null, markerLayer: null 
         }
       },
-      mounted() { this.initMap(); },
+      mounted() { 
+        this.initMap(); 
+      },
       methods: {
         initMap() {
+          // 初始化地图对象，此时盒子已经被创建（哪怕被 v-show 隐藏了）
           this.map = L.map('map', { preferCanvas: true }).setView([30.0, 110.0], 5);
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
@@ -131,7 +168,6 @@
         },
         focusMapOnEvent(ev) {
           if (!this.map) return;
-          // 清除旧的焦点标记
           if (this.markerLayer) { this.map.removeLayer(this.markerLayer); }
           
           this.map.flyTo([ev.lat, ev.lon], 16, { animate: true, duration: 1 });
@@ -156,7 +192,7 @@
             this.eventData = res.data.events;
             this.drawMap(res.data.segments);
           } catch (err) {
-            this.error = err.response?.data?.error || '解析异常';
+            this.error = err.response?.data?.error || '网络解析异常';
           } finally {
             this.loading = false;
           }
@@ -176,12 +212,12 @@
             }).addTo(this.trackLayer);
           });
 
-          // 强制刷新地图容器并适应轨迹范围，修复灰色和比例异常问题
           if (segments.length > 0) {
+            // Vue 渲染更新有延迟，需要 setTimeout 确保 v-show=true 后再计算容器大小
             setTimeout(() => {
               this.map.invalidateSize();
               this.map.fitBounds(bounds, { padding: [20, 20] });
-            }, 300);
+            }, 100);
           }
         }
       }

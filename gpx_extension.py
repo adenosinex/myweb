@@ -96,7 +96,8 @@ def analyze_events(base_table, hard_brake_threshold=-3.5, stop_threshold_kmh=3.0
         'hard_brakes': [],
         'sharp_curves': [],
         'stop_points': [],
-        'abnormal_speeds': []
+        'abnormal_speeds': [],
+        'steep_curves': []  # 【新增】危险陡坡弯道
     }
     current_stop_duration = 0
     stop_start_offset = 0
@@ -125,20 +126,31 @@ def analyze_events(base_table, hard_brake_threshold=-3.5, stop_threshold_kmh=3.0
                     'desc': f"减速度: {row['accel']} m/s² (时速降至 {row['speed_kmh']}km/h)"
                 })
             
-        # 3. 弯道识别 (方位角突变)
+        # 3. 弯道及陡坡弯道识别
         turn_angle = 0
         if i > 0:
             turn_angle = abs(row['bearing'] - base_table[i-1]['bearing'])
             turn_angle = 360 - turn_angle if turn_angle > 180 else turn_angle
+            
             if turn_angle > 30 and row['dist'] < 100 and row['speed_kmh'] > 15:
+                # 常规急弯
                 if not events['sharp_curves'] or (row['offset_min'] - events['sharp_curves'][-1]['offset_min']) > 0.2:
                     events['sharp_curves'].append({
                         'offset_min': row['offset_min'],
                         'lat': row['lat2'], 'lon': row['lon2'],
                         'desc': f"入弯时速: {row['speed_kmh']} km/h, 偏航角变化: {round(turn_angle)}°"
                     })
+                # 【新增】危险陡坡急弯 (绝对坡度 >= 8% 且伴随急弯，极度考验刹车和控车)
+                if abs(row['slope']) >= 8:
+                    if not events['steep_curves'] or (row['offset_min'] - events['steep_curves'][-1]['offset_min']) > 0.2:
+                        direction = "上坡" if row['slope'] > 0 else "下坡"
+                        events['steep_curves'].append({
+                            'offset_min': row['offset_min'],
+                            'lat': row['lat2'], 'lon': row['lon2'],
+                            'desc': f"危险{direction}弯: 坡度 {row['slope']}%, 入弯时速 {row['speed_kmh']} km/h"
+                        })
 
-        # 4. 异常速度突变 (直道平路产生巨大加速度波动)
+        # 4. 异常速度突变
         if abs(row['accel']) > 2.0 and abs(row['slope']) < 3 and turn_angle < 10:
             if not events['abnormal_speeds'] or (row['offset_min'] - events['abnormal_speeds'][-1]['offset_min']) > 0.5:
                 action = "突加速" if row['accel'] > 0 else "突减速"
@@ -152,7 +164,7 @@ def analyze_events(base_table, hard_brake_threshold=-3.5, stop_threshold_kmh=3.0
 
 def analyze_terrain(base_table):
     if not base_table:
-        return {'total_dist_km': 0, 'total_climb': 0, 'max_ele': 0, 'max_slope': 0, 'avg_speed': 0}
+        return {'total_distance': 0, 'total_climb': 0, 'max_ele': 0, 'max_slope': 0, 'avg_speed': 0}
 
     total_dist_m = sum(row['dist'] for row in base_table)
     total_climb = sum(row['ele_diff'] for row in base_table if row['ele_diff'] > 0)
@@ -161,11 +173,27 @@ def analyze_terrain(base_table):
     moving_time = sum(s['dt'] for s in moving_segments)
     avg_speed = (sum(s['dist'] for s in moving_segments) / moving_time * 3.6) if moving_time > 0 else 0
 
+    # 【新增】多级坡度统计 (基于真实物理环境，8%以上开始吃力，15%以上为极限恶劣路况)
+    up_steep = sum(1 for r in base_table if 8 <= r['slope'] < 15)
+    up_extreme = sum(1 for r in base_table if r['slope'] >= 15)
+    down_steep = sum(1 for r in base_table if -15 < r['slope'] <= -8)
+    down_extreme = sum(1 for r in base_table if r['slope'] <= -15)
+
+    max_uphill = max((r['slope'] for r in base_table), default=0)
+    max_downhill = min((r['slope'] for r in base_table), default=0)
+
     return {
-        'total_dist_km': round(total_dist_m / 1000, 1),
+        'total_distance': round(total_dist_m / 1000, 1),  # 【修复】统一命名为 total_distance 解决空值问题
         'total_climb': round(total_climb),
         'max_ele': round(max(r['ele'] for r in base_table)),
-        'max_slope': max(r['slope'] for r in base_table),
+        'max_uphill': max_uphill,
+        'max_downhill': max_downhill,
+        'slope_stats': {
+            'up_steep': up_steep,
+            'up_extreme': up_extreme,
+            'down_steep': down_steep,
+            'down_extreme': down_extreme
+        },
         'avg_speed': round(avg_speed, 1)
     }
 
@@ -191,7 +219,7 @@ def analyze_gpx():
     terrain_data = analyze_terrain(final_table)
     
     brakes_count = len(events_data['hard_brakes'])
-    dist_km = terrain_data['total_dist_km']
+    dist_km = terrain_data['total_distance']
     score = max(0, min(100, round(100 - (brakes_count / dist_km * 100 * 1.5) - (avg_jerk * 30), 1))) if dist_km > 0 else 100
     
     if score >= 85: smoothness_text = "极佳 (发力线性，寻迹精准)"
@@ -208,7 +236,8 @@ def analyze_gpx():
                 'hard_brakes': brakes_count,
                 'stop_points': len(events_data['stop_points']),
                 'sharp_curves': len(events_data['sharp_curves']),
-                'abnormal_speeds': len(events_data['abnormal_speeds'])
+                'abnormal_speeds': len(events_data['abnormal_speeds']),
+                'steep_curves': len(events_data['steep_curves']) # 暴露至前端面板
             }
         },
         'events': events_data,
