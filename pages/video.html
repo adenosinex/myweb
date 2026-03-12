@@ -286,6 +286,7 @@
         /* ==========================================================================
            5. 界面渲染引擎 (UI Renderer)
            ========================================================================== */
+       
         const UIRenderer = {
             renderCategoryPanels: (countsMap, total) => {
                 const sorted = Object.entries(countsMap || {}).sort((a, b) => b[1] - a[1]);
@@ -297,8 +298,9 @@
                 }
 
                 const bar = document.getElementById('categoryBar');
-                bar.innerHTML = `<div class="cat-pill ${AppState.tag === '全部' ? 'active' : ''}" onclick="AppActions.setTag('全部')">全部</div>` + 
-                    topTags.map(tag => `<div class="cat-pill ${AppState.tag === tag ? 'active' : ''}" onclick="AppActions.setTag('${tag}')">${tag}</div>`).join('');
+                // 🌟 修改点：在此处加入了三元运算，如果当前标签被高亮选中（=== AppState.tag），则同时渲染数量
+                bar.innerHTML = `<div class="cat-pill ${AppState.tag === '全部' ? 'active' : ''}" onclick="AppActions.setTag('全部')">全部${AppState.tag === '全部' ? ` ${total || 0}` : ''}</div>` + 
+                    topTags.map(tag => `<div class="cat-pill ${AppState.tag === tag ? 'active' : ''}" onclick="AppActions.setTag('${tag}')">${tag}${AppState.tag === tag ? ` ${countsMap[tag] || 0}` : ''}</div>`).join('');
 
                 const grid = document.getElementById('drawerGrid');
                 grid.innerHTML = `
@@ -315,7 +317,6 @@
                         <span class="text-sm font-bold">${tag}</span><span class="text-[10px] opacity-50">${count} 视频</span>
                     </div>`).join('');
             },
-
             buildCardDOM: (v, index) => {
                 if (document.getElementById(`card-${index}`)) return;
                 

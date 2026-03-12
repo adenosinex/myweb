@@ -2,7 +2,6 @@ import os
 import sqlite3
 import json
 import time
-import dashscope
 import requests
 import urllib.parse
 import re
@@ -17,20 +16,33 @@ video_bp = Blueprint('video', __name__)
 DB_PATH = 'universal_data.db'
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 
-# DEFAULT_NLP_MODEL = 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B' 
-DEFAULT_NLP_MODEL = 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14、B' 
-DEFAULT_NLP_MODEL = 'Qwen3-30B-A3B-Instruct-2507' 
-# DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-# DASHSCOPE_BASE_URL = "https://api.siliconflow.cn/v1"
-DASHSCOPE_BASE_URL = "https://api.scnet.cn/api/llm/v1"
+# ==========================================
+# 🌟 一键切换开关：将这里改为 'ollama' 或 'cloud'
+# ==========================================
+ACTIVE_AI_MODE = 'ollama'  
+
+if ACTIVE_AI_MODE == 'cloud':
+    # --- 云端 API 配置 ---
+    AI_MODEL = 'Qwen3-30B-A3B-Instruct-2507' # 之前你用的云端模型
+    AI_BASE_URL = "https://api.scnet.cn/api/llm/v1"
+    AI_API_KEY = os.getenv("CS_API_KEY", "your_cloud_api_key_here")
+    MAX_WORKERS = 6   # 云端支持高并发
+    BATCH_SIZE = 8    # 云端一次处理更多文件
+else:
+    # --- 本地 Ollama 配置 (Mac mini M4) ---
+    AI_MODEL = 'huihui_ai/qwen3.5-abliterated:9b'
+    AI_BASE_URL = "http://apple4.zin6.dpdns.org:11434/v1"
+    AI_API_KEY = "ollama" # 本地免鉴权
+    MAX_WORKERS = 2   # M4 本地建议 1-2 个并发，避免内存排队崩溃
+    BATCH_SIZE = 5    # 本地小批次更稳定
+
+# 初始化统一的 OpenAI 客户端
 client = OpenAI(
-    # api_key=os.getenv("SILICONFLOW_API_KEY"),
-    api_key=os.getenv("CS_API_KEY"),
-    base_url=DASHSCOPE_BASE_URL,
+    api_key=AI_API_KEY,
+    base_url=AI_BASE_URL,
 )
 
-max_workers=6
-executor = ThreadPoolExecutor(max_workers=max_workers)
+executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 state_lock = threading.Lock()
 
 ai_scan_state = {
@@ -40,30 +52,19 @@ ai_scan_state = {
     "success_count": 0,   
     "status_msg": "就绪，等待扫描",
     "total_time_sec": 0,
-    "ai_model": DEFAULT_NLP_MODEL,
+    "ai_model": AI_MODEL,
     "recent_results": []
 }
 
 def init_video_db():
     with sqlite3.connect(DB_PATH) as conn:
-        # 创建主表
         conn.execute('CREATE TABLE IF NOT EXISTS video_store (filename TEXT PRIMARY KEY, tags TEXT, category TEXT)')
-        
-        # 🌟 修改 1: 尝试添加新字段 (ai_model, ai_time_sec, updated_at)
-        # 使用 try-except 防止字段已存在时报错
-        columns_to_add = [
-            ("ai_model", "TEXT"),
-            ("ai_time_sec", "REAL"),
-            ("updated_at", "REAL")  # 🌟 新增：最后更新时间戳字段
-        ]
-        
+        columns_to_add = [("ai_model", "TEXT"), ("ai_time_sec", "REAL"), ("updated_at", "REAL")]
         for col_name, col_type in columns_to_add:
             try:
                 conn.execute(f'ALTER TABLE video_store ADD COLUMN {col_name} {col_type}')
             except sqlite3.OperationalError:
-                pass # 字段已存在，跳过
-        
-        # 创建统计表
+                pass 
         conn.execute('CREATE TABLE IF NOT EXISTS video_stats (filename TEXT PRIMARY KEY, is_liked INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, play_count INTEGER DEFAULT 0, last_played_at REAL DEFAULT 0)')
 
 init_video_db()
@@ -79,25 +80,23 @@ def process_single_batch(batch, batch_id):
     文件名列表：{json.dumps(batch, ensure_ascii=False)}"""
     
     batch_start_time = time.time()
-    # 🌟 修改 2: 获取当前时间戳，用于记录更新时间
     current_timestamp = time.time() 
     
     try:
         completion = client.chat.completions.create(
-            model=DEFAULT_NLP_MODEL,
+            model=AI_MODEL,
             messages=[
                 {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
                 {'role': 'user', 'content': prompt}
             ],
             response_format={ "type": "json_object" },
-            max_tokens=1000,  # 限制响应Token上限，避免超长返回
-            temperature=0.1   # 降低随机性，减少无意义的标签，间接减少Token
+            max_tokens=1000,  
+            temperature=0.1   
         )
         
         batch_duration = time.time() - batch_start_time
-        # 防止除以零 (虽然 batch 通常不为空，但作为防御性编程)
         count = len(batch) if len(batch) > 0 else 1 
-        elapsed = round(batch_duration / count, 2) # 直接保留2位小数通常更精确，或者 round(..., 1)
+        elapsed = round(batch_duration / count, 2) 
         result_text = completion.choices[0].message.content.strip()
         
         match = re.search(r'\{.*\}', result_text, re.DOTALL)
@@ -110,18 +109,17 @@ def process_single_batch(batch, batch_id):
                     tags = info.get('tags', [])
                     if not isinstance(tags, list): tags = [tags]
                     
-                    # 🌟 修改 3: 在 INSERT 语句中加入 updated_at 字段
                     conn.execute("""
                         INSERT OR REPLACE INTO video_store (filename, category, tags, ai_model, ai_time_sec, updated_at) 
                         VALUES (?, ?, ?, ?, ?, ?)
-                    """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), DEFAULT_NLP_MODEL, elapsed, current_timestamp))
+                    """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), AI_MODEL, elapsed, current_timestamp))
                     
                     last_fname, last_tags_str = fname, " ".join([f"#{t}" for t in tags[:3]])
             
             with state_lock:
                 ai_scan_state["success_count"] += len(ai_data)
                 ai_scan_state["processed"] += len(batch)
-                ai_scan_state["status_msg"] = f"✅ {last_fname[:20]}... {last_tags_str}"
+                ai_scan_state["status_msg"] = f"✅ [{ACTIVE_AI_MODE.upper()}] {last_fname[:15]}... {last_tags_str}"
                 
                 for fname, info in ai_data.items():
                     tags = info.get('tags', [])
@@ -130,7 +128,7 @@ def process_single_batch(batch, batch_id):
                         "filename": fname,
                         "category": info.get('category', '未分类'),
                         "ai_tags": tags[:5],
-                        "updated_at": current_timestamp # 可选：如果需要实时状态里也显示时间
+                        "updated_at": current_timestamp 
                     })
                 ai_scan_state["recent_results"] = ai_scan_state["recent_results"][:5]
             
@@ -139,8 +137,8 @@ def process_single_batch(batch, batch_id):
         err_msg = str(e)
         with state_lock:
             ai_scan_state["processed"] += len(batch)
-            ai_scan_state["status_msg"] = f"❌ API 报错：{err_msg[:40]}"
-        if "RateLimit" in err_msg: time.sleep(5)
+            ai_scan_state["status_msg"] = f"❌ {ACTIVE_AI_MODE.upper()} 报错：{err_msg[:30]}"
+        if "Connection" in err_msg or "RateLimit" in err_msg: time.sleep(5)
 
 def ai_tag_videos_task():
     global ai_scan_state
@@ -148,7 +146,7 @@ def ai_tag_videos_task():
     ai_scan_state.update({
         "is_running": True, "total": 0, "processed": 0, 
         "success_count": 0, "status_msg": "正在同步列表...", 
-        "total_time_sec": 0, "ai_model": DEFAULT_NLP_MODEL,
+        "total_time_sec": 0, "ai_model": AI_MODEL,
         "recent_results": []
     })
     
@@ -174,11 +172,11 @@ def ai_tag_videos_task():
 
     ai_scan_state.update({
         "total": len(untagged),
-        "status_msg": "🚀 多线程并发分析已启动..."
+        "status_msg": f"🚀 {ACTIVE_AI_MODE.upper()} 并发分析已启动 (并发:{MAX_WORKERS}, 批次:{BATCH_SIZE})"
     })
     
-    batch_size = 8
-    batches = [untagged[i:i+batch_size] for i in range(0, len(untagged), batch_size)]
+    # 🌟 使用配置好的动态批次大小
+    batches = [untagged[i:i+BATCH_SIZE] for i in range(0, len(untagged), BATCH_SIZE)]
     
     futures = []
     for idx, batch in enumerate(batches):
@@ -198,6 +196,7 @@ def ai_tag_videos_task():
         ai_scan_state["is_running"] = False
         ai_scan_state["status_msg"] = f"🎉 成功打标 {ai_scan_state['success_count']} 个视频！"
 
+ 
 @video_bp.route('/api/video/scan', methods=['POST'])
 def control_scan():
     global ai_scan_state
@@ -377,3 +376,49 @@ def proxy_stream_video(video_name):
         resp_headers = [(name, value) for (name, value) in req.raw.headers.items() if name.lower() not in excluded]
         return Response(stream_with_context(req.iter_content(chunk_size=1024 * 1024)), status=req.status_code, headers=resp_headers)
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+# ==========================================
+# 维护与归档 API (由资源节点客户端调用)
+# ==========================================
+
+@video_bp.route('/api/video/maintenance/list', methods=['GET'])
+def get_maintenance_list():
+    """下发需要物理移动的视频名单"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            # 喜欢且未删除的
+            cursor.execute("SELECT filename FROM video_stats WHERE is_liked = 1 AND is_deleted = 0")
+            liked = [row[0] for row in cursor.fetchall()]
+            # 标记为删除的
+            cursor.execute("SELECT filename FROM video_stats WHERE is_deleted = 1")
+            deleted = [row[0] for row in cursor.fetchall()]
+            
+        return jsonify({"status": "ok", "liked": liked, "deleted": deleted})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@video_bp.route('/api/video/maintenance/confirm_delete', methods=['POST'])
+def confirm_maintenance_delete():
+    """接收客户端确认，从数据库彻底抹除记录"""
+    req_data = request.get_json(silent=True) or {}
+    filenames_to_delete = req_data.get('filenames', [])
+    
+    if not filenames_to_delete:
+        return jsonify({"status": "ok", "deleted_count": 0})
+        
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            # SQLite 批量删除的占位符生成
+            placeholders = ','.join(['?'] * len(filenames_to_delete))
+            
+            # 删除 AI 标签库记录
+            cursor.execute(f"DELETE FROM video_store WHERE filename IN ({placeholders})", filenames_to_delete)
+            # 删除播放统计记录
+            cursor.execute(f"DELETE FROM video_stats WHERE filename IN ({placeholders})", filenames_to_delete)
+            conn.commit()
+            
+        return jsonify({"status": "ok", "deleted_count": len(filenames_to_delete)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
