@@ -10,8 +10,9 @@ CORS(app)
 
 # ================= 配置区 =================
 MUSIC_DIR = r'\\UGREEN-1E55\xin_Y\音乐'
-# 新增：配置你的视频文件夹路径 (请根据实际情况修改)
-VIDEO_DIR = r'\\One\d\move video\work' 
+VIDEO_DIR = r'\\UGREEN-1E55\xin_Y\视频\抖音\2025' 
+# 🌟 统一命名规范
+NEW_VIDEO_DIR = r'\\UGREEN-1E55\xin_Y\视频\upcloud-sex\all-data'
 
 # 内存索引字典
 song_index = {}
@@ -35,12 +36,24 @@ def scan_directory():
                 if file.lower().endswith(AUDIO_EXTS):
                     song_index[file] = os.path.join(root, file)
                     
-    # 2. 扫描视频
+    # 2. 扫描默认视频
     if os.path.exists(VIDEO_DIR):
         for root, _, files in os.walk(VIDEO_DIR):
+            # 排除可能被归档脚本创建的垃圾桶文件夹
+            if 'Deleted_Trash' in root or 'Liked_Favorites' in root: continue
             for file in files:
                 if file.lower().endswith(VIDEO_EXTS):
                     video_index[file] = os.path.join(root, file)
+                    
+    # 3. 🌟 扫描新资源视频 (添加虚拟前缀)
+    if os.path.exists(NEW_VIDEO_DIR):
+        for root, _, files in os.walk(NEW_VIDEO_DIR):
+            if 'Deleted_Trash' in root or 'Liked_Favorites' in root: continue
+            for file in files:
+                if file.lower().endswith(VIDEO_EXTS):
+                    # 核心魔法：字典的 Key 加上前缀，Value 依然是真实的物理路径
+                    prefixed_name = f"[NEW]_{file}"
+                    video_index[prefixed_name] = os.path.join(root, file)
                     
     return len(song_index), len(video_index)
 
@@ -96,20 +109,18 @@ def stream_audio(song_name):
 @app.route('/stream/video/<path:video_name>', methods=['GET'])
 def stream_video(video_name):
     """视频流端点 (支持 Range 请求，随意拖拽)"""
+    # 🌟 这里直接用带 [NEW]_ 前缀的名字去查字典，能完美拿到真实的无前缀物理路径
     file_path = video_index.get(video_name)
     if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "Video file not found"}), 404
-    # send_file 配合 conditional=True 可以完美处理视频的 206 Partial Content
     return send_file(file_path, conditional=True)
 
 if __name__ == '__main__':
-    # 确保媒体目录存在（不强求必须创建，防止网络盘未挂载时报错，只做检查）
     if not os.path.exists(MUSIC_DIR): print(f"⚠️ 警告: 音乐目录 {MUSIC_DIR} 不存在或未挂载")
     if not os.path.exists(VIDEO_DIR): print(f"⚠️ 警告: 视频目录 {VIDEO_DIR} 不存在或未挂载")
+    if not os.path.exists(NEW_VIDEO_DIR): print(f"⚠️ 警告: 新视频目录 {NEW_VIDEO_DIR} 不存在或未挂载")
     
-    # 启动时先扫描一次
     s_count, v_count = scan_directory()
     print(f"✅ 资源节点启动成功！已建立 {s_count} 首歌曲, {v_count} 个视频的索引。")
     
-    # 运行在 8100 端口
     app.run(host='0.0.0.0', port=8100, threaded=True)

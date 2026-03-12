@@ -75,7 +75,7 @@ def process_single_batch(batch, batch_id):
     if not ai_scan_state["is_running"]:
         return
 
-    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如：影视，搞笑，学习，颜值，音乐，随拍) 和 1 到 7 个【子标签】根据文件名信息量确定子标签数量。
+    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(包括但不限于：影视，颜值，素人，演员，舞蹈，职业) 和 1 到 7 个【子标签】根据文件名信息量确定子标签数量。
     务必返回纯 JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
     文件名列表：{json.dumps(batch, ensure_ascii=False)}"""
     
@@ -243,6 +243,7 @@ def get_video_stats():
 def get_video_list():
     filter_type = request.args.get('filter', 'all') 
     tag_filter = request.args.get('tag', '全部')
+    pool_type = request.args.get('pool', 'mixed') 
     page, limit = int(request.args.get('page', 1)), int(request.args.get('limit', 10))
     need_tags = request.args.get('need_tags', '0') == '1'
     
@@ -251,34 +252,58 @@ def get_video_list():
         all_files = resp.json() if resp.status_code == 200 else []
     except Exception: all_files = []
     
+    # ==========================================
+    # 🌟 核心修复：分离查询，彻底解决未打标视频点赞失效的 BUG
+    # ==========================================
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        # 🌟 修改 4: 查询时也带上 updated_at (虽然前端列表没用到，但以防万一)
-        cursor.execute('SELECT v.filename, v.category, v.tags, s.is_liked, s.is_deleted, s.play_count, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename')
-        db_data = {row[0]: {
+        
+        # 1. 获取 AI 分类标签数据
+        cursor.execute('SELECT filename, category, tags FROM video_store')
+        store_dict = {row[0]: {
             "category": row[1], 
-            "tags": json.loads(row[2]) if row[2] else [], 
-            "is_liked": row[3] or 0, 
-            "is_deleted": row[4] or 0, 
-            "play_count": row[5] or 0,
-            "updated_at": row[6] # 可选：如果需要返回列表中包含时间
+            "tags": json.loads(row[2]) if row[2] else []
+        } for row in cursor.fetchall()}
+        
+        # 2. 获取用户动作统计数据
+        cursor.execute('SELECT filename, is_liked, is_deleted, play_count FROM video_stats')
+        stats_dict = {row[0]: {
+            "is_liked": row[1] or 0, 
+            "is_deleted": row[2] or 0, 
+            "play_count": row[3] or 0
         } for row in cursor.fetchall()}
     
     def extract_fname_tags(fname): return [m.group(1) for m in re.finditer(r'#([^#\s.]+)', fname)]
     
     base_list = []
     for f in all_files:
-        meta = db_data.get(f, {"category": "未分类", "tags": [], "is_liked": 0, "is_deleted": 0, "play_count": 0})
-        if filter_type == 'disliked' and meta["is_deleted"] != 1: continue
-        if filter_type != 'disliked' and meta["is_deleted"] == 1: continue
+        # 独立获取两张表的状态，哪怕没打标也能获取到点赞信息！
+        s_data = store_dict.get(f, {"category": "未分类", "tags": []})
+        st_data = stats_dict.get(f, {"is_liked": 0, "is_deleted": 0, "play_count": 0})
+        
+        # 1. 处理资源池 (New / Default / Mixed)
+        is_new_lib = f.startswith('[NEW]_')
+        if pool_type == 'default' and is_new_lib: continue
+        if pool_type == 'new' and not is_new_lib: continue
+        
+        # 2. 处理删除状态 (Disliked)
+        if filter_type == 'disliked':
+            if st_data["is_deleted"] != 1: continue
+        else:
+            if st_data["is_deleted"] == 1: continue
+            
+        # 3. 处理喜欢状态 (Liked)
+        if filter_type == 'liked' and st_data["is_liked"] != 1: 
+            continue 
         
         fname_tags = extract_fname_tags(f)
-        merged_tags = list(set(meta["tags"] + fname_tags))
+        merged_tags = list(set(s_data["tags"] + fname_tags))
         base_list.append({
             "filename": f, "url": f"/stream/video/{urllib.parse.quote(f, safe='')}", 
-            "category": meta["category"], "ai_tags": meta["tags"],
+            "category": s_data["category"], "ai_tags": s_data["tags"],
             "filename_tags": fname_tags, "mergedTags": merged_tags, 
-            "is_liked": bool(meta["is_liked"]), "play_count": meta["play_count"]
+            "is_liked": bool(st_data["is_liked"]), 
+            "play_count": st_data["play_count"]
         })
 
     tags_count = {}
@@ -291,7 +316,15 @@ def get_video_list():
                 temp_counts[t] = temp_counts.get(t, 0) + 1
         tags_count = {k: v for k, v in temp_counts.items() if v > 10}
 
-    filtered_list = [i for i in base_list if tag_filter == '全部' or i["category"] == tag_filter or tag_filter in i["mergedTags"]]
+    kw = tag_filter.lower()
+    filtered_list = [
+        i for i in base_list 
+        if kw == '全部' 
+        or kw in i["category"].lower() 
+        or kw in i["filename"].lower() 
+        or any(kw in t.lower() for t in i["mergedTags"])
+    ]
+
     start = (page - 1) * limit
     return jsonify({"items": filtered_list[start:start+limit], "tags_count": tags_count, "has_more": start+limit < len(filtered_list), "total": len(filtered_list)})
 
@@ -422,3 +455,48 @@ def confirm_maintenance_delete():
         return jsonify({"status": "ok", "deleted_count": len(filenames_to_delete)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
+@video_bp.route('/api/video/sync', methods=['POST'])
+def sync_video_actions():
+    """接收前端传来的 播放、喜欢、删除 等用户动作记录"""
+    actions = request.get_json(silent=True) or []
+    if not actions:
+        return jsonify({"status": "ok", "processed": 0})
+        
+    processed = 0
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            for item in actions:
+                fname = item.get('filename')
+                action = item.get('action')
+                # JS 传过来的 timestamp 是毫秒级，Python 存一般用秒级
+                ts = item.get('timestamp', time.time() * 1000)
+                ts_sec = ts / 1000.0 if ts > 1e11 else ts
+                
+                if not fname or not action:
+                    continue
+                    
+                # 确保在统计表中有这条视频的记录，如果没有则初始化一条
+                cursor.execute('INSERT OR IGNORE INTO video_stats (filename) VALUES (?)', (fname,))
+                
+                # 根据动作更新数据库
+                if action == 'like':
+                    cursor.execute('UPDATE video_stats SET is_liked = 1 WHERE filename = ?', (fname,))
+                elif action == 'unlike':
+                    cursor.execute('UPDATE video_stats SET is_liked = 0 WHERE filename = ?', (fname,))
+                elif action == 'delete':
+                    cursor.execute('UPDATE video_stats SET is_deleted = 1 WHERE filename = ?', (fname,))
+                elif action == 'undelete':
+                    cursor.execute('UPDATE video_stats SET is_deleted = 0 WHERE filename = ?', (fname,))
+                elif action == 'play':
+                    cursor.execute('UPDATE video_stats SET play_count = play_count + 1, last_played_at = ? WHERE filename = ?', (ts_sec, fname))
+                
+                processed += 1
+            conn.commit()
+            
+        return jsonify({"status": "ok", "processed": processed})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

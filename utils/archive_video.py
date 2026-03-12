@@ -69,19 +69,23 @@ def load_cache(base_dir, cache_file):
     return file_map
 
 def get_source_path(fname, file_map):
-    """从缓存中获取源路径，增加失效降级机制"""
-    src_path = file_map.get(fname)
+    """从缓存中获取源路径，增加失效降级机制与前缀剥离"""
+    
+    # 🌟 新增：脱掉虚拟前缀，还原 NAS 上真实的物理文件名
+    real_fname = fname.replace('[NEW]_', '')
+    
+    src_path = file_map.get(real_fname) # 用真实文件名去 CSV 缓存里查
+    
     # 如果缓存里有记录且文件确实存在，直接返回
     if src_path and os.path.exists(src_path):
         return src_path
     
-    # 降级：如果缓存失效(比如新加的视频还没缓存)，尝试直接在根目录找一下
-    guess_path = os.path.join(VIDEO_BASE_DIR, fname)
+    # 降级：如果缓存失效，尝试直接在根目录找一下
+    guess_path = os.path.join(VIDEO_BASE_DIR, real_fname)
     if os.path.exists(guess_path):
         return guess_path
         
     return None
-
 def main():
     os.makedirs(LIKED_DIR, exist_ok=True)
     os.makedirs(DELETED_DIR, exist_ok=True)
