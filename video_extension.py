@@ -17,11 +17,15 @@ video_bp = Blueprint('video', __name__)
 DB_PATH = 'universal_data.db'
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 
-DEFAULT_NLP_MODEL = 'qwen3.5-397b-a17b' 
-DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
+# DEFAULT_NLP_MODEL = 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B' 
+DEFAULT_NLP_MODEL = 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14、B' 
+DEFAULT_NLP_MODEL = 'Qwen3-30B-A3B-Instruct-2507' 
+# DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+# DASHSCOPE_BASE_URL = "https://api.siliconflow.cn/v1"
+DASHSCOPE_BASE_URL = "https://api.scnet.cn/api/llm/v1"
 client = OpenAI(
-    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    # api_key=os.getenv("SILICONFLOW_API_KEY"),
+    api_key=os.getenv("CS_API_KEY"),
     base_url=DASHSCOPE_BASE_URL,
 )
 
@@ -70,7 +74,7 @@ def process_single_batch(batch, batch_id):
     if not ai_scan_state["is_running"]:
         return
 
-    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如：影视，搞笑，学习，颜值，音乐，随拍) 和 3 到 5 个【子标签】。
+    prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(如：影视，搞笑，学习，颜值，音乐，随拍) 和 1 到 7 个【子标签】根据文件名信息量确定子标签数量。
     务必返回纯 JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
     文件名列表：{json.dumps(batch, ensure_ascii=False)}"""
     
