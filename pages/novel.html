@@ -1,41 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <title>小说库</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云端书库 - 首页</title>
+    <script>tailwind = { config: { } };</script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer;}
-        .card:hover { transform: translateY(-3px); }
-        .category-bar { margin-bottom: 20px; }
-        .category-bar button { margin-right: 10px; padding: 5px 15px; cursor: pointer; }
+        body { background-color: #f4f4f5; font-family: -apple-system, sans-serif; }
     </style>
 </head>
-<body>
-    <h1>📚 本地小说库</h1>
-    <div class="category-bar">
-        <button onclick="loadNovels('')">全部</button>
-        <button onclick="loadNovels('玄幻')">玄幻</button>
-        <button onclick="loadNovels('科幻')">科幻</button>
-        <button onclick="location.href='/novel-ai'">⚙️ 去后台导书 (AI)</button>
-    </div>
-    
-    <div class="grid" id="novelGrid"></div>
+<body class="h-screen flex flex-col selection:bg-blue-500">
+
+    <header class="bg-white shadow-sm p-4 flex flex-col gap-4 sticky top-0 z-10">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-bold text-zinc-800">📚 云端幻境书库</h1>
+            <a href="/novel-ai" target="_blank" class="text-sm bg-blue-100 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-200">AI 管理端</a>
+        </div>
+        <div class="relative">
+            <input type="text" id="searchInput" placeholder="搜索书名..." oninput="filterNovels()" class="w-full bg-zinc-100 border-none rounded-xl py-2 px-4 pl-10 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            <span class="absolute left-3 top-2.5 opacity-40">🔍</span>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4">
+        <div id="loading" class="text-center text-zinc-400 mt-10 animate-pulse">正在拉取书库数据...</div>
+        
+        <div id="novelGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 hidden">
+            </div>
+    </main>
 
     <script>
-        async function loadNovels(category = '') {
-            const res = await fetch(`/api/novel/list?category=${category}`);
-            const data = await res.json();
-            const grid = document.getElementById('novelGrid');
-            grid.innerHTML = data.map(n => `
-                <div class="card" onclick="location.href='/novel-detail?id=${n.id}'">
-                    <h3>${n.title}</h3>
-                    <p style="color: gray; font-size: 12px;">状态: ${n.status}</p>
-                </div>
-            `).join('');
+        let allNovels = [];
+
+        async function init() {
+            try {
+                const res = await fetch('/api/novel/list');
+                const data = await res.json();
+                allNovels = data.items || [];
+                renderGrid(allNovels);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('novelGrid').classList.remove('hidden');
+            } catch (e) {
+                document.getElementById('loading').innerText = "书库同步失败";
+            }
         }
-        loadNovels();
+
+        function renderGrid(list) {
+            const grid = document.getElementById('novelGrid');
+            if(list.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-zinc-400 py-10">未找到相关书籍</div>';
+                return;
+            }
+            grid.innerHTML = list.map(item => {
+                const title = item.filename.replace(/\.[^/.]+$/, ""); // 去掉后缀
+                const encoded = encodeURIComponent(item.filename);
+                return `
+                    <a href="/novel-detail?novel=${encoded}" class="bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition flex flex-col gap-2 border border-zinc-100 active:scale-95">
+                        <div class="aspect-[3/4] bg-zinc-100 rounded-lg flex items-center justify-center text-4xl shadow-inner">📖</div>
+                        <h3 class="font-bold text-sm text-zinc-800 line-clamp-2 leading-snug">${title}</h3>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        function filterNovels() {
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allNovels.filter(n => n.filename.toLowerCase().includes(keyword));
+            renderGrid(filtered);
+        }
+
+        init();
     </script>
 </body>
 </html>

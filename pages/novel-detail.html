@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>书籍详情</title>
+    <script>tailwind = { config: { } };</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f4f4f5; }
+        .markdown-body b { color: #3b82f6; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <header class="bg-white shadow-sm p-4 flex items-center gap-4 shrink-0">
+        <a href="/novel" class="p-2 bg-zinc-100 rounded-full hover:bg-zinc-200">⬅️</a>
+        <h1 id="pageTitle" class="font-bold text-lg truncate flex-1">加载中...</h1>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+        <div class="bg-white p-6 shadow-sm border-b border-zinc-100 flex flex-col items-center">
+            <div class="w-24 h-32 bg-zinc-100 rounded-lg shadow-inner flex items-center justify-center text-5xl mb-4">📘</div>
+            <h2 id="bookTitle" class="font-bold text-xl mb-4 text-center">...</h2>
+            
+            <button id="btnRead" onclick="continueReading()" class="w-full max-w-xs bg-blue-600 text-white font-bold py-3 rounded-full shadow-lg hover:bg-blue-500 transition active:scale-95">
+                开始阅读
+            </button>
+        </div>
+
+        <div class="p-4 max-w-2xl mx-auto">
+            <h3 class="font-bold text-zinc-500 text-sm mb-2 uppercase">🤖 AI 深度解析</h3>
+            <div id="aiSummary" class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm leading-relaxed whitespace-pre-wrap">正在查询数据库...</div>
+        </div>
+
+        <div class="p-4 max-w-2xl mx-auto mb-10">
+            <div class="flex justify-between items-end mb-3">
+                <h3 class="font-bold text-zinc-500 text-sm uppercase">📑 章节目录</h3>
+                <span id="chapterCount" class="text-xs text-zinc-400">解析中...</span>
+            </div>
+            <div id="tocList" class="bg-white rounded-xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+                <div class="p-4 text-center text-zinc-400 text-sm animate-pulse">正在下载全本并解析目录...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const novelName = urlParams.get('novel');
+        let parsedChapters = [];
+        let lastReadIndex = 0;
+
+        if(!novelName) window.location.href = '/novel';
+        
+        const displayTitle = novelName.replace(/\.[^/.]+$/, "");
+        document.getElementById('pageTitle').innerText = displayTitle;
+        document.getElementById('bookTitle').innerText = displayTitle;
+
+        async function init() {
+            // 1. 获取 AI 简介
+            try {
+                const res = await fetch('/api/novel_analysis');
+                const list = await res.json();
+                const history = list.find(item => item.novel_name === novelName);
+                if (history) {
+                    document.getElementById('aiSummary').innerHTML = history.analysis_result.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+                } else {
+                    document.getElementById('aiSummary').innerHTML = '暂无解析记录。<br><a href="/novel-ai?novel='+encodeURIComponent(novelName)+'" class="underline text-blue-600 mt-2 inline-block">前往 AI 控制台生成</a>';
+                }
+            } catch (e) { document.getElementById('aiSummary').innerText = '读取简介失败'; }
+
+            // 2. 获取小说文本并正则切分目录
+            try {
+                const textRes = await fetch(`/api/novel/content/${encodeURIComponent(novelName)}`);
+                const textData = await textRes.json();
+                parsedChapters = buildTOC(textData.content || "");
+                
+                document.getElementById('chapterCount').innerText = `共 ${parsedChapters.length} 章`;
+                
+                // 渲染目录列表
+                document.getElementById('tocList').innerHTML = parsedChapters.map((ch, idx) => `
+                    <a href="/novel-reader?novel=${encodeURIComponent(novelName)}&ch=${idx}" 
+                       class="block p-4 hover:bg-zinc-50 text-sm text-zinc-700 truncate transition">
+                        ${ch.title}
+                    </a>
+                `).join('');
+
+                // 3. 获取上次阅读进度
+                const progress = await fetch(`/api/kv/progress_${btoa(encodeURIComponent(novelName)).slice(0,16)}`).then(r=>r.json()).catch(()=>({}));
+                if(progress.page !== undefined && progress.page < parsedChapters.length) {
+                    lastReadIndex = progress.page;
+                    document.getElementById('btnRead').innerText = `继续阅读: ${parsedChapters[lastReadIndex].title}`;
+                }
+
+            } catch(e) {
+                document.getElementById('tocList').innerHTML = '<div class="p-4 text-center text-red-500">解析小说失败</div>';
+            }
+        }
+
+        // 🌟 核心：智能分章算法
+        function buildTOC(text) {
+            // 匹配诸如：第十一章、第123回、第五部等
+            const regex = /(?:^|\n)(第[零一二三四五六七八九十百千万\d]+[章回节卷部][^\n]*)/g;
+            let chapters = [];
+            let match;
+            let lastIdx = 0;
+            let lastTitle = "引子 / 前言";
+
+            while ((match = regex.exec(text)) !== null) {
+                const content = text.slice(lastIdx, match.index).trim();
+                if (content.length > 20 || chapters.length === 0) {
+                    chapters.push({ title: lastTitle, content: content });
+                }
+                lastTitle = match[1].trim();
+                lastIdx = match.index + match[0].length;
+            }
+            // 压入最后一章
+            chapters.push({ title: lastTitle, content: text.slice(lastIdx).trim() });
+            
+            // 兜底：如果完全没有章节标记，按字数切片（每章 5000 字）
+            if (chapters.length <= 1 || chapters[0].content.length === text.length) {
+                chapters = [];
+                for(let i=0; i<text.length; i+=5000) {
+                    chapters.push({ title: `第 ${chapters.length + 1} 节`, content: text.slice(i, i+5000) });
+                }
+            }
+            return chapters;
+        }
+
+        function continueReading() {
+            window.location.href = `/novel-reader?novel=${encodeURIComponent(novelName)}&ch=${lastReadIndex}`;
+        }
+
+        init();
+    </script>
+</body>
+</html>

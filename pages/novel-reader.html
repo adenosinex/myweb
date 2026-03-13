@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>阅读器</title>
+    <script>tailwind = { config: { } };</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --bg: #f4f4f5; --text: #27272a; --panel: rgba(255,255,255,0.9); }
+        .dark-mode { --bg: #121214; --text: #d4d4d8; --panel: rgba(24,24,27,0.9); }
+        body { background-color: var(--bg); color: var(--text); font-family: "PingFang SC", "Microsoft YaHei", sans-serif; transition: background 0.3s; }
+        
+        .reader-content { font-size: 20px; line-height: 1.8; letter-spacing: 0.5px; text-align: justify; white-space: pre-wrap; word-break: break-all; }
+        .drawer { transform: translateX(100%); transition: transform 0.3s ease; }
+        .drawer.open { transform: translateX(0); }
+        .glass { backdrop-filter: blur(10px); background: var(--panel); border-bottom: 1px solid rgba(128,128,128,0.2); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <header class="h-14 glass flex items-center justify-between px-4 shrink-0 shadow-sm z-20">
+        <div class="flex items-center gap-3">
+            <a href="javascript:history.back()" class="p-2 -ml-2 rounded-full hover:bg-zinc-500/20">⬅️</a>
+            <h1 id="chapterTitle" class="font-bold text-sm truncate max-w-[150px] sm:max-w-xs text-zinc-500">加载中...</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-zinc-500/20">🌓</button>
+            <button onclick="toggleDrawer()" class="p-2 rounded-full hover:bg-zinc-500/20 text-xl">📑</button>
+        </div>
+    </header>
+
+    <div id="drawer" class="drawer fixed inset-y-0 right-0 w-72 bg-white dark:bg-zinc-900 shadow-2xl z-30 flex flex-col border-l border-zinc-200 dark:border-zinc-800">
+        <div class="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+            <span class="font-bold">目录</span>
+            <button onclick="toggleDrawer()" class="text-2xl opacity-50 hover:opacity-100">&times;</button>
+        </div>
+        <div id="tocList" class="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
+            <div class="p-4 text-center text-zinc-400">正在生成...</div>
+        </div>
+    </div>
+
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 scroll-smooth" id="scrollContainer">
+        <div class="max-w-2xl mx-auto">
+            <h2 id="innerTitle" class="text-2xl font-bold mb-8 mt-4"></h2>
+            <div id="readerContent" class="reader-content min-h-[70vh]">
+                <div class="mt-20 text-center animate-pulse text-blue-500">正在解析章节内容...</div>
+            </div>
+            
+            <div id="pagination" class="mt-16 mb-24 flex justify-between items-center hidden pt-8 border-t border-zinc-300 dark:border-zinc-700">
+                <button onclick="changeChapter(-1)" class="px-6 py-3 bg-zinc-200 dark:bg-zinc-800 rounded-full font-bold active:scale-95 transition">上一章</button>
+                <button onclick="changeChapter(1)" class="px-6 py-3 bg-blue-600 text-white rounded-full font-bold active:scale-95 transition shadow-lg shadow-blue-500/30">下一章</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const novelName = urlParams.get('novel');
+        let currentChIdx = parseInt(urlParams.get('ch')) || 0;
+        let chapters = [];
+
+        if(!novelName) window.location.href = '/novel';
+
+        const toggleTheme = () => document.body.classList.toggle('dark-mode');
+        const toggleDrawer = () => document.getElementById('drawer').classList.toggle('open');
+
+        async function init() {
+            try {
+                // 读取完整文本 (依赖浏览器缓存机制，速度极快)
+                const textRes = await fetch(`/api/novel/content/${encodeURIComponent(novelName)}`);
+                const textData = await textRes.json();
+                
+                chapters = buildTOC(textData.content || "");
+                renderTOC();
+                renderChapter();
+            } catch(e) {
+                document.getElementById('readerContent').innerHTML = '<div class="text-red-500 text-center mt-20">资源节点连接异常</div>';
+            }
+        }
+
+        // 与详情页相同的拆章逻辑
+        function buildTOC(text) {
+            const regex = /(?:^|\n)(第[零一二三四五六七八九十百千万\d]+[章回节卷部][^\n]*)/g;
+            let chs = [];
+            let match, lastIdx = 0, lastTitle = "引子 / 前言";
+
+            while ((match = regex.exec(text)) !== null) {
+                const content = text.slice(lastIdx, match.index).trim();
+                if (content.length > 20 || chs.length === 0) chs.push({ title: lastTitle, content: content });
+                lastTitle = match[1].trim();
+                lastIdx = match.index + match[0].length;
+            }
+            chs.push({ title: lastTitle, content: text.slice(lastIdx).trim() });
+            
+            if (chs.length <= 1) {
+                chs = [];
+                for(let i=0; i<text.length; i+=5000) chs.push({ title: `第 ${chs.length + 1} 节`, content: text.slice(i, i+5000) });
+            }
+            return chs;
+        }
+
+        function renderTOC() {
+            const listEl = document.getElementById('tocList');
+            listEl.innerHTML = chapters.map((ch, idx) => `
+                <div onclick="jumpTo(${idx})" class="p-4 cursor-pointer text-sm truncate transition ${idx === currentChIdx ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 font-bold' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'}">
+                    ${ch.title}
+                </div>
+            `).join('');
+        }
+
+        function renderChapter() {
+            if (currentChIdx < 0) currentChIdx = 0;
+            if (currentChIdx >= chapters.length) currentChIdx = chapters.length - 1;
+
+            const chapter = chapters[currentChIdx];
+            document.getElementById('chapterTitle').innerText = chapter.title;
+            document.getElementById('innerTitle').innerText = chapter.title;
+            document.getElementById('readerContent').innerText = chapter.content;
+            
+            document.getElementById('pagination').classList.remove('hidden');
+            document.getElementById('scrollContainer').scrollTo(0, 0);
+
+            renderTOC(); // 更新目录高亮
+            
+            // 异步保存进度
+            fetch(`/api/kv/progress_${btoa(encodeURIComponent(novelName)).slice(0,16)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payload: { page: currentChIdx } })
+            });
+
+            // 更改 URL (方便刷新或分享时保持在当前章节)
+            window.history.replaceState(null, '', `?novel=${encodeURIComponent(novelName)}&ch=${currentChIdx}`);
+        }
+
+        function changeChapter(delta) { jumpTo(currentChIdx + delta); }
+
+        function jumpTo(idx) {
+            if (idx >= 0 && idx < chapters.length) {
+                currentChIdx = idx;
+                toggleDrawer(); // 如果抽屉开着，自动关上
+                document.getElementById('drawer').classList.remove('open');
+                renderChapter();
+            } else if (idx >= chapters.length) {
+                alert('已经是最后一章了！');
+            } else {
+                alert('已经是第一章了！');
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') changeChapter(-1);
+            if (e.key === 'ArrowRight') changeChapter(1);
+        });
+
+        init();
+    </script>
+</body>
+</html>

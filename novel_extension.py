@@ -1,173 +1,255 @@
-# novel_extension.py
-from flask import Blueprint, request, jsonify
+import threading
+import time
+import requests
 import sqlite3
-import os
-import re
-import ollama
+import json
+from flask import Blueprint, request, jsonify
 
-novel_bp = Blueprint('novel_bp', __name__)
+# ================= 配置区 =================
+novel_ai_bp = Blueprint('novel_ai', __name__, url_prefix='/api/novel')
+RESOURCE_NODE_URL = "http://one4.zin6.dpdns.org:8100" 
 DB_PATH = 'universal_data.db'
 
-def init_novel_db():
+AI_MODEL = 'huihui_ai/qwen3.5-abliterated:9b'
+AI_BASE_URL = "http://apple4.zin6.dpdns.org:11434/v1"
+
+# ================= 全局状态与线程控制 =================
+scan_state = {
+    "is_running": False,
+    "total": 0,
+    "processed": 0,
+    "success_count": 0,
+    "total_time_sec": 0,
+    "status_msg": "就绪",
+    "recent_results": [], 
+    "current_task": None, # 🌟 新增：当前正在处理的上下文预览
+    "ai_model": AI_MODEL.split('/')[-1]
+}
+
+stop_event = threading.Event()
+scan_thread = None
+start_time = 0
+
+# ================= 核心分析与存储 =================
+def save_to_db(collection, payload):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS novels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                author TEXT,
-                category TEXT,
-                tags TEXT,
-                intro TEXT,
-                status TEXT DEFAULT '未知',
-                cover TEXT,
-                create_time DATETIME DEFAULT (datetime('now', 'localtime'))
-            )
-        ''')
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS novel_chapters (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                novel_id INTEGER,
-                chapter_index INTEGER,
-                chapter_name TEXT,
-                content TEXT,
-                FOREIGN KEY(novel_id) REFERENCES novels(id)
-            )
-        ''')
-init_novel_db()
+        conn.execute(
+            'INSERT INTO store (collection, payload) VALUES (?, ?)', 
+            (collection, json.dumps(payload, ensure_ascii=False))
+        )
 
-# ================= 基础数据 API =================
-
-@novel_bp.route('/api/novel/list', methods=['GET'])
-def get_novels():
-    category = request.args.get('category')
-    search = request.args.get('search')
-    query = 'SELECT id, title, author, category, cover, status FROM novels WHERE 1=1'
-    params = []
-    
-    if category:
-        query += ' AND category = ?'
-        params.append(category)
-    if search:
-        query += ' AND (title LIKE ? OR author LIKE ?)'
-        params.extend([f'%{search}%', f'%{search}%'])
-        
-    query += ' ORDER BY id DESC'
-    
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        
-    result = [{"id": r[0], "title": r[1], "author": r[2], "category": r[3], "cover": r[4], "status": r[5]} for r in rows]
-    return jsonify(result)
-
-@novel_bp.route('/api/novel/detail/<int:novel_id>', methods=['GET'])
-def get_novel_detail(novel_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT title, author, category, tags, intro, status FROM novels WHERE id=?', (novel_id,))
-        novel = cursor.fetchone()
-        if not novel:
-            return jsonify({"error": "Novel not found"}), 404
-            
-        cursor.execute('SELECT id, chapter_name, chapter_index FROM novel_chapters WHERE novel_id=? ORDER BY chapter_index ASC', (novel_id,))
-        chapters = [{"id": r[0], "name": r[1], "index": r[2]} for r in cursor.fetchall()]
-        
-    return jsonify({
-        "info": {"title": novel[0], "author": novel[1], "category": novel[2], "tags": novel[3], "intro": novel[4], "status": novel[5]},
-        "chapters": chapters
-    })
-
-@novel_bp.route('/api/novel/chapter/<int:chapter_id>', methods=['GET'])
-def get_chapter(chapter_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT novel_id, chapter_name, content, chapter_index FROM novel_chapters WHERE id=?', (chapter_id,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"error": "Chapter not found"}), 404
-            
-        novel_id = row[0]
-        # 获取上一章和下一章ID
-        cursor.execute('SELECT id FROM novel_chapters WHERE novel_id=? AND chapter_index<? ORDER BY chapter_index DESC LIMIT 1', (novel_id, row[3]))
-        prev_id = cursor.fetchone()
-        cursor.execute('SELECT id FROM novel_chapters WHERE novel_id=? AND chapter_index>? ORDER BY chapter_index ASC LIMIT 1', (novel_id, row[3]))
-        next_id = cursor.fetchone()
-
-    return jsonify({
-        "novel_id": novel_id,
-        "chapter_name": row[1],
-        "content": row[2],
-        "prev_id": prev_id[0] if prev_id else None,
-        "next_id": next_id[0] if next_id else None
-    })
-
-# ================= AI 处理核心 API =================
-
-@novel_bp.route('/api/novel/ai_init', methods=['POST'])
-def ai_init_novel():
-    """接收本地 TXT 文件路径，进行全自动 AI 初始化"""
-    data = request.json
-    file_path = data.get('file_path')
-    title = data.get('title', '未知书籍')
-    model_name = data.get('model', 'qwen3:9b')
-
-    if not os.path.exists(file_path):
-        return jsonify({"error": "文件不存在"}), 400
-
-    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-        full_text = f.read()
-
-    text_length = len(full_text)
-    head_text = full_text[:10000]
-    tail_text = full_text[-1000:] if text_length > 10000 else ""
-
-    # 1. AI 分析简介与状态
-    intro_prompt = f"请阅读以下小说开局，提炼200字核心设定简介、流派标签(以逗号分隔)。\n正文：{head_text[:3000]}"
-    status_prompt = f"阅读小说末尾，判断是'完本'、'连载'还是'断更'。\n正文：{tail_text}"
-    
+def get_analyzed_novels():
     try:
-        intro_res = ollama.generate(model=model_name, prompt=intro_prompt)['response']
-        status_res = ollama.generate(model=model_name, prompt=status_prompt)['response']
-    except Exception as e:
-        return jsonify({"error": f"Ollama 调用失败: {str(e)}"}), 500
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT payload FROM store WHERE collection='novel_analysis'")
+            rows = cursor.fetchall()
+            return {json.loads(row[0]).get('novel_name') for row in rows if row[0]}
+    except Exception:
+        return set()
 
-    # 提取标签逻辑 (简单容错)
-    tags = "未分类"
-    if "标签:" in intro_res or "标签：" in intro_res:
-        tags = intro_res.split("标签")[1].split("\n")[0].strip(":： ")
 
-    # 2. 存入主表获取 ID
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO novels (title, intro, status, tags) VALUES (?, ?, ?, ?)', 
-                       (title, intro_res, status_res, tags))
-        novel_id = cursor.lastrowid
+def analyze_core(novel_name, is_batch=False):
+    """核心大模型推理逻辑（强制锁死输出格式与长度）"""
+    content_res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{novel_name}", timeout=15)
+    if content_res.status_code != 200:
+        raise Exception("资源节点读取失败")
+        
+    full_text = content_res.json().get('content', '')
+    word_count = len(full_text)
+    if word_count == 0:
+        raise Exception("文本内容为空")
 
-    # 3. 智能分章
-    chapters = []
-    # 规则 1：尝试标准正则
-    pattern = re.compile(r'(第[零一二三四五六七八九十百千万\d]+[章卷节回] .*?)(?=\n第[零一二三四五六七八九十百千万\d]+[章卷节回] |\Z)', re.DOTALL)
-    matches = pattern.findall(full_text)
+    head_text = full_text[:7000]
+    tail_text = full_text[-1500:] if word_count > 7000 else ""
+
+    if is_batch:
+        preview = head_text[:300] + "\n\n... [数据扫描中] ...\n\n" + (tail_text[-200:] if tail_text else "")
+        scan_state["current_task"] = {"novel": novel_name, "preview": preview}
+
+    # 1. 系统提示词：剥夺思考自由，定义为格式化机器
+    system_prompt = "你是一个无情的正则化文本提取程序。严禁进行发散性评价。必须且只能按照要求的模板输出，多一个字都不行。"
     
-    if len(matches) > 10: # 正则生效
-        for idx, match in enumerate(matches):
-            lines = match.strip().split('\n', 1)
-            c_name = lines[0].strip()
-            c_content = lines[1].strip() if len(lines) > 1 else ""
-            chapters.append((novel_id, idx, c_name, c_content))
-    else:
-        # 规则 2：正则失败，寻找前1万字的潜在分章特征 (伪代码逻辑实现，实际可用 AI 返回特征字符)
-        # 此处使用暴力按字数切分兜底，或者调用小模型（如果配置了本地小模型如 qwen:0.5b）
-        chunk_size = 3000
-        for i in range(0, text_length, chunk_size):
-            chunk = full_text[i:i+chunk_size]
-            c_name = f"第 {i//chunk_size + 1} 部分"
-            chapters.append((novel_id, i//chunk_size, c_name, chunk))
+    # 2. 强硬约束与单样本示范 (One-Shot)
+    user_prompt = f"""
+任务：提取小说《{novel_name}》的情报。
 
-    # 批量插入章节
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.executemany('INSERT INTO novel_chapters (novel_id, chapter_index, chapter_name, content) VALUES (?, ?, ?, ?)', chapters)
+【绝对禁令】
+1. 严禁分点列出简介！简介必须是一小段连贯的纯文本（100字以内）。
+2. 严禁生成“人物小传”、“看点亮点”、“剧情走向”等任何多余的标题和板块！
+3. 严禁使用诸如“1. ”、“* ”等列表符号。
 
-    return jsonify({"status": "success", "novel_id": novel_id, "intro": intro_res, "chapter_count": len(chapters)})
+【强制输出模板】（只能输出这三行，禁止任何前言后语）
+**内容简介**：[在这里写100字以内的一段话概括]
+**完结状态**：[已完结/连载中]
+**原因解释**：[一句话原因]
+
+【正确示范】
+**内容简介**：本书讲述了主角意外获得催眠异能后，在家庭内部利用该能力引发的一系列充满伦理张力与欲望纠葛的荒诞故事，文风直白且尺度极大。
+**完结状态**：连载中
+**原因解释**：结尾剧情仍停留在家庭关系的发展高潮，无明确收尾迹象。
+
+==== 分析目标：开头文本 ====
+{head_text}
+
+==== 分析目标：结尾文本 ====
+{tail_text}
+"""
+    
+    ollama_url = AI_BASE_URL.replace('/v1', '/api/chat')
+    payload = {
+        "model": AI_MODEL,
+        "messages": [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ],
+        "stream": False,
+        "think": False, 
+        "options": {
+            "temperature": 0.0,  # 降到绝对零度，抹杀所有发散性创造力
+            "num_predict": 150,  # 物理防线：最多只允许生成 150 个 token（大约一百多汉字），强行切断长篇大论
+            "num_ctx": 12000
+        }
+    }
+    
+    resp = requests.post(ollama_url, json=payload, timeout=120)
+    resp.raise_for_status()
+    result_text = resp.json().get("message", {}).get("content", "").strip()
+    
+    # 3. 最终清洗防线：如果模型还是发疯写了多余内容，强行截取前三行
+    clean_lines = [line for line in result_text.split('\n') if line.strip() and not line.startswith('1.') and not line.startswith('*')]
+    clean_result = '\n'.join(clean_lines[:3])
+    
+    final_output = f"📊 **总字数**：约 {word_count:,} 字\n\n{clean_result}"
+    
+    db_payload = {
+        "novel_name": novel_name,
+        "word_count": word_count,
+        "analysis_result": final_output
+    }
+    save_to_db("novel_analysis", db_payload)
+    
+    return db_payload
+
+# ================= 后台批量扫描线程 =================
+def _run_batch_scan():
+    global scan_state, start_time
+    scan_state["is_running"] = True
+    scan_state["status_msg"] = "正在获取小说列表..."
+    scan_state["processed"] = 0
+    scan_state["success_count"] = 0
+    scan_state["recent_results"] = []
+    scan_state["current_task"] = None
+    start_time = time.time()
+
+    try:
+        res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=10)
+        if res.status_code != 200:
+            raise Exception("无法连接资源节点获取列表")
+        all_novels = res.json()
+        
+        scan_state["status_msg"] = "正在比对数据库缓存..."
+        analyzed_set = get_analyzed_novels()
+        pending_novels = [n for n in all_novels if n not in analyzed_set]
+        
+        scan_state["total"] = len(pending_novels)
+        
+        if not pending_novels:
+            scan_state["status_msg"] = "所有小说已分析完毕"
+            return
+
+        for novel in pending_novels:
+            if stop_event.is_set():
+                scan_state["status_msg"] = "任务被手动中止"
+                break
+                
+            scan_state["status_msg"] = f"正在投喂数据: {novel}"
+            scan_state["total_time_sec"] = int(time.time() - start_time)
+            
+            try:
+                result = analyze_core(novel, is_batch=True)
+                scan_state["success_count"] += 1
+                
+                is_finished = "完结" in result['analysis_result'] or "大结局" in result['analysis_result']
+                stream_item = {
+                    "filename": novel,
+                    "category": f"{result['word_count'] // 10000}万字",
+                    "ai_tags": ["已完结" if is_finished else "连载中"]
+                }
+                scan_state["recent_results"].insert(0, stream_item)
+                if len(scan_state["recent_results"]) > 5:
+                    scan_state["recent_results"].pop()
+                    
+            except Exception as e:
+                print(f"分析失败 {novel}: {str(e)}")
+            
+            scan_state["processed"] += 1
+            
+        if not stop_event.is_set():
+            scan_state["status_msg"] = "批量分析完成"
+
+    except Exception as e:
+        scan_state["status_msg"] = f"异常停止: {str(e)}"
+    finally:
+        scan_state["is_running"] = False
+        scan_state["current_task"] = None
+        scan_state["total_time_sec"] = int(time.time() - start_time)
+
+# ================= API 路由 =================
+
+@novel_ai_bp.route('/list', methods=['GET'])
+def list_novels():
+    try:
+        res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
+        if res.status_code == 200:
+            return jsonify({"items": [{"filename": name} for name in res.json()]})
+        return jsonify({"items": []})
+    except:
+        return jsonify({"items": []})
+
+@novel_ai_bp.route('/content/<path:filename>', methods=['GET'])
+def get_novel_content(filename):
+    try:
+        res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{filename}", timeout=10)
+        return jsonify(res.json()) if res.status_code == 200 else jsonify({"error": "读取失败"}), res.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@novel_ai_bp.route('/scan', methods=['POST'])
+def control_scan():
+    global scan_thread, stop_event
+    action = request.json.get('action')
+    
+    if action == 'start':
+        if scan_state["is_running"]:
+            return jsonify({"status": "error", "message": "扫描已在进行中"})
+        stop_event.clear()
+        scan_thread = threading.Thread(target=_run_batch_scan)
+        scan_thread.daemon = True
+        scan_thread.start()
+        return jsonify({"status": "success", "message": "后台扫描已启动"})
+        
+    elif action == 'stop':
+        if scan_state["is_running"]:
+            stop_event.set()
+            return jsonify({"status": "success", "message": "正在中止扫描..."})
+        return jsonify({"status": "error", "message": "没有正在运行的扫描"})
+        
+    return jsonify({"error": "未知指令"}), 400
+
+@novel_ai_bp.route('/scan/status', methods=['GET'])
+def scan_status():
+    if scan_state["is_running"]:
+        scan_state["total_time_sec"] = int(time.time() - start_time)
+    return jsonify(scan_state)
+
+@novel_ai_bp.route('/analyze', methods=['POST'])
+def analyze_novel_single():
+    novel_name = request.json.get('novel_name')
+    if not novel_name:
+        return jsonify({"error": "缺少参数"}), 400
+    try:
+        result = analyze_core(novel_name, is_batch=False)
+        return jsonify({"status": "success", "result": result["analysis_result"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
