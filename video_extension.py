@@ -33,10 +33,10 @@ else:
     AI_MODEL = 'huihui_ai/qwen3.5-abliterated:9b'
     AI_BASE_URL = "http://apple4.zin6.dpdns.org:11434/v1"
     AI_API_KEY = "ollama" # 本地免鉴权
-    MAX_WORKERS = 2   # M4 本地建议 1-2 个并发，避免内存排队崩溃
-    BATCH_SIZE = 5    # 本地小批次更稳定
+    MAX_WORKERS = 1   # M4 本地建议 1-2 个并发，避免内存排队崩溃
+    BATCH_SIZE = 6    # 本地小批次更稳定
 
-# 初始化统一的 OpenAI 客户端
+# 初始化统一的 OpenAI 客户端 (供 Cloud 模式使用)
 client = OpenAI(
     api_key=AI_API_KEY,
     base_url=AI_BASE_URL,
@@ -83,22 +83,45 @@ def process_single_batch(batch, batch_id):
     current_timestamp = time.time() 
     
     try:
-        completion = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
-                {'role': 'user', 'content': prompt}
-            ],
-            response_format={ "type": "json_object" },
-            max_tokens=1000,  
-            temperature=0.1   
-        )
+        # 🌟 分流处理：根据当前模式选择底层请求方式
+        if ACTIVE_AI_MODE == 'ollama':
+            # Ollama 原生 API 方式
+            ollama_url = AI_BASE_URL.replace('/v1', '/api/chat')
+            payload = {
+                "model": AI_MODEL,
+                "messages": [
+                    {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                "stream": False,
+                "think": False, # 🌟 原生关闭思考开关
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": 1000
+                }
+            }
+            resp = requests.post(ollama_url, json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            result_text = data.get("message", {}).get("content", "").strip()
+        else:
+            # Cloud 模式方式：使用标准 OpenAI 兼容 SDK
+            completion = client.chat.completions.create(
+                model=AI_MODEL,
+                messages=[
+                    {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                max_tokens=3000,  
+                temperature=0.1  
+            )
+            result_text = completion.choices[0].message.content.strip()
         
         batch_duration = time.time() - batch_start_time
         count = len(batch) if len(batch) > 0 else 1 
         elapsed = round(batch_duration / count, 2) 
-        result_text = completion.choices[0].message.content.strip()
         
+        # 增加鲁棒性：使用正则提取 JSON 部分，防止模型返回 Markdown 块
         match = re.search(r'\{.*\}', result_text, re.DOTALL)
         if match:
             ai_data = json.loads(match.group(0))
@@ -196,7 +219,6 @@ def ai_tag_videos_task():
         ai_scan_state["is_running"] = False
         ai_scan_state["status_msg"] = f"🎉 成功打标 {ai_scan_state['success_count']} 个视频！"
 
- 
 @video_bp.route('/api/video/scan', methods=['POST'])
 def control_scan():
     global ai_scan_state
@@ -456,8 +478,6 @@ def confirm_maintenance_delete():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
-
 @video_bp.route('/api/video/sync', methods=['POST'])
 def sync_video_actions():
     """接收前端传来的 播放、喜欢、删除 等用户动作记录"""
@@ -498,5 +518,171 @@ def sync_video_actions():
             conn.commit()
             
         return jsonify({"status": "ok", "processed": processed})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==========================================
+# 🧪 LLM 简单网页测试接口 (新添加)
+# ==========================================
+
+@video_bp.route('/test/llm', methods=['GET'])
+def test_llm_page():
+    """返回一个极简的 HTML 测试页面"""
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>LLM 模型测试接口</title>
+        <style>
+            body {{ font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 0 15px; background: #f9f9f9; color: #333; }}
+            h2 {{ border-bottom: 2px solid #ddd; padding-bottom: 10px; }}
+            .info {{ background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 0.9em; }}
+            textarea {{ width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1em; resize: vertical; }}
+            button {{ padding: 10px 24px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 1em; transition: 0.2s; }}
+            button:hover {{ background: #0056b3; }}
+            button:disabled {{ background: #aaa; cursor: not-allowed; }}
+            .box {{ background: #fff; padding: 15px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid #ddd; min-height: 50px; }}
+            .stats {{ display: inline-block; background: #ffeeba; color: #856404; padding: 5px 10px; border-radius: 3px; font-size: 0.85em; margin-top: 10px; }}
+            pre {{ background: #282c34; color: #98c379; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 0.85em; border: 1px solid #111; }}
+        </style>
+    </head>
+    <body>
+        <h2>🤖 LLM 对话与连通性测试 (原生解析)</h2>
+        <div class="info">
+            <b>当前环境:</b> {ACTIVE_AI_MODE.upper()} <br>
+            <b>当前模型:</b> {AI_MODEL}
+        </div>
+        
+        <textarea id="prompt" rows="4" placeholder="输入你想问的问题... (例如：你是谁？)"></textarea>
+        <button onclick="ask()" id="btn">发送请求</button>
+        <span id="loading" style="display:none; color: #007bff; margin-left: 10px; font-size: 0.9em;">⏳ 思考中，请稍候...</span>
+
+        <h3>模型回复:</h3>
+        <div id="reply" class="box" style="font-size: 1.05em;">等待输入...</div>
+        <div id="stats" class="stats" style="display:none;"></div>
+
+        <h3>原始响应 (Raw Response):</h3>
+        <pre id="raw">{{}}</pre>
+
+        <script>
+            async function ask() {{
+                const prompt = document.getElementById('prompt').value.trim();
+                if (!prompt) return alert('请输入问题');
+
+                const btn = document.getElementById('btn');
+                const loading = document.getElementById('loading');
+                const replyDiv = document.getElementById('reply');
+                const statsDiv = document.getElementById('stats');
+                const rawDiv = document.getElementById('raw');
+
+                btn.disabled = true;
+                loading.style.display = 'inline';
+                replyDiv.innerText = '';
+                statsDiv.style.display = 'none';
+                rawDiv.innerText = '';
+
+                try {{
+                    const res = await fetch('/api/test/llm/ask', {{
+                        method: 'POST',
+                        headers: {{'Content-Type': 'application/json'}},
+                        body: JSON.stringify({{prompt: prompt}})
+                    }});
+                    const data = await res.json();
+
+                    if (data.error) {{
+                        replyDiv.innerHTML = '<span style="color:red;">❌ 报错: ' + data.error + '</span>';
+                    }} else {{
+                        replyDiv.innerText = data.reply;
+                        
+                        const t = data.tokens;
+                        statsDiv.style.display = 'inline-block';
+                        statsDiv.innerHTML = `🪙 <b>Token 消耗</b> | 提示词: ${{t.prompt_tokens}} | 回复: ${{t.completion_tokens}} | 总计: ${{t.total_tokens}}`;
+                        
+                        rawDiv.innerText = JSON.stringify(data.raw, null, 2);
+                    }}
+                }} catch (e) {{
+                    replyDiv.innerHTML = '<span style="color:red;">❌ 网络或解析错误: ' + e.message + '</span>';
+                }} finally {{
+                    btn.disabled = false;
+                    loading.style.display = 'none';
+                }}
+            }}
+        </script>
+    </body>
+    </html>
+    """
+    return html
+
+@video_bp.route('/api/test/llm/ask', methods=['POST'])
+def test_llm_ask():
+    """处理前端发来的测试请求并返回详细数据"""
+    req_data = request.get_json(silent=True) or {}
+    user_prompt = req_data.get('prompt', '')
+
+    if not user_prompt:
+        return jsonify({"error": "Prompt 不能为空"}), 400
+
+    try:
+        start_time = time.time()
+        
+        # 🌟 分流处理：根据当前模式选择底层请求方式
+        if ACTIVE_AI_MODE == 'ollama':
+            # Ollama 原生 API 方式
+            ollama_url = AI_BASE_URL.replace('/v1', '/api/chat')
+            payload = {
+                "model": AI_MODEL,
+                "messages": [{'role': 'user', 'content': user_prompt}],
+                "stream": False,
+                "think": False, # 🌟 原生关闭思考开关
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 2000
+                }
+            }
+            resp = requests.post(ollama_url, json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            elapsed_sec = round(time.time() - start_time, 2)
+            reply = data.get("message", {}).get("content", "")
+            
+            # 适配 Ollama 原生 API 的 Token 统计字段名
+            p_tokens = data.get("prompt_eval_count", 0)
+            c_tokens = data.get("eval_count", 0)
+            tokens = {
+                "prompt_tokens": p_tokens,
+                "completion_tokens": c_tokens,
+                "total_tokens": p_tokens + c_tokens
+            }
+            raw_response = data
+            raw_response["_backend_cost_time_sec"] = elapsed_sec
+            
+        else:
+            # Cloud 模式方式：使用标准 OpenAI 兼容 SDK
+            completion = client.chat.completions.create(
+                model=AI_MODEL,
+                messages=[{'role': 'user', 'content': user_prompt}],
+                max_tokens=2000,  
+                temperature=0.7
+            )
+            elapsed_sec = round(time.time() - start_time, 2)
+            reply = completion.choices[0].message.content
+            usage = completion.usage
+            tokens = {
+                "prompt_tokens": usage.prompt_tokens if usage else 0,
+                "completion_tokens": usage.completion_tokens if usage else 0,
+                "total_tokens": usage.total_tokens if usage else 0
+            }
+            raw_response = completion.model_dump() if hasattr(completion, 'model_dump') else json.loads(completion.model_dump_json())
+            raw_response["_backend_cost_time_sec"] = elapsed_sec
+
+        return jsonify({
+            "reply": reply,
+            "tokens": tokens,
+            "raw": raw_response
+        })
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
