@@ -13,6 +13,7 @@ MUSIC_DIR = r'\\UGREEN-1E55\xin_Y\音乐'
 VIDEO_DIR = r'\\UGREEN-1E55\xin_Y\视频\抖音\2025' 
 # 🌟 统一命名规范
 NEW_VIDEO_DIR = r'\\UGREEN-1E55\xin_Y\视频\upcloud-sex\all-data'
+NEW_VIDEO_DIR2 = r'\\UGREEN-1E55\xin_Y\videospro'
 
 # 内存索引字典
 song_index = {}
@@ -53,6 +54,15 @@ def scan_directory():
                 if file.lower().endswith(VIDEO_EXTS):
                     # 核心魔法：字典的 Key 加上前缀，Value 依然是真实的物理路径
                     prefixed_name = f"[NEW]_{file}"
+                    video_index[prefixed_name] = os.path.join(root, file)
+    # 3. 🌟 扫描新资源视频 (添加虚拟前缀)
+    if os.path.exists(NEW_VIDEO_DIR2):
+        for root, _, files in os.walk(NEW_VIDEO_DIR2):
+            if 'Deleted_Trash' in root or 'Liked_Favorites' in root: continue
+            for file in files:
+                if file.lower().endswith(VIDEO_EXTS):
+                    # 核心魔法：字典的 Key 加上前缀，Value 依然是真实的物理路径
+                    prefixed_name = f"[NEW2]_{file}"
                     video_index[prefixed_name] = os.path.join(root, file)
                     
     return len(song_index), len(video_index)

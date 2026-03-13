@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>小说库</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer;}
+        .card:hover { transform: translateY(-3px); }
+        .category-bar { margin-bottom: 20px; }
+        .category-bar button { margin-right: 10px; padding: 5px 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>📚 本地小说库</h1>
+    <div class="category-bar">
+        <button onclick="loadNovels('')">全部</button>
+        <button onclick="loadNovels('玄幻')">玄幻</button>
+        <button onclick="loadNovels('科幻')">科幻</button>
+        <button onclick="location.href='/novel-ai'">⚙️ 去后台导书 (AI)</button>
+    </div>
+    
+    <div class="grid" id="novelGrid"></div>
+
+    <script>
+        async function loadNovels(category = '') {
+            const res = await fetch(`/api/novel/list?category=${category}`);
+            const data = await res.json();
+            const grid = document.getElementById('novelGrid');
+            grid.innerHTML = data.map(n => `
+                <div class="card" onclick="location.href='/novel-detail?id=${n.id}'">
+                    <h3>${n.title}</h3>
+                    <p style="color: gray; font-size: 12px;">状态: ${n.status}</p>
+                </div>
+            `).join('');
+        }
+        loadNovels();
+    </script>
+</body>
+</html>

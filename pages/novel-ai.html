@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>私人阅读终端</title>
+    <style>
+        :root {
+            --bg-color: #f4f5f7;
+            --text-color: #333;
+            --card-bg: #fff;
+            --primary-color: #007bff;
+            --nav-bg: rgba(255, 255, 255, 0.95);
+            --border-color: #eee;
+        }
+
+        /* 夜间模式变量 */
+        body.theme-night {
+            --bg-color: #1a1a1a;
+            --text-color: #a0a0a0;
+            --card-bg: #2d2d2d;
+            --primary-color: #3a8ee6;
+            --nav-bg: rgba(30, 30, 30, 0.95);
+            --border-color: #444;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--bg-color);
+            color: var(--text-color);
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* 视图切换核心 */
+        .view { display: none; padding: 60px 20px 80px 20px; max-width: 800px; margin: 0 auto; }
+        .view.active { display: block; }
+
+        /* 顶栏与底栏 */
+        .top-nav, .bottom-nav {
+            position: fixed;
+            left: 0; right: 0;
+            background: var(--nav-bg);
+            backdrop-filter: blur(5px);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .top-nav { top: 0; }
+        .bottom-nav { bottom: 0; box-shadow: 0 -1px 3px rgba(0,0,0,0.1); }
+        .nav-btn { background: none; border: none; font-size: 16px; color: var(--primary-color); cursor: pointer; padding: 8px 12px;}
+        .nav-btn:disabled { color: gray; cursor: not-allowed; }
+
+        /* 书库网格 */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px; }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid var(--border-color);}
+        .card h3 { margin: 0 0 10px 0; font-size: 16px; }
+        
+        /* 详情页与目录 */
+        .info-box { background: var(--card-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);}
+        .toc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        .toc-item { padding: 10px; background: var(--bg-color); text-align: center; border-radius: 4px; cursor: pointer; border: 1px solid var(--border-color); font-size: 14px;}
+        
+        /* 阅读器 */
+        #read-content { font-size: 18px; line-height: 1.8; white-space: pre-wrap; font-family: 'Times New Roman', serif; }
+        .reader-settings { display: flex; gap: 10px; align-items: center; }
+
+        /* AI 控制台 */
+        input, select { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px;}
+        .primary-btn { width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px;}
+        #log-area { width: 100%; height: 200px; background: #1e1e1e; color: #4af626; padding: 10px; font-family: monospace; overflow-y: auto; border-radius: 4px; margin-top: 15px; box-sizing: border-box;}
+
+        /* 响应式调整 */
+        @media (max-width: 600px) {
+            .view { padding: 50px 15px 70px 15px; }
+            .toc-grid { grid-template-columns: repeat(2, 1fr); }
+            #read-content { font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-nav">
+        <button class="nav-btn" id="nav-back" onclick="goBack()">返回</button>
+        <strong id="nav-title">本地书库</strong>
+        <div>
+            <button class="nav-btn" id="nav-action" onclick="switchView('view-admin')">⚙️ 导书</button>
+            <button class="nav-btn" id="nav-theme" style="display:none;" onclick="toggleTheme()">🌙</button>
+        </div>
+    </div>
+
+    <div id="view-library" class="view active">
+        <div style="margin-bottom: 15px; display:flex; gap:10px; overflow-x:auto;">
+            <button class="nav-btn" onclick="loadLibrary('')">全部</button>
+            <button class="nav-btn" onclick="loadLibrary('玄幻')">玄幻</button>
+            <button class="nav-btn" onclick="loadLibrary('科幻')">科幻</button>
+        </div>
+        <div class="grid" id="novelGrid"></div>
+    </div>
+
+    <div id="view-detail" class="view">
+        <div class="info-box" id="detail-info"></div>
+        <h3>目录</h3>
+        <div class="toc-grid" id="detail-toc"></div>
+    </div>
+
+    <div id="view-reader" class="view">
+        <h2 id="read-title" style="margin-top:0;"></h2>
+        <div id="read-content"></div>
+    </div>
+
+    <div id="view-admin" class="view">
+        <div class="info-box">
+            <h3>🤖 自动化入库</h3>
+            <input type="text" id="ai-path" placeholder="TXT文件绝对路径 (例: D:/books/test.txt)">
+            <input type="text" id="ai-title" placeholder="书名 (为空则自动识别)">
+            <select id="ai-model">
+                <option value="qwen3:9b">qwen3:9b (推荐)</option>
+                <option value="qwen:0.5b">qwen:0.5b (低配极速)</option>
+            </select>
+            <button class="primary-btn" id="ai-btn" onclick="runAIInit()">开始处理</button>
+            <div id="log-area">等待指令...</div>
+        </div>
+    </div>
+
+    <div class="bottom-nav" id="reader-nav" style="display:none;">
+        <button class="nav-btn" id="btn-prev" onclick="loadChapter(currentPrevId)">上一章</button>
+        <div class="reader-settings">
+            <button class="nav-btn" onclick="changeFontSize(-2)">A-</button>
+            <button class="nav-btn" onclick="changeFontSize(2)">A+</button>
+        </div>
+        <button class="nav-btn" id="btn-next" onclick="loadChapter(currentNextId)">下一章</button>
+    </div>
+
+    <script>
+        // 状态管理
+        let currentView = 'view-library';
+        let currentNovelId = null;
+        let currentPrevId = null;
+        let currentNextId = null;
+        let fontSize = 18;
+
+        // 视图路由切换
+        function switchView(viewId, title = '') {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            currentView = viewId;
+            
+            // 顶栏与底栏状态控制
+            document.getElementById('nav-back').style.display = (viewId === 'view-library') ? 'none' : 'block';
+            document.getElementById('nav-action').style.display = (viewId === 'view-library') ? 'block' : 'none';
+            document.getElementById('nav-theme').style.display = (viewId === 'view-reader') ? 'block' : 'none';
+            document.getElementById('reader-nav').style.display = (viewId === 'view-reader') ? 'flex' : 'none';
+            
+            if(title) document.getElementById('nav-title').innerText = title;
+            window.scrollTo(0, 0);
+        }
+
+        function goBack() {
+            if (currentView === 'view-reader') {
+                switchView('view-detail'); // 从阅读页回详情页
+            } else if (currentView === 'view-detail' || currentView === 'view-admin') {
+                switchView('view-library', '本地书库'); // 回主页
+                loadLibrary();
+            }
+        }
+
+        // --- 数据加载逻辑 ---
+
+        async function loadLibrary(category = '') {
+            try {
+                const res = await fetch(`/api/novel/list?category=${category}`);
+                const data = await res.json();
+                document.getElementById('novelGrid').innerHTML = data.map(n => `
+                    <div class="card" onclick="loadDetail(${n.id})">
+                        <h3>${n.title}</h3>
+                        <p style="font-size: 12px; color: gray;">状态: ${n.status}</p>
+                    </div>
+                `).join('');
+                document.getElementById('nav-title').innerText = category ? `${category}频道` : '本地书库';
+            } catch (e) { console.error('加载列表失败', e); }
+        }
+
+        async function loadDetail(id) {
+            try {
+                const res = await fetch(`/api/novel/detail/${id}`);
+                const data = await res.json();
+                currentNovelId = id;
+                
+                document.getElementById('detail-info').innerHTML = `
+                    <h2 style="margin-top:0;">${data.info.title}</h2>
+                    <p style="font-size:14px; color:gray;">标签: ${data.info.tags} | 推测: ${data.info.status}</p>
+                    <div style="font-size:14px; margin-top:10px;">${data.info.intro.replace(/\n/g, '<br>')}</div>
+                `;
+                
+                document.getElementById('detail-toc').innerHTML = data.chapters.map(c => 
+                    `<div class="toc-item" onclick="loadChapter(${c.id})">${c.name}</div>`
+                ).join('');
+                
+                switchView('view-detail', data.info.title);
+            } catch (e) { alert("加载详情失败"); }
+        }
+
+        async function loadChapter(chapterId) {
+            if (!chapterId) return;
+            try {
+                const res = await fetch(`/api/novel/chapter/${chapterId}`);
+                const data = await res.json();
+                
+                document.getElementById('read-title').innerText = data.chapter_name;
+                document.getElementById('read-content').innerText = data.content;
+                
+                currentPrevId = data.prev_id;
+                currentNextId = data.next_id;
+                currentNovelId = data.novel_id;
+                
+                document.getElementById('btn-prev').disabled = !currentPrevId;
+                document.getElementById('btn-next').disabled = !currentNextId;
+                
+                switchView('view-reader', '阅读模式');
+            } catch (e) { alert("加载章节失败"); }
+        }
+
+        // --- 阅读器辅助功能 ---
+
+        function changeFontSize(delta) {
+            fontSize += delta;
+            if(fontSize < 12) fontSize = 12;
+            if(fontSize > 36) fontSize = 36;
+            document.getElementById('read-content').style.fontSize = fontSize + 'px';
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('theme-night');
+            const isNight = document.body.classList.contains('theme-night');
+            document.getElementById('nav-theme').innerText = isNight ? '☀️' : '🌙';
+        }
+
+        // --- AI 处理后台逻辑 ---
+
+        function appendLog(msg) {
+            const log = document.getElementById('log-area');
+            log.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function runAIInit() {
+            const path = document.getElementById('ai-path').value;
+            const title = document.getElementById('ai-title').value || path.split('/').pop().split('\\').pop().replace('.txt', '');
+            const model = document.getElementById('ai-model').value;
+            const btn = document.getElementById('ai-btn');
+
+            if (!path) return alert("请填写文件路径");
+
+            btn.disabled = true;
+            appendLog(`发起请求: 解析 ${title}`);
+            appendLog(`模型调用中，预估耗时 1-2 分钟...`);
+
+            try {
+                const res = await fetch('/api/novel/ai_init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_path: path, title: title, model: model })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    appendLog(`<span style="color:#0f0;">✅ 入库成功! 书籍ID: ${data.novel_id}</span>`);
+                    appendLog(`共切分 ${data.chapter_count} 章。`);
+                } else {
+                    appendLog(`<span style="color:red;">❌ 错误: ${data.error}</span>`);
+                }
+            } catch (e) {
+                appendLog(`<span style="color:red;">❌ 请求中断: ${e}</span>`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // 初始化
+        switchView('view-library', '本地书库');
+        loadLibrary();
+    </script>
+</body>
+</html>

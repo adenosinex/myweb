@@ -121,7 +121,118 @@
     <div class="video-feed" id="videoFeed"></div>
 
     <script>
-        /* ==========================================================================
+        /**
+ * 视频导航引擎：统一处理视频上下切换逻辑
+ */
+/**
+ * 视频导航与操作引擎
+ */
+const NavigationEngine = {
+    // 统一滚动函数
+    scrollToVideo: (index) => {
+        const targetCard = document.getElementById(`card-${index}`);
+        if (targetCard) {
+            AppState.DOMFeed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
+            AppState.currentIndex = index;
+            return true;
+        }
+        return false;
+    },
+
+    // 切换下一个
+    next: () => NavigationEngine.scrollToVideo(AppState.currentIndex + 1),
+
+    // 切换上一个
+    prev: () => NavigationEngine.scrollToVideo(AppState.currentIndex - 1),
+
+    // 快捷键触发喜欢
+    toggleLikeCurrent: () => {
+        const card = document.getElementById(`card-${AppState.currentIndex}`);
+        if (card) {
+            const likeBtn = card.querySelector('.action-btn:not(.btn-dislike)');
+            const encodedName = card.querySelector('video').src.split('/').pop();
+            AppActions.toggleLike(likeBtn, encodedName);
+        }
+    },
+
+    // 快捷键触发删除
+    deleteCurrent: () => {
+        const card = document.getElementById(`card-${AppState.currentIndex}`);
+        if (card) {
+            const deleteBtn = card.querySelector('.btn-dislike, .text-green-400');
+            const encodedName = card.querySelector('video').src.split('/').pop();
+            // 直接传入当前 index，确保逻辑连贯
+            AppActions.deleteCard(deleteBtn, encodedName, AppState.currentIndex);
+        }
+    },
+    /**
+     * 当前视频快进/快退
+     * @param {string} direction - 'right' 为快进, 'left' 为快退
+     */
+    seekCurrent: (direction) => {
+        const card = document.getElementById(`card-${AppState.currentIndex}`);
+        if (!card) return;
+        
+        const video = card.querySelector('video');
+        const toast = card.querySelector('.seek-toast');
+        
+        if (video && video.duration) {
+            const step = video.duration * 0.2;
+            const isForward = direction === 'right';
+            
+            video.currentTime = Math.max(0, Math.min(
+                video.currentTime + (isForward ? step : -step), 
+                video.duration
+            ));
+
+            // UI 提示
+            toast.innerText = isForward ? '前进 20%' : '后退 20%';
+            toast.style.opacity = 1;
+            
+            // 清除之前的定时器（防止连续点击闪烁）
+            if (toast._timer) clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => toast.style.opacity = 0, 500);
+        }
+    }
+};
+window.addEventListener('keydown', (e) => {
+    // 如果正在输入搜索，不触发快捷键
+    if (e.target.tagName === 'INPUT') return;
+
+    switch(e.key.toLowerCase()) {
+        case 'z': // 喜欢
+            e.preventDefault();
+            NavigationEngine.toggleLikeCurrent();
+            break;
+        case 'x': // 删除并切换
+            e.preventDefault();
+            NavigationEngine.deleteCurrent();
+            break;
+        case ' ': // 播放/暂停
+            e.preventDefault();
+            const card = document.getElementById(`card-${AppState.currentIndex}`);
+            if (card) card.querySelector('.click-area').click();
+            break;
+        case 'arrowdown':
+            e.preventDefault();
+            NavigationEngine.next();
+            break;
+        case 'arrowup':
+            e.preventDefault();
+            NavigationEngine.prev();
+            break;
+        case 'arrowleft':
+            e.preventDefault();
+            NavigationEngine.seekCurrent('left');
+            break;
+        case 'arrowright':
+            e.preventDefault();
+            NavigationEngine.seekCurrent('right');
+            break;
+    }
+});   
+
+/* ==========================================================================
            1. 全局状态容器 (Centralized State)
            ========================================================================== */
        const AppState = {
@@ -215,21 +326,37 @@
                 btn.querySelector('.icon-circle').innerText = isLiked ? '❤️' : '🤍';
                 SyncEngine.record(decodeURIComponent(encodedName), isLiked ? 'like' : 'unlike');
             },
+            
+            deleteCard: (btn, encodedName) => {
+                const isDislikeMode = AppState.filter === 'disliked';
+                const isActioned = btn.classList.toggle('actioned'); // 切换操作状态
+                const card = btn.closest('.video-card');
+                const video = card.querySelector('.video-player');
+                const icon = btn.querySelector('.icon-circle');
 
-            deleteCard: (btn, encodedName, index) => {
-                SyncEngine.record(decodeURIComponent(encodedName), AppState.filter === 'disliked' ? 'undelete' : 'delete');
-                const targetCard = document.getElementById(`card-${index}`);
-                targetCard.classList.add(AppState.filter === 'disliked' ? 'recover-anim' : 'disliked-anim');
-                
-                setTimeout(() => {
-                    AppState.data.splice(index, 1);
-                    targetCard.remove();
-                    document.querySelectorAll('.video-card').forEach((c, i) => {
-                        c.id = `card-${i}`;
-                        c.dataset.index = i;
-                    });
-                    if (AppState.data.length < 3 && AppState.hasMore) DataLoader.fetchNextPage(false);
-                }, 400);
+                if (isDislikeMode) {
+                    // 回收站模式：点击恢复
+                    SyncEngine.record(decodeURIComponent(encodedName), isActioned ? 'undelete' : 'delete');
+                    icon.innerText = isActioned ? '✅' : '♻️';
+                    btn.querySelector('span').innerText = isActioned ? '已恢复' : '恢复';
+                    btn.classList.toggle('text-gray-400', isActioned);
+                    btn.classList.toggle('text-green-400', !isActioned);
+                    // 恢复后使视频变暗表示已移出回收站
+                    // video.style.filter = isActioned ? 'brightness(0.3)' : 'none';
+                } else {
+                    // 正常模式：点击不喜欢
+                    SyncEngine.record(decodeURIComponent(encodedName), isActioned ? 'delete' : 'undelete');
+                    icon.innerText = isActioned ? '🖤' : '💔';
+                    btn.querySelector('span').innerText = isActioned ? '已踩' : '不喜欢';
+                    
+                    // 触发类似点赞的弹跳动画
+                    icon.style.animation = 'none';
+                    void icon.offsetWidth; // 触发重绘重置动画
+                    icon.style.animation = 'heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                    NavigationEngine.next();
+                    // 视频变灰暗，不切换视频
+                    // video.style.filter = isActioned ? 'grayscale(0.8) brightness(0.5)' : 'none';
+                }
             }
         };
 
@@ -361,10 +488,9 @@
                 const jsSafeName = encodeURIComponent(v.filename);
                 const isDislikeMode = AppState.filter === 'disliked';
                 
-                const deleteBtnHtml = isDislikeMode
-                    ? `<button class="action-btn text-green-400" onclick="AppActions.deleteCard(this, '${jsSafeName}', ${index})"><div class="icon-circle">♻️</div><span class="text-[10px] font-bold shadow-black">恢复</span></button>`
-                    : `<button class="action-btn btn-dislike" onclick="AppActions.deleteCard(this, '${jsSafeName}', ${index})"><div class="icon-circle">💔</div><span class="text-[10px] font-bold shadow-black">不喜欢</span></button>`;
-
+               const deleteBtnHtml = isDislikeMode
+                    ? `<button class="action-btn text-green-400" onclick="AppActions.deleteCard(this, '${jsSafeName}')"><div class="icon-circle">♻️</div><span class="text-[10px] font-bold shadow-black">恢复</span></button>`
+                    : `<button class="action-btn btn-dislike" onclick="AppActions.deleteCard(this, '${jsSafeName}')"><div class="icon-circle">💔</div><span class="text-[10px] font-bold shadow-black">不喜欢</span></button>`;
                 // 🌟 修改：使用正则 /^\[NEW\]_/i 抹除开头的新资源前缀，顺便完善了后缀过滤
                 let cleanTitle = v.filename.replace(/^\[NEW\]_/i, '').replace(/\.(mp4|mov|mkv|webm|avi)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
                 let aiTagsHtml = '';
@@ -506,28 +632,7 @@
                     setTimeout(() => { wheelLock = false; }, 500); 
                 }, { passive: false });
 
-                window.addEventListener('keydown', (e) => {
-                    if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
-                        e.preventDefault(); 
-                        const targetIndex = Math.max(0, Math.min(e.key === 'ArrowDown' ? AppState.currentIndex + 1 : AppState.currentIndex - 1, AppState.data.length - 1));
-                        const targetCard = document.getElementById(`card-${targetIndex}`);
-                        if (targetCard) AppState.DOMFeed.scrollTo({ top: targetCard.offsetTop, behavior: 'smooth' });
-                    } else if (e.key === ' ') {
-                        e.preventDefault(); 
-                        const card = document.getElementById(`card-${AppState.currentIndex}`);
-                        if (card) card.querySelector('.click-area').click();
-                    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                        const card = document.getElementById(`card-${AppState.currentIndex}`);
-                        if (!card) return;
-                        const video = card.querySelector('video'), toast = card.querySelector('.seek-toast');
-                        if (video && video.duration) {
-                            const step = video.duration * 0.2;
-                            video.currentTime = Math.max(0, Math.min(video.currentTime + (e.key === 'ArrowRight' ? step : -step), video.duration));
-                            toast.innerText = e.key === 'ArrowRight' ? '前进 20%' : '后退 20%';
-                            toast.style.opacity = 1; setTimeout(() => toast.style.opacity = 0, 500);
-                        }
-                    }
-                });
+               
             }
         };
 
