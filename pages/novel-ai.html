@@ -3,246 +3,306 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小说 AI 管理中心</title>
-    <script>tailwind = { config: { } };</script>
+    <title>小说 AI 管理中心 (DEBUG)</title>
+    <script>window.tailwind = { config: { theme: { extend: {} } } };</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --bg: #09090b; --card: #18181b; --accent: #3b82f6; --text-sub: #a1a1aa; }
-        body { background-color: var(--bg); color: #f4f4f5; font-family: -apple-system, sans-serif; }
+        html, body { height: 100%; background-color: var(--bg); color: #f4f4f5; font-family: -apple-system, sans-serif; overflow: hidden; }
+        
         .markdown-body { white-space: pre-wrap; line-height: 1.8; font-size: 0.95rem; }
         .markdown-body b { color: var(--accent); font-weight: bold; }
         
+        /* 进度条样式 */
         .ai-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin: 8px 0; }
         .ai-bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); width: 0%; transition: width 0.4s ease; }
         
-        .result-container { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; scrollbar-width: none; }
+        /* 实时结果流 */
+        .result-container { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; scrollbar-width: none; }
         .result-container::-webkit-scrollbar { display: none; }
-        /* 增加了 cursor-pointer 和 hover 效果 */
-        .result-item { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border-left: 3px solid #8b5cf6; animation: slideIn 0.3s ease-out; cursor: pointer; transition: background 0.2s; }
+        .result-item { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border-left: 3px solid #8b5cf6; cursor: pointer; transition: 0.2s; animation: slideIn 0.3s ease-out; }
         .result-item:hover { background: rgba(255,255,255,0.08); }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
         
-        .preview-fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%); mask-image: linear-gradient(to bottom, black 50%, transparent 100%); }
+        /* Debug 悬浮窗 */
+        #debugPanel { position: fixed; bottom: 20px; right: 20px; width: 380px; height: 320px; background: rgba(0,0,0,0.95); border: 1px solid #ef4444; border-radius: 12px; font-family: 'Fira Code', monospace; z-index: 100; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        
+        .preview-fade { -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%); mask-image: linear-gradient(to bottom, black 60%, transparent 100%); }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
     </style>
 </head>
-<body class="h-screen flex flex-col selection:bg-blue-600">
+<body class="flex flex-col selection:bg-blue-600">
 
     <header class="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 shrink-0">
-        <div>
-            <h1 class="font-bold text-lg text-blue-400">📖 Novel AI 引擎 <span class="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 ml-2">原生推理模式</span></h1>
-            <p class="text-xs text-zinc-500" id="targetNovelLabel">全局管理模式</p>
+        <div class="flex items-center gap-4">
+            <h1 class="font-bold text-lg text-blue-400 flex items-center gap-2">
+                📖 Novel AI 引擎 
+                <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-500 font-mono">Native_Ollama</span>
+            </h1>
+            <label class="flex items-center gap-2 text-[10px] bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-full cursor-pointer hover:bg-zinc-800 transition">
+                <input type="checkbox" id="debugToggle" onchange="toggleDebugMode()" class="w-3 h-3"> 
+                <span class="text-zinc-400">调试模式</span>
+            </label>
         </div>
-        <button onclick="window.close()" class="text-sm bg-zinc-800 px-3 py-1 rounded hover:bg-zinc-700 transition">关闭</button>
+        <button onclick="window.close()" class="text-sm bg-zinc-800 px-4 py-1 rounded-lg hover:bg-zinc-700 transition">关闭</button>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside class="w-72 border-r border-zinc-800 bg-zinc-900/50 p-4 flex flex-col gap-6 overflow-y-auto">
+        <aside class="w-72 border-r border-zinc-800 bg-zinc-900/50 p-4 flex flex-col gap-6 overflow-y-auto shrink-0">
             
             <div id="singleNovelPanel" class="hidden space-y-3">
-                <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-800 pb-1">当前目标文件操作</h2>
-                <button onclick="runSingleAI()" class="w-full text-left p-3 rounded bg-zinc-800 hover:bg-blue-600 transition border border-zinc-700">
-                    <div class="font-bold mb-1 text-sm">🚀 重新分析本书</div>
-                    <div class="text-[10px] opacity-70">抽取首尾推理剧情与完结状态。</div>
+                <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-1">当前目标文件</h2>
+                <button onclick="runSingleAI()" class="w-full text-left p-3 rounded-xl bg-zinc-800 hover:bg-blue-600 transition border border-zinc-700 group">
+                    <div class="font-bold mb-1 text-sm flex items-center gap-2">🚀 重新分析 <span class="text-[9px] bg-white/20 px-1 rounded opacity-0 group-hover:opacity-100">FORCE</span></div>
+                    <div class="text-[10px] opacity-60">重新读取首尾文本并生成简介</div>
                 </button>
-                <button onclick="loadHistory()" class="w-full text-left p-3 rounded bg-zinc-800 hover:bg-teal-600 transition border border-zinc-700">
-                    <div class="font-bold mb-1 text-sm">☁️ 读取历史快照</div>
-                    <div class="text-[10px] opacity-70">从数据库加载已有的分析结果。</div>
-                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="resetTask('single')" class="text-center p-2 rounded-lg bg-red-900/20 hover:bg-red-600 text-red-400 hover:text-white text-[11px] border border-red-800/40 transition">重置数据</button>
+                    <button onclick="loadHistory()" class="text-center p-2 rounded-lg bg-zinc-800 hover:bg-teal-600 text-zinc-400 hover:text-white text-[11px] border border-zinc-700 transition">加载快照</button>
+                </div>
             </div>
 
-            <div class="space-y-3">
-                <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-800 pb-1">全库静默扫描</h2>
-                <div class="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
-                    <div class="flex justify-between text-xs mb-2">
-                        <span id="aiProgressText" class="text-blue-400 font-bold">空闲状态</span>
-                        <span id="aiStatsText" class="text-zinc-400">耗时: 0s | 成功: 0</span>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center border-b border-zinc-800 pb-1">
+                    <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">全库批量管理</h2>
+                    <button onclick="resetTask('all')" class="text-[9px] text-red-500 hover:underline">全部物理清空</button>
+                </div>
+                
+                <div class="p-4 bg-zinc-800/50 rounded-2xl border border-zinc-700/50">
+                    <div class="flex justify-between items-end text-xs mb-2">
+                        <span id="aiProgressText" class="text-blue-400 font-bold">空闲</span>
+                        <span id="aiStatsText" class="text-zinc-500 font-mono text-[10px]">0s | 0</span>
                     </div>
                     <div class="ai-bar-bg"><div class="ai-bar-fill" id="aiProgressFill"></div></div>
-                    <div id="aiLogText" class="text-[10px] text-zinc-500 truncate mb-3">就绪</div>
+                    <div id="aiLogText" class="text-[10px] text-zinc-500 truncate mb-4 italic">等待任务指令...</div>
                     
-                    <div class="flex gap-2">
-                        <button id="btnAiStart" onclick="controlBatchScan('start')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-1.5 rounded text-xs font-bold transition">▶ 开始扫描全库</button>
-                        <button id="btnAiStop" onclick="controlBatchScan('stop')" class="hidden flex-1 bg-red-600 hover:bg-red-500 text-white py-1.5 rounded text-xs font-bold transition">⏹ 中止</button>
-                    </div>
+                    <button id="btnAiStart" onclick="controlBatchScan('start')" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-xl text-xs font-bold shadow-lg shadow-blue-900/20 transition">▶ 开始全库扫描</button>
+                    <button id="btnAiStop" onclick="controlBatchScan('stop')" class="hidden w-full bg-red-600 hover:bg-red-500 py-2 rounded-xl text-xs font-bold transition">⏹ 停止扫描</button>
                 </div>
 
-                <div class="result-container mt-4" id="aiResultStream">
-                    <div class="text-[11px] text-zinc-600 text-center py-4 border border-dashed border-zinc-800 rounded">等待后台任务输出...</div>
+                <div class="result-container" id="aiResultStream">
+                    <div class="text-[10px] text-zinc-600 text-center py-10 border border-dashed border-zinc-800 rounded-xl">无实时任务输出</div>
                 </div>
             </div>
         </aside>
 
         <main class="flex-1 p-6 overflow-y-auto relative bg-zinc-950 flex flex-col gap-6">
             
-            <div id="taskPreviewPanel" class="hidden bg-zinc-900 border border-zinc-800 rounded-lg p-4 shrink-0 shadow-lg">
-                <div class="flex justify-between items-center mb-2 border-b border-zinc-800 pb-2">
-                    <h3 class="text-blue-400 font-bold text-xs" id="previewTitle">正在向大模型投喂数据...</h3>
-                    <span class="flex h-2 w-2 bg-blue-500 rounded-full animate-ping"></span>
+            <div id="taskPreviewPanel" class="hidden bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 shrink-0 shadow-2xl backdrop-blur">
+                <div class="flex justify-between items-center mb-3 border-b border-zinc-800 pb-2">
+                    <h3 class="text-blue-400 font-bold text-xs flex items-center gap-2" id="previewTitle">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        数据投喂中...
+                    </h3>
+                    <span class="text-[9px] text-zinc-600 font-mono">CONTEXT_PREVIEW</span>
                 </div>
-                <div class="text-[11px] text-zinc-400 font-mono preview-fade max-h-32 overflow-hidden" id="previewContent">
-                    数据拉取中...
-                </div>
+                <div class="text-[11px] text-zinc-500 font-mono preview-fade max-h-24 overflow-hidden leading-relaxed" id="previewContent"></div>
             </div>
 
             <div id="outputArea" class="max-w-3xl mx-auto markdown-body w-full">
-                <div class="flex flex-col items-center justify-center h-[60vh] text-zinc-600" id="idleIcon">
-                    <div class="text-5xl mb-4 opacity-30">🧠</div>
-                    <p class="text-sm">等待指令下达，将调用本地 Qwen 模型进行推理...</p>
+                <div id="idleIcon" class="flex flex-col items-center justify-center h-[50vh] text-zinc-700">
+                    <div class="text-6xl mb-6 opacity-20">🧠</div>
+                    <p class="text-sm tracking-widest uppercase opacity-40 font-bold">Waiting for Neural Command</p>
                 </div>
             </div>
             
-            <div id="loader" class="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm hidden flex items-center justify-center z-10">
-                <div class="flex flex-col items-center gap-4">
-                    <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-blue-400 font-bold tracking-widest animate-pulse">大模型无脑运算中...</span>
+            <div id="loader" class="absolute inset-0 bg-zinc-950/80 backdrop-blur-md hidden flex items-center justify-center z-10">
+                <div class="flex flex-col items-center gap-6">
+                    <div class="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    <span class="text-blue-400 font-bold tracking-[0.2em] animate-pulse text-sm">RECONSTRUCTING DATA...</span>
                 </div>
             </div>
         </main>
     </div>
 
+    <div id="debugPanel">
+        <div class="p-3 border-b border-red-900/50 flex justify-between bg-red-950/20 items-center">
+            <span class="text-[10px] font-bold text-red-500 tracking-tighter">POLLING_DEBUG_LOG</span>
+            <span class="text-[9px] text-zinc-500" id="debugTimer"></span>
+        </div>
+        <pre id="debugJSON" class="p-3 text-[10px] text-green-500/80 overflow-auto h-[270px] scrollbar-hidden"></pre>
+    </div>
+
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const novelName = urlParams.get('novel');
-        let lastResultsFingerprint = "";
+        let debugMode = false;
+        let lastFingerprint = "";
 
+        // 初始化
         if(novelName) {
-            document.getElementById('targetNovelLabel').innerText = `目标文件: ${novelName}`;
+            document.getElementById('targetNovelLabel').innerText = `Target: ${novelName}`;
             document.getElementById('singleNovelPanel').classList.remove('hidden');
         }
 
-        const parseMarkdown = (text) => text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-        const formatTime = (sec) => sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m ${sec%60}s`;
+        const parseMarkdown = (t) => t.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+        const formatTime = (s) => s < 60 ? `${s}s` : `${Math.floor(s/60)}m ${s%60}s`;
 
-        // ================= 单本操作 =================
+        function toggleDebugMode() {
+            debugMode = document.getElementById('debugToggle').checked;
+            document.getElementById('debugPanel').style.display = debugMode ? 'block' : 'none';
+        }
+
+        async function resetTask(mode) {
+            const body = mode === 'single' ? { novel_name: novelName } : {};
+            if(!confirm(`⚠️ 物理重置警告：将永久删除数据库中的分析记录。确定继续？`)) return;
+
+            try {
+                const res = await fetch('/api/novel/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                alert(data.message);
+                if(mode === 'single') runSingleAI(); else location.reload();
+            } catch (e) { alert("重置请求失败"); }
+        }
+
         async function runSingleAI() {
             if (!novelName) return;
-            
-            document.getElementById('idleIcon')?.remove();
+            document.getElementById('idleIcon')?.classList.add('hidden');
             const previewPanel = document.getElementById('taskPreviewPanel');
-            const previewContent = document.getElementById('previewContent');
-            const previewTitle = document.getElementById('previewTitle');
             const out = document.getElementById('outputArea');
             const loader = document.getElementById('loader');
             
             out.innerHTML = '';
             previewPanel.classList.remove('hidden');
-            previewTitle.innerText = `正在向模型注入数据: ${novelName}`;
-            previewContent.innerText = "正在从资源节点拉取首尾文本...";
             loader.classList.remove('hidden');
+            document.getElementById('previewContent').innerText = "读取首尾字节中...";
 
             try {
+                // 1. 预读取以填充预览
                 const contentRes = await fetch(`/api/novel/content/${encodeURIComponent(novelName)}`);
-                const contentData = await contentRes.json();
-                const fullText = contentData.content || "";
-                if (fullText) {
-                    const head = fullText.substring(0, 300);
-                    const tail = fullText.length > 3000 ? fullText.substring(fullText.length - 300) : "";
-                    previewContent.innerText = head + (tail ? "\n\n... [中间内容省略] ...\n\n" + tail : "");
+                const cData = await contentRes.json();
+                const txt = cData.content || "";
+                if (txt) {
+                    document.getElementById('previewContent').innerText = txt.substring(0, 300) + "\n\n[...]\n\n" + txt.substring(txt.length - 200);
                 }
 
+                // 2. 正式推理
                 const res = await fetch('/api/novel/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ novel_name: novelName })
                 });
                 const data = await res.json();
-                
-                out.innerHTML = data.status === 'success' ? parseMarkdown(data.result) : `<div class="text-red-500">错误: ${data.error}</div>`;
-            } catch (e) { 
-                out.innerHTML = `<div class="text-red-500">请求异常: ${e.message}</div>`; 
-            } finally { 
-                loader.classList.add('hidden');
-                previewTitle.innerText = "数据注入完成";
-                previewTitle.classList.replace('text-blue-400', 'text-green-500');
-            }
+                out.innerHTML = data.status === 'success' ? parseMarkdown(data.result) : `<div class="p-4 bg-red-900/20 border border-red-500/50 rounded-xl text-red-500">${data.error}</div>`;
+            } catch (e) { out.innerHTML = `<div class="text-red-500">FAIL: ${e.message}</div>`; } 
+            finally { loader.classList.add('hidden'); }
         }
 
-        // 修改：支持传入指定小说名称，默认为 URL 参数里的 novelName
-        async function loadHistory(targetName = novelName) {
+     async function loadHistory(targetName = novelName) {
             if (!targetName) return;
-            
-            // 如果点击了历史记录，隐藏预览面板以腾出空间
             document.getElementById('taskPreviewPanel').classList.add('hidden');
             document.getElementById('idleIcon')?.remove();
-
             const out = document.getElementById('outputArea');
-            out.innerHTML = '<div class="text-zinc-500">正在查询数据库...</div>';
+            out.innerHTML = '<div class="text-zinc-500 animate-pulse text-sm">正在查询数据库...</div>';
+            
             try {
                 const res = await fetch('/api/novel_analysis');
                 const list = await res.json();
                 const history = list.find(item => item.novel_name === targetName);
+                
                 if (history) {
                     const timeStr = new Date(history._time).toLocaleString();
-                    out.innerHTML = parseMarkdown(`<b>[提取记录: ${targetName} - ${timeStr}]</b>\n\n${history.analysis_result}`);
+                    let htmlContent = parseMarkdown(`<b>[提取记录: ${targetName} - ${timeStr}]</b>\n\n${history.analysis_result}`);
+                    
+                    // 🌟 动态追加原始调试数据面板
+                    if (history.raw_prompt && history.raw_response) {
+                        htmlContent += `
+                        <div class="mt-8 border-t border-zinc-800 pt-4">
+                            <details class="text-xs text-zinc-500 bg-zinc-900/40 rounded-xl border border-zinc-800/50 overflow-hidden">
+                                <summary class="p-4 cursor-pointer font-bold hover:text-blue-400 select-none outline-none transition bg-zinc-800/20">🛠️ 展开查看原始请求与响应数据 (Debug)</summary>
+                                <div class="p-4 border-t border-zinc-800/50 space-y-4">
+                                    <div>
+                                        <div class="font-bold text-blue-500 mb-2 uppercase tracking-widest text-[10px]">>> 发送给大模型的完整 Prompt</div>
+                                        <pre class="bg-black/60 p-4 rounded-lg overflow-x-auto text-[11px] text-zinc-400 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed border border-zinc-800">${history.raw_prompt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-green-500 mb-2 uppercase tracking-widest text-[10px]">>> 大模型返回的原始 JSON</div>
+                                        <pre class="bg-black/60 p-4 rounded-lg overflow-x-auto text-[11px] text-green-500/80 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed border border-zinc-800">${history.raw_response.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>`;
+                    }
+                    out.innerHTML = htmlContent;
                 } else {
                     out.innerHTML = `<div class="text-yellow-500">暂无《${targetName}》的分析记录。</div>`;
                 }
-            } catch (e) { out.innerHTML = `<div class="text-red-500">读取失败: ${e.message}</div>`; }
+            } catch (e) { 
+                out.innerHTML = `<div class="text-red-500">读取失败: ${e.message}</div>`; 
+            }
         }
-
-        // ================= 批处理控制与状态轮询 =================
         async function controlBatchScan(action) {
-            await fetch('/api/novel/scan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action}) });
-            pollStatus();
+            await fetch('/api/novel/scan', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({action}) 
+            });
         }
 
         async function pollStatus() {
             try {
-                const res = await fetch('/api/novel/scan/status');
+                const endpoint = debugMode ? '/api/novel/scan/status/debug' : '/api/novel/scan/status';
+                const res = await fetch(endpoint);
                 const state = await res.json();
                 
-                // 更新结果流 (绑定 onclick 事件)
+                if (debugMode) {
+                    document.getElementById('debugJSON').innerText = JSON.stringify(state, null, 2);
+                    document.getElementById('debugTimer').innerText = new Date().toLocaleTimeString();
+                }
+
+                // 渲染实时结果流 (指纹防抖)
                 if (state.recent_results && state.recent_results.length > 0) {
                     const fingerprint = JSON.stringify(state.recent_results);
-                    if (fingerprint !== lastResultsFingerprint) {
-                        // 将单引号转义，防止打断 onclick 里的字符串
+                    if (fingerprint !== lastFingerprint) {
                         document.getElementById('aiResultStream').innerHTML = state.recent_results.map(item => `
-                            <div class="result-item flex flex-col gap-1" onclick="loadHistory('${item.filename.replace(/'/g, "\\'")}')" title="点击查看详情">
-                                <span class="text-[11px] text-zinc-300 truncate">${item.filename}</span>
+                            <div class="result-item flex flex-col gap-1" onclick="loadHistory('${item.filename.replace(/'/g, "\\'")}')">
+                                <span class="text-[10px] text-zinc-300 truncate font-bold">${item.filename}</span>
                                 <div class="flex gap-2">
-                                    <span class="bg-blue-600/30 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px]">${item.category}</span>
-                                    ${item.ai_tags.map(t => `<span class="bg-purple-600/30 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded text-[9px]">${t}</span>`).join('')}
+                                    <span class="bg-blue-600/20 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded text-[8px]">${item.category}</span>
+                                    ${item.ai_tags.map(t => `<span class="bg-purple-600/20 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded text-[8px]">${t}</span>`).join('')}
                                 </div>
                             </div>
                         `).join('');
-                        lastResultsFingerprint = fingerprint;
+                        lastFingerprint = fingerprint;
                     }
                 }
 
+                // 更新预览面板
                 const previewPanel = document.getElementById('taskPreviewPanel');
                 if (state.is_running && state.current_task) {
-                    document.getElementById('idleIcon')?.remove();
+                    document.getElementById('idleIcon')?.classList.add('hidden');
                     previewPanel.classList.remove('hidden');
-                    document.getElementById('previewTitle').innerText = `正在读取并分析: ${state.current_task.novel}`;
-                    document.getElementById('previewTitle').classList.replace('text-green-500', 'text-blue-400');
+                    document.getElementById('previewTitle').innerText = `ANALYZING: ${state.current_task.novel}`;
                     document.getElementById('previewContent').innerText = state.current_task.preview;
-                } else if (!state.is_running) {
-                    if(!novelName && document.getElementById('outputArea').innerHTML.includes('等待指令下达')) {
-                        previewPanel.classList.add('hidden');
-                    }
                 }
 
+                // UI 状态切换
                 if (state.is_running) {
                     document.getElementById('btnAiStart').classList.add('hidden');
                     document.getElementById('btnAiStop').classList.remove('hidden');
                     document.getElementById('aiProgressFill').style.width = `${state.total > 0 ? (state.processed / state.total) * 100 : 0}%`;
-                    document.getElementById('aiProgressText').innerText = `[${state.processed}/${state.total}] 分析中`;
-                    document.getElementById('aiStatsText').innerText = `耗时: ${formatTime(state.total_time_sec)} | 成功: ${state.success_count}`;
-                    document.getElementById('aiLogText').innerText = `🔄 ${state.status_msg}`;
+                    document.getElementById('aiProgressText').innerText = `PROCESSED: ${state.processed}/${state.total}`;
+                    document.getElementById('aiStatsText').innerText = `${formatTime(state.total_time_sec)} | OK: ${state.success_count}`;
+                    document.getElementById('aiLogText').innerText = `>> ${state.status_msg}`;
                 } else {
                     document.getElementById('btnAiStart').classList.remove('hidden');
                     document.getElementById('btnAiStop').classList.add('hidden');
                     if (state.total > 0 && state.processed >= state.total) {
                         document.getElementById('aiProgressFill').style.width = '100%';
-                        document.getElementById('aiProgressText').innerText = "🎉 扫描完成";
+                        document.getElementById('aiProgressText').innerText = "SCAN_FINISHED";
                     } else {
-                        document.getElementById('aiProgressText').innerText = "空闲状态";
+                        document.getElementById('aiProgressText').innerText = "IDLE";
                     }
-                    document.getElementById('aiStatsText').innerText = `耗时: ${formatTime(state.total_time_sec)} | 成功: ${state.success_count}`;
-                    document.getElementById('aiLogText').innerText = state.status_msg || "就绪";
+                    document.getElementById('aiLogText').innerText = state.status_msg || "Ready";
                 }
             } catch (e) {
-                document.getElementById('aiProgressText').innerText = "⚠️ 状态获取失败";
+                document.getElementById('aiProgressText').innerText = "CONNECTION_LOST";
             }
         }
 

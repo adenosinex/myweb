@@ -47,10 +47,8 @@ def get_analyzed_novels():
             return {json.loads(row[0]).get('novel_name') for row in rows if row[0]}
     except Exception:
         return set()
-
-
 def analyze_core(novel_name, is_batch=False):
-    """核心大模型推理逻辑（强制锁死输出格式与长度）"""
+    """核心大模型推理逻辑（解除行数截断，数据全量入库供前端调试）"""
     content_res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{novel_name}", timeout=15)
     if content_res.status_code != 200:
         raise Exception("资源节点读取失败")
@@ -67,27 +65,15 @@ def analyze_core(novel_name, is_batch=False):
         preview = head_text[:300] + "\n\n... [数据扫描中] ...\n\n" + (tail_text[-200:] if tail_text else "")
         scan_state["current_task"] = {"novel": novel_name, "preview": preview}
 
-    # 1. 系统提示词：剥夺思考自由，定义为格式化机器
-    system_prompt = "你是一个无情的正则化文本提取程序。严禁进行发散性评价。必须且只能按照要求的模板输出，多一个字都不行。"
+    system_prompt = "你是一个无情的文本提取机器。严格遵守格式，严禁分点，严禁寒暄。"
     
-    # 2. 强硬约束与单样本示范 (One-Shot)
     user_prompt = f"""
 任务：提取小说《{novel_name}》的情报。
 
-【绝对禁令】
-1. 严禁分点列出简介！简介必须是一小段连贯的纯文本（100字以内）。
-2. 严禁生成“人物小传”、“看点亮点”、“剧情走向”等任何多余的标题和板块！
-3. 严禁使用诸如“1. ”、“* ”等列表符号。
-
-【强制输出模板】（只能输出这三行，禁止任何前言后语）
+【强制输出模板】（只能输出这三行，必须保留粗体标识，严禁输出任何其他废话！）
 **内容简介**：[在这里写100字以内的一段话概括]
 **完结状态**：[已完结/连载中]
 **原因解释**：[一句话原因]
-
-【正确示范】
-**内容简介**：本书讲述了主角意外获得催眠异能后，在家庭内部利用该能力引发的一系列充满伦理张力与欲望纠葛的荒诞故事，文风直白且尺度极大。
-**完结状态**：连载中
-**原因解释**：结尾剧情仍停留在家庭关系的发展高潮，无明确收尾迹象。
 
 ==== 分析目标：开头文本 ====
 {head_text}
@@ -106,26 +92,37 @@ def analyze_core(novel_name, is_batch=False):
         "stream": False,
         "think": False, 
         "options": {
-            "temperature": 0.0,  # 降到绝对零度，抹杀所有发散性创造力
-            "num_predict": 150,  # 物理防线：最多只允许生成 150 个 token（大约一百多汉字），强行切断长篇大论
+            "temperature": 0.1,  
+            "num_predict": 500, # 调大 token 上限，防止话没说完被截断
             "num_ctx": 12000
         }
     }
     
-    resp = requests.post(ollama_url, json=payload, timeout=120)
-    resp.raise_for_status()
-    result_text = resp.json().get("message", {}).get("content", "").strip()
+    start_ai_time = time.time()
     
-    # 3. 最终清洗防线：如果模型还是发疯写了多余内容，强行截取前三行
-    clean_lines = [line for line in result_text.split('\n') if line.strip() and not line.startswith('1.') and not line.startswith('*')]
-    clean_result = '\n'.join(clean_lines[:3])
+    try:
+        resp = requests.post(ollama_url, json=payload, timeout=120)
+        resp.raise_for_status()
+        raw_json = resp.json()
+        result_text = raw_json.get("message", {}).get("content", "").strip()
+    except Exception as e:
+        raise Exception(f"模型请求失败: {str(e)}")
+
+    elapsed_time = round(time.time() - start_ai_time, 1)
     
-    final_output = f"📊 **总字数**：约 {word_count:,} 字\n\n{clean_result}"
+    if not result_text:
+        result_text = "⚠️ 模型返回了空结果，请查看下方的原始响应数据。"
+
+    model_short_name = AI_MODEL.split('/')[-1]
+    final_output = f"📊 **总字数**：约 {word_count:,} 字\n⏱️ **AI 耗时**：{elapsed_time}s | 🧠 **模型**：{model_short_name}\n\n{result_text}"
     
+    # 🌟 将原始 prompt 和响应一同存入数据库，传给前端
     db_payload = {
         "novel_name": novel_name,
         "word_count": word_count,
-        "analysis_result": final_output
+        "analysis_result": final_output,
+        "raw_prompt": user_prompt,
+        "raw_response": json.dumps(raw_json, ensure_ascii=False, indent=2)
     }
     save_to_db("novel_analysis", db_payload)
     
@@ -206,6 +203,43 @@ def list_novels():
         return jsonify({"items": []})
     except:
         return jsonify({"items": []})
+
+
+# ================= 调试与重置扩展 =================
+
+@novel_ai_bp.route('/reset', methods=['POST'])
+def reset_database():
+    """重置数据库分析记录"""
+    target = request.json.get('novel_name') # 如果传了名字则删单本，不传则全删
+    
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            if target:
+                # 物理删除单本记录，payload 是 JSON，需要用 LIKE 匹配
+                conn.execute("DELETE FROM store WHERE collection='novel_analysis' AND payload LIKE ?", (f'%"{target}"%',))
+                msg = f"已重置《{target}》的分析数据"
+            else:
+                # 物理全量清空分析集合
+                conn.execute("DELETE FROM store WHERE collection='novel_analysis'")
+                msg = "分析数据库已全量清空"
+        
+        # 重置当前状态，让前端感知到变化
+        scan_state["recent_results"] = []
+        scan_state["success_count"] = 0
+        scan_state["status_msg"] = msg
+        return jsonify({"status": "success", "message": msg})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# 状态轮询接口已存在，我们只需在返回前多塞点 debug 信息
+@novel_ai_bp.route('/scan/status/debug', methods=['GET'])
+def scan_status_debug():
+    """返回比普通 status 更全的内部变量"""
+    debug_info = scan_state.copy()
+    debug_info["_server_time"] = time.time()
+    debug_info["_thread_active"] = scan_thread.is_alive() if scan_thread else False
+    debug_info["_db_path"] = os.path.abspath(DB_PATH)
+    return jsonify(debug_info)
 
 @novel_ai_bp.route('/content/<path:filename>', methods=['GET'])
 def get_novel_content(filename):
