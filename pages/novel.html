@@ -3,73 +3,230 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云端书库 - 首页</title>
-    <script>tailwind = { config: { } };</script>
+    <title>云端书库 - 智能索引</title>
+    <script>window.tailwind = { config: { } };</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f4f4f5; font-family: -apple-system, sans-serif; }
+        body { background-color: #f4f4f5; font-family: -apple-system, "PingFang SC", sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .tag-active { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
     </style>
 </head>
 <body class="h-screen flex flex-col selection:bg-blue-500">
 
-    <header class="bg-white shadow-sm p-4 flex flex-col gap-4 sticky top-0 z-10">
-        <div class="flex justify-between items-center">
-            <h1 class="text-xl font-bold text-zinc-800">📚 云端幻境书库</h1>
-            <a href="/novel-ai" target="_blank" class="text-sm bg-blue-100 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-200">AI 管理端</a>
+    <header class="bg-white shadow-sm flex flex-col sticky top-0 z-20 border-b border-zinc-100">
+        <div class="p-4 flex justify-between items-center bg-white">
+            <h1 class="text-xl font-bold text-zinc-800 tracking-tight flex items-center gap-2">
+                <span class="text-2xl">📚</span> 云端幻境书库
+            </h1>
+            <div class="flex gap-2">
+                <a href="/novel-ai" target="_blank" class="text-[11px] bg-zinc-800 text-white px-3 py-2 rounded-lg font-bold hover:bg-zinc-700 transition flex items-center gap-1">
+                    ⚙️ AI 管理端
+                </a>
+            </div>
         </div>
-        <div class="relative">
-            <input type="text" id="searchInput" placeholder="搜索书名..." oninput="filterNovels()" class="w-full bg-zinc-100 border-none rounded-xl py-2 px-4 pl-10 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-            <span class="absolute left-3 top-2.5 opacity-40">🔍</span>
+        
+        <div class="p-4 flex flex-col gap-4 bg-zinc-50/50 backdrop-blur-md">
+            <div class="relative">
+                <input type="text" id="searchInput" placeholder="搜索书名或关键词..." oninput="filterNovels()" 
+                       class="w-full bg-white border border-zinc-200 rounded-2xl py-3 px-4 pl-11 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition shadow-sm">
+                <span class="absolute left-4 top-3.5 opacity-30">🔍</span>
+            </div>
+            
+            <div class="flex items-start gap-3">
+                <span class="text-[11px] font-bold text-zinc-400 mt-2 shrink-0 uppercase tracking-widest">分类筛选</span>
+                <div id="tagContainer" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto scrollbar-hide pb-2">
+                    <div class="flex gap-2 animate-pulse">
+                        <div class="h-6 w-16 bg-zinc-200 rounded-md"></div>
+                        <div class="h-6 w-20 bg-zinc-200 rounded-md"></div>
+                        <div class="h-6 w-14 bg-zinc-200 rounded-md"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
-    <main class="flex-1 overflow-y-auto p-4">
-        <div id="loading" class="text-center text-zinc-400 mt-10 animate-pulse">正在拉取书库数据...</div>
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-100/30">
+        <div id="loading" class="flex flex-col items-center justify-center mt-24 text-zinc-400 space-y-4">
+            <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-xs font-bold tracking-[0.2em] animate-pulse">SYNCING LIBRARY...</p>
+        </div>
         
-        <div id="novelGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 hidden">
-            </div>
+        <div class="flex justify-between items-center mb-6 hidden" id="resultHeader">
+            <span class="text-[11px] font-bold text-zinc-400 uppercase tracking-widest" id="resultCount">共 0 本藏书</span>
+            <button onclick="clearFilters()" class="text-xs text-blue-600 font-bold hover:underline hidden" id="btnClearFilters">
+                清除所有筛选
+            </button>
+        </div>
+
+        <div id="novelGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 hidden"></div>
     </main>
 
     <script>
         let allNovels = [];
+        let allTagsSet = new Set();
+        let tagCounts = {}; // 存储每个标签下的书籍数量
+        let selectedTags = new Set();
 
-        async function init() {
+      async function init() {
             try {
-                const res = await fetch('/api/novel/list');
-                const data = await res.json();
-                allNovels = data.items || [];
-                renderGrid(allNovels);
+                // 1. 并发请求：文件列表、分析快照、以及后端统计接口
+                const [listRes, analysisRes, statsRes] = await Promise.all([
+                    fetch('/api/novel/list'),
+                    fetch('/api/novel_analysis'),
+                    fetch('/api/novel/tags/stats') // 🌟 新增：后端统计接口
+                ]);
+                
+                const listData = await listRes.json();
+                const analysisData = await analysisRes.json();
+                const tagStats = await statsRes.json(); // 格式：{"完结": 10, "后宫": 5}
+
+                // 建立分析映射
+                const analysisMap = {};
+                analysisData.forEach(item => { analysisMap[item.novel_name] = item; });
+
+                // 数据聚合
+                allNovels = (listData.items || []).map(item => {
+                    const analysis = analysisMap[item.filename] || {};
+                    const tags = analysis.tags && analysis.tags.length > 0 ? analysis.tags : ['未解析'];
+                    
+                    // 同步全局标签集（用于搜索过滤）
+                    tags.forEach(t => { if(t) allTagsSet.add(t); });
+                    
+                    return {
+                        filename: item.filename,
+                        displayTitle: item.filename.replace(/\.[^/.]+$/, ""),
+                        tags: tags,
+                        wordCount: analysis.word_count || 0
+                    };
+                });
+
                 document.getElementById('loading').classList.add('hidden');
+                document.getElementById('resultHeader').classList.remove('hidden');
                 document.getElementById('novelGrid').classList.remove('hidden');
+
+                // 2. 渲染 UI
+                renderTags(tagStats); // 🌟 传入后端统计数据
+                renderGrid(allNovels);
+
+                // 3. 🌟 核心：处理来自详情页的跳转参数 (?tag=xxx)
+                const params = new URLSearchParams(window.location.search);
+                const targetTag = params.get('tag');
+                if (targetTag && allTagsSet.has(targetTag)) {
+                    toggleTag(targetTag); // 自动激活标签并过滤
+                }
+
             } catch (e) {
-                document.getElementById('loading').innerText = "书库同步失败";
+                console.error("初始化失败:", e);
+                document.getElementById('loading').innerHTML = `<div class="text-red-500 text-sm">服务连接失败</div>`;
             }
+        }
+
+        // 渲染过滤器标签 (带数量统计)
+        function renderTags() {
+            const topTags = ['已完结', '连载中', '未解析'];
+            
+            // 排序逻辑：置顶核心标签 -> 其余按书籍数量降序 -> 数量相同按字母
+            const sortedTags = Array.from(allTagsSet).sort((a, b) => {
+                if (topTags.includes(a) && !topTags.includes(b)) return -1;
+                if (!topTags.includes(a) && topTags.includes(b)) return 1;
+                if (tagCounts[b] !== tagCounts[a]) return tagCounts[b] - tagCounts[a];
+                return a.localeCompare(b, 'zh-Hans-CN');
+            });
+
+            const container = document.getElementById('tagContainer');
+            container.innerHTML = sortedTags.map(tag => `
+                <button onclick="toggleTag('${tag}')" id="tag-btn-${tag}" 
+                        class="px-3 py-1.5 rounded-xl text-[11px] border border-zinc-200 bg-white text-zinc-600 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 select-none flex items-center gap-2 group">
+                    <span class="font-medium">${tag}</span>
+                    <span class="text-[9px] opacity-40 group-hover:opacity-100 font-mono">${tagCounts[tag]}</span>
+                </button>
+            `).join('');
+        }
+
+        function toggleTag(tag) {
+            const btn = document.getElementById(`tag-btn-${tag}`);
+            if (selectedTags.has(tag)) {
+                selectedTags.delete(tag);
+                btn.classList.remove('tag-active');
+            } else {
+                selectedTags.add(tag);
+                btn.classList.add('tag-active');
+            }
+            
+            document.getElementById('btnClearFilters').style.display = selectedTags.size > 0 ? 'inline' : 'none';
+            filterNovels();
+        }
+
+        function clearFilters() {
+            selectedTags.forEach(tag => {
+                const btn = document.getElementById(`tag-btn-${tag}`);
+                if(btn) btn.classList.remove('tag-active');
+            });
+            selectedTags.clear();
+            document.getElementById('btnClearFilters').style.display = 'none';
+            filterNovels();
+        }
+
+        // 复合过滤算法：模糊搜索 + 标签强制并集 (AND 逻辑)
+        function filterNovels() {
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            
+            const filtered = allNovels.filter(n => {
+                const matchKeyword = n.displayTitle.toLowerCase().includes(keyword);
+                // 必须包含所有选中的标签
+                const matchTags = Array.from(selectedTags).every(targetTag => n.tags.includes(targetTag));
+                return matchKeyword && matchTags;
+            });
+            
+            renderGrid(filtered);
         }
 
         function renderGrid(list) {
             const grid = document.getElementById('novelGrid');
+            document.getElementById('resultCount').innerText = `共 ${list.length} 本藏书`;
+            
             if(list.length === 0) {
-                grid.innerHTML = '<div class="col-span-full text-center text-zinc-400 py-10">未找到相关书籍</div>';
+                grid.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center text-zinc-400 py-32">
+                        <div class="text-5xl mb-4 opacity-20">📭</div>
+                        <p class="text-xs uppercase tracking-widest font-bold opacity-50">No Data Found</p>
+                    </div>`;
                 return;
             }
+            
             grid.innerHTML = list.map(item => {
-                const title = item.filename.replace(/\.[^/.]+$/, ""); // 去掉后缀
                 const encoded = encodeURIComponent(item.filename);
+                // 仅展示前三个标签
+                const displayTags = item.tags.slice(0, 3).map(t => `
+                    <span class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-[9px] truncate max-w-[60px] inline-block">${t}</span>
+                `).join('');
+                
+                const wordCountLabel = item.wordCount > 0 ? `${(item.wordCount/10000).toFixed(1)}w字` : '待解析';
+
                 return `
-                    <a href="/novel-detail?novel=${encoded}" class="bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition flex flex-col gap-2 border border-zinc-100 active:scale-95">
-                        <div class="aspect-[3/4] bg-zinc-100 rounded-lg flex items-center justify-center text-4xl shadow-inner">📖</div>
-                        <h3 class="font-bold text-sm text-zinc-800 line-clamp-2 leading-snug">${title}</h3>
+                    <a href="/novel-detail?novel=${encoded}" class="bg-white rounded-2xl p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 border border-zinc-100 relative group overflow-hidden">
+                        <div class="absolute top-2 right-2 z-10 bg-black/70 backdrop-blur text-white text-[9px] px-2 py-0.5 rounded-lg font-mono scale-90 opacity-0 group-hover:opacity-100 transition-opacity">
+                            ${wordCountLabel}
+                        </div>
+                        
+                        <div class="aspect-[3/4.2] bg-gradient-to-br from-zinc-50 to-zinc-100 rounded-xl flex items-center justify-center text-4xl shadow-inner group-hover:scale-[1.03] transition-transform duration-500">
+                            ${item.tags.includes('未解析') ? '📦' : '📗'}
+                        </div>
+                        
+                        <div class="flex flex-col gap-2 flex-1">
+                            <h3 class="font-bold text-[13px] text-zinc-800 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">${item.displayTitle}</h3>
+                            <div class="flex gap-1 flex-wrap mt-auto pt-2 border-t border-zinc-50">
+                                ${displayTags}
+                            </div>
+                        </div>
                     </a>
                 `;
             }).join('');
         }
 
-        function filterNovels() {
-            const keyword = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allNovels.filter(n => n.filename.toLowerCase().includes(keyword));
-            renderGrid(filtered);
-        }
-
+        // 初始化启动
         init();
     </script>
 </body>

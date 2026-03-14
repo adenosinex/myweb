@@ -87,16 +87,27 @@ def init_db():
         last_played_at INTEGER DEFAULT 0
     )
 ''')
-
-# ================= 1. 安全拦截器 =================
+# app.py 拦截器微调
 @app.before_request
 def check_access():
-    # 加入 /static/ 和 /favicon.ico，让静态资源免登录即可访问
-    if request.path == '/login' or request.path.startswith('/api/') or request.path.startswith('/stream/') or request.path.startswith('/static/') or request.path == '/favicon.ico':
+    # 静态资源和登录接口放行
+    if request.path == '/login' or request.path.startswith('/static/') or request.path == '/favicon.ico':
         return
-    if request.cookies.get('access_token') != ACCESS_CODE:
-        return redirect('/login')
+        
+    # 核心：检查 Cookie
+    if request.cookies.get('access_token') == ACCESS_CODE:
+        return
+        
+    # 针对手机 App (Legado) 的特殊处理：如果没 Cookie，检查 POST 参数中的 code
+    if request.method == 'POST' and request.json and request.json.get('code') == ACCESS_CODE:
+        return
 
+    # 未授权处理
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Unauthorized"}), 403
+    return redirect('/login')
+
+    
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':

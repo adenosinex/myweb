@@ -7,40 +7,64 @@
     <script>tailwind = { config: { } };</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f4f4f5; }
-        .markdown-body b { color: #3b82f6; }
+        body { background-color: #f4f4f5; color: #27272a; font-family: -apple-system, "PingFang SC", sans-serif; }
+        .markdown-body b { color: #3b82f6; font-weight: bold; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="h-screen flex flex-col">
 
-    <header class="bg-white shadow-sm p-4 flex items-center gap-4 shrink-0">
-        <a href="/novel" class="p-2 bg-zinc-100 rounded-full hover:bg-zinc-200">⬅️</a>
-        <h1 id="pageTitle" class="font-bold text-lg truncate flex-1">加载中...</h1>
+    <header class="bg-white/80 backdrop-blur-md shadow-sm p-4 flex items-center gap-4 shrink-0 sticky top-0 z-20 border-b border-zinc-100">
+        <a href="/" class="p-2 bg-zinc-100 rounded-full hover:bg-zinc-200 transition active:scale-90">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1 id="pageTitle" class="font-bold text-lg truncate flex-1 text-zinc-800">加载中...</h1>
     </header>
 
-    <main class="flex-1 overflow-y-auto">
-        <div class="bg-white p-6 shadow-sm border-b border-zinc-100 flex flex-col items-center">
-            <div class="w-24 h-32 bg-zinc-100 rounded-lg shadow-inner flex items-center justify-center text-5xl mb-4">📘</div>
-            <h2 id="bookTitle" class="font-bold text-xl mb-4 text-center">...</h2>
+    <main class="flex-1 overflow-y-auto bg-zinc-50/50">
+        <div class="bg-white p-8 shadow-sm border-b border-zinc-100 flex flex-col items-center">
+            <div class="w-28 h-36 bg-gradient-to-br from-zinc-100 to-zinc-200 rounded-2xl shadow-inner flex items-center justify-center text-6xl mb-6 ring-4 ring-white">📘</div>
+            <h2 id="bookTitle" class="font-bold text-2xl mb-6 text-center text-zinc-900 leading-tight">...</h2>
             
-            <button id="btnRead" onclick="continueReading()" class="w-full max-w-xs bg-blue-600 text-white font-bold py-3 rounded-full shadow-lg hover:bg-blue-500 transition active:scale-95">
-                开始阅读
-            </button>
+            <div class="flex flex-col w-full max-w-sm gap-4">
+                <button id="btnRead" onclick="continueReading()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-500/30 hover:bg-blue-500 transition active:scale-[0.98]">
+                    开始阅读
+                </button>
+                <button onclick="downloadFile()" class="w-full bg-zinc-100 text-zinc-600 font-bold py-3 rounded-xl border border-zinc-200 hover:bg-zinc-200 transition active:scale-[0.98] flex items-center justify-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    下载原文 (.txt)
+                </button>
+            </div>
         </div>
 
-        <div class="p-4 max-w-2xl mx-auto">
-            <h3 class="font-bold text-zinc-500 text-sm mb-2 uppercase">🤖 AI 深度解析</h3>
-            <div id="aiSummary" class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm leading-relaxed whitespace-pre-wrap">正在查询数据库...</div>
-        </div>
+        <div class="max-w-2xl mx-auto px-4 py-8 space-y-8">
+            <section>
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-blue-500 text-lg">🤖</span>
+                    <h3 class="font-bold text-zinc-400 text-xs uppercase tracking-widest">AI 深度解析</h3>
+                </div>
+                <div id="aiSummary" class="bg-blue-50/50 border border-blue-100 text-blue-900 p-5 rounded-2xl text-[15px] leading-relaxed whitespace-pre-wrap markdown-body">
+                    正在同步云端大脑数据...
+                </div>
+            </section>
 
-        <div class="p-4 max-w-2xl mx-auto mb-10">
-            <div class="flex justify-between items-end mb-3">
-                <h3 class="font-bold text-zinc-500 text-sm uppercase">📑 章节目录</h3>
-                <span id="chapterCount" class="text-xs text-zinc-400">解析中...</span>
-            </div>
-            <div id="tocList" class="bg-white rounded-xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-                <div class="p-4 text-center text-zinc-400 text-sm animate-pulse">正在下载全本并解析目录...</div>
-            </div>
+            <section class="mb-20">
+                <div class="flex justify-between items-end mb-4 px-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-zinc-400 text-lg">📑</span>
+                        <h3 class="font-bold text-zinc-400 text-xs uppercase tracking-widest">章节目录</h3>
+                    </div>
+                    <span id="chapterCount" class="text-[10px] font-mono bg-zinc-200 text-zinc-500 px-2 py-0.5 rounded">...</span>
+                </div>
+                
+                <div id="tocList" class="bg-white rounded-2xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100 shadow-sm">
+                    <div class="p-8 text-center text-zinc-400 text-sm animate-pulse flex flex-col items-center gap-3">
+                        <div class="w-5 h-5 border-2 border-zinc-300 border-t-blue-500 rounded-full animate-spin"></div>
+                        正在重组文本拓扑结构...
+                    </div>
+                </div>
+            </section>
         </div>
     </main>
 
@@ -50,81 +74,86 @@
         let parsedChapters = [];
         let lastReadIndex = 0;
 
-        if(!novelName) window.location.href = '/novel';
+        if(!novelName) window.location.href = '/';
         
         const displayTitle = novelName.replace(/\.[^/.]+$/, "");
         document.getElementById('pageTitle').innerText = displayTitle;
         document.getElementById('bookTitle').innerText = displayTitle;
 
-        async function init() {
-            // 1. 获取 AI 简介
+async function init() {
+            // 1. 并发获取：书籍详情分析 + 全库 Tag 出现频次统计
             try {
-                const res = await fetch('/api/novel_analysis');
-                const list = await res.json();
-                const history = list.find(item => item.novel_name === novelName);
-                if (history) {
-                    document.getElementById('aiSummary').innerHTML = history.analysis_result.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-                } else {
-                    document.getElementById('aiSummary').innerHTML = '暂无解析记录。<br><a href="/novel-ai?novel='+encodeURIComponent(novelName)+'" class="underline text-blue-600 mt-2 inline-block">前往 AI 控制台生成</a>';
-                }
-            } catch (e) { document.getElementById('aiSummary').innerText = '读取简介失败'; }
+                const [analysisRes, statsRes] = await Promise.all([
+                    fetch(`/api/novel/analysis/detail/${encodeURIComponent(novelName)}`),
+                    fetch('/api/novel/tags/stats')
+                ]);
 
-            // 2. 获取小说文本并正则切分目录
+                if (analysisRes.ok) {
+                    const data = await analysisRes.json();
+                    const tagStats = await statsRes.json(); // 获取全库统计 {"基因改造": 5, ...}
+                    
+                    // 处理简介内容
+                    let summaryHtml = data.analysis_result
+                        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                        .replace(/\n分类标签\s*[:：].*/g, ''); // 移除旧的纯文本标签行
+                    
+                    // 🌟 渲染带数量的高亮 Tag
+                    if (data.tags && data.tags.length > 0) {
+                        const tagsHtml = `
+                            <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-zinc-100">
+                                ${data.tags.map(tag => {
+                                    const count = tagStats[tag] || 0;
+                                    return `
+                                    <a href="/novel?tag=${encodeURIComponent(tag)}" 
+                                       class="px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-md text-[11px] hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-1.5 group">
+                                       <span># ${tag}</span>
+                                       <span class="opacity-30 group-hover:opacity-100 font-mono text-[9px]">${count}</span>
+                                    </a>`;
+                                }).join('')}
+                            </div>
+                        `;
+                        summaryHtml += tagsHtml;
+                    }
+                    document.getElementById('aiSummary').innerHTML = summaryHtml;
+                } else {
+                    document.getElementById('aiSummary').innerHTML = '暂无 AI 解析记录...';
+                }
+            } catch (e) { 
+                document.getElementById('aiSummary').innerText = '数据同步失败'; 
+                console.error(e);
+            }
+
+            // 2. 极速获取轻量化目录 (逻辑保持不变)
             try {
-                const textRes = await fetch(`/api/novel/content/${encodeURIComponent(novelName)}`);
-                const textData = await textRes.json();
-                parsedChapters = buildTOC(textData.content || "");
+                const tocRes = await fetch(`/api/novel/toc/${encodeURIComponent(novelName)}`);
+                const tocData = await tocRes.json();
+                if(tocData.error) throw new Error(tocData.error);
                 
-                document.getElementById('chapterCount').innerText = `共 ${parsedChapters.length} 章`;
+                parsedChapters = tocData.toc;
+                document.getElementById('chapterCount').innerText = `TOTAL: ${tocData.total}`;
                 
-                // 渲染目录列表
-                document.getElementById('tocList').innerHTML = parsedChapters.map((ch, idx) => `
-                    <a href="/novel-reader?novel=${encodeURIComponent(novelName)}&ch=${idx}" 
-                       class="block p-4 hover:bg-zinc-50 text-sm text-zinc-700 truncate transition">
+                document.getElementById('tocList').innerHTML = parsedChapters.map(ch => `
+                    <a href="/novel-reader?novel=${encodeURIComponent(novelName)}&ch=${ch.index}" 
+                       class="block p-4 hover:bg-zinc-50 text-[15px] text-zinc-700 truncate transition active:bg-zinc-100">
+                        <span class="inline-block w-8 text-zinc-300 font-mono text-xs">${ch.index + 1}</span>
                         ${ch.title}
                     </a>
                 `).join('');
 
-                // 3. 获取上次阅读进度
-                const progress = await fetch(`/api/kv/progress_${btoa(encodeURIComponent(novelName)).slice(0,16)}`).then(r=>r.json()).catch(()=>({}));
-                if(progress.page !== undefined && progress.page < parsedChapters.length) {
+                // 3. 恢复进度
+                const kvKey = `progress_${btoa(encodeURIComponent(novelName)).slice(0,16)}`;
+                const progress = await fetch(`/api/kv/${kvKey}`).then(r=>r.json()).catch(()=>({}));
+                if(progress.page !== undefined && progress.page < tocData.total) {
                     lastReadIndex = progress.page;
                     document.getElementById('btnRead').innerText = `继续阅读: ${parsedChapters[lastReadIndex].title}`;
                 }
-
             } catch(e) {
-                document.getElementById('tocList').innerHTML = '<div class="p-4 text-center text-red-500">解析小说失败</div>';
+                document.getElementById('tocList').innerHTML = '<div class="p-8 text-center text-red-500 font-bold text-sm">目录加载失败</div>';
             }
         }
-
-        // 🌟 核心：智能分章算法
-        function buildTOC(text) {
-            // 匹配诸如：第十一章、第123回、第五部等
-            const regex = /(?:^|\n)(第[零一二三四五六七八九十百千万\d]+[章回节卷部][^\n]*)/g;
-            let chapters = [];
-            let match;
-            let lastIdx = 0;
-            let lastTitle = "引子 / 前言";
-
-            while ((match = regex.exec(text)) !== null) {
-                const content = text.slice(lastIdx, match.index).trim();
-                if (content.length > 20 || chapters.length === 0) {
-                    chapters.push({ title: lastTitle, content: content });
-                }
-                lastTitle = match[1].trim();
-                lastIdx = match.index + match[0].length;
-            }
-            // 压入最后一章
-            chapters.push({ title: lastTitle, content: text.slice(lastIdx).trim() });
-            
-            // 兜底：如果完全没有章节标记，按字数切片（每章 5000 字）
-            if (chapters.length <= 1 || chapters[0].content.length === text.length) {
-                chapters = [];
-                for(let i=0; i<text.length; i+=5000) {
-                    chapters.push({ title: `第 ${chapters.length + 1} 节`, content: text.slice(i, i+5000) });
-                }
-            }
-            return chapters;
+        function downloadFile() {
+            const downloadUrl = `/api/novel/download/${encodeURIComponent(novelName)}`;
+            window.open(downloadUrl, '_blank');
         }
 
         function continueReading() {

@@ -18,7 +18,7 @@
         .ai-bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); width: 0%; transition: width 0.4s ease; }
         
         /* 实时结果流 */
-        .result-container { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; scrollbar-width: none; }
+        .result-container { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; scrollbar-width: none; }
         .result-container::-webkit-scrollbar { display: none; }
         .result-item { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border-left: 3px solid #8b5cf6; cursor: pointer; transition: 0.2s; animation: slideIn 0.3s ease-out; }
         .result-item:hover { background: rgba(255,255,255,0.08); }
@@ -47,13 +47,13 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside class="w-72 border-r border-zinc-800 bg-zinc-900/50 p-4 flex flex-col gap-6 overflow-y-auto shrink-0">
+        <aside class="w-80 border-r border-zinc-800 bg-zinc-900/50 p-4 flex flex-col gap-6 overflow-y-auto shrink-0">
             
             <div id="singleNovelPanel" class="hidden space-y-3">
-                <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-1">当前目标文件</h2>
+                <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-1" id="targetNovelLabel">当前目标文件</h2>
                 <button onclick="runSingleAI()" class="w-full text-left p-3 rounded-xl bg-zinc-800 hover:bg-blue-600 transition border border-zinc-700 group">
-                    <div class="font-bold mb-1 text-sm flex items-center gap-2">🚀 重新分析 <span class="text-[9px] bg-white/20 px-1 rounded opacity-0 group-hover:opacity-100">FORCE</span></div>
-                    <div class="text-[10px] opacity-60">重新读取首尾文本并生成简介</div>
+                    <div class="font-bold mb-1 text-sm flex items-center gap-2 text-white">🚀 重新分析 <span class="text-[9px] bg-white/20 px-1 rounded opacity-0 group-hover:opacity-100">FORCE</span></div>
+                    <div class="text-[10px] text-zinc-400">重新读取首尾文本并生成简介</div>
                 </button>
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="resetTask('single')" class="text-center p-2 rounded-lg bg-red-900/20 hover:bg-red-600 text-red-400 hover:text-white text-[11px] border border-red-800/40 transition">重置数据</button>
@@ -64,21 +64,25 @@
             <div class="space-y-4">
                 <div class="flex justify-between items-center border-b border-zinc-800 pb-1">
                     <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">全库批量管理</h2>
-                    <button onclick="resetTask('all')" class="text-[9px] text-red-500 hover:underline">全部物理清空</button>
+                    <div class="flex gap-3"> 
+                        <button onclick="downloadCSV()" class="text-[9px] text-blue-400 hover:underline hover:text-blue-300">下载CSV</button>
+                        <button onclick="resetTask('all')" class="text-[9px] text-red-500 hover:underline hover:text-red-400">全部清空</button>
+                    </div>
                 </div>
-                
+
                 <div class="p-4 bg-zinc-800/50 rounded-2xl border border-zinc-700/50">
                     <div class="flex justify-between items-end text-xs mb-2">
-                        <span id="aiProgressText" class="text-blue-400 font-bold">空闲</span>
+                        <span id="aiProgressText" class="text-blue-400 font-bold tracking-tighter">IDLE</span>
                         <span id="aiStatsText" class="text-zinc-500 font-mono text-[10px]">0s | 0</span>
                     </div>
                     <div class="ai-bar-bg"><div class="ai-bar-fill" id="aiProgressFill"></div></div>
-                    <div id="aiLogText" class="text-[10px] text-zinc-500 truncate mb-4 italic">等待任务指令...</div>
+                    <div id="aiLogText" class="text-[10px] text-zinc-500 truncate mb-4 italic">等待指令...</div>
                     
-                    <button id="btnAiStart" onclick="controlBatchScan('start')" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-xl text-xs font-bold shadow-lg shadow-blue-900/20 transition">▶ 开始全库扫描</button>
-                    <button id="btnAiStop" onclick="controlBatchScan('stop')" class="hidden w-full bg-red-600 hover:bg-red-500 py-2 rounded-xl text-xs font-bold transition">⏹ 停止扫描</button>
+                    <button id="btnAiStart" onclick="controlBatchScan('start')" class="w-full bg-blue-600 hover:bg-blue-500 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-blue-900/20 transition text-white">▶ 开始全库扫描</button>
+                    <button id="btnAiStop" onclick="controlBatchScan('stop')" class="hidden w-full bg-red-600 hover:bg-red-500 py-2.5 rounded-xl text-xs font-bold transition text-white">⏹ 停止扫描</button>
                 </div>
 
+                <h2 class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-1">实时任务输出</h2>
                 <div class="result-container" id="aiResultStream">
                     <div class="text-[10px] text-zinc-600 text-center py-10 border border-dashed border-zinc-800 rounded-xl">无实时任务输出</div>
                 </div>
@@ -98,13 +102,13 @@
                     </h3>
                     <span class="text-[9px] text-zinc-600 font-mono">CONTEXT_PREVIEW</span>
                 </div>
-                <div class="text-[11px] text-zinc-500 font-mono preview-fade max-h-24 overflow-hidden leading-relaxed" id="previewContent"></div>
+                <div class="text-[11px] text-zinc-400 font-mono preview-fade max-h-24 overflow-hidden leading-relaxed" id="previewContent"></div>
             </div>
 
             <div id="outputArea" class="max-w-3xl mx-auto markdown-body w-full">
-                <div id="idleIcon" class="flex flex-col items-center justify-center h-[50vh] text-zinc-700">
+                <div id="idleIcon" class="flex flex-col items-center justify-center h-[60vh] text-zinc-800">
                     <div class="text-6xl mb-6 opacity-20">🧠</div>
-                    <p class="text-sm tracking-widest uppercase opacity-40 font-bold">Waiting for Neural Command</p>
+                    <p class="text-xs tracking-[0.3em] uppercase opacity-40 font-bold">Waiting for Neural Command</p>
                 </div>
             </div>
             
@@ -122,7 +126,7 @@
             <span class="text-[10px] font-bold text-red-500 tracking-tighter">POLLING_DEBUG_LOG</span>
             <span class="text-[9px] text-zinc-500" id="debugTimer"></span>
         </div>
-        <pre id="debugJSON" class="p-3 text-[10px] text-green-500/80 overflow-auto h-[270px] scrollbar-hidden"></pre>
+        <pre id="debugJSON" class="p-3 text-[10px] text-green-500/80 overflow-auto h-[270px]"></pre>
     </div>
 
     <script>
@@ -131,7 +135,6 @@
         let debugMode = false;
         let lastFingerprint = "";
 
-        // 初始化
         if(novelName) {
             document.getElementById('targetNovelLabel').innerText = `Target: ${novelName}`;
             document.getElementById('singleNovelPanel').classList.remove('hidden');
@@ -147,7 +150,7 @@
 
         async function resetTask(mode) {
             const body = mode === 'single' ? { novel_name: novelName } : {};
-            if(!confirm(`⚠️ 物理重置警告：将永久删除数据库中的分析记录。确定继续？`)) return;
+            if(!confirm(`⚠️ 物理重置：将从数据库中永久抹除分析记录。确定继续？`)) return;
 
             try {
                 const res = await fetch('/api/novel/reset', {
@@ -156,9 +159,8 @@
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                alert(data.message);
                 if(mode === 'single') runSingleAI(); else location.reload();
-            } catch (e) { alert("重置请求失败"); }
+            } catch (e) { alert("重置失败"); }
         }
 
         async function runSingleAI() {
@@ -171,18 +173,8 @@
             out.innerHTML = '';
             previewPanel.classList.remove('hidden');
             loader.classList.remove('hidden');
-            document.getElementById('previewContent').innerText = "读取首尾字节中...";
 
             try {
-                // 1. 预读取以填充预览
-                const contentRes = await fetch(`/api/novel/content/${encodeURIComponent(novelName)}`);
-                const cData = await contentRes.json();
-                const txt = cData.content || "";
-                if (txt) {
-                    document.getElementById('previewContent').innerText = txt.substring(0, 300) + "\n\n[...]\n\n" + txt.substring(txt.length - 200);
-                }
-
-                // 2. 正式推理
                 const res = await fetch('/api/novel/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -194,12 +186,12 @@
             finally { loader.classList.add('hidden'); }
         }
 
-     async function loadHistory(targetName = novelName) {
+        async function loadHistory(targetName = novelName) {
             if (!targetName) return;
-            document.getElementById('taskPreviewPanel').classList.add('hidden');
-            document.getElementById('idleIcon')?.remove();
+            document.getElementById('taskPreviewPanel')?.classList.add('hidden');
+            document.getElementById('idleIcon')?.classList.add('hidden');
             const out = document.getElementById('outputArea');
-            out.innerHTML = '<div class="text-zinc-500 animate-pulse text-sm">正在查询数据库...</div>';
+            out.innerHTML = '<div class="text-zinc-500 animate-pulse text-sm">正在同步快照...</div>';
             
             try {
                 const res = await fetch('/api/novel_analysis');
@@ -210,33 +202,23 @@
                     const timeStr = new Date(history._time).toLocaleString();
                     let htmlContent = parseMarkdown(`<b>[提取记录: ${targetName} - ${timeStr}]</b>\n\n${history.analysis_result}`);
                     
-                    // 🌟 动态追加原始调试数据面板
                     if (history.raw_prompt && history.raw_response) {
                         htmlContent += `
                         <div class="mt-8 border-t border-zinc-800 pt-4">
                             <details class="text-xs text-zinc-500 bg-zinc-900/40 rounded-xl border border-zinc-800/50 overflow-hidden">
-                                <summary class="p-4 cursor-pointer font-bold hover:text-blue-400 select-none outline-none transition bg-zinc-800/20">🛠️ 展开查看原始请求与响应数据 (Debug)</summary>
+                                <summary class="p-4 cursor-pointer font-bold hover:text-blue-400 transition bg-zinc-800/20 select-none">🛠️ 查看原始 Debug Payload</summary>
                                 <div class="p-4 border-t border-zinc-800/50 space-y-4">
-                                    <div>
-                                        <div class="font-bold text-blue-500 mb-2 uppercase tracking-widest text-[10px]">>> 发送给大模型的完整 Prompt</div>
-                                        <pre class="bg-black/60 p-4 rounded-lg overflow-x-auto text-[11px] text-zinc-400 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed border border-zinc-800">${history.raw_prompt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
-                                    </div>
-                                    <div>
-                                        <div class="font-bold text-green-500 mb-2 uppercase tracking-widest text-[10px]">>> 大模型返回的原始 JSON</div>
-                                        <pre class="bg-black/60 p-4 rounded-lg overflow-x-auto text-[11px] text-green-500/80 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed border border-zinc-800">${history.raw_response.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
-                                    </div>
+                                    <div><div class="text-blue-500 mb-1">[PROMPT]</div><pre class="bg-black/60 p-4 rounded-lg overflow-x-auto whitespace-pre-wrap border border-zinc-800">${history.raw_prompt.replace(/</g, "&lt;")}</pre></div>
+                                    <div><div class="text-green-500 mb-1">[RESPONSE]</div><pre class="bg-black/60 p-4 rounded-lg overflow-x-auto border border-zinc-800 text-green-500/80">${history.raw_response}</pre></div>
                                 </div>
                             </details>
                         </div>`;
                     }
                     out.innerHTML = htmlContent;
-                } else {
-                    out.innerHTML = `<div class="text-yellow-500">暂无《${targetName}》的分析记录。</div>`;
                 }
-            } catch (e) { 
-                out.innerHTML = `<div class="text-red-500">读取失败: ${e.message}</div>`; 
-            }
+            } catch (e) { out.innerHTML = "加载失败"; }
         }
+
         async function controlBatchScan(action) {
             await fetch('/api/novel/scan', { 
                 method: 'POST', 
@@ -247,8 +229,7 @@
 
         async function pollStatus() {
             try {
-                const endpoint = debugMode ? '/api/novel/scan/status/debug' : '/api/novel/scan/status';
-                const res = await fetch(endpoint);
+                const res = await fetch(debugMode ? '/api/novel/scan/status/debug' : '/api/novel/scan/status');
                 const state = await res.json();
                 
                 if (debugMode) {
@@ -256,7 +237,6 @@
                     document.getElementById('debugTimer').innerText = new Date().toLocaleTimeString();
                 }
 
-                // 渲染实时结果流 (指纹防抖)
                 if (state.recent_results && state.recent_results.length > 0) {
                     const fingerprint = JSON.stringify(state.recent_results);
                     if (fingerprint !== lastFingerprint) {
@@ -273,37 +253,30 @@
                     }
                 }
 
-                // 更新预览面板
-                const previewPanel = document.getElementById('taskPreviewPanel');
-                if (state.is_running && state.current_task) {
-                    document.getElementById('idleIcon')?.classList.add('hidden');
-                    previewPanel.classList.remove('hidden');
-                    document.getElementById('previewTitle').innerText = `ANALYZING: ${state.current_task.novel}`;
-                    document.getElementById('previewContent').innerText = state.current_task.preview;
-                }
-
-                // UI 状态切换
                 if (state.is_running) {
                     document.getElementById('btnAiStart').classList.add('hidden');
                     document.getElementById('btnAiStop').classList.remove('hidden');
-                    document.getElementById('aiProgressFill').style.width = `${state.total > 0 ? (state.processed / state.total) * 100 : 0}%`;
+                    document.getElementById('aiProgressFill').style.width = `${(state.processed / state.total) * 100}%`;
                     document.getElementById('aiProgressText').innerText = `PROCESSED: ${state.processed}/${state.total}`;
                     document.getElementById('aiStatsText').innerText = `${formatTime(state.total_time_sec)} | OK: ${state.success_count}`;
                     document.getElementById('aiLogText').innerText = `>> ${state.status_msg}`;
+                    
+                    if(state.current_task) {
+                        document.getElementById('taskPreviewPanel').classList.remove('hidden');
+                        document.getElementById('previewTitle').innerText = `ANALYZING: ${state.current_task.novel}`;
+                        document.getElementById('previewContent').innerText = state.current_task.preview;
+                    }
                 } else {
                     document.getElementById('btnAiStart').classList.remove('hidden');
                     document.getElementById('btnAiStop').classList.add('hidden');
-                    if (state.total > 0 && state.processed >= state.total) {
-                        document.getElementById('aiProgressFill').style.width = '100%';
-                        document.getElementById('aiProgressText').innerText = "SCAN_FINISHED";
-                    } else {
-                        document.getElementById('aiProgressText').innerText = "IDLE";
-                    }
-                    document.getElementById('aiLogText').innerText = state.status_msg || "Ready";
+                    document.getElementById('aiProgressText').innerText = state.processed >= state.total && state.total > 0 ? "FINISHED" : "IDLE";
                 }
-            } catch (e) {
-                document.getElementById('aiProgressText').innerText = "CONNECTION_LOST";
-            }
+            } catch (e) {}
+        }
+
+        function downloadCSV() {
+            const code = urlParams.get('code') || '8888';
+            window.location.href = `/api/novel/export/csv?code=${code}`;
         }
 
         setInterval(pollStatus, 2000);
