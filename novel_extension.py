@@ -237,17 +237,90 @@ def _run_batch_scan():
         scan_state["current_task"] = None
         scan_state["total_time_sec"] = int(time.time() - start_time)
 
-# ================= API 路由 =================
+# ================= 状态管理 API =================
+
+@novel_ai_bp.route('/state/<path:filename>', methods=['GET', 'POST'])
+def handle_novel_state(filename):
+    """
+    处理书籍状态：GET 获取状态，POST 切换状态 (fav/deleted)
+    """
+    try:
+        if request.method == 'POST':
+            data = request.json
+            state_type = data.get('type')  # 'fav' 或 'deleted'
+            is_active = data.get('active', False)
+            collection = f"novel_state_{state_type}"
+            
+            with sqlite3.connect(DB_PATH) as conn:
+                # 无论 active 与否，先删除旧记录防止重复
+                conn.execute(f"DELETE FROM store WHERE collection=? AND payload LIKE ?", 
+                             (collection, f'%"{filename}"%'))
+                if is_active:
+                    conn.execute("INSERT INTO store (collection, payload) VALUES (?, ?)", 
+                                 (collection, json.dumps({"filename": filename})))
+            return jsonify({"status": "success", "active": is_active})
+        
+        else:
+            # GET：查询当前书籍的所有状态
+            states = {"fav": False, "deleted": False}
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                for s_type in ["fav", "deleted"]:
+                    cursor.execute(f"SELECT id FROM store WHERE collection=? AND payload LIKE ?", 
+                                   (f"novel_state_{s_type}", f'%"{filename}"%'))
+                    if cursor.fetchone(): states[s_type] = True
+            return jsonify(states)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ================= 修改分页逻辑 (需替换原 list 接口) =================
 
 @novel_ai_bp.route('/list', methods=['GET'])
-def list_novels():
+def list_novels_paged():
     try:
+        page, page_size = int(request.args.get('page', 1)), int(request.args.get('size', 24))
+        search_kw = request.args.get('search', '').lower()
+        selected_tags = [t for t in request.args.get('tags', '').split(',') if t.strip()]
+        
+        # 1. 获取资源节点列表与本地删除黑名单
         res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
-        if res.status_code == 200:
-            return jsonify({"items": [{"filename": name} for name in res.json()]})
-        return jsonify({"items": []})
-    except:
-        return jsonify({"items": []})
+        all_files = res.json() if res.status_code == 200 else []
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            # 获取隐藏名单
+            cursor.execute("SELECT payload FROM store WHERE collection='novel_state_deleted'")
+            deleted_set = {json.loads(row[0])['filename'] for row in cursor.fetchall()}
+            # 获取全量分析快照
+            cursor.execute("SELECT payload FROM store WHERE collection='novel_analysis'")
+            analysis_map = {json.loads(r[0])['novel_name']: json.loads(r[0]) for r in cursor.fetchall()}
+
+        # 2. 核心过滤：排除被标记删除的书籍
+        filtered_files = []
+        for fname in all_files:
+            if fname in deleted_set: continue  # 🌟 逻辑隐藏
+            
+            display_name = fname.replace('.txt', '').lower()
+            item_tags = analysis_map.get(fname, {}).get('tags', [])
+            
+            # 搜索匹配 (文件名 OR 标签)
+            if search_kw and not (search_kw in display_name or any(search_kw in t.lower() for t in item_tags)):
+                continue
+            # 标签匹配 (AND 逻辑)
+            if selected_tags and not all(t.lower() in display_name or t in item_tags for t in selected_tags):
+                continue
+            
+            filtered_files.append(fname)
+
+        # 3. 分页切片
+        total = len(filtered_files)
+        paged_files = filtered_files[(page-1)*page_size : page*page_size]
+        
+        return jsonify({
+            "items": [{"filename": f, "displayTitle": f.replace('.txt',''), "tags": analysis_map.get(f,{}).get('tags',['未解析']), "wordCount": analysis_map.get(f,{}).get('word_count',0)} for f in paged_files],
+            "total": total, "has_more": (page*page_size) < total
+        })
+    except Exception as e: return jsonify({"items": [], "error": str(e)})
 
 # ================= 调试与重置扩展 =================
 
@@ -601,21 +674,68 @@ def web_chapter(filename, index):
     return jsonify({"error": "章节越界"}), 404
 from collections import Counter
 
-@novel_ai_bp.route('/tags/stats', methods=['GET'])
+@novel_ai_bp.route('/tags/stats', methods=['GET', 'POST'])
 def get_tag_stats():
-    """后端统计所有标签出现的频次"""
+    """
+    优化后的全库统计：
+    1. 支持 POST 请求（详情页按需统计本文相关 Tag）
+    2. 支持 GET 请求（首页全量统计所有 Tag）
+    3. 逻辑：(文件名包含 Tag OR AI标签列表包含 Tag) -> 计为1本
+    """
     try:
+        # --- 数据准备阶段 ---
+        # 1. 获取目标标签
+        target_tags = []
+        if request.method == 'POST':
+            target_tags = request.json.get('tags', [])
+        
+        # 2. 从资源节点获取实时全量文件名列表 (用于文件名判断)
+        try:
+            res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
+            all_files = res.json() if res.status_code == 200 else []
+        except:
+            all_files = []
+        
+        # 3. 从本地数据库获取所有 AI 分析记录 (用于标签判断)
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT payload FROM store WHERE collection='novel_analysis'")
-            rows = cursor.fetchall()
+            analysis_rows = [json.loads(row[0]) for row in cursor.fetchall()]
+
+        # 建立 文件名 -> 标签列表 的映射
+        file_tags_map = {item['novel_name']: item.get('tags', []) for item in analysis_rows}
+
+        # 4. 如果是 GET 请求，自动提取全库所有出现过的 Tag 作为统计目标
+        if not target_tags:
+            full_tag_set = set()
+            for t_list in file_tags_map.values():
+                full_tag_set.update(t_list)
+            target_tags = list(full_tag_set)
+
+        # --- 核心统计逻辑 ---
+        stats = {}
+        for tag in target_tags:
+            if not tag: continue
             
-        all_tags = []
-        for row in rows:
-            data = json.loads(row[0])
-            all_tags.extend(data.get('tags', []))
+            matched_filenames = set() # 使用集合确保单书不重复计数
+            tag_lower = tag.lower()
             
-        return jsonify(dict(Counter(all_tags)))
+            for fname in all_files:
+                # 预处理文件名（转小写，去后缀）
+                display_name = fname.replace('.txt', '').lower()
+                
+                # 🌟 判断准则：文件名命中 或 AI标签命中
+                is_match_name = tag_lower in display_name
+                is_match_tags = tag in file_tags_map.get(fname, [])
+                
+                if is_match_name or is_match_tags:
+                    matched_filenames.add(fname)
+            
+            stats[tag] = len(matched_filenames)
+                    
+        # 按数量降序排序（仅对 GET 请求有意义，方便前端渲染）
+        return jsonify(stats)
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -630,22 +750,50 @@ def get_novel_analysis_detail(filename):
         if row:
             return jsonify(json.loads(row[0]))
     return jsonify({"error": "No analysis found"}), 404
-
-
-@novel_ai_bp.route('/tags/stats', methods=['GET'])
+@novel_ai_bp.route('/tags/stats', methods=['GET', 'POST'])
 def get_tag_stats():
-    """获取全库标签统计，用于首页显示数量"""
+    """优化后的统计：通过资源节点接口获取文件列表，计算去重小说数量"""
     try:
+        # 获取目标标签（POST为详情页按需，GET为首页全量）
+        target_tags = []
+        if request.method == 'POST':
+            target_tags = request.json.get('tags', [])
+        
+        # 1. 🌟 修复核心：不再读取本地目录，而是请求资源节点获取全量文件名列表
+        try:
+            res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
+            all_files = res.json() if res.status_code == 200 else []
+        except Exception:
+            all_files = []
+        
+        # 2. 获取所有 AI 标签数据
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT payload FROM store WHERE collection='novel_analysis'")
-            rows = cursor.fetchall()
-            
+            analysis_rows = [json.loads(row[0]) for row in cursor.fetchall()]
+
+        file_tags_map = {item['novel_name']: item.get('tags', []) for item in analysis_rows}
+
+        # 3. 如果没传 target_tags (GET请求)，则提取全库所有出现过的标签
+        if not target_tags:
+            full_set = set()
+            for t_list in file_tags_map.values(): 
+                full_set.update(t_list)
+            target_tags = list(full_set)
+
+        # 4. 统计去重后的文件匹配数
         stats = {}
-        for row in rows:
-            data = json.loads(row[0])
-            for tag in data.get('tags', []):
-                stats[tag] = stats.get(tag, 0) + 1
+        for tag in target_tags:
+            matched_files = set()
+            tag_lower = tag.lower()
+            for fname in all_files:
+                if fname in deleted_set: continue
+                display_name = fname.replace('.txt', '').lower()
+                # 并集：文件名命中 OR 标签列表命中
+                if tag_lower in display_name or tag in file_tags_map.get(fname, []):
+                    matched_files.add(fname)
+            stats[tag] = len(matched_files)
+                    
         return jsonify(stats)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
