@@ -475,3 +475,4 @@ def confirm_maintenance_delete():
         return jsonify({"status": "success", "cleaned_count": cleaned_count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+ 

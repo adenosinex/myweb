@@ -4,204 +4,188 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>云端书库 - 智能索引</title>
-    <script>window.tailwind = { config: { } };</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #f4f4f5; font-family: -apple-system, "PingFang SC", sans-serif; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        .tag-active { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+        .tag-active { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; }
+        
+        /* 控制显示行数：默认只显示两行 */
+        .tags-collapsed {
+            display: -webkit-box;
+            -webkit-line-clamp: 2; /* 限制显示行数 */
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            height: 76px; /* 约两行按钮的高度 */
+        }
+        .book-clicked {
+    opacity: 0.6;
+    filter: grayscale(30%);
+    transition: opacity 0.2s, filter 0.2s;
+  }
+        .tags-expanded { height: auto; }
     </style>
 </head>
-<body class="h-screen flex flex-col selection:bg-blue-500">
+<body class="h-screen flex flex-col selection:bg-blue-500 overflow-hidden">
 
-    <header class="bg-white shadow-sm flex flex-col sticky top-0 z-20 border-b border-zinc-100">
-        <div class="p-4 flex justify-between items-center bg-white">
+    <header class="bg-white shadow-sm sticky top-0 z-20 border-b border-zinc-100">
+        <div class="p-4 flex justify-between items-center">
             <h1 class="text-xl font-bold text-zinc-800 tracking-tight flex items-center gap-2">
                 <span class="text-2xl">📚</span> 云端幻境书库
             </h1>
-            <div class="flex gap-2">
-                <a href="/novel-ai" target="_blank" class="text-[11px] bg-zinc-800 text-white px-3 py-2 rounded-lg font-bold hover:bg-zinc-700 transition flex items-center gap-1">
-                    ⚙️ AI 管理端
-                </a>
-            </div>
+            <a href="/novel-ai" target="_blank" class="text-[11px] bg-zinc-800 text-white px-3 py-2 rounded-lg font-bold hover:bg-zinc-700 transition">⚙️ AI 管理</a>
         </div>
-        
-        <div class="p-4 flex flex-col gap-4 bg-zinc-50/50 backdrop-blur-md">
-            <div class="relative">
-                <input type="text" id="searchInput" placeholder="搜索书名或关键词..." 
+    </header>
+
+    <main class="flex-1 overflow-y-auto bg-zinc-100/30 scroll-smooth">
+        <div class="p-4 sm:p-6 pb-0 flex flex-col gap-4">
+            <div class="relative w-full">
+                <input type="text" id="searchInput" placeholder="搜索书名..." 
                        class="w-full bg-white border border-zinc-200 rounded-2xl py-3 px-4 pl-11 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition shadow-sm">
                 <span class="absolute left-4 top-3.5 opacity-30">🔍</span>
             </div>
             
-            <div class="flex items-start gap-3">
-                <span class="text-[11px] font-bold text-zinc-400 mt-2 shrink-0 uppercase tracking-widest">分类筛选</span>
-                <div id="tagContainer" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto scrollbar-hide pb-2">
-                    <div class="flex gap-2 animate-pulse">
-                        <div class="h-6 w-16 bg-zinc-200 rounded-md"></div>
-                        <div class="h-6 w-20 bg-zinc-200 rounded-md"></div>
+            <div class="bg-white/50 border border-zinc-200/50 rounded-2xl p-3">
+                <div class="flex justify-between items-center mb-2 px-1">
+                    <span class="text-[10px] font-black text-zinc-400 uppercase tracking-widest">分类筛选</span>
+                    <div class="flex gap-4">
+                        <button onclick="clearFilters()" class="text-[10px] text-red-500 font-bold hidden" id="btnClearFilters">清除</button>
+                        <button onclick="toggleExpandTags()" id="btnExpand" class="text-[10px] text-blue-600 font-bold flex items-center gap-1">
+                            展开全部 <span id="expandIcon">↓</span>
+                        </button>
                     </div>
+                </div>
+                
+                <div id="tagContainer" class="flex flex-wrap gap-2 tags-collapsed transition-all duration-300">
+                    <div class="h-8 w-16 bg-zinc-200 rounded-xl animate-pulse"></div>
                 </div>
             </div>
         </div>
-    </header>
 
-    <main class="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-100/30">
-        <div class="flex justify-between items-center mb-6" id="resultHeader">
-            <span class="text-[11px] font-bold text-zinc-400 uppercase tracking-widest" id="resultCount">正在同步...</span>
-            <button onclick="clearFilters()" class="text-xs text-blue-600 font-bold hover:underline hidden" id="btnClearFilters">
-                清除所有筛选
-            </button>
-        </div>
-
-        <div id="novelGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5"></div>
-
-        <div id="loading" class="py-10 flex flex-col items-center justify-center text-zinc-400 space-y-4">
-            <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-[10px] font-bold tracking-[0.2em] animate-pulse">LOADING MORE...</p>
+        <div class="p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-[11px] font-bold text-zinc-400 uppercase tracking-widest" id="resultCount">同步中...</span>
+            </div>
+            <div id="novelGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+            <div id="loading" class="py-10 flex flex-col items-center justify-center text-zinc-400 gap-2">
+                <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
         </div>
     </main>
 
     <script>
-        let currentPage = 1;
-        let isLoading = false;
-        let hasMore = true;
-        let globalTagStats = {}; 
-        let selectedTags = new Set();
-        let searchTimeout = null;
+        let currentPage = 1, isLoading = false, hasMore = true, globalTagStats = {}, selectedTags = new Set();
+        let isExpanded = false;
 
         async function init() {
             try {
-                const statsRes = await fetch('/api/novel/tags/stats');
-                globalTagStats = await statsRes.json();
+                const res = await fetch('/api/novel/tags/stats');
+                globalTagStats = await res.json();
                 renderTagButtons();
-            } catch (e) { console.error("统计加载失败"); }
-
+            } catch (e) { console.error(e); }
             loadNextPage(true);
 
-            const mainContent = document.querySelector('main');
-            mainContent.addEventListener('scroll', () => {
-                if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 200) {
-                    loadNextPage();
-                }
+            const main = document.querySelector('main');
+            main.addEventListener('scroll', () => {
+                if (main.scrollTop + main.clientHeight >= main.scrollHeight - 300) loadNextPage();
             });
 
             document.getElementById('searchInput').addEventListener('input', () => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => loadNextPage(true), 500);
+                clearTimeout(window.st);
+                window.st = setTimeout(() => loadNextPage(true), 500);
             });
+        }
 
-            const params = new URLSearchParams(window.location.search);
-            const tag = params.get('tag');
-            if (tag) {
-                selectedTags.add(tag);
-                setTimeout(() => {
-                    const btn = document.getElementById(`tag-btn-${tag}`);
-                    if(btn) btn.classList.add('tag-active');
-                    loadNextPage(true);
-                }, 100);
+        function toggleExpandTags() {
+            isExpanded = !isExpanded;
+            const container = document.getElementById('tagContainer');
+            const btn = document.getElementById('btnExpand');
+            const icon = document.getElementById('expandIcon');
+            
+            if (isExpanded) {
+                container.classList.replace('tags-collapsed', 'tags-expanded');
+                btn.firstChild.textContent = '收起筛选 ';
+                icon.textContent = '↑';
+            } else {
+                container.classList.replace('tags-expanded', 'tags-collapsed');
+                btn.firstChild.textContent = '展开全部 ';
+                icon.textContent = '↓';
+                // 收起时自动回滚到顶部，避免视觉丢失
+                document.querySelector('main').scrollTop = 0;
             }
         }
 
         async function loadNextPage(reset = false) {
             if (isLoading || (!hasMore && !reset)) return;
+            if (reset) { currentPage = 1; hasMore = true; document.getElementById('novelGrid').innerHTML = ''; }
             
-            if (reset) {
-                currentPage = 1;
-                hasMore = true;
-                document.getElementById('novelGrid').innerHTML = '';
-            }
-
             isLoading = true;
             document.getElementById('loading').style.visibility = 'visible';
-
+            
             const keyword = document.getElementById('searchInput').value;
             const tags = Array.from(selectedTags).join(',');
             
             try {
-                const url = `/api/novel/list?page=${currentPage}&size=24&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`;
-                const res = await fetch(url);
+                const res = await fetch(`/api/novel/list?page=${currentPage}&size=24&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`);
                 const data = await res.json();
-
                 renderGrid(data.items, !reset);
-                document.getElementById('resultCount').innerText = `已展示 ${document.querySelectorAll('#novelGrid > a').length} / ${data.total} 本`;
-                
+                document.getElementById('resultCount').innerText = `ITEMS: ${document.querySelectorAll('#novelGrid > a').length} / ${data.total}`;
                 currentPage++;
                 hasMore = data.has_more;
                 if (!hasMore) document.getElementById('loading').style.visibility = 'hidden';
-
-            } catch (e) {
-                console.error("加载失败", e);
-            } finally {
-                isLoading = false;
-            }
+            } finally { isLoading = false; }
         }
 
         function renderTagButtons() {
             const topTags = ['已完结', '连载中', '未解析'];
             const sortedTags = Object.keys(globalTagStats).sort((a, b) => {
                 if (topTags.includes(a) && !topTags.includes(b)) return -1;
-                if (!topTags.includes(a) && topTags.includes(b)) return 1;
                 return globalTagStats[b] - globalTagStats[a];
             });
 
-            const container = document.getElementById('tagContainer');
-            container.innerHTML = sortedTags.map(tag => `
+            document.getElementById('tagContainer').innerHTML = sortedTags.map(tag => `
                 <button onclick="toggleTag('${tag}')" id="tag-btn-${tag}" 
-                        class="px-3 py-1.5 rounded-xl text-[11px] border border-zinc-200 bg-white text-zinc-600 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 flex items-center gap-2 group">
+                        class="px-3 py-1.5 rounded-xl text-[11px] border border-zinc-200 bg-white text-zinc-600 transition-all flex items-center gap-2">
                     <span class="font-medium">${tag}</span>
-                    <span class="text-[9px] opacity-40 group-hover:opacity-100 font-mono">${globalTagStats[tag]}</span>
+                    <span class="text-[9px] opacity-40 font-mono">${globalTagStats[tag]}</span>
                 </button>
             `).join('');
         }
 
         function toggleTag(tag) {
             const btn = document.getElementById(`tag-btn-${tag}`);
-            if (selectedTags.has(tag)) {
-                selectedTags.delete(tag);
-                btn.classList.remove('tag-active');
-            } else {
-                selectedTags.add(tag);
-                btn.classList.add('tag-active');
-            }
+            selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
+            btn.classList.toggle('tag-active');
             document.getElementById('btnClearFilters').style.display = selectedTags.size > 0 ? 'inline' : 'none';
             loadNextPage(true);
         }
 
         function clearFilters() {
             selectedTags.clear();
-            document.querySelectorAll('[id^="tag-btn-"]').forEach(btn => btn.classList.remove('tag-active'));
-            document.getElementById('searchInput').value = '';
+            document.querySelectorAll('[id^="tag-btn-"]').forEach(b => b.classList.remove('tag-active'));
             document.getElementById('btnClearFilters').style.display = 'none';
             loadNextPage(true);
         }
 
-        function renderGrid(newItems, append = false) {
+        function renderGrid(items, append) {
             const grid = document.getElementById('novelGrid');
-            const html = newItems.map(item => {
-                const encoded = encodeURIComponent(item.filename);
-                const displayTags = item.tags.slice(0, 3).map(t => `<span class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-[9px] truncate max-w-[60px] inline-block">${t}</span>`).join('');
-                const wordCountLabel = item.wordCount > 0 ? `${(item.wordCount/10000).toFixed(1)}w字` : '待解析';
-                // 🌟 新增：如果已被标记为喜欢，则在封面右上角显示红心
-                const favIcon = item.isFav ? `<div class="absolute -top-1 -right-1 bg-white rounded-full p-1 shadow-md z-20"><svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>` : '';
-
-                return `
-                    <a href="/novel-detail?novel=${encoded}" class="bg-white rounded-2xl p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 border border-zinc-100 relative group overflow-hidden">
-                        ${favIcon}
-                        <div class="absolute top-2 left-2 z-10 bg-black/70 backdrop-blur text-white text-[9px] px-2 py-0.5 rounded-lg font-mono scale-90 opacity-0 group-hover:opacity-100 transition-opacity">${wordCountLabel}</div>
-                        <div class="aspect-[3/4.2] bg-gradient-to-br from-zinc-50 to-zinc-100 rounded-xl flex items-center justify-center text-4xl shadow-inner group-hover:scale-[1.03] transition-transform duration-500">${item.tags.includes('未解析') ? '📦' : '📗'}</div>
-                        <div class="flex flex-col gap-2 flex-1">
-                            <h3 class="font-bold text-[13px] text-zinc-800 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">${item.displayTitle}</h3>
-                            <div class="flex gap-1 flex-wrap mt-auto pt-2 border-t border-zinc-50">${displayTags}</div>
+            const html = items.map(item => `
+                <a href="/novel-detail?novel=${encodeURIComponent(item.filename)}" class="bg-white rounded-2xl p-3 shadow-sm border border-zinc-100 flex flex-col gap-3 relative group">
+                    <div class="aspect-[3/4] bg-zinc-50 rounded-xl flex items-center justify-center text-3xl shadow-inner">📗</div>
+                    <div class="flex flex-col gap-1 flex-1">
+                        <h3 class="font-bold text-[12px] text-zinc-800 line-clamp-2 leading-snug">${item.displayTitle}</h3>
+                        <div class="flex gap-1 flex-wrap mt-auto">
+                            ${item.tags.slice(0,2).map(t => `<span class="bg-zinc-100 text-zinc-400 px-1.5 py-0.5 rounded text-[8px]">${t}</span>`).join('')}
                         </div>
-                    </a>`;
-            }).join('');
-
-            if (append) {
-                grid.insertAdjacentHTML('beforeend', html);
-            } else {
-                grid.innerHTML = html;
-            }
+                    </div>
+                </a>`).join('');
+            append ? grid.insertAdjacentHTML('beforeend', html) : grid.innerHTML = html;
+        // 👇 关键：为新渲染的每个书籍卡片绑定点击事件
+    grid.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', function() {
+            this.classList.add('book-clicked');
+        });
+    });
+        
         }
 
         init();

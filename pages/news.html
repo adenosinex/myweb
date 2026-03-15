@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>网页智能分析系统</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f5f7fa; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .input-group { display: flex; gap: 10px; }
+        input[type="url"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .tag { background: #e1f0ff; color: #0056b3; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-right: 5px; }
+        .status-pending, .status-scraping, .status-analyzing { color: #f39c12; }
+        .status-completed { color: #27ae60; }
+        .status-failed { color: #e74c3c; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>提交网页分析</h2>
+    <div class="input-group">
+        <input type="url" id="urlInput" value="https://www.people.com.cn/" required>
+        <button onclick="submitUrl()" id="submitBtn">抓取并分析</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>分析结果</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>状态</th>
+                <th>URL</th>
+                <th>AI摘要</th>
+                <th>标签</th>
+                <th>耗时</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="resultBody">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    // 提交URL
+async function submitUrl() {
+    const input = document.getElementById('urlInput');
+    const url = input.value;
+    const btn = document.getElementById('submitBtn');
+    
+    if (!url) return;
+    btn.disabled = true;
+    btn.innerText = '正在扫描...';
+
+    try {
+        const res = await fetch('/news/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || '服务器响应错误');
+
+        if (data.count > 0) {
+            alert(`✅ 成功启动！发现 ${data.count} 篇文章，正在后台分析...`);
+            input.value = ''; // 成功才清空
+        } else {
+            alert(`⚠️ 扫描完成，但没有发现符合条件的新闻链接。请确认 Pattern 配置是否正确。`);
+        }
+        
+        fetchResults();
+    } catch (e) {
+        alert('❌ 提交失败: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '抓取并分析';
+    }
+} 
+
+
+// 获取并渲染列表
+    async function fetchResults() {
+        const res = await fetch('/news/results');
+        const data = await res.json();
+        const tbody = document.getElementById('resultBody');
+        tbody.innerHTML = '';
+
+        data.forEach(item => {
+            const tagsHtml = item.tags.map(t => `<span class="tag">${t}</span>`).join('');
+            const statusMap = {
+                'pending': '排队中', 'scraping': '抓取中', 'analyzing': 'AI分析中', 
+                'completed': '完成', 'failed': '失败'
+            };
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td class="status-${item.status}">${statusMap[item.status] || item.status}</td>
+                    <td><a href="${item.url}" target="_blank" style="max-width: 200px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.url}</a></td>
+                    <td style="max-width: 300px; font-size: 14px;">${item.status === 'failed' ? item.error_msg : (item.summary || '-')}</td>
+                    <td>${tagsHtml}</td>
+                    <td>${item.processing_time_sec ? item.processing_time_sec + 's' : '-'}</td>
+                    <td>
+                        ${item.status === 'completed' ? `<button style="padding: 5px 10px; font-size: 12px;" onclick="viewHTML('${item.id}')">查看源码</button>` : ''}
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // 查看源码
+    async function viewHTML(id) {
+        const res = await fetch(`/news/results/${id}/html`);
+        const data = await res.json();
+        if (data.html) {
+            const newWindow = window.open('', '_blank');
+            newWindow.document.write('<pre>' + newWindow.document.createTextNode(data.html).textContent + '</pre>');
+        }
+    }
+
+    // 初始加载与轮询（每5秒刷新一次状态）
+    fetchResults();
+    setInterval(fetchResults, 5000);
+</script>
+
+</body>
+</html>
