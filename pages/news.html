@@ -2,20 +2,23 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>网页解析工作站 v5.1</title>
+    <title>网页解析工作站 v5.3</title>
     <style>
-        :root { --border: #cbd5e1; --bg: #f8fafc; --primary: #1e293b; --accent: #2563eb; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--primary); padding: 20px; }
-        .card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        :root { --border: #cbd5e1; --bg: #f8fafc; --primary: #1e293b; --accent: #2563eb; --warning: #f59e0b; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--primary); padding: 20px; margin: 0; }
+        .card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .row { display: flex; gap: 10px; margin-bottom: 15px; align-items: flex-end; }
-        input, textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
-        button { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-family: 'Cascadia Code', monospace; font-size: 13px; }
+        button { padding: 10px 16px; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #94a3b8; }
+        
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
-        .err-text { color: #ef4444; font-size: 12px; }
-        .debugger { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; border-top: 2px dashed var(--border); padding-top: 15px; }
-        .tag { background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 2px 2px 0 0; display: inline-block; }
+        th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+        th { background: #f1f5f9; color: #475569; }
+        
+        .tag { background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; display: inline-block; }
+        .status-badge { font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: #f1f5f9; }
+        .label-hint { font-size: 11px; font-weight: bold; margin-bottom: 5px; display: block; color: #64748b; }
     </style>
 </head>
 <body>
@@ -23,52 +26,48 @@
 <div class="card">
     <div class="row">
         <div style="flex:1">
-            <input type="url" id="urlInput" placeholder="输入目标首页 URL (例如: https://www.people.com.cn)">
+            <label style="font-size:12px; font-weight:bold; margin-bottom:5px; display:block;">目标站点 URL</label>
+            <input type="url" id="urlInput" value="https://www.people.com.cn">
         </div>
         <button onclick="scanIndex()" id="scanBtn">扫描目录</button>
-        <button onclick="batchProcess()" id="batchBtn" style="background:#16a34a">批量处理 (HTML->JSON->AI)</button>
+        <button onclick="batchProcess()" id="batchBtn" style="background:#16a34a">顺序全量执行</button>
     </div>
 </div>
 
-<div class="card" id="debugArea" style="display:none; background:#f1f5f9; border: 2px solid #f59e0b;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin:0; color: #92400e;">🔧 节点异常调试面板</h3>
-        <button onclick="document.getElementById('debugArea').style.display='none'" style="background:#cbd5e1; color:#0f172a; padding:4px 8px;">关闭调试</button>
+<div id="debugPanel" class="card" style="display:none; border:2px solid var(--warning); background:#fffbeb;">
+    <h3 style="margin:0 0 15px 0;">⚙️ 站点全流程规则定制: <span id="currentDomain"></span></h3>
+    
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+        <div>
+            <label class="label-hint">1. 首页链接过滤 (Regex)</label>
+            <input type="text" id="indexRegIn" placeholder="如: /topics/\d+">
+        </div>
+        <div>
+            <label class="label-hint">2. 正文时间定位 (Selector)</label>
+            <input type="text" id="selIn" placeholder="如: .time-box">
+        </div>
+        <div>
+            <label class="label-hint">3. 时间清洗规则 (Regex)</label>
+            <input type="text" id="regIn" placeholder="如: (\d{4}-\d{2}-\d{2})">
+        </div>
     </div>
     
-    <input type="hidden" id="debugUrl">
-    <div class="debugger">
-        <div>
-            <h4>1. 解析规则调试</h4>
-            <div class="row">
-                <input type="text" id="selIn" placeholder="CSS Selector (定位时间位置)">
-                <input type="text" id="regIn" placeholder="Regex (提取具体日期)">
-            </div>
-            <textarea id="rawHtmlArea" rows="8" placeholder="点击下方[测试获取HTML]后，源码将显示在此处..."></textarea>
-            <div style="margin-top:10px; display: flex; gap: 10px;">
-                <button onclick="testHtml()" style="background:#0284c7;">获取纯HTML</button>
-                <button onclick="testParse()" style="background:#0f766e;">执行 JSON 解析</button>
-                <button onclick="saveConfig()" style="background:#f59e0b;">保存规则至数据库</button>
-            </div>
-        </div>
-        <div>
-            <h4>2. AI Prompt 调试</h4>
-            <textarea id="promptIn" rows="8">分析文章，严格返回 JSON格式: {"summary":"50字摘要","tags":["标签1","标签2"]}&#10;正文: {TEXT}</textarea>
-            <button onclick="testAi()" style="margin-top:10px;">执行自定义 AI 分析</button>
-            <pre id="aiResultArea" style="background:#fff; padding:10px; border:1px solid var(--border); font-size:12px; min-height:50px; white-space: pre-wrap; word-break: break-all;"></pre>
-        </div>
+    <div style="margin-top:15px; display:flex; justify-content: flex-end; gap:10px;">
+        <button onclick="scanIndex(true)" style="background:#0284c7;">🔬 仅测试首页扫描</button>
+        <button onclick="saveAllConfigs()" style="background:var(--warning);">💾 保存全站档案</button>
+        <button onclick="document.getElementById('debugPanel').style.display='none'" style="background:#cbd5e1; color:#1e293b;">关闭面板</button>
     </div>
 </div>
 
-<div class="card" style="padding:0;">
+<div class="card" style="padding:0; overflow:hidden;">
     <table>
         <thead>
             <tr>
-                <th width="40">#</th>
-                <th>文章资源 (URL)</th>
-                <th width="250">结构化解析 (JSON)</th>
-                <th width="300">AI 分析结果</th>
-                <th width="140">控制流操作</th>
+                <th width="50">#</th>
+                <th>文章资源</th>
+                <th width="200">解析数据</th>
+                <th width="300">AI 摘要</th>
+                <th width="130">操作</th>
             </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -77,193 +76,190 @@
 
 <script>
     let articles = [];
-    let siteConfig = { selector: "", regex: "" };
+    let siteConfig = { selector: "", regex: "", index_regex: "" };
     const API = "/smart_scraper";
 
-    // --- 健壮的 URL 处理 ---
-    function getValidUrl(inputId) {
-        let val = document.getElementById(inputId).value.trim();
-        if (!val) return null;
-        if (!/^https?:\/\//i.test(val)) val = 'http://' + val; // 自动补全 http
-        document.getElementById(inputId).value = val;
-        try { return new URL(val); } catch (e) { return null; }
+    function formatNumber(num) {
+        if (!num || isNaN(num)) return '0';
+        if (num >= 10000) return (num / 10000).toFixed(1) + 'w';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+        return num.toString();
     }
 
-    async function scanIndex() {
+    function getValidUrl(id) {
+        let val = document.getElementById(id).value.trim();
+        if (!val) return null;
+        if (!/^https?:\/\//i.test(val)) val = 'http://' + val;
+        try { return new URL(val); } catch(e) { return null; }
+    }
+
+    async function scanIndex(isDebug = false) {
         const urlObj = getValidUrl('urlInput');
-        if (!urlObj) return alert("请输入有效的目标站点 URL");
-        
+        if (!urlObj) return alert("URL 错误");
         const domain = urlObj.hostname;
         const btn = document.getElementById('scanBtn');
-        btn.disabled = true; btn.innerText = "扫描中...";
-        
-        try {
-            // 获取已有配置
-            const cfgRes = await fetch(`${API}/config/get?domain=${domain}`);
-            siteConfig = await cfgRes.json();
-            document.getElementById('selIn').value = siteConfig.selector || "";
-            document.getElementById('regIn').value = siteConfig.regex || "";
 
-            // 扫描目录
-            const res = await fetch(`${API}/scan_index`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url: urlObj.href}) });
+        if (!isDebug) {
+            btn.disabled = true; btn.innerText = "扫描中...";
+            try {
+                const cfgRes = await fetch(`${API}/config/get?domain=${domain}`);
+                const cfg = await cfgRes.json();
+                siteConfig = cfg;
+                document.getElementById('indexRegIn').value = cfg.index_regex || "";
+                document.getElementById('selIn').value = cfg.selector || "";
+                document.getElementById('regIn').value = cfg.regex || "";
+                document.getElementById('currentDomain').innerText = domain;
+                document.getElementById('debugPanel').style.display = 'block';
+            } catch(e) { console.error("获取配置失败", e); }
+        }
+
+        try {
+            const res = await fetch(`${API}/scan_index`, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({
+                    url: urlObj.href,
+                    link_regex: document.getElementById('indexRegIn').value 
+                }) 
+            });
             const data = await res.json();
-            
             if(data.status === "success") {
-                articles = data.links.map(l => ({ url:l.url, title:l.title, html:"", content:"", pub_date:"", summary:"", tags:[], status:"等待指令" }));
+                articles = data.links.map(l => ({ 
+                    url:l.url, title:l.title, html:"", content:"", pub_date:"", summary:"", tags:[], status:"等待" 
+                }));
                 render();
-            } else {
-                alert("扫描失败: " + data.error);
-            }
-        } catch(e) { alert("网络异常，无法连接到核心服务器"); }
-        finally { btn.disabled = false; btn.innerText = "扫描目录"; }
+            } else { alert("扫描异常: " + data.error); }
+        } catch(e) {
+            alert("请求失败，请检查后端服务");
+        } finally {
+            btn.disabled = false; btn.innerText = "扫描目录";
+        }
     }
 
-    // 核心流 1：获取纯 HTML
     async function fetchHtml(index) {
-        articles[index].status = "抓取HTML..."; render();
+        articles[index].status = "抓取中..."; render();
         try {
-            const res = await fetch(`${API}/html`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({urls:[articles[index].url]}) });
+            const res = await fetch(`${API}/html`, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({urls: [articles[index].url]}) 
+            });
             const data = await res.json();
-            articles[index].html = data.data[articles[index].url].html;
-            articles[index].status = "HTML已就绪";
-        } catch(e) { articles[index].status = "抓取失败"; }
+            const resData = data.data[articles[index].url];
+            articles[index].html = resData.html;
+            articles[index].content = resData.content;
+            articles[index].title = resData.title || articles[index].title;
+            articles[index].status = "就绪";
+        } catch(e) { articles[index].status = "失败"; }
         render();
     }
 
-    // 核心流 2：纯粹的正则与 DOM 解析
     async function parseHtml(index) {
-        if(!articles[index].html) {
-            alert("请先获取 HTML!"); return;
-        }
-        articles[index].status = "解析JSON..."; render();
         const item = articles[index];
+        if (!item.html) return;
+        item.status = "解析中..."; render();
         try {
             const res = await fetch(`${API}/parse`, { 
-                method:'POST', headers:{'Content-Type':'application/json'}, 
-                body:JSON.stringify({url:item.url, html:item.html, selector:siteConfig.selector, regex:siteConfig.regex}) 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({
+                    url: item.url, 
+                    html: item.html, 
+                    selector: document.getElementById('selIn').value, 
+                    regex: document.getElementById('regIn').value
+                }) 
             });
             const data = await res.json();
-            if(data.status === "success") {
-                item.content = data.content; item.pub_date = data.pub_date; item.title = data.title || item.title;
-                item.status = item.pub_date.includes("未命中") ? "解析异常" : "解析完成";
-            } else {
-                item.status = "解析报错";
-            }
-        } catch(e) { item.status = "解析失败"; }
+            item.pub_date = data.pub_date;
+            item.status = item.pub_date.includes("未命中") ? "异常" : "完成";
+        } catch(e) { item.status = "错误"; }
         render();
     }
 
-    // 核心流 3：大模型调用
-    async function runAi(index, customPrompt = null) {
-        if(!articles[index].content) {
-            alert("正文为空，请先执行解析!"); return;
-        }
-        articles[index].status = "AI处理中..."; render();
+    async function runAi(index) {
         const item = articles[index];
-        const promptText = customPrompt ? customPrompt.replace("{TEXT}", item.content.substring(0,2000)) : "";
-        
+        if (!item.content) return;
+        item.status = "AI分析..."; render();
         try {
             const res = await fetch(`${API}/ai`, { 
-                method:'POST', headers:{'Content-Type':'application/json'}, 
-                body:JSON.stringify({content:item.content, prompt:promptText}) 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({content: item.content}) 
             });
             const data = await res.json();
-            if(data.status === "success") {
-                item.summary = data.summary; item.tags = data.tags; item.status = "全流程完成";
-            } else {
-                item.summary = data.error || "AI处理报错"; item.status = "AI失败";
-            }
-        } catch(e) { item.status = "AI网络异常"; }
+            item.summary = data.summary;
+            item.tags = data.tags;
+            item.status = "全胜完成";
+        } catch(e) { item.status = "AI失败"; }
         render();
     }
 
-    // 全自动流水线
-    async function processSingle(index) {
-        await fetchHtml(index);
-        await parseHtml(index);
-        if(articles[index].status !== "解析异常" && articles[index].status !== "解析失败") {
-            await runAi(index);
+    async function processSingle(i) {
+        await fetchHtml(i);
+        await parseHtml(i);
+        if (articles[i].content && articles[i].content.length > 20) {
+            await runAi(i);
+        } else {
+            articles[i].status = "内容过短";
+            render();
         }
     }
 
     async function batchProcess() {
         const btn = document.getElementById('batchBtn');
-        btn.disabled = true; btn.innerText = "批量处理中...";
+        btn.disabled = true;
         for(let i=0; i<articles.length; i++) {
-            if(articles[i].status === "等待指令") await processSingle(i);
+            if(articles[i].status === "等待") await processSingle(i);
         }
-        btn.disabled = false; btn.innerText = "批量处理 (HTML->JSON->AI)";
+        btn.disabled = false;
     }
 
-    // --- 调试模式支持 ---
-    function openDebug(index) {
-        const item = articles[index];
-        document.getElementById('debugArea').style.display = 'block';
-        document.getElementById('debugUrl').value = item.url;
-        document.getElementById('rawHtmlArea').value = item.html || "该条目尚未抓取 HTML，请点击下方按钮测试获取。";
+    async function saveAllConfigs() {
+        const domain = document.getElementById('currentDomain').innerText;
+        try {
+            await fetch(`${API}/config/save`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    domain,
+                    index_regex: document.getElementById('indexRegIn').value,
+                    selector: document.getElementById('selIn').value,
+                    regex: document.getElementById('regIn').value
+                })
+            });
+            alert("全站抓取档案已固化。");
+        } catch(e) { alert("保存失败"); }
     }
 
-    async function testHtml() {
-        const url = document.getElementById('debugUrl').value;
-        const idx = articles.findIndex(a => a.url === url);
-        if(idx === -1) return alert("无效的测试索引");
-        document.getElementById('rawHtmlArea').value = "获取中...";
-        await fetchHtml(idx);
-        document.getElementById('rawHtmlArea').value = articles[idx].html;
-    }
-
-    async function testParse() {
-        const url = document.getElementById('debugUrl').value;
-        const idx = articles.findIndex(a => a.url === url);
-        siteConfig.selector = document.getElementById('selIn').value;
-        siteConfig.regex = document.getElementById('regIn').value;
-        await parseHtml(idx);
-    }
-
-    async function testAi() {
-        const url = document.getElementById('debugUrl').value;
-        const idx = articles.findIndex(a => a.url === url);
-        document.getElementById('aiResultArea').innerText = "请求大模型中...";
-        const promptTemplate = document.getElementById('promptIn').value;
-        await runAi(idx, promptTemplate);
-        document.getElementById('aiResultArea').innerText = JSON.stringify({summary: articles[idx].summary, tags: articles[idx].tags}, null, 2);
-    }
-
-    async function saveConfig() {
-        const urlObj = new URL(document.getElementById('debugUrl').value);
-        if(!urlObj) return alert("无法获取域名");
-        await fetch(`${API}/config/save`, { method:'POST', headers:{'Content-Type':'application/json'}, 
-            body:JSON.stringify({domain: urlObj.hostname, selector: document.getElementById('selIn').value, regex: document.getElementById('regIn').value}) });
-        alert("配置已固化至数据库！");
+    async function resetAll() {
+        if(confirm("确定清空全库？")) {
+            await fetch(`${API}/db_reset`, {method: 'POST'});
+            articles = [];
+            render();
+        }
     }
 
     function render() {
-        document.getElementById('tableBody').innerHTML = articles.map((item, i) => {
-            const dateColor = item.pub_date.includes('未命中') ? '#ef4444' : '#16a34a';
-            return `
+        document.getElementById('tableBody').innerHTML = articles.map((item, i) => `
             <tr>
-                <td style="color:#94a3b8; font-weight:bold;">${i+1}</td>
+                <td>${i+1}</td>
                 <td>
                     <a href="${item.url}" target="_blank" style="text-decoration:none;font-weight:bold;color:#1e293b;">${item.title}</a>
-                    <div style="font-size:11px; color:#64748b; margin-top:6px;">正文长度: ${item.content ? item.content.length : 0}</div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;">字数: ${formatNumber(item.content.length)}</div>
                 </td>
                 <td>
-                    ${item.pub_date ? `<div style="color:${dateColor}; font-weight:bold; font-size:12px; margin-bottom:6px;">📅 ${item.pub_date}</div>` : ''}
-                    ${item.content ? `<div style="font-size:11px; color:#475569;">已提取正文</div>` : ''}
+                    ${item.pub_date ? `<div style="color:${item.pub_date.includes('未命中')?'#ef4444':'#16a34a'};font-weight:bold;">${item.pub_date}</div>` : ''}
                 </td>
                 <td>
-                    <div style="font-size:13px;">${item.summary || '-'}</div>
-                    <div style="margin-top:6px;">${(item.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+                    <div style="font-size:12px;">${item.summary || '-'}</div>
+                    <div style="margin-top:4px;">${(item.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
                 </td>
                 <td>
-                    <div style="font-size:11px; font-weight:bold; margin-bottom:6px; color:${item.status.includes('异常')||item.status.includes('失败')?'#ef4444':'#475569'}">${item.status}</div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                        <button onclick="processSingle(${i})" style="padding:4px 8px; font-size:11px;">自动管线处理</button>
-                        <button onclick="openDebug(${i})" style="padding:4px 8px; font-size:11px; background:#f59e0b; color:#fff;">进入手动调试</button>
-                    </div>
+                    <div class="status-badge" style="color:${item.status.includes('异常')?'#ef4444':'#475569'};margin-bottom:5px;">${item.status}</div>
+                    <button onclick="processSingle(${i})" style="padding:4px 8px;font-size:11px;">执行</button>
                 </td>
             </tr>
-        `}).join('');
+        `).join('');
     }
 </script>
 </body>

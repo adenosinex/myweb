@@ -19,18 +19,27 @@ def get_conn():
 
 def init_db():
     with get_conn() as conn:
+        # 1. 网页数据缓存表
         conn.execute("""
         CREATE TABLE IF NOT EXISTS webpages (
             url TEXT PRIMARY KEY, title TEXT, clean_text TEXT, 
             pub_date TEXT, ai_summary TEXT, tags TEXT, raw_html TEXT
         )""")
+        # 2. 站点规则配置表
         conn.execute("""
         CREATE TABLE IF NOT EXISTS site_configs (
-            domain TEXT PRIMARY KEY, url_pattern TEXT, selector TEXT, regex TEXT
+            domain TEXT PRIMARY KEY, 
+            index_regex TEXT,   -- 首页链接过滤正则
+            selector TEXT,      -- 时间选择器
+            regex TEXT          -- 时间清洗正则
         )""")
+        # 数据库平滑升级检查
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(site_configs)").fetchall()]
+        if 'index_regex' not in cols:
+            conn.execute("ALTER TABLE site_configs ADD COLUMN index_regex TEXT")
 init_db()
 
-# ================= 1. 获取资源接口 (依赖 Node 节点返回 raw_html, title, content) =================
+# ================= 1. 资源获取接口 (批量/并发) =================
 def fetch_single_html(url, bypass_cache):
     if not bypass_cache:
         with get_conn() as conn:
@@ -40,6 +49,7 @@ def fetch_single_html(url, bypass_cache):
 
     try:
         resp = requests.post(f"{NODE_API_URL}/api/fetch", json={"url": url}, timeout=30)
+        resp.raise_for_status()
         data = resp.json()
         raw_html = data.get("raw_html", "")
         title = data.get("title", "")
@@ -68,7 +78,7 @@ def api_html():
             
     return jsonify({"status": "success", "data": results})
 
-# ================= 2. 本地解析接口 (仅负责时间提取) =================
+# ================= 2. 结构化解析接口 (时间提取) =================
 @scrape_bp.route("/parse", methods=["POST"])
 def api_parse():
     data = request.json
@@ -78,38 +88,32 @@ def api_parse():
     regex = data.get("regex", "")
     
     if not html or html.startswith("Error:"):
-        return jsonify({"status": "error", "error": "无效的 HTML 内容"})
+        return jsonify({"status": "error", "error": "无效的内容"})
 
-    # 从数据库拿回 Node 节点已经解析好的标题和正文
     with get_conn() as conn:
         row = conn.execute("SELECT title, clean_text FROM webpages WHERE url=?", (url,)).fetchone()
-    title = row[0] if row else "未知标题"
+    
+    title = row[0] if row else "未捕获标题"
     content = row[1] if row else ""
 
-    # 使用 BeautifulSoup + Regex 提取发布时间
     soup = BeautifulSoup(html, 'html.parser')
     target_text = ""
     if selector:
         try:
-            for s in selector.split(','):
-                el = soup.select_one(s.strip())
-                if el:
-                    target_text = el.get_text(separator=' ', strip=True)
-                    break
+            el = soup.select_one(selector)
+            if el: target_text = el.get_text(separator=' ', strip=True)
         except: pass
-        
+    
     if not target_text: 
         target_text = soup.get_text(separator=' ', strip=True)[:1000]
     
     pub_date = ""
     if regex and target_text:
-        try:
-            match = re.search(regex, target_text)
-            if match: pub_date = match.group(1).strip()
-        except: pass
+        match = re.search(regex, target_text)
+        if match: pub_date = match.group(1).strip()
         
     if not pub_date:
-        sample = re.sub(r'\s+', ' ', target_text[:100])
+        sample = re.sub(r'\s+', ' ', target_text[:60])
         pub_date = f"未命中: {sample}..."
 
     with get_conn() as conn:
@@ -123,10 +127,10 @@ def api_ai():
     content = request.json.get("content", "")
     custom_prompt = request.json.get("prompt", "")
     
-    if not content:
-        return jsonify({"status": "error", "error": "正文为空"})
+    if not content or len(content) < 10:
+        return jsonify({"status": "error", "error": "正文内容太短，无法分析"})
 
-    prompt = custom_prompt if custom_prompt else f"分析文章，严格返回 JSON格式: {{\"summary\":\"50字摘要\",\"tags\":[\"标签1\",\"标签2\"]}}\n正文:{content[:2000]}"
+    prompt = custom_prompt if custom_prompt else f"分析文章，严格返回 JSON格式: {{\"summary\":\"50字摘要\",\"tags\":[\"标签\"]}}\n正文:{content[:2000]}"
     
     try:
         res = client.chat.completions.create(model="mimo-v2-flash", messages=[{"role": "user", "content": prompt}], temperature=0.1)
@@ -136,25 +140,53 @@ def api_ai():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e), "summary": "AI分析失败", "tags": []})
 
-# ================= 配置与扫描路由 =================
+# ================= 4. 配置与扫描路由 =================
 @scrape_bp.route("/config/get", methods=["GET"])
 def get_config():
+    domain = request.args.get("domain")
     with get_conn() as conn:
-        row = conn.execute("SELECT selector, regex FROM site_configs WHERE domain=?", (request.args.get("domain"),)).fetchone()
-    return jsonify({"selector": row[0] if row else "", "regex": row[1] if row else ""})
+        row = conn.execute("SELECT index_regex, selector, regex FROM site_configs WHERE domain=?", (domain,)).fetchone()
+    if row:
+        return jsonify({"index_regex": row[0], "selector": row[1], "regex": row[2]})
+    return jsonify({"index_regex": "", "selector": "", "regex": ""})
 
 @scrape_bp.route("/config/save", methods=["POST"])
 def save_config():
     data = request.json
     with get_conn() as conn:
-        conn.execute("INSERT INTO site_configs (domain, selector, regex) VALUES (?, ?, ?) ON CONFLICT(domain) DO UPDATE SET selector=excluded.selector, regex=excluded.regex", 
-                     (data['domain'], data.get('selector'), data.get('regex')))
+        conn.execute("""
+            INSERT INTO site_configs (domain, index_regex, selector, regex) VALUES (?, ?, ?, ?)
+            ON CONFLICT(domain) DO UPDATE SET 
+                index_regex=excluded.index_regex, 
+                selector=excluded.selector, 
+                regex=excluded.regex
+        """, (data['domain'], data.get('index_regex'), data.get('selector'), data.get('regex')))
     return jsonify({"status": "success"})
 
 @scrape_bp.route("/scan_index", methods=["POST"])
 def scan():
+    url = request.json.get("url")
+    domain = urlparse(url).netloc
+    
+    with get_conn() as conn:
+        row = conn.execute("SELECT index_regex FROM site_configs WHERE domain=?", (domain,)).fetchone()
+    
+    link_regex = request.json.get("link_regex") or (row[0] if row else None)
+    
     try:
-        resp = requests.post(f"{NODE_API_URL}/api/scan", json={"url": request.json.get("url")}, timeout=40)
-        return jsonify({"status": "success", "links": resp.json().get("links", [])})
+        resp = requests.post(f"{NODE_API_URL}/api/scan", json={"url": url}, timeout=40)
+        raw_links = resp.json().get("links", [])
+        
+        if link_regex:
+            try:
+                raw_links = [l for l in raw_links if re.search(link_regex, l.get('url',''))]
+            except: pass # 正则错误则不匹配
+        
+        return jsonify({"status": "success", "links": raw_links})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)})
+
+@scrape_bp.route("/db_reset", methods=["POST"])
+def clear_db():
+    with get_conn() as conn: conn.execute("DELETE FROM webpages")
+    return jsonify({"status": "success"})
