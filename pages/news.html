@@ -2,205 +2,167 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>AI 网页分析控制台 v3.1</title>
+    <title>AI 智能分析终端 v4.5</title>
     <style>
-        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --error: #e74c3c; --bg: #f8f9fa; --border: #e2e8f0; }
-        body { font-family: 'PingFang SC', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--primary); margin: 0; padding: 20px; line-height: 1.6; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 25px; margin-bottom: 20px; border: 1px solid var(--border); }
-        h2, h3 { margin-top: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1.2rem; }
-
-        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
-        input { flex: 1; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; }
-        input:focus { border-color: var(--accent); }
-        
-        .btn { padding: 10px 20px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
-        .btn-scan { background: var(--accent); color: white; }
-        .btn-clear { background: #edf2f7; color: #4a5568; font-size: 12px; }
-        .btn-all { background: var(--success); color: white; margin-bottom: 15px; }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-
-        /* 目录列表 (带序号) */
-        .dir-container { border: 1px solid var(--border); border-radius: 8px; max-height: 300px; overflow-y: auto; }
-        .link-item { display: flex; align-items: center; padding: 10px 15px; border-bottom: 1px solid var(--border); background: white; }
-        .no-badge { width: 24px; height: 24px; background: #f1f5f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: #64748b; margin-right: 12px; flex-shrink: 0; }
-        .link-info { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* 表格区域 */
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { background: #f8fafc; padding: 12px; font-size: 13px; color: #64748b; border-bottom: 2px solid var(--border); }
-        td { padding: 15px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: top; }
-        
-        .time-text { font-family: monospace; color: #94a3b8; font-weight: bold; }
-        .status-pill { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 800; }
-        .status-completed { background: #dcfce7; color: #166534; }
-        .status-failed { background: #fee2e2; color: #991b1b; }
-        .tag { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin: 1px; }
+        :root { --primary: #1e293b; --accent: #2563eb; --warning: #f59e0b; --bg: #f8fafc; --border: #cbd5e1; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--primary); padding: 20px; margin: 0; }
+        .card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .row { display: flex; gap: 10px; margin-bottom: 15px; }
+        input { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
+        button { padding: 10px 15px; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-red { background: #ef4444; }
+        .btn-orange { background: var(--warning); }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+        th { background: #f1f5f9; color: #475569; }
+        .tag { background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+        dialog { border: none; border-radius: 8px; width: 80%; max-width: 800px; padding: 0; }
+        .modal-body { padding: 20px; white-space: pre-wrap; max-height: 70vh; overflow-y: auto; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card">
-        <h2>
-            <span>🌐 网页分析控制台</span>
-            <button class="btn btn-clear" onclick="clearInput()">清空输入</button>
-        </h2>
-        <div class="input-group">
-            <input type="url" id="urlInput" placeholder="输入首页地址...">
-            <button onclick="scanUrl()" id="scanBtn" class="btn btn-scan">扫描首页</button>
-        </div>
-        
-        <div id="controls" style="display:none">
-            <button onclick="analyzeAll()" class="btn btn-all" id="allBtn">⚡ 按序全量分析</button>
-            <div class="dir-container" id="dirList"></div>
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>🌐 扫描与任务调度</h2>
+        <button class="btn-red" onclick="resetAll()">清空全站数据</button>
+    </div>
+    <div class="row">
+        <input type="url" id="urlInput" placeholder="输入首页地址...">
+        <button onclick="scanIndex()">扫描首页目录</button>
+    </div>
+    <div id="debugPanel" style="display:none; border:2px solid var(--warning); padding:15px; border-radius:8px; background:#fffbeb;">
+        <h4 style="margin:0 0 10px 0;">⚙️ 站点规则调试: <span id="currentDomain"></span></h4>
+        <div class="row">
+            <input type="text" id="selIn" placeholder="CSS选择器 (如 p.sou)">
+            <input type="text" id="regIn" placeholder="正则表达式">
+            <button class="btn-orange" onclick="saveRules()">保存并应用</button>
         </div>
     </div>
-
-    <div class="card">
-        <h3>
-            <span>📊 历史分析记录</span>
-            <button class="btn btn-clear" onclick="clearHistory()" style="color: var(--error);">清空历史库</button>
-        </h2>
-        <div style="overflow-x: auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th width="40">#</th>
-                        <th width="90">时间</th>
-                        <th width="240">文章标题</th>
-                        <th>AI 核心内容分析</th>
-                        <th width="150">关键词</th>
-                        <th width="90">状态</th>
-                    </tr>
-                </thead>
-                <tbody id="resultBody"></tbody>
-            </table>
-        </div>
+    <div id="batchArea" style="display:none; margin-top:15px;">
+        <button style="background:#16a34a" onclick="runBatch()">▶ 顺序全分析</button>
     </div>
 </div>
 
+<div class="card">
+    <table>
+        <thead>
+            <tr><th width="40">#</th><th width="280">文章标题 / 时间</th><th>AI 摘要 / 标签</th><th width="120">耗时</th><th width="100">状态</th></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+
+<dialog id="contentModal">
+    <div style="padding:15px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">
+        <strong id="modalTitle"></strong>
+        <button onclick="contentModal.close()">关闭</button>
+    </div>
+    <div class="modal-body" id="modalText"></div>
+</dialog>
+
 <script>
-    let currentLinks = [];
-    const DEFAULT_URL = "https://www.people.com.cn/";
+    let articles = JSON.parse(localStorage.getItem('scraper_v45_state')) || [];
+    const API_BASE = "/smart_scraper";
 
     window.onload = () => {
-        // 1. 恢复上次输入或使用默认值
-        const savedUrl = localStorage.getItem('last_scan_url') || DEFAULT_URL;
-        document.getElementById('urlInput').value = savedUrl;
-        
-        // 2. 初始加载数据
-        refreshTable();
-        // 3. 轮询
-        setInterval(refreshTable, 4000); 
+        document.getElementById('urlInput').value = localStorage.getItem('last_url') || "https://www.people.com.cn/";
+        if(articles.length > 0) { render(); document.getElementById('batchArea').style.display='block'; }
     };
 
-    function clearInput() {
-        document.getElementById('urlInput').value = "";
-        localStorage.removeItem('last_scan_url');
-    }
-
-    async function clearHistory() {
-        // 直接执行，无需二次提示
-        try {
-            const res = await fetch('/api/clear', { method: 'POST' });
-            const data = await res.json();
-            if (data.status === 'success') {
-                document.getElementById('resultBody').innerHTML = ""; // 立即清空界面
-                refreshTable(); // 重新拉取
-            }
-        } catch (e) {
-            console.error("清空失败", e);
-        }
-    }
-
-    async function scanUrl() {
-        const url = document.getElementById('urlInput').value;
-        if (!url) return;
-        localStorage.setItem('last_scan_url', url);
-        
-        const btn = document.getElementById('scanBtn');
-        btn.disabled = true;
-        btn.innerText = "扫描中...";
-
-        try {
-            const res = await fetch('/api/scrape', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ url })
-            });
-            const data = await res.json();
-            currentLinks = data.links || [];
-            renderDirectory();
-            document.getElementById('controls').style.display = currentLinks.length ? 'block' : 'none';
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "扫描首页";
-        }
-    }
-
-    function renderDirectory() {
-        const list = document.getElementById('dirList');
-        list.innerHTML = currentLinks.map((item, i) => `
-            <div class="link-item">
-                <div class="no-badge">${i + 1}</div>
-                <div class="link-info">${item.title || '（未获取标题）'}</div>
-                <button onclick="analyzeOne('${item.url}', ${i})" id="btn-${i}" class="btn btn-scan" style="padding: 5px 12px; font-size: 11px;">分析</button>
-            </div>
+    function render() {
+        localStorage.setItem('scraper_v45_state', JSON.stringify(articles));
+        document.getElementById('tableBody').innerHTML = articles.map((item, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td>
+                    <a href="${item.url}" target="_blank" style="font-weight:bold; text-decoration:none; color:#1e293b;">${item.title}</a>
+                    <div style="color:#16a34a; font-size:12px; margin-top:4px;">${item.pub_date ? '📅 '+item.pub_date : ''}</div>
+                </td>
+                <td>
+                    <div style="font-size:13px;">${item.summary || '-'}</div>
+                    <div style="margin-top:5px;">${(item.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+                </td>
+                <td style="font-family:monospace; font-size:11px;">
+                    抓取:${item.fDur||'--'}s<br>智核:${item.aDur||'--'}s
+                </td>
+                <td>
+                    <div style="font-size:11px; font-weight:bold; margin-bottom:5px;">${item.status}</div>
+                    ${item.content ? `<button onclick="view(${i})" style="padding:3px 8px; font-size:11px;">预览</button>` : `<button onclick="process(${i})" style="padding:3px 8px; font-size:11px;">执行</button>`}
+                </td>
+            </tr>
         `).join('');
     }
 
-    async function analyzeOne(url, index) {
-        const btn = document.getElementById(`btn-${index}`);
-        if(btn) { btn.disabled = true; btn.innerText = "已提交"; }
-
-        await fetch('/api/analyze', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ url })
-        });
+    async function scanIndex() {
+        const url = document.getElementById('urlInput').value;
+        const domain = new URL(url).hostname;
+        localStorage.setItem('last_url', url);
+        
+        const res = await fetch(`${API_BASE}/scan_index`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url}) });
+        const data = await res.json();
+        articles = data.links.map(l => ({ url:l.url, title:l.title, status:'等待' }));
+        
+        document.getElementById('currentDomain').innerText = domain;
+        document.getElementById('debugPanel').style.display = 'block';
+        document.getElementById('batchArea').style.display = 'block';
+        
+        const cfgRes = await fetch(`${API_BASE}/config/get?domain=${domain}`);
+        const cfg = await cfgRes.json();
+        document.getElementById('selIn').value = cfg.selector;
+        document.getElementById('regIn').value = cfg.regex;
+        render();
     }
 
-    async function analyzeAll() {
-        const btn = document.getElementById('allBtn');
-        btn.disabled = true;
-        for (let i = 0; i < currentLinks.length; i++) {
-            const itemBtn = document.getElementById(`btn-${i}`);
-            if (itemBtn && !itemBtn.disabled) {
-                analyzeOne(currentLinks[i].url, i);
-                await new Promise(r => setTimeout(r, 600)); 
-            }
+    async function saveRules() {
+        const domain = document.getElementById('currentDomain').innerText;
+        await fetch(`${API_BASE}/config/save`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ domain, selector:document.getElementById('selIn').value, regex:document.getElementById('regIn').value })
+        });
+        alert("规则已应用");
+    }
+
+    async function process(i) {
+        let item = articles[i];
+        item.status = "抓取中"; render();
+        
+        const s1 = performance.now();
+        const r1 = await fetch(`${API_BASE}/fetch_content`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:item.url}) });
+        const d1 = await r1.json();
+        item.fDur = ((performance.now()-s1)/1000).toFixed(2);
+        
+        if(d1.status==='success') {
+            item.content = d1.content; item.pub_date = d1.pub_date; item.title = d1.title;
+            item.status = "分析中"; render();
+            
+            const s2 = performance.now();
+            const r2 = await fetch(`${API_BASE}/analyze_ai`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:item.url}) });
+            const d2 = await r2.json();
+            item.aDur = ((performance.now()-s2)/1000).toFixed(2);
+            item.summary = d2.summary; item.tags = d2.tags; item.status = "完成";
+        } else { item.status = "失败"; }
+        render();
+    }
+
+    async function runBatch() {
+        for(let i=0; i<articles.length; i++) {
+            if(articles[i].status !== "完成") await process(i);
         }
     }
 
-    async function refreshTable() {
-        try {
-            const res = await fetch('/api/results');
-            const data = await res.json();
-            const tbody = document.getElementById('resultBody');
-            
-            tbody.innerHTML = data.map((item, i) => {
-                const timeStr = item.created ? item.created.split(' ')[1] : '--:--';
-                let content = item.summary || "";
-                if (item.status === 'failed') {
-                    content = `<span style="color:var(--error); font-size:12px;">${item.error || '解析失败'}</span>`;
-                }
+    function view(i) {
+        document.getElementById('modalTitle').innerText = articles[i].title;
+        document.getElementById('modalText').innerText = articles[i].content;
+        document.getElementById('contentModal').showModal();
+    }
 
-                return `
-                    <tr>
-                        <td style="color:#cbd5e0; font-weight:bold;">${i + 1}</td>
-                        <td class="time-text">${timeStr}</td>
-                        <td style="font-weight:600;">${item.title || '提取中...'}</td>
-                        <td style="color:#444;">${content}</td>
-                        <td>${(item.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</td>
-                        <td><span class="status-pill status-${item.status}">${item.status}</span></td>
-                    </tr>
-                `;
-            }).join('');
-        } catch (e) { }
+    async function resetAll() {
+        if(confirm("确定清空数据？")) {
+            await fetch(`${API_BASE}/db_reset`, {method:'POST'});
+            localStorage.clear(); location.reload();
+        }
     }
 </script>
-
 </body>
 </html>

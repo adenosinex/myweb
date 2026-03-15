@@ -1,16 +1,16 @@
-import os, sqlite3, json, uuid, time, requests
+import os, sqlite3, json, requests, re
 from flask import Blueprint, request, jsonify
-from concurrent.futures import ThreadPoolExecutor
+ 
 from openai import OpenAI
+from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
-scrape_bp = Blueprint('scrape', __name__)
+# 定义 Blueprint 及其唯一路由前缀
+scrape_bp = Blueprint('smart_scraper', __name__, url_prefix='/smart_scraper')
+ 
 
-# --- 数据库配置：使用绝对路径确保稳定性 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "web_analysis.db")
-
-executor = ThreadPoolExecutor(max_workers=5)
+DB_PATH = os.path.join(BASE_DIR, "web_cache.db")
 NODE_API_URL = "http://192.168.31.124:8901"
 client = OpenAI(base_url='https://api.xiaomimimo.com/v1', api_key=os.getenv("MI_API_KEY"))
 
@@ -18,104 +18,123 @@ def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 def init_db():
-    print(f"[*] 正在初始化数据库: {DB_PATH}")
     with get_conn() as conn:
         conn.execute("""
         CREATE TABLE IF NOT EXISTS webpages (
-            id TEXT PRIMARY KEY,
-            url TEXT,
-            title TEXT,
-            clean_text TEXT,
-            ai_summary TEXT,
-            tags TEXT,
-            status TEXT,
-            error_msg TEXT,
-            created_at DATETIME DEFAULT (datetime('now','localtime'))
-        )
-        """)
-    print("[+] 数据库初始化成功。")
-
-# 启动即执行初始化
+            url TEXT PRIMARY KEY, title TEXT, clean_text TEXT, 
+            pub_date TEXT, ai_summary TEXT, tags TEXT, raw_html TEXT
+        )""")
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS site_configs (
+            domain TEXT PRIMARY KEY, selector TEXT, regex TEXT
+        )""")
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(webpages)").fetchall()]
+        if 'raw_html' not in cols:
+            conn.execute("ALTER TABLE webpages ADD COLUMN raw_html TEXT")
 init_db()
 
-@scrape_bp.route("/api/scrape", methods=["POST"])
-def scrape():
-    data = request.get_json()
-    url = data.get("url", "")
+DEFAULT_CONFIGS = {
+    "www.people.com.cn": {
+        "selector": "p.sou, .box01 .fl, .text_dot_line",
+        "regex": r"(\d{4}年\d{1,2}月\d{1,2}日)"
+    },
+    "global": { "selector": "", "regex": r"(\d{4}[年-]\d{1,2}[月-]\d{1,2}.*?\d{1,2}:\d{1,2})" }
+}
+
+def get_site_config(domain):
+    with get_conn() as conn:
+        row = conn.execute("SELECT selector, regex FROM site_configs WHERE domain=?", (domain,)).fetchone()
+    return {"selector": row[0], "regex": row[1]} if row else DEFAULT_CONFIGS.get(domain, DEFAULT_CONFIGS["global"])
+
+def apply_custom_extract(html, url):
     domain = urlparse(url).netloc
+    config = get_site_config(domain)
+    selector, regex = config['selector'], config['regex']
+    soup = BeautifulSoup(html, 'html.parser')
+    target_text = ""
+    if selector:
+        try:
+            for s in selector.split(','):
+                el = soup.select_one(s.strip())
+                if el:
+                    target_text = el.get_text(separator=' ', strip=True)
+                    break
+        except: pass
+    if not target_text: target_text = soup.get_text(separator=' ', strip=True)[:4000]
+    if regex and target_text:
+        try:
+            match = re.search(regex, target_text)
+            return match.group(1).strip() if match else ""
+        except: pass
+    return target_text[:50]
+
+@scrape_bp.route("/config/get", methods=["GET"])
+def get_config_api():
+    domain = request.args.get("domain")
+    return jsonify(get_site_config(domain))
+
+@scrape_bp.route("/config/save", methods=["POST"])
+def save_config_api():
+    data = request.json
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO site_configs (domain, selector, regex) VALUES (?, ?, ?)
+            ON CONFLICT(domain) DO UPDATE SET selector=excluded.selector, regex=excluded.regex
+        """, (data['domain'], data.get('selector'), data.get('regex')))
+    return jsonify({"status": "success"})
+
+@scrape_bp.route("/fetch_content", methods=["POST"])
+def fetch():
+    url = request.json.get("url")
+    with get_conn() as conn:
+        row = conn.execute("SELECT title, clean_text, pub_date, raw_html FROM webpages WHERE url=?", (url,)).fetchone()
     
-    with get_conn() as conn:
-        cur = conn.execute(
-            "SELECT url, title FROM webpages WHERE url LIKE ? AND title IS NOT NULL ORDER BY created_at DESC LIMIT 50", 
-            (f"%{domain}%",)
-        )
-        history = [{"url": r[0], "title": r[1]} for r in cur.fetchall()]
+    if row and row[3]:
+        new_date = apply_custom_extract(row[3], url)
+        if new_date != row[2]:
+            with get_conn() as conn: conn.execute("UPDATE webpages SET pub_date=? WHERE url=?", (new_date, url))
+        return jsonify({"status": "success", "title": row[0], "content": row[1], "pub_date": new_date, "cached": True})
 
     try:
-        scan_resp = requests.post(f"{NODE_API_URL}/api/scan", json={"url": url}, timeout=20)
-        scan_resp.raise_for_status()
-        links = scan_resp.json().get("links", [])
-        return jsonify({"status": "success", "links": links if links else history})
+        resp = requests.post(f"{NODE_API_URL}/api/fetch", json={"url": url}, timeout=60)
+        data = resp.json()
+        raw_html = data.get("raw_html", "")
+        pub_date = apply_custom_extract(raw_html, url)
+        with get_conn() as conn:
+            conn.execute("""
+                INSERT INTO webpages (url, title, clean_text, pub_date, raw_html) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(url) DO UPDATE SET title=excluded.title, clean_text=excluded.clean_text, 
+                pub_date=excluded.pub_date, raw_html=excluded.raw_html
+            """, (url, data.get('title',''), data.get('content',''), pub_date, raw_html))
+        return jsonify({"status": "success", "title": data.get('title'), "content": data.get('content'), "pub_date": pub_date})
     except Exception as e:
-        return jsonify({"status": "success", "links": history, "note": str(e)})
+        return jsonify({"status": "error", "error": str(e)}), 500
 
-@scrape_bp.route("/api/analyze", methods=["POST"])
+@scrape_bp.route("/analyze_ai", methods=["POST"])
 def analyze():
-    url = request.get_json().get("url")
-    record_id = str(uuid.uuid4())
+    url = request.json.get("url")
     with get_conn() as conn:
-        conn.execute("INSERT INTO webpages (id, url, status) VALUES (?, ?, ?)", (record_id, url, "scraping"))
-    executor.submit(run_full_pipeline, record_id, url)
-    return jsonify({"id": record_id, "status": "processing"})
+        row = conn.execute("SELECT title, clean_text, ai_summary, tags FROM webpages WHERE url=?", (url,)).fetchone()
+    if row and row[2]:
+        return jsonify({"status": "success", "summary": row[2], "tags": json.loads(row[3] or '[]'), "cached": True})
+    
+    prompt = f"分析文章，JSON返回: {{\"summary\":\"50字摘要\",\"tags\":[\"标签\"]}}\n标题:{row[0]}\n正文:{row[1][:2500]}"
+    res = client.chat.completions.create(model="mimo-v2-flash", messages=[{"role": "user", "content": prompt}], temperature=0.1)
+    analysis = json.loads(res.choices[0].message.content.replace("```json","").replace("```",""))
+    with get_conn() as conn:
+        conn.execute("UPDATE webpages SET ai_summary=?, tags=? WHERE url=?", (analysis['summary'], json.dumps(analysis['tags']), url))
+    return jsonify({"status": "success", **analysis})
 
-def run_full_pipeline(record_id, url):
+@scrape_bp.route("/scan_index", methods=["POST"])
+def scan():
+    url = request.json.get("url")
     try:
-        node_resp = requests.post(f"{NODE_API_URL}/api/fetch", json={"url": url}, timeout=60)
-        node_data = node_resp.json()
-        title = node_data.get("title", "未命名标题")
-        text = node_data.get("content", "")
-
-        with get_conn() as conn:
-            conn.execute("UPDATE webpages SET title=?, clean_text=?, status='analyzing' WHERE id=?", (title, text, record_id))
-
-        prompt = f"分析文章并以JSON返回(summary:50字内, tags:数组)。标题：{title}\n正文：{text[:3000]}"
-        ai_resp = client.chat.completions.create(
-            model="mimo-v2-flash",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw_content = ai_resp.choices[0].message.content
-        cleaned_json = raw_content.replace("```json", "").replace("```", "").strip()
-        res = json.loads(cleaned_json)
-
-        with get_conn() as conn:
-            conn.execute("UPDATE webpages SET ai_summary=?, tags=?, status='completed' WHERE id=?", 
-                        (res.get('summary', ''), json.dumps(res.get('tags', []), ensure_ascii=False), record_id))
+        resp = requests.post(f"{NODE_API_URL}/api/scan", json={"url": url}, timeout=40)
+        return jsonify({"status": "success", "links": resp.json().get("links", [])})
     except Exception as e:
-        with get_conn() as conn:
-            conn.execute("UPDATE webpages SET status='failed', error_msg=? WHERE id=?", (str(e), record_id))
+        return jsonify({"status": "error", "error": str(e)}), 500
 
-@scrape_bp.route("/api/results", methods=["GET"])
-def results():
-    try:
-        with get_conn() as conn:
-            rows = conn.execute("""
-                SELECT id, url, title, ai_summary, tags, status, created_at, error_msg 
-                FROM webpages ORDER BY created_at DESC LIMIT 50
-            """).fetchall()
-        return jsonify([{
-            "id": r[0], "url": r[1], "title": r[2] or r[1],
-            "summary": r[3], "tags": json.loads(r[4] or '[]'),
-            "status": r[5], "created": r[6], "error": r[7]
-        } for r in rows])
-    except sqlite3.OperationalError:
-        init_db() # 表不存在时修复
-        return jsonify([])
-
-@scrape_bp.route("/api/clear", methods=["POST"])
-def clear_history():
-    try:
-        with get_conn() as conn:
-            conn.execute("DELETE FROM webpages")
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+@scrape_bp.route("/db_reset", methods=["POST"])
+def clear_db():
+    with get_conn() as conn: conn.execute("DELETE FROM webpages")
+    return jsonify({"status": "success"})

@@ -36,6 +36,7 @@ def load_extensions(app):
                         app.register_blueprint(attr)
                         print(f"✅ 已自动挂载蓝图: {attr.name} (来自 {filename})")
                         blueprint_found = True
+                        
                 
                 if not blueprint_found:
                     print(f"⚠️ 警告: 在 {filename} 中未找到可用的 Blueprint 实例。")
