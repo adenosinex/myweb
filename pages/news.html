@@ -2,131 +2,204 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>网页智能分析系统</title>
+    <title>AI 网页分析控制台 v3.1</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f5f7fa; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .input-group { display: flex; gap: 10px; }
-        input[type="url"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:disabled { background: #ccc; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-        .tag { background: #e1f0ff; color: #0056b3; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-right: 5px; }
-        .status-pending, .status-scraping, .status-analyzing { color: #f39c12; }
-        .status-completed { color: #27ae60; }
-        .status-failed { color: #e74c3c; }
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --error: #e74c3c; --bg: #f8f9fa; --border: #e2e8f0; }
+        body { font-family: 'PingFang SC', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--primary); margin: 0; padding: 20px; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 25px; margin-bottom: 20px; border: 1px solid var(--border); }
+        h2, h3 { margin-top: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1.2rem; }
+
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        input { flex: 1; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; }
+        input:focus { border-color: var(--accent); }
+        
+        .btn { padding: 10px 20px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-scan { background: var(--accent); color: white; }
+        .btn-clear { background: #edf2f7; color: #4a5568; font-size: 12px; }
+        .btn-all { background: var(--success); color: white; margin-bottom: 15px; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* 目录列表 (带序号) */
+        .dir-container { border: 1px solid var(--border); border-radius: 8px; max-height: 300px; overflow-y: auto; }
+        .link-item { display: flex; align-items: center; padding: 10px 15px; border-bottom: 1px solid var(--border); background: white; }
+        .no-badge { width: 24px; height: 24px; background: #f1f5f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: #64748b; margin-right: 12px; flex-shrink: 0; }
+        .link-info { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 表格区域 */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: #f8fafc; padding: 12px; font-size: 13px; color: #64748b; border-bottom: 2px solid var(--border); }
+        td { padding: 15px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: top; }
+        
+        .time-text { font-family: monospace; color: #94a3b8; font-weight: bold; }
+        .status-pill { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 800; }
+        .status-completed { background: #dcfce7; color: #166534; }
+        .status-failed { background: #fee2e2; color: #991b1b; }
+        .tag { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin: 1px; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>提交网页分析</h2>
-    <div class="input-group">
-        <input type="url" id="urlInput" value="https://www.people.com.cn/" required>
-        <button onclick="submitUrl()" id="submitBtn">抓取并分析</button>
+<div class="container">
+    <div class="card">
+        <h2>
+            <span>🌐 网页分析控制台</span>
+            <button class="btn btn-clear" onclick="clearInput()">清空输入</button>
+        </h2>
+        <div class="input-group">
+            <input type="url" id="urlInput" placeholder="输入首页地址...">
+            <button onclick="scanUrl()" id="scanBtn" class="btn btn-scan">扫描首页</button>
+        </div>
+        
+        <div id="controls" style="display:none">
+            <button onclick="analyzeAll()" class="btn btn-all" id="allBtn">⚡ 按序全量分析</button>
+            <div class="dir-container" id="dirList"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>
+            <span>📊 历史分析记录</span>
+            <button class="btn btn-clear" onclick="clearHistory()" style="color: var(--error);">清空历史库</button>
+        </h2>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="40">#</th>
+                        <th width="90">时间</th>
+                        <th width="240">文章标题</th>
+                        <th>AI 核心内容分析</th>
+                        <th width="150">关键词</th>
+                        <th width="90">状态</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
-<div class="card">
-    <h2>分析结果</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>状态</th>
-                <th>URL</th>
-                <th>AI摘要</th>
-                <th>标签</th>
-                <th>耗时</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody id="resultBody">
-            </tbody>
-    </table>
-</div>
-
 <script>
-    // 提交URL
-async function submitUrl() {
-    const input = document.getElementById('urlInput');
-    const url = input.value;
-    const btn = document.getElementById('submitBtn');
-    
-    if (!url) return;
-    btn.disabled = true;
-    btn.innerText = '正在扫描...';
+    let currentLinks = [];
+    const DEFAULT_URL = "https://www.people.com.cn/";
 
-    try {
-        const res = await fetch('/news/scrape', {
+    window.onload = () => {
+        // 1. 恢复上次输入或使用默认值
+        const savedUrl = localStorage.getItem('last_scan_url') || DEFAULT_URL;
+        document.getElementById('urlInput').value = savedUrl;
+        
+        // 2. 初始加载数据
+        refreshTable();
+        // 3. 轮询
+        setInterval(refreshTable, 4000); 
+    };
+
+    function clearInput() {
+        document.getElementById('urlInput').value = "";
+        localStorage.removeItem('last_scan_url');
+    }
+
+    async function clearHistory() {
+        // 直接执行，无需二次提示
+        try {
+            const res = await fetch('/api/clear', { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                document.getElementById('resultBody').innerHTML = ""; // 立即清空界面
+                refreshTable(); // 重新拉取
+            }
+        } catch (e) {
+            console.error("清空失败", e);
+        }
+    }
+
+    async function scanUrl() {
+        const url = document.getElementById('urlInput').value;
+        if (!url) return;
+        localStorage.setItem('last_scan_url', url);
+        
+        const btn = document.getElementById('scanBtn');
+        btn.disabled = true;
+        btn.innerText = "扫描中...";
+
+        try {
+            const res = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ url })
+            });
+            const data = await res.json();
+            currentLinks = data.links || [];
+            renderDirectory();
+            document.getElementById('controls').style.display = currentLinks.length ? 'block' : 'none';
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "扫描首页";
+        }
+    }
+
+    function renderDirectory() {
+        const list = document.getElementById('dirList');
+        list.innerHTML = currentLinks.map((item, i) => `
+            <div class="link-item">
+                <div class="no-badge">${i + 1}</div>
+                <div class="link-info">${item.title || '（未获取标题）'}</div>
+                <button onclick="analyzeOne('${item.url}', ${i})" id="btn-${i}" class="btn btn-scan" style="padding: 5px 12px; font-size: 11px;">分析</button>
+            </div>
+        `).join('');
+    }
+
+    async function analyzeOne(url, index) {
+        const btn = document.getElementById(`btn-${index}`);
+        if(btn) { btn.disabled = true; btn.innerText = "已提交"; }
+
+        await fetch('/api/analyze', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ url })
         });
-        
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || '服务器响应错误');
-
-        if (data.count > 0) {
-            alert(`✅ 成功启动！发现 ${data.count} 篇文章，正在后台分析...`);
-            input.value = ''; // 成功才清空
-        } else {
-            alert(`⚠️ 扫描完成，但没有发现符合条件的新闻链接。请确认 Pattern 配置是否正确。`);
-        }
-        
-        fetchResults();
-    } catch (e) {
-        alert('❌ 提交失败: ' + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = '抓取并分析';
     }
-} 
 
+    async function analyzeAll() {
+        const btn = document.getElementById('allBtn');
+        btn.disabled = true;
+        for (let i = 0; i < currentLinks.length; i++) {
+            const itemBtn = document.getElementById(`btn-${i}`);
+            if (itemBtn && !itemBtn.disabled) {
+                analyzeOne(currentLinks[i].url, i);
+                await new Promise(r => setTimeout(r, 600)); 
+            }
+        }
+    }
 
-// 获取并渲染列表
-    async function fetchResults() {
-        const res = await fetch('/news/results');
-        const data = await res.json();
-        const tbody = document.getElementById('resultBody');
-        tbody.innerHTML = '';
-
-        data.forEach(item => {
-            const tagsHtml = item.tags.map(t => `<span class="tag">${t}</span>`).join('');
-            const statusMap = {
-                'pending': '排队中', 'scraping': '抓取中', 'analyzing': 'AI分析中', 
-                'completed': '完成', 'failed': '失败'
-            };
+    async function refreshTable() {
+        try {
+            const res = await fetch('/api/results');
+            const data = await res.json();
+            const tbody = document.getElementById('resultBody');
             
-            tbody.innerHTML += `
-                <tr>
-                    <td class="status-${item.status}">${statusMap[item.status] || item.status}</td>
-                    <td><a href="${item.url}" target="_blank" style="max-width: 200px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.url}</a></td>
-                    <td style="max-width: 300px; font-size: 14px;">${item.status === 'failed' ? item.error_msg : (item.summary || '-')}</td>
-                    <td>${tagsHtml}</td>
-                    <td>${item.processing_time_sec ? item.processing_time_sec + 's' : '-'}</td>
-                    <td>
-                        ${item.status === 'completed' ? `<button style="padding: 5px 10px; font-size: 12px;" onclick="viewHTML('${item.id}')">查看源码</button>` : ''}
-                    </td>
-                </tr>
-            `;
-        });
-    }
+            tbody.innerHTML = data.map((item, i) => {
+                const timeStr = item.created ? item.created.split(' ')[1] : '--:--';
+                let content = item.summary || "";
+                if (item.status === 'failed') {
+                    content = `<span style="color:var(--error); font-size:12px;">${item.error || '解析失败'}</span>`;
+                }
 
-    // 查看源码
-    async function viewHTML(id) {
-        const res = await fetch(`/news/results/${id}/html`);
-        const data = await res.json();
-        if (data.html) {
-            const newWindow = window.open('', '_blank');
-            newWindow.document.write('<pre>' + newWindow.document.createTextNode(data.html).textContent + '</pre>');
-        }
+                return `
+                    <tr>
+                        <td style="color:#cbd5e0; font-weight:bold;">${i + 1}</td>
+                        <td class="time-text">${timeStr}</td>
+                        <td style="font-weight:600;">${item.title || '提取中...'}</td>
+                        <td style="color:#444;">${content}</td>
+                        <td>${(item.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</td>
+                        <td><span class="status-pill status-${item.status}">${item.status}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) { }
     }
-
-    // 初始加载与轮询（每5秒刷新一次状态）
-    fetchResults();
-    setInterval(fetchResults, 5000);
 </script>
 
 </body>
