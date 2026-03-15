@@ -1,11 +1,11 @@
 import os, sqlite3, json, requests, re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Blueprint, request, jsonify
  
 from openai import OpenAI
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
-# 定义 Blueprint 及其唯一路由前缀
 scrape_bp = Blueprint('smart_scraper', __name__, url_prefix='/smart_scraper')
  
 
@@ -26,30 +26,67 @@ def init_db():
         )""")
         conn.execute("""
         CREATE TABLE IF NOT EXISTS site_configs (
-            domain TEXT PRIMARY KEY, selector TEXT, regex TEXT
+            domain TEXT PRIMARY KEY, url_pattern TEXT, selector TEXT, regex TEXT
         )""")
-        cols = [c[1] for c in conn.execute("PRAGMA table_info(webpages)").fetchall()]
-        if 'raw_html' not in cols:
-            conn.execute("ALTER TABLE webpages ADD COLUMN raw_html TEXT")
 init_db()
 
-DEFAULT_CONFIGS = {
-    "www.people.com.cn": {
-        "selector": "p.sou, .box01 .fl, .text_dot_line",
-        "regex": r"(\d{4}年\d{1,2}月\d{1,2}日)"
-    },
-    "global": { "selector": "", "regex": r"(\d{4}[年-]\d{1,2}[月-]\d{1,2}.*?\d{1,2}:\d{1,2})" }
-}
+# ================= 1. 获取资源接口 (依赖 Node 节点返回 raw_html, title, content) =================
+def fetch_single_html(url, bypass_cache):
+    if not bypass_cache:
+        with get_conn() as conn:
+            row = conn.execute("SELECT raw_html, title, clean_text FROM webpages WHERE url=?", (url,)).fetchone()
+            if row and row[0]: 
+                return url, row[0], row[1], row[2], True
 
-def get_site_config(domain):
+    try:
+        resp = requests.post(f"{NODE_API_URL}/api/fetch", json={"url": url}, timeout=30)
+        data = resp.json()
+        raw_html = data.get("raw_html", "")
+        title = data.get("title", "")
+        content = data.get("content", "")
+        
+        with get_conn() as conn:
+            conn.execute("""
+                INSERT INTO webpages (url, raw_html, title, clean_text) VALUES (?, ?, ?, ?) 
+                ON CONFLICT(url) DO UPDATE SET raw_html=excluded.raw_html, title=excluded.title, clean_text=excluded.clean_text
+            """, (url, raw_html, title, content))
+        return url, raw_html, title, content, False
+    except Exception as e:
+        return url, f"Error: {str(e)}", "", "", False
+
+@scrape_bp.route("/html", methods=["POST"])
+def api_html():
+    urls = request.json.get("urls", [])
+    bypass_cache = request.json.get("bypass_cache", False)
+    
+    results = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(fetch_single_html, url, bypass_cache): url for url in urls}
+        for future in as_completed(futures):
+            url, html, title, content, cached = future.result()
+            results[url] = {"html": html, "title": title, "content": content, "cached": cached}
+            
+    return jsonify({"status": "success", "data": results})
+
+# ================= 2. 本地解析接口 (仅负责时间提取) =================
+@scrape_bp.route("/parse", methods=["POST"])
+def api_parse():
+    data = request.json
+    url = data.get("url", "")
+    html = data.get("html", "")
+    selector = data.get("selector", "")
+    regex = data.get("regex", "")
+    
+    if not html or html.startswith("Error:"):
+        return jsonify({"status": "error", "error": "无效的 HTML 内容"})
+
+    # 从数据库拿回 Node 节点已经解析好的标题和正文
     with get_conn() as conn:
-        row = conn.execute("SELECT selector, regex FROM site_configs WHERE domain=?", (domain,)).fetchone()
-    return {"selector": row[0], "regex": row[1]} if row else DEFAULT_CONFIGS.get(domain, DEFAULT_CONFIGS["global"])
+        row = conn.execute("SELECT title, clean_text FROM webpages WHERE url=?", (url,)).fetchone()
+    title = row[0] if row else "未知标题"
+    content = row[1] if row else ""
 
-def apply_custom_extract(html, url):
-    domain = urlparse(url).netloc
-    config = get_site_config(domain)
-    selector, regex = config['selector'], config['regex']
+    # 使用 BeautifulSoup + Regex 提取发布时间
     soup = BeautifulSoup(html, 'html.parser')
     target_text = ""
     if selector:
@@ -60,81 +97,64 @@ def apply_custom_extract(html, url):
                     target_text = el.get_text(separator=' ', strip=True)
                     break
         except: pass
-    if not target_text: target_text = soup.get_text(separator=' ', strip=True)[:4000]
+        
+    if not target_text: 
+        target_text = soup.get_text(separator=' ', strip=True)[:1000]
+    
+    pub_date = ""
     if regex and target_text:
         try:
             match = re.search(regex, target_text)
-            return match.group(1).strip() if match else ""
+            if match: pub_date = match.group(1).strip()
         except: pass
-    return target_text[:50]
+        
+    if not pub_date:
+        sample = re.sub(r'\s+', ' ', target_text[:100])
+        pub_date = f"未命中: {sample}..."
 
+    with get_conn() as conn:
+        conn.execute("UPDATE webpages SET pub_date=? WHERE url=?", (pub_date, url))
+
+    return jsonify({"status": "success", "title": title, "content": content, "pub_date": pub_date})
+
+# ================= 3. AI 调用接口 =================
+@scrape_bp.route("/ai", methods=["POST"])
+def api_ai():
+    content = request.json.get("content", "")
+    custom_prompt = request.json.get("prompt", "")
+    
+    if not content:
+        return jsonify({"status": "error", "error": "正文为空"})
+
+    prompt = custom_prompt if custom_prompt else f"分析文章，严格返回 JSON格式: {{\"summary\":\"50字摘要\",\"tags\":[\"标签1\",\"标签2\"]}}\n正文:{content[:2000]}"
+    
+    try:
+        res = client.chat.completions.create(model="mimo-v2-flash", messages=[{"role": "user", "content": prompt}], temperature=0.1)
+        cleaned = res.choices[0].message.content.replace("```json","").replace("```","").strip()
+        analysis = json.loads(cleaned)
+        return jsonify({"status": "success", **analysis})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e), "summary": "AI分析失败", "tags": []})
+
+# ================= 配置与扫描路由 =================
 @scrape_bp.route("/config/get", methods=["GET"])
-def get_config_api():
-    domain = request.args.get("domain")
-    return jsonify(get_site_config(domain))
+def get_config():
+    with get_conn() as conn:
+        row = conn.execute("SELECT selector, regex FROM site_configs WHERE domain=?", (request.args.get("domain"),)).fetchone()
+    return jsonify({"selector": row[0] if row else "", "regex": row[1] if row else ""})
 
 @scrape_bp.route("/config/save", methods=["POST"])
-def save_config_api():
+def save_config():
     data = request.json
     with get_conn() as conn:
-        conn.execute("""
-            INSERT INTO site_configs (domain, selector, regex) VALUES (?, ?, ?)
-            ON CONFLICT(domain) DO UPDATE SET selector=excluded.selector, regex=excluded.regex
-        """, (data['domain'], data.get('selector'), data.get('regex')))
+        conn.execute("INSERT INTO site_configs (domain, selector, regex) VALUES (?, ?, ?) ON CONFLICT(domain) DO UPDATE SET selector=excluded.selector, regex=excluded.regex", 
+                     (data['domain'], data.get('selector'), data.get('regex')))
     return jsonify({"status": "success"})
-
-@scrape_bp.route("/fetch_content", methods=["POST"])
-def fetch():
-    url = request.json.get("url")
-    with get_conn() as conn:
-        row = conn.execute("SELECT title, clean_text, pub_date, raw_html FROM webpages WHERE url=?", (url,)).fetchone()
-    
-    if row and row[3]:
-        new_date = apply_custom_extract(row[3], url)
-        if new_date != row[2]:
-            with get_conn() as conn: conn.execute("UPDATE webpages SET pub_date=? WHERE url=?", (new_date, url))
-        return jsonify({"status": "success", "title": row[0], "content": row[1], "pub_date": new_date, "cached": True})
-
-    try:
-        resp = requests.post(f"{NODE_API_URL}/api/fetch", json={"url": url}, timeout=60)
-        data = resp.json()
-        raw_html = data.get("raw_html", "")
-        pub_date = apply_custom_extract(raw_html, url)
-        with get_conn() as conn:
-            conn.execute("""
-                INSERT INTO webpages (url, title, clean_text, pub_date, raw_html) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(url) DO UPDATE SET title=excluded.title, clean_text=excluded.clean_text, 
-                pub_date=excluded.pub_date, raw_html=excluded.raw_html
-            """, (url, data.get('title',''), data.get('content',''), pub_date, raw_html))
-        return jsonify({"status": "success", "title": data.get('title'), "content": data.get('content'), "pub_date": pub_date})
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@scrape_bp.route("/analyze_ai", methods=["POST"])
-def analyze():
-    url = request.json.get("url")
-    with get_conn() as conn:
-        row = conn.execute("SELECT title, clean_text, ai_summary, tags FROM webpages WHERE url=?", (url,)).fetchone()
-    if row and row[2]:
-        return jsonify({"status": "success", "summary": row[2], "tags": json.loads(row[3] or '[]'), "cached": True})
-    
-    prompt = f"分析文章，JSON返回: {{\"summary\":\"50字摘要\",\"tags\":[\"标签\"]}}\n标题:{row[0]}\n正文:{row[1][:2500]}"
-    res = client.chat.completions.create(model="mimo-v2-flash", messages=[{"role": "user", "content": prompt}], temperature=0.1)
-    analysis = json.loads(res.choices[0].message.content.replace("```json","").replace("```",""))
-    with get_conn() as conn:
-        conn.execute("UPDATE webpages SET ai_summary=?, tags=? WHERE url=?", (analysis['summary'], json.dumps(analysis['tags']), url))
-    return jsonify({"status": "success", **analysis})
 
 @scrape_bp.route("/scan_index", methods=["POST"])
 def scan():
-    url = request.json.get("url")
     try:
-        resp = requests.post(f"{NODE_API_URL}/api/scan", json={"url": url}, timeout=40)
+        resp = requests.post(f"{NODE_API_URL}/api/scan", json={"url": request.json.get("url")}, timeout=40)
         return jsonify({"status": "success", "links": resp.json().get("links", [])})
     except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@scrape_bp.route("/db_reset", methods=["POST"])
-def clear_db():
-    with get_conn() as conn: conn.execute("DELETE FROM webpages")
-    return jsonify({"status": "success"})
+        return jsonify({"status": "error", "error": str(e)})
