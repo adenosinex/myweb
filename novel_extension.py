@@ -326,18 +326,41 @@ def get_novel_analysis_detail(filename):
 
 # ================= 资源工具 (分章/下载) =================
 def get_and_split_chapters(novel_name):
-    if novel_name in text_cache: return text_cache[novel_name]
+    if novel_name in text_cache: 
+        return text_cache[novel_name]
+        
     res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{novel_name}", timeout=10)
-    if res.status_code != 200: return []
+    if res.status_code != 200: 
+        return []
+        
     text = res.json().get('content', '')
-    regex = re.compile(r'(?:^|\n)(第[零一二三四五六七八九十百千万\d]+[章回节卷部][^\n]*)')
+    
+    # 【核心优化】更具包容性的正则表达式：
+    # 1. [ \t\u3000]* 兼容半角和全角缩进空格
+    # 2. [（【《\[]? 兼容前置符号，如 【第一章】
+    # 3. (?:正文[ \t\u3000]*)? 兼容“正文 第82章”这种写法
+    # 4. [^\n]{0,50} 限制标题最大长度，防止误杀以“第x章”开头的超长正文段落
+    pattern = r'(?:^|\n)[ \t\u3000]*([（【《\[]?(?:正文[ \t\u3000]*)?第[ \t\u3000]*[零一二两三四五六七八九十百千万\d]+[ \t\u3000]*[章回节卷部集折篇][^\n]{0,50})'
+    regex = re.compile(pattern)
+    
     chapters, last_idx, last_title = [], 0, "前言"
+    
     for match in regex.finditer(text):
         content = text[last_idx:match.start()].strip()
-        if len(content) > 20 or not chapters: chapters.append({"title": last_title, "content": content})
-        last_title, last_idx = match.group(1).strip(), match.end()
+        # 长度判断可有效过滤掉小说开头的“目录列表”，只记录包含真实正文的章节
+        if len(content) > 20 or not chapters: 
+            chapters.append({"title": last_title, "content": content})
+            
+        last_title = match.group(1).strip()
+        last_idx = match.end()
+        
+    # 补充最后一章
     chapters.append({"title": last_title, "content": text[last_idx:].strip()})
-    if len(chapters) <= 1: chapters = [{"title": f"第 {i//5000 + 1} 节", "content": text[i:i+5000]} for i in range(0, len(text), 5000)]
+    
+    # 兜底机制：如果全篇无章节标识，按 5000 字强制切分
+    if len(chapters) <= 1: 
+        chapters = [{"title": f"第 {i//5000 + 1} 节", "content": text[i:i+5000]} for i in range(0, len(text), 5000)]
+        
     text_cache[novel_name] = chapters
     return chapters
 

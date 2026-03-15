@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 import requests
 import csv
@@ -14,7 +15,8 @@ NOVEL_BASE_DIR = r'\\Synology\home\sync od\funny\收藏小说\allstory'
 
 # 集中存放的新文件夹名称
 LIKED_DIR = os.path.join(NOVEL_BASE_DIR, 'Liked_Favorites')
-DELETED_DIR = os.path.join(NOVEL_BASE_DIR, 'Deleted_Trash')
+dp=Path(NOVEL_BASE_DIR).parent
+DELETED_DIR = os.path.join(dp, 'Deleted_Trash')
 
 # 缓存文件名称
 CACHE_CSV = 'novel_index_cache.csv'

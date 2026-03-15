@@ -18,11 +18,18 @@
             height: 76px; /* 约两行按钮的高度 */
         }
         .book-clicked {
-    opacity: 0.6;
-    filter: grayscale(30%);
-    transition: opacity 0.2s, filter 0.2s;
-  }
+            opacity: 0.6;
+            filter: grayscale(30%);
+            transition: opacity 0.2s, filter 0.2s;
+        }
         .tags-expanded { height: auto; }
+
+        /* 新增：一键获取按钮的渐变样式 */
+        .btn-primary-gradient {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col selection:bg-blue-500 overflow-hidden">
@@ -38,10 +45,16 @@
 
     <main class="flex-1 overflow-y-auto bg-zinc-100/30 scroll-smooth">
         <div class="p-4 sm:p-6 pb-0 flex flex-col gap-4">
-            <div class="relative w-full">
-                <input type="text" id="searchInput" placeholder="搜索书名..." 
-                       class="w-full bg-white border border-zinc-200 rounded-2xl py-3 px-4 pl-11 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition shadow-sm">
-                <span class="absolute left-4 top-3.5 opacity-30">🔍</span>
+            
+            <div class="flex flex-col sm:flex-row gap-3 w-full">
+                <div class="relative flex-1">
+                    <input type="text" id="searchInput" placeholder="搜索书名..." 
+                           class="w-full bg-white border border-zinc-200 rounded-2xl py-3 px-4 pl-11 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition shadow-sm">
+                    <span class="absolute left-4 top-3.5 opacity-30">🔍</span>
+                </div>
+                <button onclick="fetchAllFiltered()" id="btnFetchAll" class="btn-primary-gradient px-5 py-3 rounded-2xl text-sm font-bold transition active:scale-95 whitespace-nowrap">
+                    🚀 一键全量获取 (字数降序)
+                </button>
             </div>
             
             <div class="bg-white/50 border border-zinc-200/50 rounded-2xl p-3">
@@ -95,6 +108,12 @@
             });
         }
 
+        // 新增：字数格式化工具
+        function formatWordCount(num) {
+            if (!num || isNaN(num)) return '0字';
+            return num >= 10000 ? (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w字' : num + '字';
+        }
+
         function toggleExpandTags() {
             isExpanded = !isExpanded;
             const container = document.getElementById('tagContainer');
@@ -127,12 +146,62 @@
             try {
                 const res = await fetch(`/api/novel/list?page=${currentPage}&size=24&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`);
                 const data = await res.json();
-                renderGrid(data.items, !reset);
+                
+                // 修改：只对当前获取到的这批新数据内部进行降序排序
+                const sortedItems = data.items.sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
+                
+                renderGrid(sortedItems, !reset);
                 document.getElementById('resultCount').innerText = `ITEMS: ${document.querySelectorAll('#novelGrid > a').length} / ${data.total}`;
                 currentPage++;
                 hasMore = data.has_more;
                 if (!hasMore) document.getElementById('loading').style.visibility = 'hidden';
             } finally { isLoading = false; }
+        }
+
+        // 新增：一键全量获取与整体降序
+        async function fetchAllFiltered() {
+            if (isLoading) return;
+            const btn = document.getElementById('btnFetchAll');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "⚡ 正在全量获取...";
+            
+            let allFetchedItems = [];
+            let tempPage = 1;
+            let tempHasMore = true;
+            
+            document.getElementById('novelGrid').innerHTML = ''; // 清空当前视图
+            document.getElementById('loading').style.visibility = 'visible';
+            
+            const keyword = document.getElementById('searchInput').value;
+            const tags = Array.from(selectedTags).join(',');
+            
+            try {
+                while (tempHasMore) {
+                    const res = await fetch(`/api/novel/list?page=${tempPage}&size=50&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`);
+                    const data = await res.json();
+                    
+                    allFetchedItems = allFetchedItems.concat(data.items);
+                    tempHasMore = data.has_more;
+                    tempPage++;
+                    
+                    btn.innerText = `已获取 ${allFetchedItems.length} 本...`;
+                }
+                
+                // 获取完毕后，进行整体全量降序
+                allFetchedItems.sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
+                
+                renderGrid(allFetchedItems, false); // 不使用追加模式，直接覆盖渲染
+                
+                document.getElementById('resultCount').innerText = `已收录全部: ${allFetchedItems.length} 本`;
+                hasMore = false; // 阻断懒加载，防止干扰
+            } catch (e) {
+                alert("获取失败，请检查网络或后端接口。");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+                document.getElementById('loading').style.visibility = 'hidden';
+            }
         }
 
         function renderTagButtons() {
@@ -173,19 +242,29 @@
                     <div class="aspect-[3/4] bg-zinc-50 rounded-xl flex items-center justify-center text-3xl shadow-inner">📗</div>
                     <div class="flex flex-col gap-1 flex-1">
                         <h3 class="font-bold text-[12px] text-zinc-800 line-clamp-2 leading-snug">${item.displayTitle}</h3>
+                        
+                        <div class="text-[10px] text-zinc-400 font-mono mt-0.5 flex items-center gap-1">
+                            <span>📊</span> ${formatWordCount(item.wordCount)}
+                        </div>
+
                         <div class="flex gap-1 flex-wrap mt-auto">
                             ${item.tags.slice(0,2).map(t => `<span class="bg-zinc-100 text-zinc-400 px-1.5 py-0.5 rounded text-[8px]">${t}</span>`).join('')}
                         </div>
                     </div>
                 </a>`).join('');
+            
             append ? grid.insertAdjacentHTML('beforeend', html) : grid.innerHTML = html;
-        // 👇 关键：为新渲染的每个书籍卡片绑定点击事件
-    grid.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', function() {
-            this.classList.add('book-clicked');
-        });
-    });
-        
+            
+            // 为新渲染的每个书籍卡片绑定点击事件
+            grid.querySelectorAll('a').forEach(link => {
+                // 防止重复绑定，先移除可能存在的监听器（简易防抖）
+                const newLink = link.cloneNode(true);
+                link.parentNode.replaceChild(newLink, link);
+                
+                newLink.addEventListener('click', function() {
+                    this.classList.add('book-clicked');
+                });
+            });
         }
 
         init();
