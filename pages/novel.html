@@ -70,19 +70,15 @@
         let selectedTags = new Set();
         let searchTimeout = null;
 
-        // 初始化
         async function init() {
-            // 1. 获取全量标签统计
             try {
                 const statsRes = await fetch('/api/novel/tags/stats');
                 globalTagStats = await statsRes.json();
                 renderTagButtons();
             } catch (e) { console.error("统计加载失败"); }
 
-            // 2. 加载第一页
             loadNextPage(true);
 
-            // 3. 滚动加载监听
             const mainContent = document.querySelector('main');
             mainContent.addEventListener('scroll', () => {
                 if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 200) {
@@ -90,18 +86,15 @@
                 }
             });
 
-            // 4. 搜索框防抖处理
-            document.getElementById('searchInput').addEventListener('input', (e) => {
+            document.getElementById('searchInput').addEventListener('input', () => {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => loadNextPage(true), 500);
             });
 
-            // 5. 处理详情页跳转过来的 Tag
             const params = new URLSearchParams(window.location.search);
             const tag = params.get('tag');
             if (tag) {
                 selectedTags.add(tag);
-                // 延迟一下等待统计数据渲染完成再更新样式
                 setTimeout(() => {
                     const btn = document.getElementById(`tag-btn-${tag}`);
                     if(btn) btn.classList.add('tag-active');
@@ -110,43 +103,40 @@
             }
         }
 
-    async function loadNextPage(reset = false) {
-    if (isLoading || (!hasMore && !reset)) return;
-    
-    if (reset) {
-        currentPage = 1;
-        hasMore = true;
-        document.getElementById('novelGrid').innerHTML = '';
-    }
+        async function loadNextPage(reset = false) {
+            if (isLoading || (!hasMore && !reset)) return;
+            
+            if (reset) {
+                currentPage = 1;
+                hasMore = true;
+                document.getElementById('novelGrid').innerHTML = '';
+            }
 
-    isLoading = true;
-    document.getElementById('loading').style.visibility = 'visible';
+            isLoading = true;
+            document.getElementById('loading').style.visibility = 'visible';
 
-    const keyword = document.getElementById('searchInput').value;
-    // 🌟 确保这里拿到了所有选中的标签
-    const tags = Array.from(selectedTags).join(',');
-    
-    try {
-        // 将 tags 传给后端
-        const url = `/api/novel/list?page=${currentPage}&size=24&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`;
-        const res = await fetch(url);
-        const data = await res.json();
+            const keyword = document.getElementById('searchInput').value;
+            const tags = Array.from(selectedTags).join(',');
+            
+            try {
+                const url = `/api/novel/list?page=${currentPage}&size=24&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`;
+                const res = await fetch(url);
+                const data = await res.json();
 
-        renderGrid(data.items, !reset);
-        
-        // 更新 UI 计数
-        document.getElementById('resultCount').innerText = `已展示 ${document.querySelectorAll('#novelGrid > a').length} / ${data.total} 本`;
-        
-        currentPage++;
-        hasMore = data.has_more;
-        if (!hasMore) document.getElementById('loading').style.visibility = 'hidden';
+                renderGrid(data.items, !reset);
+                document.getElementById('resultCount').innerText = `已展示 ${document.querySelectorAll('#novelGrid > a').length} / ${data.total} 本`;
+                
+                currentPage++;
+                hasMore = data.has_more;
+                if (!hasMore) document.getElementById('loading').style.visibility = 'hidden';
 
-    } catch (e) {
-        console.error("加载失败", e);
-    } finally {
-        isLoading = false;
-    }
-}
+            } catch (e) {
+                console.error("加载失败", e);
+            } finally {
+                isLoading = false;
+            }
+        }
+
         function renderTagButtons() {
             const topTags = ['已完结', '连载中', '未解析'];
             const sortedTags = Object.keys(globalTagStats).sort((a, b) => {
@@ -174,6 +164,7 @@
                 selectedTags.add(tag);
                 btn.classList.add('tag-active');
             }
+            document.getElementById('btnClearFilters').style.display = selectedTags.size > 0 ? 'inline' : 'none';
             loadNextPage(true);
         }
 
@@ -181,6 +172,7 @@
             selectedTags.clear();
             document.querySelectorAll('[id^="tag-btn-"]').forEach(btn => btn.classList.remove('tag-active'));
             document.getElementById('searchInput').value = '';
+            document.getElementById('btnClearFilters').style.display = 'none';
             loadNextPage(true);
         }
 
@@ -190,10 +182,13 @@
                 const encoded = encodeURIComponent(item.filename);
                 const displayTags = item.tags.slice(0, 3).map(t => `<span class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-[9px] truncate max-w-[60px] inline-block">${t}</span>`).join('');
                 const wordCountLabel = item.wordCount > 0 ? `${(item.wordCount/10000).toFixed(1)}w字` : '待解析';
+                // 🌟 新增：如果已被标记为喜欢，则在封面右上角显示红心
+                const favIcon = item.isFav ? `<div class="absolute -top-1 -right-1 bg-white rounded-full p-1 shadow-md z-20"><svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>` : '';
 
                 return `
                     <a href="/novel-detail?novel=${encoded}" class="bg-white rounded-2xl p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 border border-zinc-100 relative group overflow-hidden">
-                        <div class="absolute top-2 right-2 z-10 bg-black/70 backdrop-blur text-white text-[9px] px-2 py-0.5 rounded-lg font-mono scale-90 opacity-0 group-hover:opacity-100 transition-opacity">${wordCountLabel}</div>
+                        ${favIcon}
+                        <div class="absolute top-2 left-2 z-10 bg-black/70 backdrop-blur text-white text-[9px] px-2 py-0.5 rounded-lg font-mono scale-90 opacity-0 group-hover:opacity-100 transition-opacity">${wordCountLabel}</div>
                         <div class="aspect-[3/4.2] bg-gradient-to-br from-zinc-50 to-zinc-100 rounded-xl flex items-center justify-center text-4xl shadow-inner group-hover:scale-[1.03] transition-transform duration-500">${item.tags.includes('未解析') ? '📦' : '📗'}</div>
                         <div class="flex flex-col gap-2 flex-1">
                             <h3 class="font-bold text-[13px] text-zinc-800 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">${item.displayTitle}</h3>
