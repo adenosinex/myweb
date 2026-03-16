@@ -21,6 +21,17 @@
             #modalBody[data-view="text"] #modalImgContainer { display: none; }
             #modalBody[data-view="image"] #modalTextContainer { display: none; }
         }
+
+        /* 覆盖 Viewer.js 默认的移动端隐藏策略，强制显示旋转按钮 */
+        .viewer-rotate-left.viewer-hide-md-down,
+        .viewer-rotate-right.viewer-hide-md-down {
+            display: block !important;
+        }
+        .viewer-toolbar > ul > li {
+            width: 32px !important;
+            height: 32px !important;
+            margin: 0 3px !important;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
@@ -142,7 +153,6 @@
         let activeTag = '全部'; 
         let validIdsToProcess = []; 
 
-        // 统一的浮点数格式化工具
         const formatSec = (val) => val ? parseFloat(val).toFixed(2) + 's' : '--';
 
         function syncSearch(val) { 
@@ -151,7 +161,6 @@
             renderGallery(); 
         }
 
-        // ======================== 原图指纹计算与压缩 ========================
         async function calculateOriginalHash(file) {
             const buffer = await file.arrayBuffer();
             const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -257,17 +266,16 @@
         }
 
         function updateDashboardStats() {
-            document.getElementById('queueCount').innerText = allManualsData.filter(m => m.status === 'pending').length;
+            // 更新以兼容所有 pending 状态
+            document.getElementById('queueCount').innerText = allManualsData.filter(m => m.status.startsWith('pending')).length;
             document.getElementById('processingCount').innerText = allManualsData.filter(m => m.status.startsWith('processing')).length;
             const completed = allManualsData.filter(m => m.status === 'completed');
             if (completed.length > 0) {
-                // 应用格式化
                 document.getElementById('lastOcrTime').innerText = formatSec(completed[0].metrics.ocr_sec);
                 document.getElementById('lastNlpTime').innerText = formatSec(completed[0].metrics.nlp_sec);
             }
         }
 
-        // ======================== 渲染与分类 ========================
         function renderTags() {
             let totalPhotos = 0; const tagCounts = {};
             allManualsData.forEach(item => {
@@ -325,16 +333,23 @@
             });
 
             gallery.innerHTML = filteredData.map(item => {
-                if (item.status === 'pending' || item.status.startsWith('processing')) needPolling = true;
+                // 更新轮询检查逻辑，兼容解耦后的细分状态
+                if (['pending', 'pending_ocr', 'processing_ocr', 'pending_nlp', 'processing_nlp'].includes(item.status)) {
+                    needPolling = true;
+                }
                 
+                // 细化 Overlay 状态显示
                 let statusOverlay = '';
-                if (item.status === 'pending') statusOverlay = '排队准备中...';
+                if (item.status === 'pending' || item.status === 'pending_ocr') statusOverlay = '排队准备中...';
                 else if (item.status === 'processing_ocr') statusOverlay = '👁️ 提取文字中...';
+                else if (item.status === 'pending_nlp') statusOverlay = '等待智能分类...';
                 else if (item.status === 'processing_nlp') statusOverlay = '🧠 智能分类中...';
 
+                let failOverlay = '';
+                if (item.status === 'failed' || item.status === 'ocr_failed') failOverlay = '❌ 提取失败';
+                else if (item.status === 'nlp_failed') failOverlay = '⚠️ 分类失败';
+
                 const tagsHTML = (item.tags || []).map(t => `<span class="bg-gray-100 text-gray-600 text-[9px] px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[60px]">${t}</span>`).join('');
-                
-                // 卡片级时间格式化
                 const ocrSec = formatSec(item.metrics.ocr_sec);
                 const nlpSec = formatSec(item.metrics.nlp_sec);
 
@@ -343,20 +358,25 @@
                     <button class="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur shadow rounded-full p-2 text-red-500 hover:bg-red-50 transition-opacity" onclick="deleteManual('${item.id}', event)" title="永久删除">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
-                    <button class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur shadow rounded-full p-2 text-gray-500 hover:bg-blue-50 transition-opacity" onclick="retryManual('${item.id}', event)" title="重新识别">
+                    
+                    <button class="absolute top-2 right-12 z-10 opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur shadow rounded-full p-2 text-gray-500 hover:bg-purple-50 transition-opacity" onclick="reanalyzeManual('${item.id}', event)" title="重新分析 (仅重新生成标签，速度极快)">
+                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                    </button>
+
+                    <button class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur shadow rounded-full p-2 text-gray-500 hover:bg-blue-50 transition-opacity" onclick="retryManual('${item.id}', event)" title="全量重试 (重新识别图片并分类)">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>
                     
                     <div class="relative h-32 sm:h-44 overflow-hidden bg-gray-50">
                         <img src="${item.url}" alt="${item.filename}" class="w-full h-full object-cover manual-img">
                         ${statusOverlay ? `<div class="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-xs text-white animate-pulse font-bold tracking-widest">${statusOverlay}</div>` : ''}
-                        ${item.status === 'failed' ? `<div class="absolute inset-0 bg-red-900/60 backdrop-blur-sm flex items-center justify-center text-xs text-white font-bold tracking-widest">❌ 处理失败</div>` : ''}
+                        ${failOverlay ? `<div class="absolute inset-0 bg-red-900/60 backdrop-blur-sm flex items-center justify-center text-xs text-white font-bold tracking-widest">${failOverlay}</div>` : ''}
                     </div>
                     
                     <div class="p-3 sm:p-4 flex-1 flex flex-col">
                         <div class="text-[11px] font-bold text-gray-700 truncate mb-2" title="${item.filename}">📄 ${item.filename}</div>
                         <div class="flex flex-wrap gap-1 mb-2 h-6 overflow-hidden">${tagsHTML}</div>
-                        <button onclick="showDetail('${item.id}')" class="mt-auto w-full py-2 bg-blue-50/50 hover:bg-blue-600 hover:text-white text-blue-600 text-[11px] font-bold rounded-xl transition-all border border-blue-100 disabled:opacity-50" ${item.status!=='completed'?'disabled':''}>
+                        <button onclick="showDetail('${item.id}')" class="mt-auto w-full py-2 bg-blue-50/50 hover:bg-blue-600 hover:text-white text-blue-600 text-[11px] font-bold rounded-xl transition-all border border-blue-100 disabled:opacity-50" ${item.status!=='completed' && item.status!=='nlp_failed' ? 'disabled':''}>
                             查看文档
                         </button>
                         <div class="mt-3 pt-3 border-t text-[9px] text-gray-400 flex justify-between items-center font-mono">
@@ -367,7 +387,7 @@
             }).join('');
 
             if (viewer) viewer.destroy();
-            viewer = new Viewer(gallery, { filter(img) { return img.classList.contains('manual-img'); }, navbar: true, title: true });
+            viewer = new Viewer(gallery, { filter(img) { return img.classList.contains('manual-img'); }, navbar: true, title: true, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 } });
             return needPolling;
         }
 
@@ -386,13 +406,19 @@
 
         async function retryManual(id, event) {
             event.stopPropagation();
-            if(!confirm("重新提取文字？")) return;
+            // if(!confirm("⚠️ 确定要重新执行【完整的 OCR 图片提取】和分类吗？\n(这会消耗较长时间)")) return;
             await fetch('/api/manuals/retry', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
             loadManuals(); startPolling();
         }
 
-        // ======================== 双排对照模式逻辑 ========================
-        
+        // 新增的仅重试 NLP 方法
+        async function reanalyzeManual(id, event) {
+            event.stopPropagation();
+            // if(!confirm("⚡ 仅重新生成智能分类标签？\n(跳过图像识别阶段，速度极快)")) return;
+            await fetch('/api/manuals/reanalyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
+            loadManuals(); startPolling();
+        }
+
         function setModalView(view) {
             document.getElementById('modalBody').setAttribute('data-view', view);
             const btnImg = document.getElementById('btnViewImg');
@@ -400,7 +426,7 @@
             if (view === 'image') {
                 btnImg.className = "flex-1 py-1.5 bg-white shadow rounded-lg text-sm font-bold text-blue-600 transition-all";
                 btnText.className = "flex-1 py-1.5 text-gray-500 hover:bg-gray-200 rounded-lg text-sm font-bold transition-all";
-                document.getElementById('mobileFooter').classList.add('hidden'); // 看图时隐藏复制按钮
+                document.getElementById('mobileFooter').classList.add('hidden');
             } else {
                 btnText.className = "flex-1 py-1.5 bg-white shadow rounded-lg text-sm font-bold text-blue-600 transition-all";
                 btnImg.className = "flex-1 py-1.5 text-gray-500 hover:bg-gray-200 rounded-lg text-sm font-bold transition-all";
@@ -414,16 +440,12 @@
             document.getElementById('modalTitle').innerText = item.filename;
             document.getElementById('modalContent').innerHTML = marked.parse(item.ocr_text || "提取中...");
             
-            // 绑定弹窗内侧原图
             const imgEl = document.getElementById('modalDetailImg');
             imgEl.src = item.url;
-            
-            // 手机端默认进入"识别文档"视图
             setModalView('text');
             
-            // 为弹窗内的图片单独绑定一个可以全屏放大的 Viewer
             if(modalViewer) modalViewer.destroy();
-            modalViewer = new Viewer(imgEl, { navbar: false, title: false, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1,rotateLeft: 1,  rotateRight: 1  }}    );
+            modalViewer = new Viewer(imgEl, { navbar: false, title: false, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 }});
 
             document.getElementById('detailModal').classList.remove('hidden'); 
             document.body.style.overflow = 'hidden';
