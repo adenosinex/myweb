@@ -423,7 +423,7 @@
             
             // 为弹窗内的图片单独绑定一个可以全屏放大的 Viewer
             if(modalViewer) modalViewer.destroy();
-            modalViewer = new Viewer(imgEl, { navbar: false, title: false, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1 } });
+            modalViewer = new Viewer(imgEl, { navbar: false, title: false, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1,rotateLeft: 1,  rotateRight: 1  }}    );
 
             document.getElementById('detailModal').classList.remove('hidden'); 
             document.body.style.overflow = 'hidden';
