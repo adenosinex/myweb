@@ -499,3 +499,42 @@ def confirm_maintenance_delete():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
  
+
+import csv
+import io
+from flask import make_response
+
+@novel_ai_bp.route('/export/csv', methods=['GET'])
+def export_all_csv():
+    """无视分页，全量导出所有 AI 解析结果为 CSV"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT payload FROM store WHERE collection='novel_analysis'")
+            rows = cursor.fetchall()
+
+        # 使用 StringIO 构建 CSV 文本流
+        si = io.StringIO()
+        # 写入 \ufeff BOM 头，强制 Excel 使用 UTF-8 识别中文，防止乱码
+        si.write('\ufeff')
+        cw = csv.writer(si)
+        
+        # 写入表头
+        cw.writerow(['小说文件名', '总字数', 'AI分析结果'])
+
+        # 写入全量数据
+        for row in rows:
+            data = json.loads(row[0])
+            name = data.get('novel_name', '')
+            word_count = data.get('word_count', 0)
+            result = data.get('analysis_result', '')
+            cw.writerow([name, word_count, result])
+
+        # 封装为可下载的文件响应
+        output = make_response(si.getvalue())
+        output.headers["Content-Disposition"] = "attachment; filename=Novel_AI_Full_Export.csv"
+        output.headers["Content-type"] = "text/csv; charset=utf-8"
+        return output
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

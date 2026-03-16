@@ -4,3 +4,4 @@ anki.csv
 .DS_Store
 .env
 static/uploads/*
+manuals_processing.log
