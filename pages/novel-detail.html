@@ -79,6 +79,16 @@
                     同步云端数据中...
                 </div>
             </section>
+
+            <section id="recommendSection" class="hidden">
+    <div class="flex items-center gap-2 mb-3">
+        <span class="text-purple-500 text-sm">✨</span>
+        <h3 class="font-bold text-zinc-400 text-[10px] uppercase tracking-widest">相关推荐</h3>
+    </div>
+    <div id="recommendList" class="flex flex-wrap gap-2">
+        </div>
+</section>
+
             <section class="mb-20">
                 <div class="flex justify-between items-end mb-4 px-1">
                     <div class="flex items-center gap-2">
@@ -87,6 +97,10 @@
                     </div>
                     <span id="chapterCount" class="text-[10px] font-mono bg-zinc-200 text-zinc-500 px-2 py-0.5 rounded">...</span>
                 </div>
+                <section id="recommendSection" class="hidden">
+   
+   
+</section>
                 <div id="tocList" class="bg-white rounded-2xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100 shadow-sm">
                     <div class="p-8 text-center text-zinc-400 text-sm flex flex-col items-center gap-3">
                         <div class="w-5 h-5 border-2 border-zinc-300 border-t-blue-500 rounded-full animate-spin"></div>
@@ -98,6 +112,35 @@
     </main>
 
     <script>
+        // 🌟 新增：加载相关推荐函数
+async function loadRecommendations() {
+    const listContainer = document.getElementById('recommendList');
+    const section = document.getElementById('recommendSection');
+    
+    try {
+        const res = await fetch(`/api/novel/recommend/${encodeURIComponent(novelName)}`);
+        const data = await res.json();
+        
+        if (data.recommendations && data.recommendations.length > 0) {
+            section.classList.remove('hidden');
+            
+            listContainer.innerHTML = data.recommendations.map(book => {
+                const title = book.filename.replace(/\.[^/.]+$/, "");
+                // 相似度越高，背景色稍深一点点以示区分（可选）
+                const opacity = Math.max(0.4, book.similarity); 
+                
+                return `
+                    <a href="/novel-detail?novel=${encodeURIComponent(book.filename)}" 
+                       class="px-3 py-1.5 bg-zinc-100 hover:bg-purple-100 text-zinc-600 hover:text-purple-700 rounded-lg text-xs transition-colors border border-zinc-200 hover:border-purple-200 truncate max-w-[180px]">
+                        ${title}
+                    </a>
+                `;
+            }).join('');
+        }
+    } catch (e) {
+        section.classList.add('hidden');
+    }
+}
         const urlParams = new URLSearchParams(window.location.search);
         const novelName = urlParams.get('novel');
         let parsedChapters = [];
@@ -126,6 +169,10 @@
 
             // 2. 加载 AI 详情及其他逻辑 (保持不变)
             loadAIDetail();
+  
+    
+    // 3. 🌟 新增：加载相关推荐
+    loadRecommendations();
             loadTOC();
         }
 function goBack() {

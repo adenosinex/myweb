@@ -11,11 +11,12 @@ import threading
 from openai import OpenAI
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import quote
 
 video_bp = Blueprint('video', __name__)
 DB_PATH = 'universal_data.db'
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
-
+VIDEO_VECTOR_NODE="http://15x4.zin6.dpdns.org:5003"
 # ==========================================
 # 🌟 一键切换开关：将这里改为 'ollama' 或 'cloud'
 # ==========================================
@@ -261,8 +262,48 @@ def get_video_stats():
             
     return jsonify({k: v for k, v in temp_counts.items() if v > 3})
 
-@video_bp.route('/api/video/list', methods=['GET'])
+@video_bp.route('/api/video/list', methods=['GET','POST'])
 def get_video_list():
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            name_list = data.get('names', [])
+            
+            if not name_list:
+                return jsonify({"items": [], "total": 0})
+
+            items = []
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # 构建防注入的 IN 查询
+                placeholders = ','.join(['?'] * len(name_list))
+                query = f"SELECT * FROM video_store WHERE filename IN ({placeholders})"
+                cursor.execute(query, name_list)
+                
+                rows = cursor.fetchall()
+                # 建立映射以保持前端请求的原始顺序（相似度降序）
+                row_map = {row['filename']: dict(row) for row in rows}
+                
+                for name in name_list:
+                    if name in row_map:
+                        item = row_map[name]
+                        # 转换标签字段
+                        item['ai_tags'] = json.loads(item['tags']) if item.get('tags') else []
+                        # 补全播放 URL
+                        item['url'] = f"/stream/video/{quote(item['filename'])}"
+                        items.append(item)
+            
+            return jsonify({
+                "items": items,
+                "total": len(items),
+                "has_more": False
+            })
+
+        except Exception as e:
+            print(f"[!] POST 批量查询异常: {e}")
+            return jsonify({"error": str(e)}), 500
     filter_type = request.args.get('filter', 'all') 
     tag_filter = request.args.get('tag', '全部')
     pool_type = request.args.get('pool', 'mixed') 
@@ -686,3 +727,21 @@ def test_llm_ask():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+ 
+
+@video_bp.route('/api/video/recommend', methods=['GET'])
+def get_video_recommendations():
+    """网页调用：获取相似视频"""
+    try:
+        # 将请求转发给视频向量节点
+        filename=request.args.get('name')
+        print("silimar video",filename)
+        safe_name = quote(filename)
+        # safe_name = filename
+        node_url = f"{VIDEO_VECTOR_NODE}/api/video/similar?name={safe_name}&k=10&threshold=0.85"
+        res = requests.get(node_url, timeout=5)
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"recommendations": [], "error": "无法连接向量节点"})

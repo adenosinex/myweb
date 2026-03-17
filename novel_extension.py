@@ -292,6 +292,7 @@ def handle_novel_state(filename):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 @novel_ai_bp.route('/analysis/detail/<path:filename>', methods=['GET'])
+@novel_ai_bp.route('/skip/analysis/detail/<path:filename>', methods=['GET'])
 def get_novel_analysis_detail(filename):
     """精准查询单本书的 AI 分析数据，增加容错处理"""
     try:
@@ -538,3 +539,39 @@ def export_all_csv():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# 新增配置：向量计算节点地址
+VECTOR_NODE_URL = "http://15x4.zin6.dpdns.org:5001"
+
+# ================= 关联推荐与图谱调用 =================
+
+@novel_ai_bp.route('/recommend/<path:filename>', methods=['GET'])
+def get_recommendations(filename):
+    """
+    阅读器调用此接口：请求独立向量节点，获取与当前小说最相似的书籍。
+    """
+    try:
+        # 向向量节点发起请求，索要 Top 5 相似书籍
+        node_url = f"{VECTOR_NODE_URL}/api/vector/similar?name={quote(filename)}&k=5"
+        res = requests.get(node_url, timeout=5)
+        
+        if res.status_code == 200:
+            return jsonify(res.json())
+        elif res.status_code == 404:
+            return jsonify({"recommendations": [], "msg": "向量库尚未收录此书"}), 200
+        else:
+            return jsonify({"error": "向量节点返回异常"}), res.status_code
+            
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"无法连接到独立向量节点: {str(e)}"}), 500
+
+@novel_ai_bp.route('/graph/trigger_sync', methods=['POST'])
+def trigger_vector_sync():
+    """
+    管理端调用此接口：通知向量节点开始下载小说并执行向量化计算。
+    """
+    try:
+        res = requests.post(f"{VECTOR_NODE_URL}/api/vector/sync", timeout=3)
+        return jsonify(res.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"指令下发失败: {str(e)}"}), 500
