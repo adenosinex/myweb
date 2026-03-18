@@ -12,7 +12,7 @@ import time
 from flask import Blueprint, request, jsonify, make_response
 
 tags_bp = Blueprint('tags', __name__)
-DB_PATH = 'universal_data.db'
+DB_PATH = 'db/universal_data.db'
 
 # ================= 配置管理模块 =================
 TAG_CHOICES = [

@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 
 video_bp = Blueprint('video', __name__)
-DB_PATH = 'universal_data.db'
+DB_PATH = 'db/universal_data.db'
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 VIDEO_VECTOR_NODE="http://15x4.zin6.dpdns.org:5003"
 # ==========================================

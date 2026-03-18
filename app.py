@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()  # 自动寻找当前目录下的 .env 并注入到 os.environ
 
 app = Flask(__name__)
-DB_PATH = 'universal_data.db'
+DB_PATH = 'db/universal_data.db'
 PAGES_DIR = 'pages'
 ACCESS_CODE = os.environ.get('ACCESS_CODE') or "8888"
 
@@ -18,7 +18,7 @@ def load_extensions(app):
     扫描当前目录，自动导入所有以 _extension.py 结尾的文件，
     并将其中的 Blueprint 实例注册到 app 中。
     """
-    current_dir = os.path.dirname(os.path.abspath(__name__))
+    current_dir = 'moduels'
     
     for filename in os.listdir(current_dir):
         # 匹配后缀为 _extension.py 的文件
@@ -26,7 +26,7 @@ def load_extensions(app):
             module_name = filename[:-3]  # 去掉 .py 后缀
             try:
                 # 动态导入模块
-                module = importlib.import_module(module_name)
+                module = importlib.import_module(current_dir+"."+module_name)
                 
                 # 遍历模块内的所有对象，寻找 Blueprint 实例
                 blueprint_found = False
@@ -197,15 +197,18 @@ def serve_html_with_icon(filename):
     """读取 HTML 文件，若存在同名 svg，则向其动态插入 icon 标签"""
     if not filename.endswith('.html'):
         filename += '.html'
-        
+    PAGES_DIR2=PAGES_DIR
     html_path = os.path.join(PAGES_DIR, filename)
     if not os.path.exists(html_path):
-        return "Page not found", 404
+        PAGES_DIR2 = os.path.join(PAGES_DIR, "second" )
+        html_path = os.path.join(PAGES_DIR2, filename)
+        if not os.path.exists(html_path):
+            return "Page not found", 404
 
     # 提取基础文件名，例如 'player.html' -> 'player'
     base_name = filename[:-5] 
     base_name=base_name.split('-')[0] if '-' in base_name else base_name
-    svg_path = os.path.join('static', f'{base_name}.svg')
+    svg_path = os.path.join('static', "svg",f'{base_name}.svg')
 
     # 如果 static 目录下存在同名的 svg 图标
     if os.path.exists(svg_path):
@@ -225,7 +228,7 @@ def serve_html_with_icon(filename):
         return content
 
     # 如果没有对应的 svg，按原样发送文件
-    return send_from_directory(PAGES_DIR, filename)
+    return send_from_directory(PAGES_DIR2, filename)
 
 @app.route('/')
 def index():

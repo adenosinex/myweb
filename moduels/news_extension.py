@@ -10,7 +10,7 @@ scrape_bp = Blueprint('smart_scraper', __name__, url_prefix='/smart_scraper')
  
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "web_cache.db")
+DB_PATH =   "db/web_cache.db" 
 NODE_API_URL = "http://192.168.31.124:8901"
 client = OpenAI(base_url='https://api.xiaomimimo.com/v1', api_key=os.getenv("MI_API_KEY"))
 

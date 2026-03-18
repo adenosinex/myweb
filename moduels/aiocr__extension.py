@@ -10,8 +10,8 @@ from flask import Blueprint, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 
 manuals_bp = Blueprint('manuals', __name__)
-DB_PATH = 'universal_data.db' 
-UPLOAD_FOLDER = 'static/uploads'
+DB_PATH = 'db/universal_data.db' 
+UPLOAD_FOLDER = 'db/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 增加 worker 数量以应对分离后的多阶段任务

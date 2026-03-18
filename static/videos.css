@@ -1,0 +1,429 @@
+ 
+        /* ==========================================================================
+           1. 全局与基础样式
+           ========================================================================== */
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #000;
+            color: white;
+            overflow: hidden;
+            font-family: -apple-system, sans-serif;
+            touch-action: pan-y;
+        }
+
+        /* ==========================================================================
+           2. 顶部导航与标签栏 (Top Navigation)
+           ========================================================================== */
+        .top-nav {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 40;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 30%, transparent);
+            padding-top: env(safe-area-inset-top, 15px);
+            pointer-events: none;
+        }
+
+        .main-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            padding: 15px 0 10px;
+            pointer-events: auto;
+        }
+
+        .tab-item {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .tab-item.active {
+            color: white;
+            font-size: 18px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        /* 搜索框相关样式 - 缩小化处理 */
+        .search-container {
+            padding: 0 15px 10px;
+            pointer-events: auto;
+            display: flex;
+            justify-content: center;
+        }
+
+        .search-wrapper {
+            position: relative;
+            width: 60%;
+            max-width: 220px;
+        }
+
+        .search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 4px 15px 4px 30px;
+            color: white;
+            font-size: 12px;
+            height: 28px;
+            outline: none;
+            transition: 0.3s;
+            backdrop-filter: blur(8px);
+        }
+
+        .search-input:focus {
+            border-color: #3b82f6;
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .tag-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 15px 15px;
+            pointer-events: auto;
+        }
+
+        .tag-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 10px;
+            flex: 1;
+            scrollbar-width: none;
+            padding-bottom: 5px;
+        }
+
+        .tag-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .cat-pill {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 12px;
+            white-space: nowrap;
+            transition: 0.2s;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(4px);
+        }
+
+        .cat-pill.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #60a5fa;
+            font-weight: bold;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+
+        /* 相似度标签基础样式 */
+        .similarity-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 800;
+            margin-right: 8px;
+            text-shadow: none;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* 根据程度显示的颜色 */
+        .sim-high {
+            background: #ef4444;
+            color: white;
+        }
+
+        /* 极高：红色 */
+        .sim-med {
+            background: #f59e0b;
+            color: white;
+        }
+
+        /* 中等：橙色 */
+        .sim-low {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* 一般：蓝色 */
+
+        /* ==========================================================================
+           3. 分类抽屉网格 (Category Drawer)
+           ========================================================================== */
+        .drawer {
+            position: fixed;
+            inset: 0;
+            background: #0b1120;
+            z-index: 100;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+            padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px;
+        }
+
+        .drawer.open {
+            transform: translateY(0);
+        }
+
+        .drawer-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        .grid-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 10px;
+            border-radius: 12px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .grid-item.active {
+            border: 1px solid #60a5fa;
+            background: rgba(59, 130, 246, 0.2);
+            box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.2);
+        }
+
+        /* ==========================================================================
+           4. 视频流容器与卡片 (Video Feed & Card)
+           ========================================================================== */
+        .video-feed {
+            height: 100dvh;
+            width: 100vw;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scrollbar-width: none;
+            scroll-behavior: smooth;
+        }
+
+        .video-feed::-webkit-scrollbar {
+            display: none;
+        }
+
+        .video-card {
+            height: 100dvh;
+            width: 100vw;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .video-player {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        .blur-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background-size: cover;
+            background-position: center;
+            filter: blur(40px) brightness(0.3);
+            transform: scale(1.1);
+            pointer-events: none;
+        }
+
+        .click-area {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        /* ==========================================================================
+           5. 悬浮 UI 与交互组件 (Overlay & Components)
+           ========================================================================== */
+        .play-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 11;
+            opacity: 0;
+            pointer-events: none;
+            color: rgba(255, 255, 255, 0.7);
+            transition: 0.2s;
+        }
+
+        .video-card.paused .play-icon {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .seek-toast {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .info-bottom {
+            position: absolute;
+            left: 15px;
+            bottom: 30px;
+            right: 75px;
+            z-index: 20;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+        }
+
+        .tag-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .ai-tag {
+            background: rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(96, 165, 250, 0.2);
+            color: #93c5fd;
+        }
+
+        .file-tag {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #d1d5db;
+        }
+
+        .action-sidebar {
+            position: absolute;
+            right: 15px;
+            bottom: 120px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .icon-circle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            transition: 0.3s;
+        }
+
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 30;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* ==========================================================================
+           6. 动画特效 (Animations)
+           ========================================================================== */
+        @keyframes heartPop {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.5);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .action-btn.liked .icon-circle {
+            animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-dislike:active .icon-circle {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .disliked-anim {
+            transform: scale(0.8) translateY(100px);
+            opacity: 0;
+            filter: grayscale(1);
+            transition: 0.4s ease-in;
+            pointer-events: none;
+        }
+
+        .recover-anim {
+            transform: translateX(100%);
+            opacity: 0;
+            transition: 0.4s ease-out;
+            pointer-events: none;
+        }
+ 

@@ -10,7 +10,7 @@ player_bp = Blueprint('player', __name__)
 # 配置资源节点地址 (局域网源站)
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 # 修复 2：补充数据库路径常量
-DB_PATH = 'universal_data.db' 
+DB_PATH = 'db/universal_data.db' 
 
 @player_bp.route('/api/play_stats', methods=['GET'])
 def get_play_stats():

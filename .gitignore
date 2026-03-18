@@ -5,3 +5,5 @@ anki.csv
 .env
 static/uploads/*
 manuals_processing.log
+db/uploads/*
+*.jpg
