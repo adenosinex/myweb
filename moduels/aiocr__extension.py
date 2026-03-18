@@ -265,7 +265,7 @@ def get_manuals():
     return jsonify([{
         "id": r[0], 
         "filename": r[1] or '未命名文件',
-        "url": f"/{r[2]}", 
+        "url": fr"/db/uploads/{r[0]}", 
         "tags": json.loads(r[3]) if r[3] else [],
         "status": r[4], 
         "metrics": {"total_sec": r[5], "ocr_sec": r[6], "nlp_sec": r[7]},
