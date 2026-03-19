@@ -6,6 +6,7 @@
   <title>轨迹遥测与事件分析引擎</title>
   <script src="https://unpkg.com/vue@3.2.47/dist/vue.global.js"></script>
   <script src="https://unpkg.com/axios@1.6.2/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"></script>
   <link href="https://unpkg.com/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,17 +15,19 @@
     .app-container { max-width: 900px; margin: 0 auto; padding: 0 16px; }
     .panel-card { margin-bottom: 16px; border-radius: 12px; padding: 20px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     #map { height: 450px; border-radius: 8px; margin-top: 16px; z-index: 1; }
+    .chart-box { height: 300px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #e2e8f0; background: #fff; }
     .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; height: 100%; transition: all 0.2s; cursor: pointer; }
     .stat-box:hover { border-color: #3b82f6; background: #eff6ff; transform: translateY(-2px); }
     .stat-box.active { border-color: #1e40af; background: #dbeafe; box-shadow: 0 0 0 2px rgba(30,64,175,0.2); }
     .stat-value { font-size: 20px; font-weight: 700; color: #1e40af; }
     .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
     .section-title { font-size: 1.1rem; font-weight: 700; border-left: 4px solid #1e40af; padding-left: 10px; margin-bottom: 16px; color: #1e293b;}
-    .event-list { max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; margin-top: 12px;}
+    .event-list { max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; margin-top: 12px;}
     .event-item { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; display: flex; align-items: center; }
     .event-item:hover { background: #f8fafc; }
     .event-item:last-child { border-bottom: none; }
-    .event-time { font-weight: 600; color: #3b82f6; width: 85px; flex-shrink: 0; line-height: 1.4; font-size: 12px;}
+    .event-time { font-weight: 600; color: #3b82f6; width: 95px; flex-shrink: 0; line-height: 1.4; font-size: 12px; display: flex; flex-direction: column;}
+    .idx-badge { background-color: #e2e8f0; color: #475569; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-bottom: 2px; display: inline-block; width: fit-content; }
     .filter-panel { background: #f8fafc; border-radius: 8px; padding: 16px; border: 1px dashed #cbd5e1; }
   </style>
 </head>
@@ -34,93 +37,45 @@
     
     <div class="panel-card">
       <input type="file" ref="fileInput" accept=".gpx" class="form-control mb-3">
-      
       <div class="filter-panel mb-3">
         <div class="d-flex justify-content-between align-items-center mb-2" style="cursor: pointer;" @click="showFilters = !showFilters">
           <span class="fw-bold" style="color:#334155; font-size: 14px;">🛠️ 二次筛选引擎 (前端本地记忆)</span>
           <span class="text-muted" style="font-size: 12px;">{{ showFilters ? '收起 ▲' : '配置参数 ▼' }}</span>
         </div>
         <div v-show="showFilters" class="row g-2 mt-2">
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">休整(> 分钟)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.minStopTime" step="1" min="1">
-          </div>
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">弯角(> 度)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.minTurnAngle" step="5" min="15">
-          </div>
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">重刹(< m/s²)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.maxHardBrake" step="0.5" max="-1">
-          </div>
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">异常a (> m/s²)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.minAbnormalAccel" step="0.5" min="1">
-          </div>
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">危险陡坡起点(%)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.minSteepCurveSlope" step="1" min="1">
-          </div>
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">较陡分界(%)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.steepSlopeThreshold" step="1" min="1">
-          </div>
-          <div class="col-4 col-md-3">
-            <label class="text-muted" style="font-size: 12px;">极限分界(%)</label>
-            <input type="number" class="form-control form-control-sm" v-model.number="filters.extremeSlopeThreshold" step="1" min="5">
-          </div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">休整(> 分钟)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minStopTime" step="1" min="1"></div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">弯角(> 度)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minTurnAngle" step="5" min="15"></div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">重刹(< m/s²)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.maxHardBrake" step="0.5" max="-1"></div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">异常a (> m/s²)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minAbnormalAccel" step="0.5" min="1"></div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">危险坡点(%)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minSteepCurveSlope" step="1" min="1"></div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">较陡分界(%)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.steepSlopeThreshold" step="1" min="1"></div>
+          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">极限分界(%)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.extremeSlopeThreshold" step="1" min="5"></div>
         </div>
       </div>
-
       <button @click="uploadGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
         {{ loading ? '数据解算与拓扑映射中...' : '启动分析引擎' }}
       </button>
+      <div v-if="lastRecordTime" class="text-center text-success mt-2" style="font-size: 12px;">已自动加载上次分析缓存 ({{ lastRecordTime }})</div>
       <div v-if="error" class="text-danger text-center mt-3">{{ error }}</div>
     </div>
 
     <div v-show="stats">
       <div class="panel-card">
-        <div class="section-title">动态事件侦测 (点击面板下钻)</div>
+        <div class="section-title">动态事件侦测 (点击面板查阅详情)</div>
         <div class="row g-2">
-          <div class="col-6 col-md-2">
-            <div class="stat-box" :class="{active: activeEvent === 'hard_brakes'}" @click="setActiveEvent('hard_brakes')">
-              <div class="stat-value text-danger">{{ stats?.counts?.hard_brakes }}</div>
-              <div class="stat-label">重刹(<{{ filters.maxHardBrake }})</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-box" :class="{active: activeEvent === 'abnormal_speeds'}" @click="setActiveEvent('abnormal_speeds')">
-              <div class="stat-value text-secondary">{{ stats?.counts?.abnormal_speeds }}</div>
-              <div class="stat-label">突变(a>{{ filters.minAbnormalAccel }})</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-2">
-            <div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')">
-              <div class="stat-value text-success">{{ stats?.counts?.sharp_curves }}</div>
-              <div class="stat-label">发卡弯(>{{ filters.minTurnAngle }}°)</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-box" :class="{active: activeEvent === 'steep_curves'}" @click="setActiveEvent('steep_curves')">
-              <div class="stat-value text-danger" style="font-size:22px;">{{ stats?.counts?.steep_curves }}</div>
-              <div class="stat-label fw-bold">危险弯(坡>{{ filters.minSteepCurveSlope }}%)</div>
-            </div>
-          </div>
-          <div class="col-12 col-md-2">
-            <div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')">
-              <div class="stat-value text-warning">{{ stats?.counts?.stop_points }}</div>
-              <div class="stat-label">休整(>{{ filters.minStopTime }}min)</div>
-            </div>
-          </div>
+          <div class="col-6 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'hard_brakes'}" @click="setActiveEvent('hard_brakes')"><div class="stat-value text-danger">{{ stats?.counts?.hard_brakes }}</div><div class="stat-label">重刹(<{{ filters.maxHardBrake }})</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'abnormal_speeds'}" @click="setActiveEvent('abnormal_speeds')"><div class="stat-value text-secondary">{{ stats?.counts?.abnormal_speeds }}</div><div class="stat-label">突变(a>{{ filters.minAbnormalAccel }})</div></div></div>
+          <div class="col-6 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')"><div class="stat-value text-success">{{ stats?.counts?.sharp_curves }}</div><div class="stat-label">发卡弯(>{{ filters.minTurnAngle }}°)</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'steep_curves'}" @click="setActiveEvent('steep_curves')"><div class="stat-value text-danger" style="font-size:22px;">{{ stats?.counts?.steep_curves }}</div><div class="stat-label fw-bold">危险弯(坡>{{ filters.minSteepCurveSlope }}%)</div></div></div>
+          <div class="col-12 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')"><div class="stat-value text-warning">{{ stats?.counts?.stop_points }}</div><div class="stat-label">休整(>{{ filters.minStopTime }}min)</div></div></div>
         </div>
 
         <div v-if="['hard_brakes', 'abnormal_speeds', 'sharp_curves', 'steep_curves', 'stop_points'].includes(activeEvent)" class="event-list">
           <div v-if="eventData[activeEvent] && eventData[activeEvent].length > 0">
             <div class="event-item" v-for="(ev, idx) in eventData[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
               <div class="event-time">
-                <span v-if="['hard_brakes', 'abnormal_speeds', 'stop_points'].includes(activeEvent)">
-                  {{ ev.offset_min.toFixed(1) }} 分钟<br>
-                </span>
+                <span class="idx-badge">#{{ idx + 1 }}</span>
+                <span v-if="['hard_brakes', 'abnormal_speeds', 'stop_points'].includes(activeEvent)">{{ ev.offset_min.toFixed(1) }} 分钟</span>
                 <span class="text-secondary">{{ ev.cum_dist_km.toFixed(1) }} km</span>
               </div>
               <div class="event-desc text-muted ms-2">{{ ev.desc }}</div>
@@ -133,7 +88,6 @@
 
       <div class="panel-card">
         <div class="section-title">宏观路况与地形评估</div>
-        
         <div class="row g-2 mb-3">
           <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.score }}</div><div class="stat-label">综合得分</div></div></div>
           <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.terrain?.total_distance }}</div><div class="stat-label">总里程(km)</div></div></div>
@@ -144,36 +98,17 @@
         </div>
 
         <div class="row g-2">
-          <div class="col-6 col-md-3">
-            <div class="stat-box" :class="{active: activeEvent === 'up_steep'}" @click="setActiveEvent('up_steep')">
-              <div class="stat-value text-warning" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_steep }} 段</div>
-              <div class="stat-label">较陡上坡 ({{ filters.steepSlopeThreshold }}~{{ filters.extremeSlopeThreshold }}%)</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-box" :class="{active: activeEvent === 'up_extreme'}" @click="setActiveEvent('up_extreme')">
-              <div class="stat-value text-danger" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_extreme }} 段</div>
-              <div class="stat-label fw-bold">极限上坡 (≥{{ filters.extremeSlopeThreshold }}%)</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-box" :class="{active: activeEvent === 'down_steep'}" @click="setActiveEvent('down_steep')">
-              <div class="stat-value text-info" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_steep }} 段</div>
-              <div class="stat-label">较陡下坡 (-{{ filters.steepSlopeThreshold }}~-{{ filters.extremeSlopeThreshold }}%)</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-box" :class="{active: activeEvent === 'down_extreme'}" @click="setActiveEvent('down_extreme')">
-              <div class="stat-value text-primary" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_extreme }} 段</div>
-              <div class="stat-label fw-bold">极限下坡 (≤-{{ filters.extremeSlopeThreshold }}%)</div>
-            </div>
-          </div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_steep'}" @click="setActiveEvent('up_steep')"><div class="stat-value text-warning" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_steep }} 段</div><div class="stat-label">较陡上坡 ({{ filters.steepSlopeThreshold }}~{{ filters.extremeSlopeThreshold }}%)</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_extreme'}" @click="setActiveEvent('up_extreme')"><div class="stat-value text-danger" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_extreme }} 段</div><div class="stat-label fw-bold">极限上坡 (≥{{ filters.extremeSlopeThreshold }}%)</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_steep'}" @click="setActiveEvent('down_steep')"><div class="stat-value text-info" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_steep }} 段</div><div class="stat-label">较陡下坡 (-{{ filters.steepSlopeThreshold }}~-{{ filters.extremeSlopeThreshold }}%)</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_extreme'}" @click="setActiveEvent('down_extreme')"><div class="stat-value text-primary" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_extreme }} 段</div><div class="stat-label fw-bold">极限下坡 (≤-{{ filters.extremeSlopeThreshold }}%)</div></div></div>
         </div>
 
         <div v-if="['up_steep', 'up_extreme', 'down_steep', 'down_extreme'].includes(activeEvent)" class="event-list">
           <div v-if="eventData[activeEvent] && eventData[activeEvent].length > 0">
             <div class="event-item" v-for="(ev, idx) in eventData[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
               <div class="event-time">
+                <span class="idx-badge">#{{ idx + 1 }}</span>
                 <span class="text-secondary">{{ ev.cum_dist_km.toFixed(1) }} km</span>
               </div>
               <div class="event-desc text-muted ms-2">{{ ev.desc }}</div>
@@ -184,8 +119,14 @@
         </div>
       </div>
 
+      <div class="panel-card" v-show="rawData">
+        <div class="section-title">多维数据重构视图 (支持滚轮放大/平移)</div>
+        <div id="topologyChart" class="chart-box mb-4"></div>
+        <div id="sequenceChart" class="chart-box"></div>
+      </div>
+
       <div class="panel-card">
-        <div class="section-title">二维空间映射</div>
+        <div class="section-title">二维空间真实映射</div>
         <div id="map"></div>
       </div>
     </div>
@@ -201,111 +142,225 @@
           stats: null, eventData: null, activeEvent: null,
           map: null, trackLayer: null, markerLayer: null,
           showFilters: false,
-          rawData: null, // 持久化后端原始数据镜像
+          rawData: null,
+          lastRecordTime: '', 
+          topoChart: null,
+          seqChart: null,
           filters: {
-            minStopTime: 1,           // 最短休整时长 (分钟)
-            minTurnAngle: 30,         // 最小发卡弯角 (度)
-            maxHardBrake: -3.5,       // 重刹阈值 (m/s²)
-            minAbnormalAccel: 2.0,    // 异常加速度阈值绝对值 (m/s²)
-            minSteepCurveSlope: 8,    // 危险陡坡弯道最小坡度 (%)
-            steepSlopeThreshold: 8,   // 较陡坡度分界起点 (%)
-            extremeSlopeThreshold: 15 // 极限坡度分界起点 (%)
+            minStopTime: 1, minTurnAngle: 30, maxHardBrake: -3.5, 
+            minAbnormalAccel: 2.0, minSteepCurveSlope: 8, steepSlopeThreshold: 8, extremeSlopeThreshold: 15 
           }
         }
       },
       mounted() { 
-        // 挂载时读取本地缓存配置
         const savedFilters = localStorage.getItem('gpx_filters_v2');
-        if (savedFilters) {
+        if (savedFilters) { try { this.filters = { ...this.filters, ...JSON.parse(savedFilters) }; } catch(e) {} }
+
+        const savedData = localStorage.getItem('last_gpx_data');
+        const savedTime = localStorage.getItem('last_gpx_time');
+        if (savedData && savedTime) {
           try {
-            this.filters = { ...this.filters, ...JSON.parse(savedFilters) };
-          } catch(e) {}
+            this.rawData = JSON.parse(savedData);
+            this.lastRecordTime = savedTime;
+            this.$nextTick(() => {
+              this.applyFilters();
+              if (this.rawData.segments) this.drawMap(this.rawData.segments);
+            });
+          } catch(e) { console.error("缓存恢复失败", e); }
         }
+        
         this.initMap(); 
+        window.addEventListener('resize', () => {
+          if (this.topoChart) this.topoChart.resize();
+          if (this.seqChart) this.seqChart.resize();
+        });
       },
       watch: {
-        // 监听配置改变，实时存入本地并触发清洗重算
-        filters: {
-          deep: true,
-          handler(newVal) {
-            localStorage.setItem('gpx_filters_v2', JSON.stringify(newVal));
-            this.applyFilters();
-          }
-        }
+        filters: { deep: true, handler(newVal) { localStorage.setItem('gpx_filters_v2', JSON.stringify(newVal)); this.applyFilters(); } }
       },
       methods: {
         initMap() {
           this.map = L.map('map', { preferCanvas: true }).setView([30.0, 110.0], 5);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-          }).addTo(this.map);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(this.map);
         },
         getColor(speed) {
           if (speed > 80) return '#ef4444'; 
           if (speed > 50) return '#f59e0b'; 
           if (speed > 20) return '#10b981'; 
-          return '#3b82f6';                 
+          return '#3b82f6';                
         },
         setActiveEvent(type) {
           this.activeEvent = this.activeEvent === type ? null : type;
+          this.$nextTick(() => { this.renderCharts(); });
         },
         focusMapOnEvent(ev) {
           if (!this.map) return;
           if (this.markerLayer) { this.map.removeLayer(this.markerLayer); }
-          
           this.map.flyTo([ev.lat, ev.lon], 16, { animate: true, duration: 1 });
-          
           let popupText = `<b>里程点: ${ev.cum_dist_km.toFixed(1)} km</b>`;
           if (['hard_brakes', 'abnormal_speeds', 'stop_points'].includes(this.activeEvent)) {
               popupText += `<br><b>时间点: ${ev.offset_min.toFixed(1)} 分钟</b>`;
           }
           popupText += `<br>${ev.desc}`;
-
-          this.markerLayer = L.circleMarker([ev.lat, ev.lon], {
-            radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, opacity: 1, fillOpacity: 0.8
-          }).addTo(this.map).bindPopup(popupText).openPopup();
+          this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, opacity: 1, fillOpacity: 0.8 }).addTo(this.map).bindPopup(popupText).openPopup();
+        },
+        
+        // 【核心优化】严谨的距离计算算法，抑制 GPS 微小漂移带来的里程发散
+        calcDist(lat1, lon1, lat2, lon2) {
+          const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+          const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          // 容差过滤：消除 < 1m 的静态噪点位移
+          return dist < 0.001 ? 0 : dist; 
         },
 
-        // --- 前端动态数据漏斗清洗器 ---
+        // 统一渲染双视角图表，增加 MarkPoint 与序号体系
+        renderCharts() {
+          const topoDom = document.getElementById('topologyChart');
+          const seqDom = document.getElementById('sequenceChart');
+          if (!topoDom || !seqDom) return;
+
+          if (!this.topoChart) this.topoChart = echarts.init(topoDom);
+          if (!this.seqChart) this.seqChart = echarts.init(seqDom);
+
+          const events = (this.activeEvent && this.eventData[this.activeEvent]) ? this.eventData[this.activeEvent] : [];
+          
+          const trackData = [];
+          const eleData = [];
+          let curDist = 0;
+
+          if (this.rawData && this.rawData.segments) {
+            this.rawData.segments.forEach(seg => {
+              trackData.push([seg.lon1, seg.lat1]);
+              const stepDist = this.calcDist(seg.lat1, seg.lon1, seg.lat2, seg.lon2);
+              curDist += stepDist;
+              const distX = seg.cum_dist_km !== undefined ? seg.cum_dist_km : curDist;
+              const ele = seg.ele2 ?? seg.elevation ?? seg.ele ?? seg.alt ?? 0;
+              eleData.push([parseFloat(distX.toFixed(3)), ele]);
+            });
+            const lastSeg = this.rawData.segments[this.rawData.segments.length - 1];
+            if (lastSeg) trackData.push([lastSeg.lon2, lastSeg.lat2]);
+          }
+
+          let yName = '事件数值';
+          let seriesColor = '#3b82f6';
+          let extType = 'max'; // 用于标记最大或最小值
+
+          const scatterTopo = [];
+          const scatterSeq = [];
+
+          events.forEach((ev, idx) => {
+            let val = 0;
+            const desc = ev.desc;
+            
+            if (this.activeEvent === 'hard_brakes') { yName = '减速度 (m/s²)'; seriesColor = '#ef4444'; val = parseFloat(desc.match(/减速度:\s*([-.\d]+)/)?.[1] || 0); extType = 'min'; }
+            else if (this.activeEvent === 'abnormal_speeds') { yName = '突变加速度 (m/s²)'; seriesColor = '#64748b'; val = parseFloat(desc.match(/a=([-.\d]+)/)?.[1] || 0); extType = 'max'; }
+            else if (this.activeEvent === 'sharp_curves') { yName = '偏航角度 (°)'; seriesColor = '#10b981'; val = parseFloat(desc.match(/偏航角变化:\s*([\d.]+)/)?.[1] || 0); extType = 'max'; }
+            else if (this.activeEvent === 'stop_points') { yName = '休整时长 (min)'; seriesColor = '#f59e0b'; val = parseFloat(desc.match(/停留时长:\s*([\d.]+)/)?.[1] || 0); extType = 'max'; }
+            else if (this.activeEvent?.includes('steep') || this.activeEvent?.includes('extreme')) { 
+              yName = '坡度 (%)'; seriesColor = desc.includes('-') ? '#3b82f6' : '#ef4444'; 
+              val = parseFloat(desc.match(/坡度[:\s]*\+?([-.\d]+)/)?.[1] || 0); 
+              extType = this.activeEvent.includes('down') ? 'min' : 'max';
+            }
+
+            // 构建统一的带序号 NodeName
+            const nodeName = `#${idx + 1}`; 
+            
+            scatterTopo.push({ name: nodeName, value: [ev.lon, ev.lat], rawEvent: ev, desc: desc });
+            scatterSeq.push({ name: nodeName, value: [ev.cum_dist_km, val], rawEvent: ev, desc: desc });
+          });
+
+          // 1. 同态拓扑 Option
+          const topoOption = {
+            title: { text: '同态拓扑图 (空间几何映射)', left: 10, top: 10, textStyle: { fontSize: 13, color: '#475569' } },
+            tooltip: { trigger: 'item', formatter: p => p.seriesType === 'scatter' ? `里程: ${p.data.rawEvent.cum_dist_km.toFixed(2)} km<br/>${p.data.name} - ${p.data.desc}` : '' },
+            grid: { left: '3%', right: '3%', bottom: '15%', top: '15%', containLabel: false },
+            dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'inside', yAxisIndex: 0 }, { type: 'slider', xAxisIndex: 0, bottom: 5, height: 12 }],
+            xAxis: { type: 'value', scale: true, show: false }, 
+            yAxis: { type: 'value', scale: true, show: false },
+            series: [
+              { type: 'line', name: '线路轨迹', data: trackData, smooth: true, lineStyle: { color: '#cbd5e1', width: 2 }, symbol: 'none', silent: true, zlevel: 0 },
+              { 
+                type: 'scatter', name: '事件节点', data: scatterTopo, symbolSize: 12, 
+                itemStyle: { color: seriesColor, shadowBlur: 4, shadowColor: 'rgba(0,0,0,0.3)' }, 
+                label: { show: true, formatter: '{b}', position: 'top', fontSize: 10, color: '#1e293b' }, // 图形上方显示 #1, #2 序号
+                emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 2 }, symbolSize: 16 }, zlevel: 1 
+              }
+            ]
+          };
+
+          // 2. 序列与海拔剖面 Option
+          const seqOption = {
+            title: { text: '事件序列与海拔剖面图', left: 10, top: 10, textStyle: { fontSize: 13, color: '#475569' } },
+            tooltip: { trigger: 'item' },
+            grid: { left: '8%', right: '8%', bottom: '15%', top: '25%', containLabel: true },
+            dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', xAxisIndex: 0, bottom: 5, height: 12 }],
+            xAxis: { type: 'value', name: '里程 (km)', nameLocation: 'middle', nameGap: 25, splitLine: { show: false } },
+            yAxis: [
+              { type: 'value', name: '海拔 (m)', position: 'left', splitLine: { show: false }, scale: true, axisLabel: { color: '#64748b' } },
+              { type: 'value', name: this.activeEvent ? yName : '', position: 'right', splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } }, scale: true, axisLabel: { color: seriesColor } }
+            ],
+            series: [
+              { 
+                type: 'line', name: '海拔', data: eleData, yAxisIndex: 0, 
+                smooth: true, symbol: 'none', lineStyle: { color: '#94a3b8', width: 1 },
+                areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(148, 163, 184, 0.5)'}, {offset: 1, color: 'rgba(148, 163, 184, 0.1)'}]) },
+                tooltip: { formatter: p => `<b>海拔剖面</b><br/>里程: ${p.value[0]} km<br/>高度: ${p.value[1]} m` }
+              },
+              { 
+                type: 'scatter', name: '事件节点', data: scatterSeq, yAxisIndex: 1, 
+                symbolSize: 10, itemStyle: { color: seriesColor },
+                label: { show: true, formatter: '{b}', position: 'top', fontSize: 10, color: '#1e293b' }, // 序号直接打在点上
+                markPoint: {
+                  data: [ { type: extType, name: '极值点' } ], // 自动计算最大值/最小值
+                  symbolSize: 35,
+                  label: { color: '#fff', fontSize: 10 }
+                },
+                tooltip: { formatter: p => `<b>${p.data.name} 节点</b><br/>里程: ${p.value[0].toFixed(2)} km<br/>${p.data.desc}` }
+              }
+            ]
+          };
+
+          this.topoChart.setOption(topoOption, true);
+          this.seqChart.setOption(seqOption, true);
+
+          const clickHandler = (params) => {
+            if (params.seriesType === 'scatter' && params.data && params.data.rawEvent) {
+              this.focusMapOnEvent(params.data.rawEvent);
+            }
+          };
+          this.topoChart.off('click'); this.seqChart.off('click');
+          this.topoChart.on('click', clickHandler); this.seqChart.on('click', clickHandler);
+        },
+
         applyFilters() {
           if (!this.rawData) return;
-          
-          // 深拷贝隔离后端原始数据
           let filtered = JSON.parse(JSON.stringify(this.rawData));
           
-          // 1. 过滤休整时间
           if (filtered.events.stop_points) {
             filtered.events.stop_points = filtered.events.stop_points.filter(ev => {
               const match = ev.desc.match(/停留时长:\s*([\d.]+)/);
               return match ? parseFloat(match[1]) >= this.filters.minStopTime : true;
             });
           }
-          
-          // 2. 过滤发卡弯角
           if (filtered.events.sharp_curves) {
             filtered.events.sharp_curves = filtered.events.sharp_curves.filter(ev => {
               const match = ev.desc.match(/偏航角变化:\s*([\d.]+)/);
               return match ? parseFloat(match[1]) >= this.filters.minTurnAngle : true;
             });
           }
-          
-          // 3. 过滤重刹阈值 (注意是负数判断)
           if (filtered.events.hard_brakes) {
             filtered.events.hard_brakes = filtered.events.hard_brakes.filter(ev => {
               const match = ev.desc.match(/减速度:\s*([-\d.]+)/);
               return match ? parseFloat(match[1]) <= this.filters.maxHardBrake : true;
             });
           }
-
-          // 4. 过滤异常速度 (绝对值比对)
           if (filtered.events.abnormal_speeds) {
             filtered.events.abnormal_speeds = filtered.events.abnormal_speeds.filter(ev => {
               const match = ev.desc.match(/a=([-\d.]+)/);
               return match ? Math.abs(parseFloat(match[1])) >= this.filters.minAbnormalAccel : true;
             });
           }
-
-          // 5. 过滤危险陡坡弯道
           if (filtered.events.steep_curves) {
             filtered.events.steep_curves = filtered.events.steep_curves.filter(ev => {
               const match = ev.desc.match(/坡度\s*([-\d.]+)%/);
@@ -313,42 +368,25 @@
             });
           }
 
-          // 6. 重组地形坡度数组池，基于新的动态区间重新派发
-          const allSlopes = [
-            ...(this.rawData.events.up_steep || []),
-            ...(this.rawData.events.up_extreme || []),
-            ...(this.rawData.events.down_steep || []),
-            ...(this.rawData.events.down_extreme || [])
-          ];
-
-          filtered.events.up_steep = [];
-          filtered.events.up_extreme = [];
-          filtered.events.down_steep = [];
-          filtered.events.down_extreme = [];
+          const allSlopes = [...(this.rawData.events.up_steep || []), ...(this.rawData.events.up_extreme || []), ...(this.rawData.events.down_steep || []), ...(this.rawData.events.down_extreme || [])];
+          filtered.events.up_steep = []; filtered.events.up_extreme = []; filtered.events.down_steep = []; filtered.events.down_extreme = [];
 
           allSlopes.forEach(ev => {
             const match = ev.desc.match(/坡度:\s*\+?([-\d.]+)/);
             if (match) {
               const val = parseFloat(match[1]);
-              if (val >= this.filters.extremeSlopeThreshold) {
-                filtered.events.up_extreme.push(ev);
-              } else if (val >= this.filters.steepSlopeThreshold) {
-                filtered.events.up_steep.push(ev);
-              } else if (val <= -this.filters.extremeSlopeThreshold) {
-                filtered.events.down_extreme.push(ev);
-              } else if (val <= -this.filters.steepSlopeThreshold) {
-                filtered.events.down_steep.push(ev);
-              }
+              if (val >= this.filters.extremeSlopeThreshold) filtered.events.up_extreme.push(ev);
+              else if (val >= this.filters.steepSlopeThreshold) filtered.events.up_steep.push(ev);
+              else if (val <= -this.filters.extremeSlopeThreshold) filtered.events.down_extreme.push(ev);
+              else if (val <= -this.filters.steepSlopeThreshold) filtered.events.down_steep.push(ev);
             }
           });
 
-          // 更新数据大屏统计数值
           filtered.overall.counts.stop_points = filtered.events.stop_points.length;
           filtered.overall.counts.sharp_curves = filtered.events.sharp_curves.length;
           filtered.overall.counts.hard_brakes = filtered.events.hard_brakes.length;
           filtered.overall.counts.abnormal_speeds = filtered.events.abnormal_speeds.length;
           filtered.overall.counts.steep_curves = filtered.events.steep_curves.length;
-
           filtered.overall.terrain.slope_stats.up_steep = filtered.events.up_steep.length;
           filtered.overall.terrain.slope_stats.up_extreme = filtered.events.up_extreme.length;
           filtered.overall.terrain.slope_stats.down_steep = filtered.events.down_steep.length;
@@ -356,27 +394,27 @@
 
           this.stats = filtered.overall;
           this.eventData = filtered.events;
+          
+          this.$nextTick(() => { this.renderCharts(); });
         },
 
         async uploadGPX() {
           const file = this.$refs.fileInput.files[0];
           if (!file) return this.error = '请选择文件';
           this.loading = true; this.error = ''; this.activeEvent = null;
-
           const formData = new FormData();
           formData.append('file', file);
 
           try {
-            const res = await axios.post('/analyze_gpx', formData, {
-              headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            
-            // 备份后端一次解析的原始底库
+            const res = await axios.post('/analyze_gpx', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             this.rawData = res.data;
+            this.lastRecordTime = new Date().toLocaleString();
+            try {
+              localStorage.setItem('last_gpx_data', JSON.stringify(this.rawData));
+              localStorage.setItem('last_gpx_time', this.lastRecordTime);
+            } catch (storageErr) { console.warn("缓存溢出防范生效"); }
             
-            // 强制触发前端清洗链
             this.applyFilters();
-            
             this.drawMap(res.data.segments);
           } catch (err) {
             this.error = err.response?.data?.error || '网络解析异常';
@@ -388,23 +426,17 @@
         drawMap(segments) {
           if (this.trackLayer) this.map.removeLayer(this.trackLayer);
           if (this.markerLayer) this.map.removeLayer(this.markerLayer);
-          
           this.trackLayer = L.featureGroup().addTo(this.map);
           const bounds = L.latLngBounds();
 
           segments.forEach(seg => {
             const latlngs = [[seg.lat1, seg.lon1], [seg.lat2, seg.lon2]];
             bounds.extend(latlngs);
-            L.polyline(latlngs, {
-              color: this.getColor(seg.speed_kmh), weight: 4, opacity: 0.8
-            }).addTo(this.trackLayer);
+            L.polyline(latlngs, { color: this.getColor(seg.speed_kmh), weight: 4, opacity: 0.8 }).addTo(this.trackLayer);
           });
 
           if (segments.length > 0) {
-            setTimeout(() => {
-              this.map.invalidateSize();
-              this.map.fitBounds(bounds, { padding: [20, 20] });
-            }, 100);
+            setTimeout(() => { this.map.invalidateSize(); this.map.fitBounds(bounds, { padding: [20, 20] }); }, 100);
           }
         }
       }
