@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/videos.css">
 </head>
+ 
 
 <body class="selection:bg-blue-500">
 
@@ -20,37 +21,44 @@
     </div>
 
     <div class="top-nav">
-        <div class="main-tabs relative">
-            <div class="flex gap-6">
-                <div class="tab-item active" onclick="AppActions.switchFilter('all')" id="nav-all">推荐</div>
-                <div class="tab-item hidden" onclick="AppActions.switchFilter('similar')" id="nav-similar">相似</div>
-                <div class="tab-item" onclick="AppActions.switchFilter('liked')" id="nav-liked">喜欢</div>
-            </div>
-            <div class="flex gap-2 absolute right-4 top-0 pointer-events-auto items-center h-full">
-                <select id="poolSelect" onchange="AppActions.switchPool(this.value)"
-                    class="bg-white/20 border border-white/20 backdrop-blur px-2 py-1.5 rounded-md text-[10px] text-white outline-none cursor-pointer">
-                    <option value="mixed" class="text-black">🌌 混合</option>
-                    <option value="default" class="text-black">📱 默认</option>
-                    <option value="new" class="text-black">✨ 新增</option>
-                </select>
-                <a href="/video-cache.html"
-                    class="text-[10px] bg-white/20 border border-white/20 backdrop-blur px-2.5 py-1.5 rounded-md hover:bg-white/40 shadow-lg">管理📦</a>
-            </div>
-        </div>
+        <div class="header-row">
+            <nav id="mainNav" onclick="event.stopPropagation()">
+                <div class="nav-indicator" id="navIndicator"></div>
+                
+                <div id="nav-all" class="nav-item active" onclick="AppActions.switchFilter('all')">
+                    <span class="icon">🏠</span><span class="nav-text">主页</span>
+                </div>
+                <div id="nav-similar" class="nav-item hidden" onclick="AppActions.switchFilter('similar')">
+                    <span class="icon">📝</span><span class="nav-text">文似</span>
+                </div>
+                <div id="nav-similar-vision" class="nav-item hidden" onclick="AppActions.switchFilter('similar_vision')">
+                    <span class="icon">👁️</span><span class="nav-text">图似</span>
+                </div>
+                <div id="nav-liked" class="nav-item" onclick="AppActions.switchFilter('liked')">
+                    <span class="icon">❤️</span><span class="nav-text">喜欢</span>
+                </div>
+            </nav>
 
-        <div class="search-container">
-            <div class="search-wrapper relative">
+            <div class="search-wrapper">
                 <span class="search-icon">🔍</span>
                 <input type="text" id="searchInput" class="search-input" placeholder="输入标签名..."
                     onkeypress="AppActions.handleSearch(event)">
-                <span id="searchCount"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] opacity-60 pointer-events-none bg-black/40 px-1.5 py-0.5 rounded">0</span>
+                <span id="searchCount" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] opacity-60 pointer-events-none bg-black/40 px-1.5 py-0.5 rounded">0</span>
+            </div>
+
+            <div class="pool-select-wrapper">
+                <select id="poolSelect" onchange="AppActions.switchPool(this.value)">
+                    <option value="mixed" class="bg-gray-900">🌌 混合</option>
+                    <option value="default" class="bg-gray-900">📱 默认</option>
+                    <option value="new" class="bg-gray-900">✨ 新增</option>
+                    <option value="new2" class="bg-gray-900">✨ 2新增</option>
+                </select>
             </div>
         </div>
 
         <div class="tag-row">
             <div class="tag-scroll" id="categoryBar"></div>
-            <button onclick="AppActions.toggleDrawer()" class="p-1.5 bg-white/20 rounded-lg shadow-md">⊞</button>
+            <button onclick="AppActions.toggleDrawer()" class="p-2 bg-white/20 rounded-xl shadow-md border border-white/10 flex-shrink-0">⊞</button>
         </div>
     </div>
 
@@ -58,5 +66,5 @@
 
     <script src="/static/videos.js"></script>
 </body>
-
+ 
 </html>

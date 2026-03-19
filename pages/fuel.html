@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>油耗统计</title>
+    <script src="https://unpkg.com/vue@3.5.13/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.1.3/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="app" class="max-w-6xl mx-auto mt-8 p-6 bg-white rounded-lg shadow">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-bold text-blue-700">油耗统计</h2>
+       
+    </div>
+    
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+       
+
+        <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600">${lastEfficiency} km</div>
+            <div class="text-sm text-gray-600">最近油耗</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600">${totalMileage} km</div>
+            <div class="text-sm text-gray-600">总里程</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-green-600">${totalFuel} L</div>
+            <div class="text-sm text-gray-600">总加油量</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-purple-600">${avgEfficiency}</div>
+            <div class="text-sm text-gray-600">平均油耗(L/100km)</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-orange-600">${recentTrend}</div>
+            <div class="text-sm text-gray-600">最近趋势</div>
+        </div>
+    </div>
+    
+    <form @submit.prevent="addRecord" class="flex flex-col gap-3 mb-6 bg-blue-50 p-4 rounded-lg">
+        <div class="flex flex-wrap gap-3 items-center">
+            <span class="text-sm font-semibold text-blue-700">总里程(km)</span>
+            <input type="number" v-model.number="totalMileageInput" step="0.1" min="0" class="w-24 px-2 py-1 border rounded" required>
+            <span class="text-sm font-semibold text-green-700">加油量(L)</span>
+            <input type="number" v-model.number="fuelAmount" step="0.1" min="0" class="w-24 px-2 py-1 border rounded" required>
+            <input v-model="remark" class="flex-1 px-2 py-1 border rounded min-w-[200px]" placeholder="备注（可选）">
+            <button type="submit" class="px-6 py-1 bg-blue-500 text-white font-bold rounded hover:bg-blue-600 transition">记录</button>
+        </div>
+    </form>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div>
+            <h3 class="text-lg font-semibold mb-2 text-center text-gray-700">油耗趋势图</h3>
+            <canvas id="fuelChart" style="height: 40vh; max-height: 350px;"></canvas>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold mb-2 text-center text-gray-700">里程 vs 油耗散点图</h3>
+            <canvas id="distanceChart" style="height: 40vh; max-height: 350px;"></canvas>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <h3 class="text-lg font-semibold mb-2 text-gray-700">历史记录</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto text-sm text-center">
+                <thead>
+                    <tr class="bg-gray-200 text-gray-700">
+                        <th class="px-4 py-2">日期时间</th>
+                        <th class="px-4 py-2">总里程(km)</th>
+                        <th class="px-4 py-2">加油量(L)</th>
+                        <th class="px-4 py-2">单次里程(km)</th>
+                        <th class="px-4 py-2">间隔天数</th>
+                        <th class="px-4 py-2">日均里程(km)</th>
+                        <th class="px-4 py-2 text-red-600">油耗(L/100km)</th>
+                        <th class="px-4 py-2">备注</th>
+                        <th class="px-4 py-2">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="item in reversedStats" :key="item.id" class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2">${item.date} <span class="text-gray-400 text-xs">${item.time}</span></td>
+                        <td class="px-4 py-2 font-mono">${item.total_mileage}</td>
+                        <td class="px-4 py-2 font-mono">${item.fuel_amount}</td>
+                        <td class="px-4 py-2 font-mono text-gray-600">${item.mileage_diff}</td>
+                        <td class="px-4 py-2 font-mono text-gray-600">${item.days_diff}</td>
+                        <td class="px-4 py-2 font-mono text-gray-600">${item.daily_distance}</td>
+                        <td class="px-4 py-2 font-bold" :class="item.fuel_efficiency === '--' ? 'text-gray-400' : 'text-red-500'">
+                            ${item.fuel_efficiency}
+                        </td>
+                        <td class="px-4 py-2 text-gray-500 text-left max-w-[200px] truncate" :title="item.remark">${item.remark}</td>
+                        <td class="px-4 py-2">
+                            <button v-if="isDeletable(item._time)" @click="deleteRecord(item.id)" class="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs transition">删除</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+     <div class="flex gap-2">
+            <button @click="exportCSV" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm transition">导出 CSV</button>
+            <input type="file" ref="fileInput" @change="importCSV" class="hidden" accept=".csv">
+            <button @click="$refs.fileInput.click()" class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm transition">导入 CSV</button>
+        </div>
+</div>
+
+<script>
+if (typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+}
+
+const { createApp } = Vue;
+
+createApp({
+    delimiters: ['${', '}'],
+    data() {
+        return {
+            totalMileageInput: null,
+            fuelAmount: null,
+            remark: "",
+            rawStats: [] // 存储后端返回的原始数据
+        }
+    },
+    computed: {
+        // 1. 获取最近一次的油耗数值
+        lastEfficiency() {
+            // 从处理好的数据中过滤出有油耗的数据
+            const validList = this.processedStats.filter(item => item.fuel_efficiency !== '--');
+            if (validList.length === 0) return '--';
+            // 返回最后一条（也就是时间轴上最近的一条）
+            return validList[validList.length - 1].fuel_efficiency;
+        },
+        // 【核心】前端数据处理引擎
+        processedStats() {
+            if (!this.rawStats || this.rawStats.length === 0) return [];
+            
+            // 1. 确保数据按时间升序排列，才能正确计算“差值”
+            const sorted = [...this.rawStats].sort((a, b) => new Date(a._time) - new Date(b._time));
+            
+            // 2. 遍历并计算二级数据
+            return sorted.map((item, index) => {
+                let mileage_diff = '--';
+                let days_diff = '--';
+                let fuel_efficiency = '--';
+                let daily_distance = '--';
+                
+                // 处理时间拆分
+                const dateTimeStr = item._time || '';
+                const dateStr = dateTimeStr.split(' ')[0] || '';
+                const timeStr = dateTimeStr.split(' ')[1] || '';
+                
+                // 如果不是第一条记录，则计算差值
+                if (index > 0) {
+                    const prev = sorted[index - 1];
+                    const currMileage = parseFloat(item.total_mileage) || 0;
+                    const prevMileage = parseFloat(prev.total_mileage) || 0;
+                    const currFuel = parseFloat(item.fuel_amount) || 0;
+                    
+                    const diffM = currMileage - prevMileage;
+                    if (diffM > 0) {
+                        mileage_diff = diffM.toFixed(1);
+                        fuel_efficiency = ((currFuel / diffM) * 100).toFixed(2);
+                    }
+                    
+                    // 计算天数差
+                    const currDateObj = new Date(dateTimeStr);
+                    const prevDateObj = new Date(prev._time);
+                    const timeDiff = currDateObj.getTime() - prevDateObj.getTime();
+                    const diffDays = timeDiff / (1000 * 3600 * 24);
+                    
+                    if (diffDays >= 0) {
+                        // 保留一位小数，如果不足0.1天则按实际算或显示0
+                        days_diff = diffDays.toFixed(1);
+                        if (diffM > 0 && diffDays > 0) {
+                            daily_distance = (diffM / diffDays).toFixed(1);
+                        } else if (diffM > 0 && diffDays === 0) {
+                            daily_distance = diffM.toFixed(1); // 同一天录入的距离直接作为日距
+                        }
+                    }
+                }
+                
+                return {
+                    ...item,
+                    date: dateStr,
+                    time: timeStr,
+                    mileage_diff,
+                    days_diff,
+                    fuel_efficiency,
+                    daily_distance
+                };
+            });
+        },
+        // 表格展示使用倒序（最新记录在最上面）
+        reversedStats() {
+            return [...this.processedStats].reverse();
+        },
+        
+        // 顶部统计面板计算
+        totalMileage() {
+            if (this.rawStats.length === 0) return 0;
+            return Math.max(...this.rawStats.map(item => parseFloat(item.total_mileage) || 0));
+        },
+        totalFuel() {
+            return this.rawStats.reduce((sum, item) => sum + (parseFloat(item.fuel_amount) || 0), 0).toFixed(2);
+        },
+        avgEfficiency() {
+            const validList = this.processedStats.filter(item => item.fuel_efficiency !== '--');
+            if (validList.length === 0) return '0.00';
+            const sum = validList.reduce((acc, item) => acc + parseFloat(item.fuel_efficiency), 0);
+            return (sum / validList.length).toFixed(2);
+        },
+        recentTrend() {
+            const validList = this.processedStats.filter(item => item.fuel_efficiency !== '--');
+            if (validList.length < 2) return '数据不足';
+            
+            const last = parseFloat(validList[validList.length - 1].fuel_efficiency);
+            const prev = parseFloat(validList[validList.length - 2].fuel_efficiency);
+            const avg = parseFloat(this.avgEfficiency);
+            
+            let trend = last > avg + 0.05 ? '高于平均，' : last < avg - 0.05 ? '低于平均，' : '等于平均，';
+            trend += last > prev + 0.05 ? '高于上次' : last < prev - 0.05 ? '低于上次' : '等于上次';
+            return trend;
+        }
+    },
+    methods: {
+        // 判断是否为最近 3 天内的记录
+        isDeletable(timeStr) {
+            if (!timeStr) return false;
+            // 处理后端传来的如 2026-03-19 21:46:32，去掉中间的横杠影响部分旧版浏览器解析
+            const recordTime = new Date(timeStr.replace(/-/g, '/')).getTime(); 
+            const now = new Date().getTime();
+            // 3天的毫秒数: 3 * 24 * 60 * 60 * 1000 = 259200000
+            return (now - recordTime) <= 259200000;
+        },
+        async fetchStats() {
+            try {
+                const res = await axios.get('/api/fuel_stats');
+                // 将后端数据直接存入 rawStats
+                this.rawStats = res.data;
+                this.$nextTick(() => {
+                    this.drawChart();
+                });
+            } catch (error) {
+                console.error("获取数据失败:", error);
+            }
+        },
+        async addRecord() {
+            if (!this.totalMileageInput || !this.fuelAmount) return;
+            const payload = {
+                total_mileage: this.totalMileageInput,
+                fuel_amount: this.fuelAmount,
+                remark: this.remark
+            };
+            try {
+                await axios.post('/api/fuel_stats', payload);
+                this.totalMileageInput = null;
+                this.fuelAmount = null;
+                this.remark = "";
+                await this.fetchStats();
+            } catch (error) {
+                alert("添加记录失败");
+            }
+        },
+        async deleteRecord(id) {
+            if (!id) {
+                alert("该记录没有ID，无法通过接口删除");
+                return;
+            }
+            if (confirm('确定删除这条记录吗？')) {
+                try {
+                    await axios.delete(`/api/fuel_stats/${id}`);
+                    await this.fetchStats();
+                } catch (error) {
+                    alert("删除失败");
+                }
+            }
+        },
+        exportCSV() {
+            window.location.href = '/api/fuel_stats/export';
+        },
+        async importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                await axios.post('/api/fuel_stats/import', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                this.$refs.fileInput.value = ''; 
+                await this.fetchStats();
+            } catch (error) {
+                alert("导入失败，请检查 CSV 格式");
+            }
+        },
+        drawChart() {
+            const validStats = this.processedStats.filter(item => item.fuel_efficiency !== '--');
+            if (validStats.length === 0) return;
+
+            // 折线图
+            const ctxFuel = document.getElementById('fuelChart').getContext('2d');
+            if (window.fuelChart instanceof Chart) window.fuelChart.destroy();
+            window.fuelChart = new Chart(ctxFuel, {
+                type: 'line',
+                data: {
+                    labels: validStats.map(item => item.date),
+                    datasets: [{
+                        label: '油耗 (L/100km)',
+                        data: validStats.map(item => parseFloat(item.fuel_efficiency)),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: { responsive: true, plugins: { datalabels: { display: false } } }
+            });
+
+            // 散点图
+            const ctxDist = document.getElementById('distanceChart').getContext('2d');
+            if (window.distanceChart instanceof Chart) window.distanceChart.destroy();
+            const scatterData = validStats.map(item => ({
+                x: parseFloat(item.total_mileage),
+                y: parseFloat(item.fuel_efficiency),
+                remark: item.remark
+            }));
+            window.distanceChart = new Chart(ctxDist, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: '单点表现',
+                        data: scatterData,
+                        backgroundColor: '#10b981',
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: '总里程 (km)' } },
+                        y: { title: { display: true, text: '油耗 (L/100km)' } }
+                    },
+                    plugins: {
+                        datalabels: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const point = context.raw;
+                                    return [
+                                        `里程: ${point.x} km`,
+                                        `油耗: ${point.y} L/100km`,
+                                        point.remark ? `备注: ${point.remark}` : ''
+                                    ].filter(Boolean);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    },
+    mounted() {
+        this.fetchStats();
+    }
+}).mount('#app');
+</script>
+</body>
+</html>

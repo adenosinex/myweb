@@ -9,6 +9,7 @@ load_dotenv()  # 自动寻找当前目录下的 .env 并注入到 os.environ
 
 app = Flask(__name__)
 DB_PATH = 'db/universal_data.db'
+DBstat_FILE = r"db/universal_stats.db"
 PAGES_DIR = 'pages'
 ACCESS_CODE = os.environ.get('ACCESS_CODE') or "8888"
 
@@ -57,6 +58,21 @@ def load_extensions(app):
 load_extensions(app)
 # ================= 数据库初始化 =================
 def init_db():
+    with sqlite3.connect(DBstat_FILE) as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS universal_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                record_time TEXT NOT NULL,
+                val1 REAL,       
+                val2 REAL,       
+                remark TEXT
+            )
+        ''')
+        # 创建复合索引，提升按分类和时间查询的性能
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_cat_time ON universal_records(category, record_time)')
+
+
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS store (
@@ -87,7 +103,9 @@ def init_db():
         recent_skip_count INTEGER DEFAULT 0,
         last_played_at INTEGER DEFAULT 0
     )
-''')
+''')  
+       
+
 # app.py 拦截器微调
 @app.before_request
 def check_access():
@@ -216,7 +234,7 @@ def serve_html_with_icon(filename):
             content = f.read()
         
         # 准备要插入的 link 标签
-        icon_tag = f'<link rel="icon" href="/static/{base_name}.svg" type="image/svg+xml">'
+        icon_tag = f'<link rel="icon" href="/static/svg/{base_name}.svg" type="image/svg+xml">'
         
         # 查找 </head> 并在其前面硬编码插入标签
         if '</head>' in content:

@@ -204,7 +204,23 @@ def start_processing():
             if row: 
                 executor.submit(process_ocr_task, record_id, os.path.abspath(row[0]))
     return jsonify({"status": "started"})
+import os
+from flask import send_file, abort
+from pathlib import Path
 
+@manuals_bp.route('/api/img/<imgname>', methods=['GET'])
+def get_manual_image(imgname):
+    """
+    获取上传的图片文件
+    """
+    # 建议使用 Pathlib 处理路径，确保安全性
+    img_path = Path(UPLOAD_FOLDER) / imgname
+    
+    # 检查文件是否存在且在目录内
+    if img_path.is_file():
+        return send_file(img_path)
+    else:
+        return abort(404, description="Image not found")
 
 @manuals_bp.route('/api/manuals/retry', methods=['POST'])
 def retry_manual():
@@ -265,7 +281,8 @@ def get_manuals():
     return jsonify([{
         "id": r[0], 
         "filename": r[1] or '未命名文件',
-        "url": fr"/db/uploads/{r[0]}", 
+       # 结果示例: /api/img/123.jpg
+"url": f"/api/img/{r[0]}.jpg",
         "tags": json.loads(r[3]) if r[3] else [],
         "status": r[4], 
         "metrics": {"total_sec": r[5], "ocr_sec": r[6], "nlp_sec": r[7]},

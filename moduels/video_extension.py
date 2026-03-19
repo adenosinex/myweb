@@ -13,31 +13,31 @@ from flask import Blueprint, request, jsonify, Response, stream_with_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 
+# ==========================================
+# 配置与全局变量
+# ==========================================
 video_bp = Blueprint('video', __name__)
 DB_PATH = 'db/universal_data.db'
 RESOURCE_NODE_URL = "http://192.168.31.204:8100"
 VIDEO_VECTOR_NODE="http://15x4.zin6.dpdns.org:5003"
-# ==========================================
+VIDEO_VECTOR_NODE_PIC="http://15x4.zin6.dpdns.org:5004"
+
 # 🌟 一键切换开关：将这里改为 'ollama' 或 'cloud'
-# ==========================================
 ACTIVE_AI_MODE = 'ollama'  
 
 if ACTIVE_AI_MODE == 'cloud':
-    # --- 云端 API 配置 ---
-    AI_MODEL = 'Qwen3-30B-A3B-Instruct-2507' # 之前你用的云端模型
+    AI_MODEL = 'Qwen3-30B-A3B-Instruct-2507' 
     AI_BASE_URL = "https://api.scnet.cn/api/llm/v1"
     AI_API_KEY = os.getenv("CS_API_KEY", "your_cloud_api_key_here")
-    MAX_WORKERS = 6   # 云端支持高并发
-    BATCH_SIZE = 8    # 云端一次处理更多文件
+    MAX_WORKERS = 6   
+    BATCH_SIZE = 8    
 else:
-    # --- 本地 Ollama 配置 (Mac mini M4) ---
     AI_MODEL = 'huihui_ai/qwen3.5-abliterated:9b'
     AI_BASE_URL = "http://apple4.zin6.dpdns.org:11434/v1"
-    AI_API_KEY = "ollama" # 本地免鉴权
-    MAX_WORKERS = 1   # M4 本地建议 1-2 个并发，避免内存排队崩溃
-    BATCH_SIZE = 6    # 本地小批次更稳定
+    AI_API_KEY = "ollama" 
+    MAX_WORKERS = 1   
+    BATCH_SIZE = 6    
 
-# 初始化统一的 OpenAI 客户端 (供 Cloud 模式使用)
 client = OpenAI(
     api_key=AI_API_KEY,
     base_url=AI_BASE_URL,
@@ -47,17 +47,154 @@ executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 state_lock = threading.Lock()
 
 ai_scan_state = {
-    "is_running": False,
-    "total": 0,
-    "processed": 0,       
-    "success_count": 0,   
-    "status_msg": "就绪，等待扫描",
-    "total_time_sec": 0,
-    "ai_model": AI_MODEL,
-    "recent_results": []
+    "is_running": False, "total": 0, "processed": 0,       
+    "success_count": 0, "status_msg": "就绪，等待扫描",
+    "total_time_sec": 0, "ai_model": AI_MODEL, "recent_results": []
 }
 
-def init_video_db():
+# ==========================================
+# 🌐 路由层 (Route Controllers) - 仅做参数解析与请求转发
+# ==========================================
+
+@video_bp.route('/api/video/scan', methods=['POST'])
+def control_scan():
+    global ai_scan_state
+    req_data = request.get_json(silent=True) or {}
+    if req_data.get('action') == 'start' and not ai_scan_state["is_running"]:
+        threading.Thread(target=biz_ai_tag_videos_task, daemon=True).start()
+    elif req_data.get('action') == 'stop':
+        ai_scan_state["is_running"] = False
+    return jsonify({"status": "ok"})
+
+@video_bp.route('/api/video/scan/status', methods=['GET'])
+def get_scan_status():
+    return jsonify(ai_scan_state)
+
+@video_bp.route('/api/video/stats', methods=['GET'])
+def get_video_stats():
+    stats_data = biz_get_video_stats()
+    return jsonify(stats_data)
+
+@video_bp.route('/api/video/list', methods=['GET','POST'])
+def get_video_list():
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        res, code = biz_get_video_list_by_names(data.get('names', []))
+        return jsonify(res), code
+
+    filter_type = request.args.get('filter', 'all') 
+    tag_filter = request.args.get('tag', '全部')
+    pool_type = request.args.get('pool', 'mixed') 
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+    need_tags = request.args.get('need_tags', '0') == '1'
+    
+    res, code = biz_get_filtered_video_list(filter_type, tag_filter, pool_type, page, limit, need_tags)
+    return jsonify(res), code
+
+@video_bp.route('/api/video/export_csv', methods=['GET'])
+def export_video_csv():
+    return biz_generate_video_csv(limit=None, filename='video_stats.csv')
+
+@video_bp.route('/api/video/export_csv2', methods=['GET'])
+def export_video_csv2():
+    return biz_generate_video_csv(limit=500, filename='video_stats_full.csv')
+
+@video_bp.route('/stream/video/<path:video_name>', methods=['GET'])
+def proxy_stream_video(video_name):
+    url = f"{RESOURCE_NODE_URL}/stream/video/{urllib.parse.quote(video_name)}"
+    headers = {key: value for (key, value) in request.headers if key.lower() != 'host'}
+    try:
+        req = requests.get(url, headers=headers, stream=True, proxies={"http": None, "https": None})
+        excluded = ['content-encoding', 'transfer-encoding', 'connection']
+        resp_headers = [(name, value) for (name, value) in req.raw.headers.items() if name.lower() not in excluded]
+        return Response(stream_with_context(req.iter_content(chunk_size=1024 * 1024)), status=req.status_code, headers=resp_headers)
+    except Exception as e: 
+        return jsonify({"error": str(e)}), 500
+
+@video_bp.route('/api/video/maintenance/list', methods=['GET'])
+def get_maintenance_list():
+    res, code = biz_get_maintenance_list()
+    return jsonify(res), code
+
+@video_bp.route('/api/video/maintenance/confirm_delete', methods=['POST'])
+def confirm_maintenance_delete():
+    req_data = request.get_json(silent=True) or {}
+    res, code = biz_confirm_maintenance_delete(req_data.get('filenames', []))
+    return jsonify(res), code
+
+@video_bp.route('/api/video/sync', methods=['POST'])
+def sync_video_actions():
+    actions = request.get_json(silent=True) or []
+    res, code = biz_sync_video_actions(actions)
+    return jsonify(res), code
+
+@video_bp.route('/test/llm', methods=['GET'])
+def test_llm_page():
+    return biz_get_test_llm_page_html()
+
+@video_bp.route('/api/test/llm/ask', methods=['POST'])
+def test_llm_ask():
+    req_data = request.get_json(silent=True) or {}
+    res, code = biz_test_llm_ask(req_data.get('prompt', ''))
+    return jsonify(res), code
+
+@video_bp.route('/api/video/recommend', methods=['GET'])
+def get_video_recommendations():
+    filename = request.args.get('name')
+    res, code = biz_get_video_recommendations(filename)
+    return jsonify(res), code
+
+
+@video_bp.route('/api/video/vision_recommend', methods=['GET'])
+def get_vision_video_recommendations():
+    """
+    通过画面特征获取相似视频
+    前端请求示例: GET /api/video/vision_recommend?name=我的机车日记.mp4&k=15
+    """
+    filename = request.args.get('name')
+    filename=filename.replace('[NEW2]_','')
+    # 默认返回 15 个，前端可以通过 k 参数调整
+    k = int(request.args.get('k', 15)) 
+    
+    res, code = biz_get_vision_similar_videos(filename, top_k=k)
+    return jsonify(res), code
+
+# ==========================================
+# 💼 业务逻辑层 (Business Logic)
+# ==========================================
+
+
+def biz_get_vision_similar_videos(filename, top_k=15):
+    """请求图像向量节点，通过文件名获取画面相似的视频推荐"""
+    if not filename:
+        return {"error": "缺少 filename 参数"}, 400
+        
+    try:
+        # 拼接 5003 节点的 API，注意要对中文文件名进行 quote 编码
+        url = f"{VIDEO_VECTOR_NODE_PIC}/api/vision/similar_by_name?name={quote(filename)}&k={top_k}"
+        
+        # 强制不走本地代理，防止局域网 IP 被拦截
+        proxies_config = {"http": None, "https": None} 
+        
+        resp = requests.get(url, proxies=proxies_config, timeout=15)
+        
+        if resp.status_code == 200:
+            return resp.json(), 200
+        elif resp.status_code == 404:
+            return {"error": "该视频尚未进行视觉特征分析", "target": filename}, 404
+        else:
+            return {"error": f"视觉向量节点异常 (HTTP {resp.status_code})"}, resp.status_code
+            
+    except requests.exceptions.Timeout:
+        return {"error": "视觉向量节点请求超时"}, 504
+    except Exception as e:
+        return {"error": "无法连接到视觉向量节点", "details": str(e)}, 500
+# ==========================================
+# 🛠️ 通用工具函数 (General Utility Functions)
+# ==========================================
+
+def util_init_video_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('CREATE TABLE IF NOT EXISTS video_store (filename TEXT PRIMARY KEY, tags TEXT, category TEXT)')
         columns_to_add = [("ai_model", "TEXT"), ("ai_time_sec", "REAL"), ("updated_at", "REAL")]
@@ -68,13 +205,32 @@ def init_video_db():
                 pass 
         conn.execute('CREATE TABLE IF NOT EXISTS video_stats (filename TEXT PRIMARY KEY, is_liked INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, play_count INTEGER DEFAULT 0, last_played_at REAL DEFAULT 0)')
 
-init_video_db()
+# 执行数据库初始化
+util_init_video_db()
 
-def process_single_batch(batch, batch_id):
+def util_fetch_remote_videos():
+    """获取资源节点的视频列表"""
+    try:
+        resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=10, proxies={"http": None, "https": None})
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return []
+
+def util_extract_tags_from_filename(fname):
+    """从文件名正则提取标签"""
+    return [m.group(1) for m in re.finditer(r'#([^#\s.]+)', fname)]
+
+
+# ==========================================
+# ⚙️ 蓝图核心业务函数 (Blueprint Business Logic Functions)
+# ==========================================
+
+def biz_process_single_batch(batch, batch_id):
+    """AI 打标：单批次处理逻辑"""
     global ai_scan_state
-    
-    if not ai_scan_state["is_running"]:
-        return
+    if not ai_scan_state["is_running"]: return
 
     prompt = f"""你是一个短视频内容分析引擎。请根据以下视频文件名，为每个视频推断出 1 个【主分类】(包括但不限于：影视，颜值，素人，演员，舞蹈，职业) 和 1 到 7 个【子标签】根据文件名信息量确定子标签数量。
     务必返回纯 JSON，格式：{{"video.mp4": {{"category": "影视", "tags": ["混剪", "动作"]}}}}
@@ -84,9 +240,7 @@ def process_single_batch(batch, batch_id):
     current_timestamp = time.time() 
     
     try:
-        # 🌟 分流处理：根据当前模式选择底层请求方式
         if ACTIVE_AI_MODE == 'ollama':
-            # Ollama 原生 API 方式
             ollama_url = AI_BASE_URL.replace('/v1', '/api/chat')
             payload = {
                 "model": AI_MODEL,
@@ -94,27 +248,20 @@ def process_single_batch(batch, batch_id):
                     {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
                     {'role': 'user', 'content': prompt}
                 ],
-                "stream": False,
-                "think": False, # 🌟 原生关闭思考开关
-                "options": {
-                    "temperature": 0.1,
-                    "num_predict": 1000
-                }
+                "stream": False, "think": False,
+                "options": {"temperature": 0.1, "num_predict": 1000}
             }
             resp = requests.post(ollama_url, json=payload, timeout=60)
             resp.raise_for_status()
-            data = resp.json()
-            result_text = data.get("message", {}).get("content", "").strip()
+            result_text = resp.json().get("message", {}).get("content", "").strip()
         else:
-            # Cloud 模式方式：使用标准 OpenAI 兼容 SDK
             completion = client.chat.completions.create(
                 model=AI_MODEL,
                 messages=[
                     {'role': 'system', 'content': '你是一个只返回纯 JSON 的分析助手。'},
                     {'role': 'user', 'content': prompt}
                 ],
-                max_tokens=3000,  
-                temperature=0.1  
+                max_tokens=3000, temperature=0.1  
             )
             result_text = completion.choices[0].message.content.strip()
         
@@ -122,7 +269,6 @@ def process_single_batch(batch, batch_id):
         count = len(batch) if len(batch) > 0 else 1 
         elapsed = round(batch_duration / count, 2) 
         
-        # 增加鲁棒性：使用正则提取 JSON 部分，防止模型返回 Markdown 块
         match = re.search(r'\{.*\}', result_text, re.DOTALL)
         if match:
             ai_data = json.loads(match.group(0))
@@ -132,12 +278,10 @@ def process_single_batch(batch, batch_id):
                 for fname, info in ai_data.items():
                     tags = info.get('tags', [])
                     if not isinstance(tags, list): tags = [tags]
-                    
                     conn.execute("""
                         INSERT OR REPLACE INTO video_store (filename, category, tags, ai_model, ai_time_sec, updated_at) 
                         VALUES (?, ?, ?, ?, ?, ?)
                     """, (fname, info.get('category', '未分类'), json.dumps(tags[:5], ensure_ascii=False), AI_MODEL, elapsed, current_timestamp))
-                    
                     last_fname, last_tags_str = fname, " ".join([f"#{t}" for t in tags[:3]])
             
             with state_lock:
@@ -149,38 +293,30 @@ def process_single_batch(batch, batch_id):
                     tags = info.get('tags', [])
                     if not isinstance(tags, list): tags = [tags]
                     ai_scan_state["recent_results"].insert(0, {
-                        "filename": fname,
-                        "category": info.get('category', '未分类'),
-                        "ai_tags": tags[:5],
-                        "updated_at": current_timestamp 
+                        "filename": fname, "category": info.get('category', '未分类'),
+                        "ai_tags": tags[:5], "updated_at": current_timestamp 
                     })
                 ai_scan_state["recent_results"] = ai_scan_state["recent_results"][:5]
-            
+                
     except Exception as e:
-        elapsed = round(time.time() - batch_start_time, 2)
         err_msg = str(e)
         with state_lock:
             ai_scan_state["processed"] += len(batch)
             ai_scan_state["status_msg"] = f"❌ {ACTIVE_AI_MODE.upper()} 报错：{err_msg[:30]}"
         if "Connection" in err_msg or "RateLimit" in err_msg: time.sleep(5)
 
-def ai_tag_videos_task():
+def biz_ai_tag_videos_task():
+    """AI 打标：后台扫描主任务"""
     global ai_scan_state
-    
     ai_scan_state.update({
         "is_running": True, "total": 0, "processed": 0, 
         "success_count": 0, "status_msg": "正在同步列表...", 
-        "total_time_sec": 0, "ai_model": AI_MODEL,
-        "recent_results": []
+        "total_time_sec": 0, "ai_model": AI_MODEL, "recent_results": []
     })
-    
     task_start_time = time.time()
-    
-    try:
-        resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=10, proxies={"http": None, "https": None})
-        all_files = resp.json() if resp.status_code == 200 else []
-    except Exception as e: 
-        ai_scan_state.update({"is_running": False, "status_msg": "无法访问资源节点"})
+    all_files = util_fetch_remote_videos()
+    if not all_files:
+        ai_scan_state.update({"is_running": False, "status_msg": "无法访问资源节点或视频列表为空"})
         return
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -189,7 +325,6 @@ def ai_tag_videos_task():
         existing = set(row[0] for row in cursor.fetchall())
         
     untagged = [f for f in all_files if f not in existing]
-    
     if not untagged: 
         ai_scan_state.update({"is_running": False, "status_msg": "🎉 所有视频均已打标"})
         return
@@ -199,16 +334,13 @@ def ai_tag_videos_task():
         "status_msg": f"🚀 {ACTIVE_AI_MODE.upper()} 并发分析已启动 (并发:{MAX_WORKERS}, 批次:{BATCH_SIZE})"
     })
     
-    # 🌟 使用配置好的动态批次大小
     batches = [untagged[i:i+BATCH_SIZE] for i in range(0, len(untagged), BATCH_SIZE)]
-    
     futures = []
+    
     for idx, batch in enumerate(batches):
-        if not ai_scan_state["is_running"]:
-            break
-        futures.append(executor.submit(process_single_batch, batch, idx + 1))
+        if not ai_scan_state["is_running"]: break
+        futures.append(executor.submit(biz_process_single_batch, batch, idx + 1))
         time.sleep(0.5)
-        
         with state_lock:
              ai_scan_state["total_time_sec"] = round(time.time() - task_start_time, 1)
 
@@ -220,27 +352,9 @@ def ai_tag_videos_task():
         ai_scan_state["is_running"] = False
         ai_scan_state["status_msg"] = f"🎉 成功打标 {ai_scan_state['success_count']} 个视频！"
 
-@video_bp.route('/api/video/scan', methods=['POST'])
-def control_scan():
-    global ai_scan_state
-    req_data = request.get_json(silent=True) or {}
-    if req_data.get('action') == 'start' and not ai_scan_state["is_running"]:
-        threading.Thread(target=ai_tag_videos_task, daemon=True).start()
-    elif req_data.get('action') == 'stop':
-        ai_scan_state["is_running"] = False
-    return jsonify({"status": "ok"})
-
-@video_bp.route('/api/video/scan/status', methods=['GET'])
-def get_scan_status():
-    return jsonify(ai_scan_state)
-
-@video_bp.route('/api/video/stats', methods=['GET'])
-def get_video_stats():
-    try:
-        resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=5, proxies={"http": None, "https": None})
-        all_files = resp.json() if resp.status_code == 200 else []
-    except Exception: all_files = []
-    
+def biz_get_video_stats():
+    """获取所有标签的统计数据"""
+    all_files = util_fetch_remote_videos()
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT filename, category, tags FROM video_store')
@@ -249,301 +363,219 @@ def get_video_stats():
         deleted_set = set(row[0] for row in cursor.fetchall())
 
     temp_counts = {}
-    def extract_tags(fname): return [m.group(1) for m in re.finditer(r'#([^#\s.]+)', fname)]
-
     for f in all_files:
         if f in deleted_set: continue
         meta = db_store.get(f, {"cat": "未分类", "tags": []})
-        merged = list(set(meta["tags"] + extract_tags(f)))
+        merged = list(set(meta["tags"] + util_extract_tags_from_filename(f)))
         if meta["cat"] and meta["cat"] != '未分类':
             temp_counts[meta["cat"]] = temp_counts.get(meta["cat"], 0) + 1
         for t in merged:
             temp_counts[t] = temp_counts.get(t, 0) + 1
             
-    return jsonify({k: v for k, v in temp_counts.items() if v > 3})
+    return {k: v for k, v in temp_counts.items() if v > 3}
 
-@video_bp.route('/api/video/list', methods=['GET','POST'])
-def get_video_list():
-    if request.method == 'POST':
-        try:
-            data = request.get_json()
-            name_list = data.get('names', [])
-            
-            if not name_list:
-                return jsonify({"items": [], "total": 0})
+def biz_get_video_list_by_names(name_list):
+    """根据视频名称列表批量获取详细信息"""
+    if not name_list:
+        return {"items": [], "total": 0, "has_more": False}, 200
 
-            items = []
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                
-                # 构建防注入的 IN 查询
-                placeholders = ','.join(['?'] * len(name_list))
-                query = f"SELECT * FROM video_store WHERE filename IN ({placeholders})"
-                cursor.execute(query, name_list)
-                
-                rows = cursor.fetchall()
-                # 建立映射以保持前端请求的原始顺序（相似度降序）
-                row_map = {row['filename']: dict(row) for row in rows}
-                
-                for name in name_list:
-                    if name in row_map:
-                        item = row_map[name]
-                        # 转换标签字段
-                        item['ai_tags'] = json.loads(item['tags']) if item.get('tags') else []
-                        # 补全播放 URL
-                        item['url'] = f"/stream/video/{quote(item['filename'])}"
-                        items.append(item)
-            
-            return jsonify({
-                "items": items,
-                "total": len(items),
-                "has_more": False
-            })
-
-        except Exception as e:
-            print(f"[!] POST 批量查询异常: {e}")
-            return jsonify({"error": str(e)}), 500
-    filter_type = request.args.get('filter', 'all') 
-    tag_filter = request.args.get('tag', '全部')
-    pool_type = request.args.get('pool', 'mixed') 
-    page, limit = int(request.args.get('page', 1)), int(request.args.get('limit', 10))
-    need_tags = request.args.get('need_tags', '0') == '1'
-    
     try:
-        resp = requests.get(f"{RESOURCE_NODE_URL}/api/videos/json", timeout=5, proxies={"http": None, "https": None})
-        all_files = resp.json() if resp.status_code == 200 else []
-    except Exception: all_files = []
+        items = []
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            placeholders = ','.join(['?'] * len(name_list))
+            query = f"SELECT * FROM video_store WHERE filename IN ({placeholders})"
+            cursor.execute(query, name_list)
+            rows = cursor.fetchall()
+            row_map = {row['filename']: dict(row) for row in rows}
+            
+            for name in name_list:
+                if name in row_map:
+                    item = row_map[name]
+                    item['ai_tags'] = json.loads(item['tags']) if item.get('tags') else []
+                    item['url'] = f"/stream/video/{quote(item['filename'])}"
+                    items.append(item)
+        return {"items": items, "total": len(items), "has_more": False}, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def biz_get_filtered_video_list(filter_type, tag_filter, pool_type, page, limit, need_tags):
+    """根据筛选条件、分页等获取视频列表"""
+    # 0. 防御性处理：确保 tag_filter 是字符串
+    if not tag_filter:
+        tag_filter = '全部'
     
-    # ==========================================
-    # 🌟 核心修复：分离查询，彻底解决未打标视频点赞失效的 BUG
-    # ==========================================
+    # 1. 获取所有物理文件
+    all_files = util_fetch_remote_videos()
+    
+    # 2. 从数据库拉取元数据和统计信息
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        
-        # 1. 获取 AI 分类标签数据
+        # 获取基础信息
         cursor.execute('SELECT filename, category, tags FROM video_store')
-        store_dict = {row[0]: {
-            "category": row[1], 
-            "tags": json.loads(row[2]) if row[2] else []
-        } for row in cursor.fetchall()}
+        store_dict = {row[0]: {"category": row[1], "tags": json.loads(row[2]) if row[2] else []} for row in cursor.fetchall()}
         
-        # 2. 获取用户动作统计数据
+        # 获取状态信息 (is_liked, is_deleted)
         cursor.execute('SELECT filename, is_liked, is_deleted, play_count FROM video_stats')
-        stats_dict = {row[0]: {
-            "is_liked": row[1] or 0, 
-            "is_deleted": row[2] or 0, 
-            "play_count": row[3] or 0
-        } for row in cursor.fetchall()}
-    
-    def extract_fname_tags(fname): return [m.group(1) for m in re.finditer(r'#([^#\s.]+)', fname)]
-    
+        stats_dict = {row[0]: {"is_liked": row[1] or 0, "is_deleted": row[2] or 0, "play_count": row[3] or 0} for row in cursor.fetchall()}
+
+    # 3. 基础过滤（池切换、黑名单、喜欢）
     base_list = []
     for f in all_files:
-        # 独立获取两张表的状态，哪怕没打标也能获取到点赞信息！
         s_data = store_dict.get(f, {"category": "未分类", "tags": []})
         st_data = stats_dict.get(f, {"is_liked": 0, "is_deleted": 0, "play_count": 0})
         
-        # 1. 处理资源池 (New / Default / Mixed)
-        is_new_lib = f.startswith('[NEW]_')
-        if pool_type == 'default' and is_new_lib: continue
-        if pool_type == 'new' and not is_new_lib: continue
+        # 库类型前缀判断
+        is_new1 = f.startswith('[NEW]_')
+        is_new2 = f.startswith('[NEW2]_')
         
-        # 2. 处理删除状态 (Disliked)
+        # --- 🌟 修正后的池切换逻辑 ---
+        if pool_type == 'default' and (is_new1 or is_new2):
+            continue
+        if pool_type == 'new' and not is_new1:
+            continue
+        if pool_type == 'new2' and not is_new2:
+            continue
+        
+        # --- 黑名单/回收站过滤 ---
         if filter_type == 'disliked':
-            if st_data["is_deleted"] != 1: continue
+            if st_data["is_deleted"] != 1:
+                continue
         else:
-            if st_data["is_deleted"] == 1: continue
+            if st_data["is_deleted"] == 1:
+                continue
             
-        # 3. 处理喜欢状态 (Liked)
+        # --- 喜欢过滤 ---
         if filter_type == 'liked' and st_data["is_liked"] != 1: 
             continue 
-        
-        fname_tags = extract_fname_tags(f)
+
+        # 提取文件名标签
+        fname_tags = util_extract_tags_from_filename(f)
         merged_tags = list(set(s_data["tags"] + fname_tags))
+        
         base_list.append({
-            "filename": f, "url": f"/stream/video/{urllib.parse.quote(f, safe='')}", 
-            "category": s_data["category"], "ai_tags": s_data["tags"],
-            "filename_tags": fname_tags, "mergedTags": merged_tags, 
+            "filename": f, 
+            "url": f"/stream/video/{urllib.parse.quote(f, safe='')}", 
+            "category": s_data["category"], 
+            "ai_tags": s_data["tags"],
+            "filename_tags": fname_tags, 
+            "mergedTags": merged_tags, 
             "is_liked": bool(st_data["is_liked"]), 
             "play_count": st_data["play_count"]
         })
 
+    # 4. 🌟 多维关键词搜索 (文件名 + 分类 + 标签)
+    kw = tag_filter.lower()
+    if kw == '全部':
+        filtered_list = base_list
+    else:
+        filtered_list = []
+        for i in base_list:
+            # 匹配关键词是否在文件名、分类或任何合并后的标签中
+            in_filename = kw in i["filename"].lower()
+            in_category = kw in i["category"].lower()
+            in_tags = any(kw in t.lower() for t in i["mergedTags"])
+            
+            if in_filename or in_category or in_tags:
+                filtered_list.append(i)
+
+    # 5. 统计标签云 (仅在 need_tags=1 时计算，通常是首页加载)
     tags_count = {}
     if need_tags:
         temp_counts = {}
-        for item in base_list:
-            if item["category"] and item["category"] != '未分类':
-                temp_counts[item["category"]] = temp_counts.get(item["category"], 0) + 1
+        for item in filtered_list:
+            cat = item.get("category")
+            if cat and cat != '未分类':
+                temp_counts[cat] = temp_counts.get(cat, 0) + 1
             for t in item["mergedTags"]:
                 temp_counts[t] = temp_counts.get(t, 0) + 1
-        tags_count = {k: v for k, v in temp_counts.items() if v > 10}
+        # 过滤显示门槛，防止过杂
+        tags_count = {k: v for k, v in temp_counts.items() if v >= 5}
 
-    kw = tag_filter.lower()
-    filtered_list = [
-        i for i in base_list 
-        if kw == '全部' 
-        or kw in i["category"].lower() 
-        or kw in i["filename"].lower() 
-        or any(kw in t.lower() for t in i["mergedTags"])
-    ]
-
+    # 6. 分页截取与返回
     start = (page - 1) * limit
-    return jsonify({"items": filtered_list[start:start+limit], "tags_count": tags_count, "has_more": start+limit < len(filtered_list), "total": len(filtered_list)})
-
-@video_bp.route('/api/video/export_csv', methods=['GET'])
-def export_video_csv():
-    output = io.StringIO()
-    writer = csv.writer(output)
-    # 🌟 修改 5: 表头增加 "最后更新时间"
-    writer.writerow(['文件名', '主分类', 'AI 标签', '提取标签', '播放次数', '是否喜欢', '是否隐藏', '最后活动时间', 'AI 模型', 'AI 耗时 (秒)', '最后更新时间'])
+    page_data = filtered_list[start:start+limit]
     
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        # 🌟 修改 6: SQL 查询增加 v.updated_at
-        cursor.execute('SELECT v.filename, v.category, v.tags, s.play_count, s.is_liked, s.is_deleted, s.last_played_at, v.ai_model, v.ai_time_sec, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename')
-        
-        for row in cursor.fetchall():
-            # row[6] 是 last_played_at, row[9] 是新的 updated_at
-            dt_play = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[6])) if row[6] else '-'
-            
-            # 🌟 修改 7: 格式化新的更新时间戳
-            dt_update = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[9])) if row[9] else '-'
-            
-            ai_tags = " ".join(json.loads(row[2])) if row[2] else ""
-            f_tags = " ".join([m.group(1) for m in re.finditer(r'#([^#\s.]+)', row[0])])
-            
-            # 🌟 修改 8: 写入行数据，增加 dt_update
-            writer.writerow([
-                row[0], row[1], ai_tags, f_tags, 
-                row[3] or 0, 
-                '是' if row[4] else '否', 
-                '是' if row[5] else '否', 
-                dt_play, 
-                row[7] or '-', 
-                row[8] or '-',
-                dt_update 
-            ])
-            
-    response = Response(output.getvalue().encode('utf-8-sig'), mimetype='text/csv')
-    response.headers['Content-Disposition'] = 'attachment; filename=video_stats.csv'
-    return response
+    return {
+        "items": page_data, 
+        "tags_count": tags_count, 
+        "has_more": start + limit < len(filtered_list), 
+        "total": len(filtered_list)
+    }, 200
 
-# export_csv2 保持原样或同样修改，这里为了统一也加上
-@video_bp.route('/api/video/export_csv2', methods=['GET'])
-def export_video_csv2():
+def biz_generate_video_csv(limit, filename):
+    """导出视频数据为 CSV"""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['文件名', '主分类', 'AI 标签', '提取标签', '播放次数', '是否喜欢', '是否隐藏', '最后活动时间', 'AI 模型', 'AI 耗时 (秒)', '最后更新时间'])
     
+    query = 'SELECT v.filename, v.category, v.tags, s.play_count, s.is_liked, s.is_deleted, s.last_played_at, v.ai_model, v.ai_time_sec, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename'
+    if limit:
+        query += f' ORDER BY v.updated_at DESC LIMIT {limit}'
+
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT v.filename, v.category, v.tags, s.play_count, s.is_liked, s.is_deleted, s.last_played_at, v.ai_model, v.ai_time_sec, v.updated_at FROM video_store v LEFT JOIN video_stats s ON v.filename = s.filename ORDER BY v.updated_at DESC LIMIT 500')
-        
+        cursor.execute(query)
         for row in cursor.fetchall():
             dt_play = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[6])) if row[6] else '-'
             dt_update = time.strftime('%Y-%m-%d %H:%M', time.localtime(row[9])) if row[9] else '-'
-            
             ai_tags = " ".join(json.loads(row[2])) if row[2] else ""
-            f_tags = " ".join([m.group(1) for m in re.finditer(r'#([^#\s.]+)', row[0])])
+            f_tags = " ".join(util_extract_tags_from_filename(row[0]))
             
             writer.writerow([
-                row[0], row[1], ai_tags, f_tags, 
-                row[3] or 0, 
-                '是' if row[4] else '否', 
-                '是' if row[5] else '否', 
-                dt_play, 
-                row[7] or '-', 
-                row[8] or '-',
-                dt_update 
+                row[0], row[1], ai_tags, f_tags, row[3] or 0, 
+                '是' if row[4] else '否', '是' if row[5] else '否', 
+                dt_play, row[7] or '-', row[8] or '-', dt_update 
             ])
             
     response = Response(output.getvalue().encode('utf-8-sig'), mimetype='text/csv')
-    response.headers['Content-Disposition'] = 'attachment; filename=video_stats_full.csv'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
-@video_bp.route('/stream/video/<path:video_name>', methods=['GET'])
-def proxy_stream_video(video_name):
-    url = f"{RESOURCE_NODE_URL}/stream/video/{urllib.parse.quote(video_name)}"
-    headers = {key: value for (key, value) in request.headers if key.lower() != 'host'}
-    try:
-        req = requests.get(url, headers=headers, stream=True, proxies={"http": None, "https": None})
-        excluded = ['content-encoding', 'transfer-encoding', 'connection']
-        resp_headers = [(name, value) for (name, value) in req.raw.headers.items() if name.lower() not in excluded]
-        return Response(stream_with_context(req.iter_content(chunk_size=1024 * 1024)), status=req.status_code, headers=resp_headers)
-    except Exception as e: return jsonify({"error": str(e)}), 500
-
-# ==========================================
-# 维护与归档 API (由资源节点客户端调用)
-# ==========================================
-
-@video_bp.route('/api/video/maintenance/list', methods=['GET'])
-def get_maintenance_list():
-    """下发需要物理移动的视频名单"""
+def biz_get_maintenance_list():
+    """获取需归档/删除的名单"""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            # 喜欢且未删除的
             cursor.execute("SELECT filename FROM video_stats WHERE is_liked = 1 AND is_deleted = 0")
             liked = [row[0] for row in cursor.fetchall()]
-            # 标记为删除的
             cursor.execute("SELECT filename FROM video_stats WHERE is_deleted = 1")
             deleted = [row[0] for row in cursor.fetchall()]
-            
-        return jsonify({"status": "ok", "liked": liked, "deleted": deleted})
+        return {"status": "ok", "liked": liked, "deleted": deleted}, 200
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return {"status": "error", "message": str(e)}, 500
 
-@video_bp.route('/api/video/maintenance/confirm_delete', methods=['POST'])
-def confirm_maintenance_delete():
-    """接收客户端确认，从数据库彻底抹除记录"""
-    req_data = request.get_json(silent=True) or {}
-    filenames_to_delete = req_data.get('filenames', [])
-    
+def biz_confirm_maintenance_delete(filenames_to_delete):
+    """物理抹除确认后的数据库清理"""
     if not filenames_to_delete:
-        return jsonify({"status": "ok", "deleted_count": 0})
-        
+        return {"status": "ok", "deleted_count": 0}, 200
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            # SQLite 批量删除的占位符生成
             placeholders = ','.join(['?'] * len(filenames_to_delete))
-            
-            # 删除 AI 标签库记录
             cursor.execute(f"DELETE FROM video_store WHERE filename IN ({placeholders})", filenames_to_delete)
-            # 删除播放统计记录
             cursor.execute(f"DELETE FROM video_stats WHERE filename IN ({placeholders})", filenames_to_delete)
             conn.commit()
-            
-        return jsonify({"status": "ok", "deleted_count": len(filenames_to_delete)})
+        return {"status": "ok", "deleted_count": len(filenames_to_delete)}, 200
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return {"status": "error", "message": str(e)}, 500
 
-@video_bp.route('/api/video/sync', methods=['POST'])
-def sync_video_actions():
-    """接收前端传来的 播放、喜欢、删除 等用户动作记录"""
-    actions = request.get_json(silent=True) or []
-    if not actions:
-        return jsonify({"status": "ok", "processed": 0})
-        
+def biz_sync_video_actions(actions):
+    """同步用户行为数据 (点赞、删除、播放)"""
+    if not actions: return {"status": "ok", "processed": 0}, 200
     processed = 0
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             for item in actions:
-                fname = item.get('filename')
-                action = item.get('action')
-                # JS 传过来的 timestamp 是毫秒级，Python 存一般用秒级
+                fname, action = item.get('filename'), item.get('action')
                 ts = item.get('timestamp', time.time() * 1000)
                 ts_sec = ts / 1000.0 if ts > 1e11 else ts
                 
-                if not fname or not action:
-                    continue
-                    
-                # 确保在统计表中有这条视频的记录，如果没有则初始化一条
+                if not fname or not action: continue
                 cursor.execute('INSERT OR IGNORE INTO video_stats (filename) VALUES (?)', (fname,))
                 
-                # 根据动作更新数据库
                 if action == 'like':
                     cursor.execute('UPDATE video_stats SET is_liked = 1 WHERE filename = ?', (fname,))
                 elif action == 'unlike':
@@ -554,22 +586,15 @@ def sync_video_actions():
                     cursor.execute('UPDATE video_stats SET is_deleted = 0 WHERE filename = ?', (fname,))
                 elif action == 'play':
                     cursor.execute('UPDATE video_stats SET play_count = play_count + 1, last_played_at = ? WHERE filename = ?', (ts_sec, fname))
-                
                 processed += 1
             conn.commit()
-            
-        return jsonify({"status": "ok", "processed": processed})
+        return {"status": "ok", "processed": processed}, 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
-# ==========================================
-# 🧪 LLM 简单网页测试接口 (新添加)
-# ==========================================
-
-@video_bp.route('/test/llm', methods=['GET'])
-def test_llm_page():
-    """返回一个极简的 HTML 测试页面"""
-    html = f"""
+def biz_get_test_llm_page_html():
+    """返回极简 LLM 测试页面 HTML"""
+    return f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
     <head>
@@ -591,157 +616,86 @@ def test_llm_page():
     </head>
     <body>
         <h2>🤖 LLM 对话与连通性测试 (原生解析)</h2>
-        <div class="info">
-            <b>当前环境:</b> {ACTIVE_AI_MODE.upper()} <br>
-            <b>当前模型:</b> {AI_MODEL}
-        </div>
-        
+        <div class="info"><b>当前环境:</b> {ACTIVE_AI_MODE.upper()} <br><b>当前模型:</b> {AI_MODEL}</div>
         <textarea id="prompt" rows="4" placeholder="输入你想问的问题... (例如：你是谁？)"></textarea>
         <button onclick="ask()" id="btn">发送请求</button>
         <span id="loading" style="display:none; color: #007bff; margin-left: 10px; font-size: 0.9em;">⏳ 思考中，请稍候...</span>
-
         <h3>模型回复:</h3>
         <div id="reply" class="box" style="font-size: 1.05em;">等待输入...</div>
         <div id="stats" class="stats" style="display:none;"></div>
-
         <h3>原始响应 (Raw Response):</h3>
         <pre id="raw">{{}}</pre>
-
         <script>
             async function ask() {{
                 const prompt = document.getElementById('prompt').value.trim();
                 if (!prompt) return alert('请输入问题');
-
-                const btn = document.getElementById('btn');
-                const loading = document.getElementById('loading');
-                const replyDiv = document.getElementById('reply');
-                const statsDiv = document.getElementById('stats');
-                const rawDiv = document.getElementById('raw');
-
-                btn.disabled = true;
-                loading.style.display = 'inline';
-                replyDiv.innerText = '';
-                statsDiv.style.display = 'none';
-                rawDiv.innerText = '';
-
+                const btn = document.getElementById('btn'), loading = document.getElementById('loading');
+                const replyDiv = document.getElementById('reply'), statsDiv = document.getElementById('stats'), rawDiv = document.getElementById('raw');
+                btn.disabled = true; loading.style.display = 'inline'; replyDiv.innerText = ''; statsDiv.style.display = 'none'; rawDiv.innerText = '';
                 try {{
                     const res = await fetch('/api/test/llm/ask', {{
-                        method: 'POST',
-                        headers: {{'Content-Type': 'application/json'}},
-                        body: JSON.stringify({{prompt: prompt}})
+                        method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{prompt: prompt}})
                     }});
                     const data = await res.json();
-
-                    if (data.error) {{
-                        replyDiv.innerHTML = '<span style="color:red;">❌ 报错: ' + data.error + '</span>';
-                    }} else {{
+                    if (data.error) {{ replyDiv.innerHTML = '<span style="color:red;">❌ 报错: ' + data.error + '</span>'; }} 
+                    else {{
                         replyDiv.innerText = data.reply;
-                        
                         const t = data.tokens;
                         statsDiv.style.display = 'inline-block';
                         statsDiv.innerHTML = `🪙 <b>Token 消耗</b> | 提示词: ${{t.prompt_tokens}} | 回复: ${{t.completion_tokens}} | 总计: ${{t.total_tokens}}`;
-                        
                         rawDiv.innerText = JSON.stringify(data.raw, null, 2);
                     }}
-                }} catch (e) {{
-                    replyDiv.innerHTML = '<span style="color:red;">❌ 网络或解析错误: ' + e.message + '</span>';
-                }} finally {{
-                    btn.disabled = false;
-                    loading.style.display = 'none';
-                }}
+                }} catch (e) {{ replyDiv.innerHTML = '<span style="color:red;">❌ 网络或解析错误: ' + e.message + '</span>'; }} 
+                finally {{ btn.disabled = false; loading.style.display = 'none'; }}
             }}
         </script>
     </body>
     </html>
     """
-    return html
 
-@video_bp.route('/api/test/llm/ask', methods=['POST'])
-def test_llm_ask():
-    """处理前端发来的测试请求并返回详细数据"""
-    req_data = request.get_json(silent=True) or {}
-    user_prompt = req_data.get('prompt', '')
-
-    if not user_prompt:
-        return jsonify({"error": "Prompt 不能为空"}), 400
-
+def biz_test_llm_ask(user_prompt):
+    """测试 LLM 接口通信"""
+    if not user_prompt: return {"error": "Prompt 不能为空"}, 400
     try:
         start_time = time.time()
-        
-        # 🌟 分流处理：根据当前模式选择底层请求方式
         if ACTIVE_AI_MODE == 'ollama':
-            # Ollama 原生 API 方式
             ollama_url = AI_BASE_URL.replace('/v1', '/api/chat')
             payload = {
-                "model": AI_MODEL,
-                "messages": [{'role': 'user', 'content': user_prompt}],
-                "stream": False,
-                "think": False, # 🌟 原生关闭思考开关
-                "options": {
-                    "temperature": 0.7,
-                    "num_predict": 2000
-                }
+                "model": AI_MODEL, "messages": [{'role': 'user', 'content': user_prompt}],
+                "stream": False, "think": False, "options": {"temperature": 0.7, "num_predict": 2000}
             }
             resp = requests.post(ollama_url, json=payload, timeout=60)
             resp.raise_for_status()
             data = resp.json()
-            
             elapsed_sec = round(time.time() - start_time, 2)
             reply = data.get("message", {}).get("content", "")
-            
-            # 适配 Ollama 原生 API 的 Token 统计字段名
-            p_tokens = data.get("prompt_eval_count", 0)
-            c_tokens = data.get("eval_count", 0)
-            tokens = {
-                "prompt_tokens": p_tokens,
-                "completion_tokens": c_tokens,
-                "total_tokens": p_tokens + c_tokens
-            }
+            p_tokens, c_tokens = data.get("prompt_eval_count", 0), data.get("eval_count", 0)
+            tokens = {"prompt_tokens": p_tokens, "completion_tokens": c_tokens, "total_tokens": p_tokens + c_tokens}
             raw_response = data
             raw_response["_backend_cost_time_sec"] = elapsed_sec
-            
         else:
-            # Cloud 模式方式：使用标准 OpenAI 兼容 SDK
             completion = client.chat.completions.create(
-                model=AI_MODEL,
-                messages=[{'role': 'user', 'content': user_prompt}],
-                max_tokens=2000,  
-                temperature=0.7
+                model=AI_MODEL, messages=[{'role': 'user', 'content': user_prompt}],
+                max_tokens=2000, temperature=0.7
             )
             elapsed_sec = round(time.time() - start_time, 2)
             reply = completion.choices[0].message.content
             usage = completion.usage
-            tokens = {
-                "prompt_tokens": usage.prompt_tokens if usage else 0,
-                "completion_tokens": usage.completion_tokens if usage else 0,
-                "total_tokens": usage.total_tokens if usage else 0
-            }
+            tokens = {"prompt_tokens": usage.prompt_tokens if usage else 0, "completion_tokens": usage.completion_tokens if usage else 0, "total_tokens": usage.total_tokens if usage else 0}
             raw_response = completion.model_dump() if hasattr(completion, 'model_dump') else json.loads(completion.model_dump_json())
             raw_response["_backend_cost_time_sec"] = elapsed_sec
 
-        return jsonify({
-            "reply": reply,
-            "tokens": tokens,
-            "raw": raw_response
-        })
-        
+        return {"reply": reply, "tokens": tokens, "raw": raw_response}, 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
-
- 
-
-@video_bp.route('/api/video/recommend', methods=['GET'])
-def get_video_recommendations():
-    """网页调用：获取相似视频"""
+def biz_get_video_recommendations(filename):
+    """向向量节点获取相似视频推荐"""
     try:
-        # 将请求转发给视频向量节点
-        filename=request.args.get('name')
-        print("silimar video",filename)
+        if not filename: return {"recommendations": []}, 200
         safe_name = quote(filename)
-        # safe_name = filename
         node_url = f"{VIDEO_VECTOR_NODE}/api/video/similar?name={safe_name}&k=10&threshold=0.85"
         res = requests.get(node_url, timeout=5)
-        return jsonify(res.json())
+        return res.json(), res.status_code
     except Exception as e:
-        return jsonify({"recommendations": [], "error": "无法连接向量节点"})
+        return {"recommendations": [], "error": "无法连接向量节点"}, 500
