@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>日常项目统计</title>
+    <script src="/static/cdn/vue3.5.global.prod.js"></script>
+    <script src="/static/cdn/axios1.1.min.js"></script>
+    <script src="/static/cdn/tailwind.js"></script>
+    <script src="/static/cdn/chart.min.3.9.1.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="app" class="max-w-xl mx-auto mt-8 p-6 bg-white rounded-lg shadow">
+    <h2 class="text-2xl font-bold mb-4 text-blue-700">日常项目统计</h2>
+    
+    <div class="flex flex-wrap gap-2 mb-6 border-b pb-4">
+        <button v-for="pp in allProjects" :key="pp" 
+                @click="project = pp"
+                :class="project === pp ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                class="px-4 py-2 rounded-full font-medium transition-all duration-200 text-sm">
+            ${ pp }
+        </button>
+    </div>
+
+    <form @submit.prevent="addRecord" class="flex flex-col gap-3 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <div v-if="project==='ejec'" class="flex flex-wrap gap-2 items-center">
+            <span class="text-lg font-bold text-blue-700 w-16">ejec</span>
+            <input type="number" v-model="count" min="1" class="w-20 px-2 py-1 border rounded" placeholder="次数">
+            <span class="text-gray-400 text-sm">快捷：</span>
+            <div class="flex gap-1">
+                <button v-for="n in squatOptions" :key="n" type="button"
+                    @click="quickSquat(n)"
+                    class="px-2 py-1 bg-blue-100 rounded hover:bg-blue-300 text-blue-700 text-sm font-semibold">${ n }</button>
+            </div>
+            <input v-model="remark" class="flex-1 px-2 py-1 border rounded min-w-[120px]" placeholder="备注（可选）">
+            <button type="submit" class="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 font-bold transition">记录</button>
+        </div>
+        
+        <div v-else class="flex flex-wrap gap-2 items-center">
+            <span class="text-lg font-bold text-green-700 w-auto min-w-[64px]">${ project }</span>
+            <input v-model="remark" class="flex-1 px-2 py-1 border rounded min-w-[150px]" placeholder="备注（可选）">
+            <button type="submit" class="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600 font-bold transition">记录</button>
+        </div>
+    </form>
+
+    <div class="mb-6 relative">
+        <h3 class="absolute top-0 right-0 text-xs text-gray-400 font-mono">当前分析视角: ${ project }</h3>
+        <canvas id="statsChart" height="200"></canvas>
+    </div>
+
+    <div v-if="todayList.length" class="mb-4 bg-green-50 p-4 rounded-lg border border-green-100">
+        <h3 class="text-lg font-semibold mb-2 text-green-700 flex items-center gap-2">
+            今日足迹 
+            <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">${ todayList.length } 条记录</span>
+        </h3>
+        <ul>
+            <li v-for="item in todayList" :key="item.id || item._time" class="flex items-center mb-2 text-sm border-b border-green-100 pb-1 last:border-0">
+                <span class="font-bold w-24 truncate" :class="item.project === project ? 'text-blue-600' : 'text-gray-700'">${item.project}</span>
+                <span v-if="item.project==='ejec'" class="text-blue-700 font-mono w-10">${item.count}次</span>
+                <span class="text-gray-500 font-mono mx-2">${item.time}</span>
+                <span v-if="item.project==='downm'" class="text-orange-500 text-xs w-16">(${poopOffsetMinutes(item.time)})</span>
+                <span v-if="item.remark" class="text-gray-500 flex-1 truncate text-xs">📝 ${item.remark}</span>
+                <button @click="deleteRecord(item.id)" class="ml-auto px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-xs">删除</button>
+            </li>
+        </ul>
+    </div>
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-bold text-blue-700">日常项目统计</h2>
+        <div class="flex gap-2">
+            <button @click="exportCSV" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm shadow-sm transition">导出 CSV</button>
+            <input type="file" ref="fileInput" @change="importCSV" class="hidden" accept=".csv">
+            <button @click="$refs.fileInput.click()" class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm shadow-sm transition">导入 CSV</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+    delimiters: ['${', '}'],
+    data() {
+        return {
+            project: "downm",
+            count: 6,
+            remark: "",
+            stats: [], // 前端清洗后的标准数据集合
+            squatOptions: [4,5,6,7],
+            allProjects: ["downm", "ejec", "mountain-15"]
+        }
+    },
+    computed: {
+        todayList() {
+            const today = new Date().toISOString().slice(0,10);
+            return this.stats.filter(item => item.date === today);
+        },
+        avgPoopMinutes() {
+            const poops = this.todayList.filter(i => i.project === 'downm');
+            if (!poops.length) return null;
+            const times = poops.map(i => {
+                const timeStr = i.time || '00:00:00';
+                const [h, m, s] = timeStr.split(':').map(Number);
+                return (h || 0) * 60 + (m || 0) + ((s || 0) / 60);
+            });
+            return times.reduce((a,b)=>a+b,0) / times.length;
+        }
+    },
+    watch: {
+        // 监听项目切换，瞬间重绘焦点图表
+        project() {
+            this.drawChart();
+        }
+    },
+    methods: {
+        exportCSV() {
+            // 直接利用浏览器的下载机制访问导出接口
+            window.location.href = '/api/daily_stats/export';
+        },
+        async importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const res = await axios.post('/api/daily_stats/import', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                alert(`成功导入 ${res.data.imported_rows} 条记录`);
+                this.$refs.fileInput.value = ''; // 清空 input 状态，允许重复上传同名文件
+                await this.fetchStats(); // 重新拉取刷新图表和列表
+            } catch (error) {
+                alert("导入失败，请检查 CSV 格式或网络");
+            }
+        },
+        async fetchStats() {
+            try {
+                const res = await axios.get('/api/daily_stats');
+                const rawData = res.data || [];
+                
+                // 【核心清洗层】将后端的 _time 转化为 date 和 time，防范空数据
+                let processedData = rawData.map(item => {
+                    const timeStr = item._time || '';
+                    const parts = timeStr.split(' ');
+                    return {
+                        ...item,
+                        date: parts[0] || '1970-01-01',
+                        time: parts[1] || '00:00:00',
+                        count: item.count ? Number(item.count) : null
+                    };
+                });
+
+                // 按时间倒序排序，同时间按项目名排
+                processedData.sort((a, b) => {
+                    const dateDiff = `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`);
+                    if (dateDiff !== 0) return -dateDiff;
+                    return -a.project.localeCompare(b.project);
+                });
+                
+                this.stats = processedData;
+                
+                // 动态获取新的项目类型并加入标签栏
+                const backendProjects = [...new Set(processedData.map(i => i.project))];
+                backendProjects.forEach(p => {
+                    if (p && !this.allProjects.includes(p)) this.allProjects.push(p);
+                });
+
+                this.drawChart();
+            } catch (error) {
+                console.error("获取数据失败:", error);
+            }
+        },
+        async addRecord() {
+            if (!this.project) return;
+            const payload = {
+                project: this.project,
+                remark: this.remark
+            };
+            if (this.project === 'ejec') payload.count = this.count;
+            
+            try {
+                await axios.post('/api/daily_stats', payload);
+                this.remark = "";
+                if (this.project === 'ejec') this.count = 6;
+                await this.fetchStats();
+            } catch (error) {
+                alert("记录添加失败");
+            }
+        },
+        async quickSquat(n) {
+            this.count = n;
+            this.remark = "";
+            await this.addRecord();
+        },
+        poopOffsetMinutes(time) {
+            if (this.avgPoopMinutes === null || !time) return '';
+            const [h, m, s] = time.split(':').map(Number);
+            const t = (h || 0) * 60 + (m || 0) + ((s || 0) / 60);
+            const offset = t - this.avgPoopMinutes;
+            if (offset === 0) return '0.0m';
+            return (offset > 0 ? '+' : '') + offset.toFixed(1) + 'm';
+        },
+        drawChart() {
+            if (window.statsChart && typeof window.statsChart.destroy === 'function') {
+                window.statsChart.destroy();
+            }
+
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            const projectData = this.stats.filter(item => item.project === this.project);
+            const labels = [...new Set(projectData.map(i => i.date))].sort();
+
+            let datasetConfig = {};
+            let scalesConfig = {};
+            let tooltipConfig = {};
+
+            // 模式 A：计次项目（如 ejec）
+            if (this.project === 'ejec') {
+                const dataPoints = labels.map(d => {
+                    return projectData.filter(i => i.date === d).reduce((sum, curr) => sum + (Number(curr.count) || 0), 0);
+                });
+                
+                datasetConfig = {
+                    label: `${this.project} 每日总次数`,
+                    data: dataPoints,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                };
+                scalesConfig = { y: { beginAtZero: true, ticks: { precision: 0 } } };
+            } 
+            // 模式 B：时间点项目（如 downm, mountain-15）
+            else {
+                const dataPoints = labels.map(d => {
+                    const dayRecords = projectData.filter(i => i.date === d);
+                    const totalHours = dayRecords.reduce((sum, curr) => {
+                        const timeStr = curr.time || '00:00:00';
+                        const parts = timeStr.split(':').map(Number);
+                        const h = parts[0] || 0;
+                        const m = parts[1] || 0;
+                        const s = parts[2] || 0;
+                        return sum + h + (m/60) + (s/3600);
+                    }, 0);
+                    return totalHours / dayRecords.length;
+                });
+
+                datasetConfig = {
+                    label: `${this.project} 发生时间点趋势`,
+                    data: dataPoints,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                };
+                
+                scalesConfig = {
+                    y: {
+                        min: 0, max: 24, 
+                        ticks: {
+                            stepSize: 4, 
+                            callback: function(value) {
+                                const h = Math.floor(value);
+                                const m = Math.floor((value - h) * 60);
+                                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                            }
+                        }
+                    }
+                };
+                
+                tooltipConfig = {
+                    callbacks: {
+                        label: function(context) {
+                            const val = context.raw;
+                            const h = Math.floor(val);
+                            const m = Math.floor((val - h) * 60);
+                            return `时间点: ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                        }
+                    }
+                };
+            }
+
+            window.statsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [datasetConfig]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { tooltip: tooltipConfig },
+                    scales: scalesConfig
+                }
+            });
+        },
+        async deleteRecord(id) {
+            if (!id) {
+                alert("该记录没有后端 ID，无法删除。请检查后端 API 返回格式。");
+                return;
+            }
+            if (confirm("确定删除这条记录吗？")) {
+                try {
+                    await axios.delete(`/api/daily_stats/${id}`);
+                    await this.fetchStats();
+                } catch (error) {
+                    alert("删除失败");
+                }
+            }
+        }
+    },
+    mounted() {
+        this.fetchStats();
+        
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
