@@ -10,3 +10,5 @@ db/uploads/*
 moduels/__pycache__/*
 *.pyc
 moduels/__pycache__/aiocr__extension.cpython-313.pyc
+tmp/*
+*.mp4

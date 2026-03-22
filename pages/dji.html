@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>动态缓冲视频压缩</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased p-6">
+
+<div id="app" class="max-w-4xl mx-auto space-y-6">
+    <div class="flex justify-between items-end border-b pb-4 border-gray-300">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">压缩控制台</h2>
+            <p class="text-sm text-gray-500 mt-1">JIT 上传模式 | 动态轮询：[[ currentPollRate / 1000 ]]s/次</p>
+        </div>
+        <button @click="forceRefresh" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded shadow transition-colors text-sm">
+            强制刷新数据
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 class="text-lg font-semibold mb-4">1. 本地视频 (按需上传)</h3>
+            <input type="file" ref="fileInput" multiple accept="video/mp4,video/quicktime,video/x-m4v" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4">
+            <button @click="queueLocalFiles" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors">
+                提交到本地浏览器队列
+            </button>
+            <div v-if="localQueue.length > 0" class="mt-4 text-sm font-medium text-emerald-600 bg-emerald-50 p-3 rounded">
+                排队中: 剩余 [[ localQueue.length ]] 个文件。<br>
+                <span class="text-xs text-gray-500">注意：刷新页面会清空此本地队列。</span>
+            </div>
+            <div v-if="isUploading" class="mt-2 text-sm text-blue-600 animate-pulse">
+                正在静默上传备用文件...
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 class="text-lg font-semibold mb-4">2. 本地 SMB 挂载目录</h3>
+            <input type="text" v-model="smbPath" placeholder="例如: /Volumes/VideoShare/RAW_MP4" class="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button @click="startSMB" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 px-4 rounded transition-colors">
+                提交目录批量压缩
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h3 class="text-xl font-bold border-b pb-2 mb-4">运行状态大盘</h3>
+        
+        <div class="mb-6">
+            <div v-if="currentTask" class="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-semibold text-blue-800">
+                        正在处理 【[[ currentTask.type.toUpperCase() ]]】: [[ currentTask.source_name ]]
+                    </span>
+                    <span class="text-blue-600 font-bold">[[ currentTask.progress ]]%</span>
+                </div>
+                <div class="w-full bg-blue-200 rounded-full h-2.5">
+                    <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" :style="{ width: currentTask.progress + '%' }"></div>
+                </div>
+            </div>
+            <div v-else class="text-gray-500 font-medium p-4 bg-gray-50 rounded-lg border border-gray-200">
+                当前空闲，无转码任务
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h4 class="font-semibold text-gray-700 mb-3 flex justify-between">
+                    服务器等待队列 <span class="bg-gray-200 text-gray-700 py-0.5 px-2 rounded-full text-xs">[[ queue.length ]]</span>
+                </h4>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    <div v-for="task in queue" :key="task.id" class="flex justify-between text-sm p-3 bg-gray-50 border border-gray-100 rounded">
+                        <span class="truncate pr-4">[[ task.source_name ]]</span>
+                        <span class="text-xs text-gray-400 uppercase">[[ task.type ]]</span>
+                    </div>
+                    <div v-if="queue.length === 0" class="text-sm text-gray-400 italic">队列为空</div>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="font-semibold text-gray-700 mb-3 flex justify-between">
+                    处理结果 <span class="bg-gray-200 text-gray-700 py-0.5 px-2 rounded-full text-xs">[[ completed.length ]]</span>
+                </h4>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    <div v-for="task in completed" :key="task.id" class="flex justify-between items-center text-sm p-3 border rounded" :class="task.status === 'error' ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'">
+                        
+                        <div v-if="task.status === 'error'" class="truncate text-red-600 font-medium">
+                            ❌ 失败: [[ task.source_name ]]
+                        </div>
+                        
+                        <template v-else>
+                            <span class="truncate text-green-700 font-medium">✅ [[ task.source_name ]]</span>
+                            <a :href="'/compressor/download/' + task.output_name" target="_blank" class="shrink-0 ml-2 bg-white text-green-700 border border-green-300 hover:bg-green-50 px-2 py-1 rounded text-xs transition-colors">
+                                重新下载
+                            </a>
+                        </template>
+
+                    </div>
+                    <div v-if="completed.length === 0" class="text-sm text-gray-400 italic">暂无完成记录</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+ <script>
+    const { createApp, ref, onMounted, onUnmounted } = Vue;
+
+    const app = createApp({
+        setup() {
+            const currentTask = ref(null);
+            const queue = ref([]);
+            const completed = ref([]);
+            
+            const localQueue = ref([]);
+            const isUploading = ref(false);
+            const smbPath = ref('');
+            
+            const downloaded = ref(new Set(JSON.parse(localStorage.getItem('downloaded_v2') || '[]')));
+            
+            let pollTimer = null;
+            const currentPollRate = ref(5000); 
+
+            // 下载调度队列与锁
+            const downloadQueue = [];
+            let isProcessingDownload = false;
+
+            const processDownloadQueue = () => {
+                if (isProcessingDownload || downloadQueue.length === 0) return;
+                isProcessingDownload = true;
+                
+                const url = downloadQueue.shift();
+                
+                // 使用 iframe 触发静默下载，最稳定且不干扰当前页面
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                
+                // 10秒后清理隐藏的 iframe 节点
+                setTimeout(() => document.body.removeChild(iframe), 10000);
+
+                // 强制排队间隔 1.5 秒，处理后续下载
+                setTimeout(() => {
+                    isProcessingDownload = false;
+                    processDownloadQueue();
+                }, 1500);
+            };
+
+            const queueLocalFiles = () => {
+                const fileInput = document.querySelector('input[type="file"]');
+                if (!fileInput.files.length) return alert('请先选择文件');
+                for (let file of fileInput.files) {
+                    localQueue.value.push(file);
+                }
+                fileInput.value = '';
+            };
+
+            const startSMB = async () => {
+                if (!smbPath.value) return alert('请输入路径');
+                try {
+                    const res = await fetch('/compressor/api/smb', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: smbPath.value })
+                    });
+                    const data = await res.json();
+                    alert(data.message || data.error);
+                    forceRefresh(); 
+                } catch (e) {
+                    alert('网络请求失败');
+                }
+            };
+
+            const fetchStatus = async () => {
+                try {
+                    const res = await fetch('/compressor/api/status');
+                    const data = await res.json();
+
+                    currentTask.value = data.current;
+                    queue.value = data.queue;
+                    completed.value = data.completed;
+
+                    // 1. 先处理完成列表，装填下载队列
+                    let hasNewDownload = false;
+                    data.completed.forEach(t => {
+                        if (t.status === 'completed' && !downloaded.value.has(t.output_name)) {
+                            downloaded.value.add(t.output_name);
+                            hasNewDownload = true;
+                            downloadQueue.push(`/compressor/download/${t.output_name}`);
+                        }
+                    });
+
+                    if (hasNewDownload) {
+                        localStorage.setItem('downloaded_v2', JSON.stringify([...downloaded.value]));
+                        processDownloadQueue();
+                    }
+
+                    // 2. 【核心修复】：带安全锁的 JIT 上传逻辑
+                    // 只有当：下载队列完全清空、当前没有正在执行的下载、没在上传、且服务器全空时，才允许提取下一个本地文件
+                    const isDownloadClear = downloadQueue.length === 0 && !isProcessingDownload;
+                    
+                    if (localQueue.value.length > 0 && !isUploading.value && data.queue.length < 1 && isDownloadClear) {
+                        isUploading.value = true;
+                        
+                        // 强制退避 2 秒！
+                        // 留出充分的时间让刚才 iframe 发出的 HTTP 下载请求抵达服务器并锁定文件读取流。
+                        // 之后再提交下一个上传（这会触发后端删除旧文件）。只要文件开始读取，Unix 系统底层允许一边读取一边 unlink(删除)。
+                        setTimeout(() => {
+                            const nextFile = localQueue.value.shift();
+                            const formData = new FormData();
+                            formData.append('file', nextFile);
+
+                            fetch('/compressor/api/upload', { method: 'POST', body: formData })
+                                .then(() => isUploading.value = false)
+                                .catch(() => { isUploading.value = false; });
+                        }, 2000);
+                    }
+
+                    // 动态调整轮询频率
+                    const isBusy = currentTask.value || queue.value.length > 0 || localQueue.value.length > 0 || isUploading.value || !isDownloadClear;
+                    currentPollRate.value = isBusy ? 1000 : 5000;
+
+                } catch (e) {
+                    console.error("获取状态失败", e);
+                    currentPollRate.value = 10000; 
+                }
+            };
+
+            const pollLoop = async () => {
+                await fetchStatus();
+                pollTimer = setTimeout(pollLoop, currentPollRate.value);
+            };
+
+            const forceRefresh = async () => {
+                clearTimeout(pollTimer);
+                await fetchStatus();
+                pollTimer = setTimeout(pollLoop, currentPollRate.value);
+            };
+
+            onMounted(() => {
+                pollLoop();
+            });
+
+            onUnmounted(() => {
+                clearTimeout(pollTimer);
+            });
+
+            return {
+                currentTask, queue, completed, localQueue, isUploading, smbPath,
+                currentPollRate, queueLocalFiles, startSMB, forceRefresh
+            };
+        }
+    });
+
+    app.config.compilerOptions.delimiters = ['[[', ']]'];
+    app.mount('#app');
+</script>
+</body>
+</html>

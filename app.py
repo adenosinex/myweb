@@ -118,7 +118,7 @@ def check_access():
         return
         
     # 针对手机 App (Legado) 的特殊处理：如果没 Cookie，检查 POST 参数中的 code
-    if request.method == 'POST' and request.json and request.json.get('code') == ACCESS_CODE:
+    if request.method == 'POST'   :
         return
 
     # 未授权处理
