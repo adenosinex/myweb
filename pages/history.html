@@ -35,10 +35,17 @@
                 </div>
             </div>
         </div>
-        <div class="max-w-7xl mx-auto mt-4 flex gap-2 items-center flex-wrap" id="tagFilterContainer"></div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 md:px-6 py-6">
+    <div class="max-w-7xl mx-auto px-4 md:px-6 pt-6">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">周期状态大盘 (距今最久优先)</h2>
+            <button onclick="document.getElementById('searchInput').value=''; renderGallery();" class="text-[10px] text-blue-500 hover:underline">查看全部</button>
+        </div>
+        <div id="eventStatsDashboard" class="flex gap-3 overflow-x-auto custom-scrollbar pb-3"></div>
+    </div>
+
+    <main class="max-w-7xl mx-auto px-4 md:px-6 py-4">
         <div id="gallery" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"></div>
     </main>
 
@@ -51,7 +58,8 @@
             <div class="p-6">
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-gray-700 mb-1">记录事件 (同批次照片共用)</label>
-                    <input type="text" id="eventType" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none" placeholder="可选，默认：未命名记录">
+                    <input type="text" id="eventType" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none mb-2" placeholder="输入新事件，或点击下方历史标签">
+                    <div id="quickSelectContainer" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar"></div>
                 </div>
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-gray-700 mb-1">实际发生时间 (自动提取/可修改)</label>
@@ -115,6 +123,80 @@
             if (!dateStr) return '未知';
             const d = new Date(dateStr.replace(' ', 'T'));
             return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        function getTimeAgo(dateStr) {
+            if (!dateStr) return '未知';
+            const past = new Date(dateStr.replace(' ', 'T')).getTime();
+            const now = new Date().getTime();
+            const diffDays = Math.floor((now - past) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) return '今天';
+            if (diffDays === 1) return '昨天';
+            if (diffDays > 365) return `${Math.floor(diffDays/365)}年前`;
+            if (diffDays > 30) return `${Math.floor(diffDays/30)}个月前`;
+            return `${diffDays}天前`;
+        }
+
+        // 新增/优化：同时渲染“首页大盘”和“弹窗快捷选项”
+        function renderEventStats() {
+            const dashboardContainer = document.getElementById('eventStatsDashboard');
+            const quickSelectContainer = document.getElementById('quickSelectContainer');
+            if (!dashboardContainer) return;
+
+            const eventStats = {};
+            // 提取每个事件的最后一次发生时间
+            allSnapshots.forEach(item => {
+                const type = item.event_type || '未命名记录';
+                if (type === '未命名记录' || type.trim() === '') return;
+                
+                const itemTime = new Date(item.record_time.replace(' ', 'T')).getTime();
+                if (!eventStats[type] || itemTime > eventStats[type].time) {
+                    eventStats[type] = { time: itemTime, record_time: item.record_time };
+                }
+            });
+
+            // 首页大盘排序逻辑：按距今越久（时间戳越小）排在越前面，作为周期提醒
+            const sortedForDashboard = Object.keys(eventStats).sort((a, b) => eventStats[a].time - eventStats[b].time);
+            
+            // 弹窗快捷排序逻辑：按最近更新（时间戳越大）排在越前面，方便连续记录
+            const sortedForQuickSelect = Object.keys(eventStats).sort((a, b) => eventStats[b].time - eventStats[a].time);
+
+            if (sortedForDashboard.length === 0) {
+                dashboardContainer.innerHTML = '<span class="text-xs text-gray-400">暂无项目记录，快去添加你的第一个切片吧！</span>';
+                if (quickSelectContainer) quickSelectContainer.innerHTML = '';
+                return;
+            }
+
+            // 1. 渲染首页大盘
+            dashboardContainer.innerHTML = sortedForDashboard.map(type => {
+                const timeAgo = getTimeAgo(eventStats[type].record_time);
+                // 距离今天越久，颜色略有不同（可选增强）
+                return `<div onclick="document.getElementById('searchInput').value='${type}'; renderGallery();" class="bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-sm shrink-0 flex flex-col cursor-pointer hover:border-black hover:shadow-md transition-all group min-w-[100px]">
+                    <span class="text-sm font-bold text-gray-800 group-hover:text-black">${type}</span>
+                    <span class="text-[11px] text-gray-500 mt-0.5">上次: <span class="font-mono">${timeAgo}</span></span>
+                </div>`;
+            }).join('');
+
+            // 2. 渲染上传弹窗快捷选项
+            if (quickSelectContainer) {
+                quickSelectContainer.innerHTML = sortedForQuickSelect.map(type => {
+                    const timeAgo = getTimeAgo(eventStats[type].record_time);
+                    return `<button onclick="quickSubmit('${type}')" class="px-3 py-1.5 bg-gray-100 hover:bg-black hover:text-white text-gray-700 rounded-xl transition-all flex flex-col items-start text-left shrink-0">
+                        <span class="text-[11px] font-bold">${type}</span>
+                        <span class="text-[9px] opacity-70">上次: ${timeAgo}</span>
+                    </button>`;
+                }).join('');
+            }
+        }
+
+        function quickSubmit(type) {
+            document.getElementById('eventType').value = type;
+            if (currentFiles.length > 0) {
+                submitRecord();
+            } else {
+                document.getElementById('fileInput').click();
+            }
         }
 
         async function compressImage(file) {
@@ -182,6 +264,12 @@
             btn.disabled = false;
             btn.className = "w-full bg-black hover:bg-gray-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg";
             btn.innerHTML = `✅ 立即入库 (${currentFiles.length} 张)`;
+            
+            // 选完图片后，自动判断如果已填好分类，直接提交（实现"一键打卡"）
+            const currentEvent = document.getElementById('eventType').value.trim();
+            if (currentEvent) {
+                submitRecord();
+            }
         }
 
         async function submitRecord() {
@@ -283,6 +371,7 @@
         async function loadSnapshots() {
             const res = await fetch(API_BASE + '/api/snapshots');
             allSnapshots = await res.json();
+            renderEventStats(); // 渲染顶层大盘和快捷选择
             return renderGallery();
         }
 
