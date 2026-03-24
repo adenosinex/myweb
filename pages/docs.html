@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态知识库</title>
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --bg-side: #ffffff;
+            --accent: #2563eb;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --border: #e2e8f0;
+        }
+
+        body { margin: 0; display: flex; font-family: "Inter", system-ui, sans-serif; height: 100vh; background: var(--bg-main); color: var(--text-main); overflow: hidden; }
+
+        /* 顶部进度条 */
+        #topProgress {
+            position: fixed; top: 0; left: 0; height: 3px; background: var(--accent);
+            width: 0%; transition: width 0.3s ease, opacity 0.3s ease; z-index: 1000; opacity: 0;
+        }
+
+        /* 侧边栏 */
+        .sidebar { width: 280px; background: var(--bg-side); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid var(--border); }
+        .sidebar-header h3 { margin: 0; font-size: 16px; }
+        #docList { flex: 1; padding: 15px 10px; overflow-y: auto; }
+        .doc-item { padding: 12px 15px; margin-bottom: 4px; cursor: pointer; border-radius: 8px; color: var(--text-sub); font-size: 14px; transition: 0.2s; }
+        .doc-item:hover { background: #f1f5f9; color: var(--text-main); }
+        .doc-item.active { background: #eff6ff; color: var(--accent); font-weight: 600; }
+
+        /* 内容区 */
+        .content-area { flex: 1; overflow-y: auto; scroll-behavior: smooth; position: relative; }
+        .doc-wrapper { max-width: 880px; margin: 40px auto; padding: 0 40px; }
+        .doc-container { background: white; padding: 50px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); min-height: 600px; }
+
+        /* Markdown 样式 */
+        .doc-container h1 { font-size: 2em; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+        .doc-container table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        .doc-container th, .doc-container td { border: 1px solid var(--border); padding: 12px; text-align: left; }
+        .doc-container th { background: #f8fafc; color: var(--text-sub); }
+        .doc-container blockquote { border-left: 4px solid var(--accent); margin: 20px 0; padding: 10px 20px; background: #eff6ff; color: #1e40af; }
+        .doc-container code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #e11d48; font-family: monospace; }
+        .doc-container pre { background: #1e293b; color: white; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        .doc-container pre code { background: transparent; color: inherit; padding: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="topProgress"></div>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h3>📂 知识库</h3>
+        </div>
+        <div id="docList"></div>
+    </div>
+
+    <div class="content-area" id="scrollContainer">
+        <div class="doc-wrapper">
+            <div class="doc-container" id="docContent">
+                <div style="text-align:center; padding-top:100px; color:var(--text-sub);">
+                    请从左侧选择文档
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const progressBar = document.getElementById('topProgress');
+        const contentArea = document.getElementById('docContent');
+        const scrollContainer = document.getElementById('scrollContainer');
+        
+        // 使用 AbortController 拦截重复点击引发的并发请求冲突
+        let currentAbortController = null;
+
+        function setProgress(val) {
+            if (val === 0) {
+                progressBar.style.opacity = '0';
+                setTimeout(() => { progressBar.style.width = '0%'; }, 300);
+            } else {
+                progressBar.style.opacity = '1';
+                progressBar.style.width = val + '%';
+            }
+        }
+
+        async function initDocList() {
+            try {
+                const res = await fetch('/api/docs/list');
+                const data = await res.json();
+                const listEl = document.getElementById('docList');
+                listEl.innerHTML = data.docs.map(doc => `<div class="doc-item" onclick="handleDocSelect(this, '${doc}')">${doc}</div>`).join('');
+            } catch (e) {
+                document.getElementById('docList').innerHTML = '<p style="color:red;padding:20px;">列表获取失败</p>';
+            }
+        }
+
+        async function handleDocSelect(el, docName) {
+            document.querySelectorAll('.doc-item').forEach(item => item.classList.remove('active'));
+            el.classList.add('active');
+
+            // 终止上一次正在进行的请求链
+            if (currentAbortController) currentAbortController.abort();
+            currentAbortController = new AbortController();
+            const signal = currentAbortController.signal;
+
+            try {
+                // ==========================================
+                // 阶段一：获取缓存静态版本，瞬间展示
+                // ==========================================
+                setProgress(30);
+                const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docName)}`, { signal });
+                const dataFast = await resFast.json();
+                
+                if (dataFast.error) throw new Error(dataFast.error);
+
+                contentArea.innerHTML = dataFast.html;
+                scrollContainer.scrollTop = 0;
+                setProgress(60);
+
+                // ==========================================
+                // 阶段二：触发后端抓取新数据，静默刷新 DOM
+                // ==========================================
+                const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docName)}`, { signal });
+                const dataFresh = await resFresh.json();
+
+                // 只有当新数据与旧数据产生变化时，才局部替换 DOM，避免画面闪烁
+                if (!dataFresh.error && dataFresh.html !== dataFast.html) {
+                    contentArea.innerHTML = dataFresh.html;
+                }
+                setProgress(100);
+
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    contentArea.innerHTML = `<div style="color:#ef4444; padding:20px;">⚠️ 渲染失败: ${e.message}</div>`;
+                    setProgress(100);
+                }
+            } finally {
+                setTimeout(() => setProgress(0), 400);
+            }
+        }
+
+        window.onload = initDocList;
+    </script>
+</body>
+</html>

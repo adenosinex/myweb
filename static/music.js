@@ -1,5 +1,4 @@
- 
-    const CACHE_NAME = 'cloud-music-cache-v1';
+const CACHE_NAME = 'cloud-music-cache-v1';
     let allSongs = [];
     let tagsMap = {};       
     let categories = [];    
@@ -82,7 +81,13 @@
             
             let rawSongs = await songsRes.json();
             const tagsData = await tagsRes.json();
-            tagsMap = tagsData?.song_tags || {};
+            
+            // ================= 核心修复：兼容新版后端返回的带统计信息的结构 =================
+            tagsMap = {};
+            for (const [song, info] of Object.entries(tagsData?.song_tags || {})) {
+                // 如果是新版对象则取 .tags，旧版数组则直接使用
+                tagsMap[song] = Array.isArray(info) ? info : (info.tags || []);
+            }
             categories = tagsData?.categories || [];
             
             const favData = await favRes.json();
@@ -114,7 +119,8 @@
                 generateNewPlay(currentFilteredSongs[0]);
             }
         } catch (e) {
-            document.getElementById('songList').innerHTML = '<div style="text-align:center;color:#ef4444;">网络异常，无法获取数据</div>';
+            console.error(e); // 在控制台打印真实错误，避免被掩盖
+            document.getElementById('songList').innerHTML = '<div style="text-align:center;color:#ef4444;">网络或解析异常，无法获取数据</div>';
         }
     }
 
@@ -529,4 +535,3 @@
     }
 
     window.onload = init;
- 

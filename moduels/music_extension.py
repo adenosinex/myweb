@@ -19,15 +19,15 @@ GLOBAL_MODEL_MUSIC_API = os.environ.get('MODEL_MUSIC_API', '').strip()
 GLOBAL_MODEL_MUSIC = os.environ.get('MODEL_MUSIC', '').strip()
 GLOBAL_MODEL_MUSIC_URL = os.environ.get('MODEL_MUSIC_URL', '').strip()
 
-print("="*50)
-print("🎵 AI Music Tags - 环境变量加载检查")
-if GLOBAL_MODEL_MUSIC_API:
-    print(f"[*] MODEL_MUSIC_API: {GLOBAL_MODEL_MUSIC_API[:8]}... (长度: {len(GLOBAL_MODEL_MUSIC_API)})")
-else:
-    print("[!] MODEL_MUSIC_API: 未设置或为空!")
-print(f"[*] MODEL_MUSIC    : {GLOBAL_MODEL_MUSIC if GLOBAL_MODEL_MUSIC else '未设置或为空!'}")
-print(f"[*] MODEL_MUSIC_URL: {GLOBAL_MODEL_MUSIC_URL if GLOBAL_MODEL_MUSIC_URL else '未设置或为空!'}")
-print("="*50)
+# print("="*50)
+# print("🎵 AI Music Tags - 环境变量加载检查")
+# if GLOBAL_MODEL_MUSIC_API:
+#     print(f"[*] MODEL_MUSIC_API: {GLOBAL_MODEL_MUSIC_API[:8]}... (长度: {len(GLOBAL_MODEL_MUSIC_API)})")
+# else:
+#     print("[!] MODEL_MUSIC_API: 未设置或为空!")
+# print(f"[*] MODEL_MUSIC    : {GLOBAL_MODEL_MUSIC if GLOBAL_MODEL_MUSIC else '未设置或为空!'}")
+# print(f"[*] MODEL_MUSIC_URL: {GLOBAL_MODEL_MUSIC_URL if GLOBAL_MODEL_MUSIC_URL else '未设置或为空!'}")
+# print("="*50)
 
 
 # ================= 配置管理模块 =================
@@ -49,6 +49,39 @@ TAG_CHOICES = [
     # 编曲特征
     "钢琴", "吉他", "弦乐", "电子合成器", "鼓点重", "人声为主",
 ]
+
+# ================= 新增：遥测数据记录函数 =================
+def log_telemetry(model_name, batch_size, telemetry_data, total_time, status):
+    """记录每次大模型调用的性能指标"""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS model_telemetry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                model_name TEXT,
+                batch_size INTEGER,
+                prompt_tokens INTEGER,
+                completion_tokens INTEGER,
+                total_tokens INTEGER,
+                pure_ai_time REAL,
+                total_time REAL,
+                status TEXT
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO model_telemetry 
+            (model_name, batch_size, prompt_tokens, completion_tokens, total_tokens, pure_ai_time, total_time, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            model_name,
+            batch_size,
+            telemetry_data.get('prompt_tokens', 0),
+            telemetry_data.get('completion_tokens', 0),
+            telemetry_data.get('total_tokens', 0),
+            telemetry_data.get('pure_ai_time', 0.0),
+            round(total_time, 3),
+            status
+        ))
  
 
 @tags_bp.route('/api/tags', methods=['GET'])
@@ -117,22 +150,85 @@ def delete_tags():
 def download_tags_csv():
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT song_name, tags FROM song_tags')
+        
+        # 确保遥测子表存在，防止在未发生过任何请求前直接导出引发 SQL 报错
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS model_telemetry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                model_name TEXT,
+                batch_size INTEGER,
+                prompt_tokens INTEGER,
+                completion_tokens INTEGER,
+                total_tokens INTEGER,
+                pure_ai_time REAL,
+                total_time REAL,
+                status TEXT
+            )
+        ''')
+        
+        # 联合查询：左连接主表与子表的聚合数据
+        query = '''
+            SELECT 
+                st.song_name, 
+                st.tags, 
+                st.model_name, 
+                st.time_taken,
+                mt.avg_pure_ai,
+                mt.avg_total_tokens
+            FROM song_tags st
+            LEFT JOIN (
+                SELECT 
+                    model_name, 
+                    ROUND(AVG(pure_ai_time), 3) AS avg_pure_ai,
+                    ROUND(AVG(total_tokens), 1) AS avg_total_tokens
+                FROM model_telemetry
+                WHERE status = 'success'
+                GROUP BY model_name
+            ) mt ON st.model_name = mt.model_name
+        '''
+        cursor.execute(query)
         rows = cursor.fetchall()
     
     si = io.StringIO()
     cw = csv.writer(si)
-    cw.writerow(['歌曲名', '分类标签'])
+    # 更新表头以匹配新增的详细联合信息
+    cw.writerow([
+        '歌曲名', 
+        '分类标签', 
+        '识别模型', 
+        '单首分摊耗时(s)', 
+        '模型批次均次推理耗时(s)', 
+        '模型批次均消耗Tokens'
+    ])
+    
     for row in rows:
-        tags_str = " / ".join(json.loads(row[1]))
-        cw.writerow([row[0], tags_str])
+        song_name = row[0]
+        try:
+            tags_str = " / ".join(json.loads(row[1])) if row[1] else "未分类"
+        except json.JSONDecodeError:
+            tags_str = "数据损坏"
+            
+        model_name = row[2] if row[2] else "未知"
+        time_taken = row[3] if row[3] else 0.0
+        avg_pure_ai = row[4] if row[4] is not None else "N/A"
+        avg_total_tokens = row[5] if row[5] is not None else "N/A"
+        
+        cw.writerow([
+            song_name, 
+            tags_str, 
+            model_name, 
+            time_taken, 
+            avg_pure_ai, 
+            avg_total_tokens
+        ])
         
     output = make_response(si.getvalue().encode('utf-8-sig'))
-    output.headers["Content-Disposition"] = "attachment; filename=song_tags_export.csv"
+    # 修改了默认文件名以区分旧版基础导出
+    output.headers["Content-Disposition"] = "attachment; filename=song_tags_detailed_export.csv"
     output.headers["Content-type"] = "text/csv; charset=utf-8"
     return output
 
-# ================= 新增：CSV导入重识别模块 =================
 @tags_bp.route('/api/tags/csv_import', methods=['POST'])
 def import_and_reidentify_csv():
     """
@@ -177,7 +273,7 @@ def import_and_reidentify_csv():
         start_time = time.time()
         
         try:
-            result_dict = call_silicon_batch(chunk, api_key, model_name)
+            result_dict, telemetry_data = call_silicon_batch(chunk, api_key, model_name)
             batch_time = time.time() - start_time
             avg_time = batch_time / len(chunk)
             
@@ -190,9 +286,16 @@ def import_and_reidentify_csv():
                         (song, json.dumps(tags, ensure_ascii=False), model_name, round(avg_time, 3))
                     )
                     success_count += 1
+            
+            # 记录成功遥测数据
+            log_telemetry(model_name, len(chunk), telemetry_data, batch_time, "success")
+            
         except Exception as e:
+            batch_time = time.time() - start_time
             print(f"[CSV Import Error] 批处理失败 (歌曲: {chunk}): {e}")
             fail_count += len(chunk)
+            # 记录失败遥测数据
+            log_telemetry(model_name, len(chunk), {}, batch_time, f"error: {str(e)[:50]}")
 
     return jsonify({
         "status": "completed", 
@@ -205,12 +308,13 @@ def import_and_reidentify_csv():
 # ================= AI 动态批处理核心 =================
 
 BATCH_QUEUE = queue.Queue()
-MAX_BATCH_SIZE = 5      # 每次最多打包 5 首
-BATCH_TIMEOUT = 1.0     # 最多等待 1 秒
+MAX_BATCH_SIZE = 10      # 每次最多打包 5 首
+BATCH_TIMEOUT = 3.0     # 最多等待 1 秒
 
 def call_silicon_batch(song_names, api_key, model_name):
     """
     底层发包函数：将多首歌一并发送给大模型，并要求强制返回严格的 JSON 对象
+    返回: (clean_result_dict, telemetry_data)
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -250,8 +354,10 @@ def call_silicon_batch(song_names, api_key, model_name):
         if not GLOBAL_MODEL_MUSIC_URL:
             raise Exception("服务端未配置环境变量 MODEL_MUSIC_URL 或其为空")
 
-        # 发送请求 (使用全局变量)
+        # 记录纯 AI 推理耗时
+        ai_start_time = time.time()
         resp = requests.post(GLOBAL_MODEL_MUSIC_URL, json=payload, headers=headers, timeout=120)
+        pure_ai_time = time.time() - ai_start_time
         
         # 1. 拦截所有非 200 的状态码 (比如 429, 502 等)
         if resp.status_code != 200:
@@ -268,6 +374,15 @@ def call_silicon_batch(song_names, api_key, model_name):
             raise Exception(f"API 服务端拒绝: {error_msg}")
             
         raw_text = res_json['choices'][0]['message']['content'].strip()
+        
+        # 提取 Token 使用量
+        usage = res_json.get('usage', {})
+        telemetry_data = {
+            'prompt_tokens': usage.get('prompt_tokens', 0),
+            'completion_tokens': usage.get('completion_tokens', 0),
+            'total_tokens': usage.get('total_tokens', 0),
+            'pure_ai_time': pure_ai_time
+        }
         
         # 3. 尝试暴力提取 JSON，防大模型返回多余文本
         match = re.search(r'\{.*\}', raw_text, re.DOTALL)
@@ -288,14 +403,14 @@ def call_silicon_batch(song_names, api_key, model_name):
             else:
                 clean_result[song] = ["未分类"]
                 
-        return clean_result
+        return clean_result, telemetry_data
 
     except requests.exceptions.RequestException as e:
         raise Exception(f"网络连接层异常: {e}")
 
 def ai_batch_worker():
     """后台工作线程：负责收割队列，批量请求大模型"""
-    print("[AI Worker] 动态批处理引擎已启动")
+    # print("[AI Worker] 动态批处理引擎已启动")
     while True:
         batch_items = []
         # 1. 阻塞等待第一个请求到达
@@ -317,15 +432,19 @@ def ai_batch_worker():
         song_names = [item['song_name'] for item in batch_items]
         api_key = batch_items[0]['api_key']
         model_name = batch_items[0]['model_name']
+        batch_size = len(batch_items)
         
-        print(f"[AI Worker] 聚合发车: 共 {len(batch_items)} 首 -> {song_names}")
+        print(f"[AI Worker] 聚合发车: 共 {batch_size} 首 -> {song_names}")
         
+        req_start_time = time.time()
         try:
             # 3. 真正向外发送网络请求并记录时间
-            req_start_time = time.time()
-            result_dict = call_silicon_batch(song_names, api_key, model_name)
+            result_dict, telemetry_data = call_silicon_batch(song_names, api_key, model_name)
             total_time = time.time() - req_start_time
-            avg_time = total_time / len(batch_items)  # 计算单首平均耗时
+            avg_time = total_time / batch_size  # 计算单首平均耗时
+            
+            # 记录成功遥测数据
+            log_telemetry(model_name, batch_size, telemetry_data, total_time, "success")
             
             # 4. 精确分发结果并唤醒各个阻塞的请求线程
             for item in batch_items:
@@ -336,14 +455,19 @@ def ai_batch_worker():
                 item['event'].set()
                 
         except Exception as e:
+            total_time = time.time() - req_start_time
             print(f"[AI Worker Error] 批量处理崩溃: {e}")
+            
+            # 记录失败遥测数据
+            log_telemetry(model_name, batch_size, {}, total_time, f"error: {str(e)[:50]}")
+            
             for item in batch_items:
                 item['error'] = str(e)
                 item['event'].set()
 
 # 启动线程
 # 启动多条后台收割机线程（建立并发池）
-WORKER_COUNT = 5  # 你可以根据 API 的限流承受能力调整这个数字
+WORKER_COUNT = 2  # 你可以根据 API 的限流承受能力调整这个数字
 for _ in range(WORKER_COUNT):
     threading.Thread(target=ai_batch_worker, daemon=True).start()
 print(f"🚀 成功启动 {WORKER_COUNT} 条 AI 动态批处理流水线！")
@@ -379,7 +503,7 @@ def tag_song_api():
     # 丢进公交车站，等车来
     BATCH_QUEUE.put(req_context)
     
-    # 本请求线程挂起，最多等 25 秒 (1秒等车 + 20秒大模型处理 + 缓冲)
+    # 本请求线程挂起，最多等 125 秒
     success = event.wait(timeout=125.0)
     
     if not success:
