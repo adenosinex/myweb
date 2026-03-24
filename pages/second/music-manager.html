@@ -28,27 +28,45 @@
         .tag-badge { background: #e6f7ff; color: #1890ff; padding: 4px 10px; border-radius: 12px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 4px;}
         .action-btns { display: flex; gap: 5px; }
 
-        /* 置顶行动画高亮效果 */
         @keyframes highlight-row {
             0% { background-color: #e6f7ff; }
             100% { background-color: transparent; }
         }
         .flash-row { animation: highlight-row 2s ease-out; }
         
-        /* 统计看板样式 */
         .stats-board { display: flex; gap: 15px; font-size: 15px; font-weight: bold; }
         .stat-item { padding: 4px 10px; border-radius: 6px; background: #f5f5f5; border: 1px solid #e8e8e8;}
         .stat-item.green { color: #52c41a; background: #f6ffed; border-color: #b7eb8f;}
         .stat-item.orange { color: #fa8c16; background: #fff7e6; border-color: #ffd591;}
+
+        /* 新增：弹窗样式 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
+        .modal-box { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; z-index: 100; width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .modal-box textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; resize: vertical; }
     </style>
 </head>
 <body>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeTextModal()"></div>
+<div class="modal-box" id="textModal">
+    <h3 style="margin-top:0;">📝 批量输入歌曲</h3>
+    <textarea id="textSongList" rows="8" placeholder="每行输入一首歌曲，或使用逗号分隔...&#10;示例：&#10;七里香&#10;夜曲&#10;晴天"></textarea>
+    <div style="text-align:right; margin-top:15px; display:flex; gap:10px; justify-content:flex-end;">
+        <button class="danger" onclick="closeTextModal()">取消</button>
+        <button class="success" onclick="confirmTextImport()">开始识别</button>
+    </div>
+</div>
 
 <div class="card flex-between">
     <h2>🎵 AI 标签管理中枢</h2>
     <div class="config-inputs">
         <input type="password" id="apiKey" placeholder="API Key (留空则用后端环境)">
         <input type="text" id="modelName" placeholder="模型 (留空默认 Qwen2.5-7B)">
+        
+        <button style="background: #722ed1;" onclick="openTextModal()">📝 文本导入</button>
+        
+        <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="handleCSVUpload(event)">
+        <button class="warning" onclick="document.getElementById('csvFileInput').click()">⬆️ 导入 CSV</button>
         <button class="success" onclick="downloadCSV()">⬇️ 导出 CSV</button>
     </div>
 </div>
@@ -91,7 +109,7 @@
     let allSongs = [];
     let tagsData = {};
     let isBatchAborted = false; 
-    let sessionMarked = new Set(); // 核心：记录本次打开页面后新标记的歌曲，强制置顶
+    let sessionMarked = new Set();
 
     window.onload = async () => {
         const savedKey = localStorage.getItem('silicon_key');
@@ -110,7 +128,11 @@
             ]);
             allSongs = await songsRes.json();
             const data = await tagsRes.json();
-            tagsData = data.song_tags || {};
+            
+            tagsData = {};
+            for (const [song, info] of Object.entries(data.song_tags || {})) {
+                tagsData[song] = Array.isArray(info) ? info : (info.tags || []);
+            }
             
             renderTable();
         } catch(e) {
@@ -140,10 +162,9 @@
             return;
         }
 
-        // ================= 新增：三级智能排序 =================
-        const sessionNewlyMarked = []; // 第一级：当前页面新打标的 (排最前)
-        const untaggedSongs = [];      // 第二级：未打标的 (排中间)
-        const taggedSongs = [];        // 第三级：以前打好标的 (沉底)
+        const sessionNewlyMarked = []; 
+        const untaggedSongs = [];      
+        const taggedSongs = [];        
 
         allSongs.forEach(song => {
             const tags = tagsData[song] || [];
@@ -179,14 +200,13 @@
         });
         
         tbody.innerHTML = rowsHtml.join('');
-        updateStats(); // 每次渲染后更新数据统计看板
+        updateStats(); 
     }
 
     function updateRowTagsAndMoveToTop(songName, tags) {
-        // 更新内存数据池
         tagsData[songName] = tags;
-        sessionMarked.add(songName); // 纳入置顶池
-        updateStats(); // 实时更新统计数字
+        sessionMarked.add(songName); 
+        updateStats(); 
 
         const baseId = 'row-' + btoa(encodeURIComponent(songName)).replace(/[^a-zA-Z0-9]/g, '');
         const td = document.getElementById(baseId + '-td');
@@ -194,16 +214,14 @@
         const tbody = document.getElementById('songTable');
         
         if(td && tr && tbody) {
-            // 局部更新 DOM，避免全量刷新导致滚动条跳动
             td.innerHTML = tags.map(t => `<span class="tag-badge">${t}</span>`).join('') || '<span style="color:#999">暂无标签</span>';
             if (tbody.firstChild !== tr) {
-                tbody.prepend(tr); // 物理提升到第一行
+                tbody.prepend(tr); 
             }
             tr.classList.remove('flash-row');
             void tr.offsetWidth; 
             tr.classList.add('flash-row');
         } else {
-            // 兜底：如果 DOM 结构发生错乱，重新全量渲染
             renderTable();
         }
     }
@@ -235,7 +253,7 @@
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const timeoutId = setTimeout(() => controller.abort(), 150000);
 
                 const res = await fetch('/api/ai/tag', {
                     method: 'POST',
@@ -251,7 +269,7 @@
                     await fetch('/api/tags', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ song_name: songName, tags: data.tags })
+                        body: JSON.stringify({ song_name: songName, tags: data.tags, model_name: data.model_name, time_taken: data.time_taken })
                     });
                     return { success: true, tags: data.tags };
                 } else {
@@ -301,11 +319,8 @@
         }
     }
 
-    async function autoTagAll() {
-        const untagged = allSongs.filter(s => !tagsData[s] || tagsData[s].length === 0);
-        if(untagged.length === 0) return alert("所有歌曲都已打标！");
-        if(!confirm(`发现 ${untagged.length} 首未打标歌曲。\n后端已开启 DataLoader 并发加速。\n是否开始？`)) return;
-
+    // ================= 新增：提取通用的批量任务执行引擎 =================
+    async function runBatchTagging(targetSongsList) {
         const apiKey = document.getElementById('apiKey').value;
         const modelName = document.getElementById('modelName').value;
         if(apiKey) localStorage.setItem('silicon_key', apiKey);
@@ -325,11 +340,11 @@
         let successCount = 0;
         const CHUNK_SIZE = 15; 
         
-        for (let i = 0; i < untagged.length; i += CHUNK_SIZE) {
+        for (let i = 0; i < targetSongsList.length; i += CHUNK_SIZE) {
             if (isBatchAborted) break;
 
-            const chunk = untagged.slice(i, i + CHUNK_SIZE);
-            progressText.innerText = `批量执行中 (${Math.min(i + CHUNK_SIZE, untagged.length)}/${untagged.length})，正在并发请求...`;
+            const chunk = targetSongsList.slice(i, i + CHUNK_SIZE);
+            progressText.innerText = `批量执行中 (${Math.min(i + CHUNK_SIZE, targetSongsList.length)}/${targetSongsList.length})，正在并发请求...`;
             
             const batchStartTime = performance.now();
             const chunkPromises = chunk.map(song => executeAiTag(song, apiKey, modelName));
@@ -354,13 +369,63 @@
                 break;
             }
             
-            progressBar.style.width = `${(Math.min(i + CHUNK_SIZE, untagged.length) / untagged.length) * 100}%`;
+            progressBar.style.width = `${(Math.min(i + CHUNK_SIZE, targetSongsList.length) / targetSongsList.length) * 100}%`;
             if (!isBatchAborted) await new Promise(r => setTimeout(r, 500)); 
         }
         
         abortBtn.style.display = 'none';
         progressBar.style.background = '#52c41a';
-        progressText.innerText = `🎉 批量执行结束！成功标记 ${successCount} 首。`;
+        progressText.innerText = `🎉 批量执行结束！本次成功标记 ${successCount} 首。`;
+    }
+
+    async function autoTagAll() {
+        const untagged = allSongs.filter(s => !tagsData[s] || tagsData[s].length === 0);
+        if(untagged.length === 0) return alert("所有歌曲都已打标！");
+        if(!confirm(`发现 ${untagged.length} 首未打标歌曲。\n后端已开启 DataLoader 并发加速。\n是否开始？`)) return;
+
+        await runBatchTagging(untagged);
+    }
+
+    // ================= 新增：处理手动文本列表输入 =================
+    function openTextModal() {
+        document.getElementById('modalOverlay').style.display = 'block';
+        document.getElementById('textModal').style.display = 'block';
+        document.getElementById('textSongList').focus();
+    }
+
+    function closeTextModal() {
+        document.getElementById('modalOverlay').style.display = 'none';
+        document.getElementById('textModal').style.display = 'none';
+    }
+
+    async function confirmTextImport() {
+        const textVal = document.getElementById('textSongList').value;
+        if (!textVal.trim()) {
+            alert("请输入有效内容");
+            return;
+        }
+
+        // 支持换行、逗号（中英）、分号等作为分隔符
+        const newSongs = textVal.split(/[\n\r,，;；]+/).map(s => s.trim()).filter(s => s);
+        if (newSongs.length === 0) return;
+
+        closeTextModal();
+        document.getElementById('textSongList').value = '';
+
+        // 将新歌合并进入基础曲库并更新 UI 表格
+        let isNewAdded = false;
+        newSongs.forEach(song => {
+            if (!allSongs.includes(song)) {
+                allSongs.push(song);
+                isNewAdded = true;
+            }
+        });
+        
+        if (isNewAdded) {
+            renderTable();
+        }
+
+        await runBatchTagging(newSongs);
     }
 
     async function clearTags(songName) {
@@ -372,14 +437,72 @@
         });
         
         tagsData[songName] = [];
-        sessionMarked.delete(songName); // 清除标记后，从置顶池移除
-        
-        // 彻底重新渲染列表，让它乖乖回到“未打标”的分组里
+        sessionMarked.delete(songName); 
         renderTable();
     }
 
     function downloadCSV() {
         window.open('/api/tags/csv', '_blank');
+    }
+
+    async function handleCSVUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!confirm(`确定要上传 ${file.name} 并重新识别其中的歌曲标签吗？\n注意：此过程需调用大模型，耗时受歌曲数量影响。`)) {
+            event.target.value = ''; 
+            return;
+        }
+
+        const apiKey = document.getElementById('apiKey').value;
+        const modelName = document.getElementById('modelName').value;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        if (apiKey) formData.append('api_key', apiKey);
+        if (modelName) formData.append('model_name', modelName);
+
+        const progressCard = document.getElementById('progressCard');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const timeText = document.getElementById('lastTimeText');
+        
+        progressCard.style.display = 'block';
+        document.getElementById('abortBtn').style.display = 'none';
+        progressBar.style.width = '50%';
+        progressBar.style.background = '#1890ff';
+        progressText.innerText = '正在上传并进行后台批量识别，请耐心等待...';
+        timeText.innerText = '后端计算中...';
+
+        const startTime = performance.now();
+
+        try {
+            const res = await fetch('/api/tags/csv_import', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await res.json();
+            const timeCost = ((performance.now() - startTime) / 1000).toFixed(2);
+            
+            if (res.ok) {
+                progressText.innerText = `✅ CSV 识别完成！总计: ${data.total} 首 | 成功: ${data.success_count} | 失败: ${data.fail_count}`;
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#52c41a';
+                timeText.innerText = `总耗时: ${timeCost}s`;
+                await loadData();
+            } else {
+                alert('导入失败: ' + (data.error || '未知错误'));
+                progressText.innerText = `❌ CSV 处理失败`;
+                progressBar.style.background = '#ff4d4f';
+            }
+        } catch (e) {
+            alert('网络请求异常: ' + e);
+            progressText.innerText = `❌ 网络请求中断`;
+            progressBar.style.background = '#ff4d4f';
+        } finally {
+            event.target.value = ''; 
+        }
     }
 </script>
 </body>

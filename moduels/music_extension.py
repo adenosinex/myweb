@@ -14,17 +14,42 @@ from flask import Blueprint, request, jsonify, make_response
 tags_bp = Blueprint('tags', __name__)
 DB_PATH = 'db/universal_data.db'
 
+# ================= 环境变量全局加载与验证 =================
+GLOBAL_MODEL_MUSIC_API = os.environ.get('MODEL_MUSIC_API', '').strip()
+GLOBAL_MODEL_MUSIC = os.environ.get('MODEL_MUSIC', '').strip()
+GLOBAL_MODEL_MUSIC_URL = os.environ.get('MODEL_MUSIC_URL', '').strip()
+
+print("="*50)
+print("🎵 AI Music Tags - 环境变量加载检查")
+if GLOBAL_MODEL_MUSIC_API:
+    print(f"[*] MODEL_MUSIC_API: {GLOBAL_MODEL_MUSIC_API[:8]}... (长度: {len(GLOBAL_MODEL_MUSIC_API)})")
+else:
+    print("[!] MODEL_MUSIC_API: 未设置或为空!")
+print(f"[*] MODEL_MUSIC    : {GLOBAL_MODEL_MUSIC if GLOBAL_MODEL_MUSIC else '未设置或为空!'}")
+print(f"[*] MODEL_MUSIC_URL: {GLOBAL_MODEL_MUSIC_URL if GLOBAL_MODEL_MUSIC_URL else '未设置或为空!'}")
+print("="*50)
+
+
 # ================= 配置管理模块 =================
 TAG_CHOICES = [
-    "深夜emo", "健身", "说唱", "图书馆", "通勤", "驾车",
-    "起床", "DJ", "助眠", "抖音漫游", "Chill", "洗澡",
-    "快乐", "电音", "音乐视频", "春节", "粤语", "失恋",
-    "躺平", "欧美", "打扫", "国风", "会员", "游戏",
-    "专注", "沉浸", "夜晚", "治愈", "轻音乐", "小酒馆",
-    "KTV", "情歌", "摇滚", "R&B", "佛系", "怀旧",
-    "民谣", "女声", "K-pop", "日语", "旅行", "摸鱼",
-    "儿歌", "雨天", "海边", "乡村", "古典", "学习"
+    # 曲风/风格
+    "流行", "摇滚", "民谣", "电子", "说唱", "R&B", "古典", "爵士", "古风", "国风",
+    "乡村", "蓝调", "金属", "朋克", "雷鬼", "放克", "灵魂乐",
+
+    # 情绪/氛围
+    "快乐", "伤感", "浪漫", "孤独", "甜蜜", "安静", "放松", "激昂", "治愈", "忧郁",
+    "温暖", "紧张", "神秘",
+
+    # 节奏/速度
+    "快节奏", "中速", "慢节奏", "舒缓", "节奏感强",
+
+    # 演唱形式
+    "男声", "女声", "合唱", "独唱", "说唱", "戏腔", "纯音乐",
+
+    # 编曲特征
+    "钢琴", "吉他", "弦乐", "电子合成器", "鼓点重", "人声为主",
 ]
+ 
 
 @tags_bp.route('/api/tags', methods=['GET'])
 def get_tags():
@@ -33,10 +58,19 @@ def get_tags():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS song_tags (
                 song_name TEXT PRIMARY KEY,
-                tags TEXT
+                tags TEXT,
+                model_name TEXT,
+                time_taken REAL
             )
         ''')
-        cursor.execute('SELECT song_name, tags FROM song_tags')
+        # 兼容旧数据库结构，自动追加新字段
+        try:
+            cursor.execute('ALTER TABLE song_tags ADD COLUMN model_name TEXT')
+            cursor.execute('ALTER TABLE song_tags ADD COLUMN time_taken REAL')
+        except sqlite3.OperationalError:
+            pass # 字段已存在
+
+        cursor.execute('SELECT song_name, tags, model_name, time_taken FROM song_tags')
         rows = cursor.fetchall()
     
     tags_dict = {}
@@ -44,10 +78,15 @@ def get_tags():
     for row in rows:
         try:
             tags = json.loads(row[1])
-            tags_dict[row[0]] = tags
+            # 返回数据中附加模型和耗时信息
+            tags_dict[row[0]] = {
+                "tags": tags,
+                "model_name": row[2] if row[2] else "",
+                "time_taken": row[3] if row[3] else 0.0
+            }
             all_categories.update(tags)
         except json.JSONDecodeError:
-            tags_dict[row[0]] = []
+            tags_dict[row[0]] = {"tags": [], "model_name": "", "time_taken": 0.0}
             
     return jsonify({
         "song_tags": tags_dict,
@@ -59,9 +98,12 @@ def save_tags():
     data = request.json
     song_name = data.get('song_name')
     tags = data.get('tags', [])
+    model_name = data.get('model_name', '')
+    time_taken = data.get('time_taken', 0.0)
+    
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('INSERT OR REPLACE INTO song_tags (song_name, tags) VALUES (?, ?)',
-                     (song_name, json.dumps(tags, ensure_ascii=False)))
+        conn.execute('INSERT OR REPLACE INTO song_tags (song_name, tags, model_name, time_taken) VALUES (?, ?, ?, ?)',
+                     (song_name, json.dumps(tags, ensure_ascii=False), model_name, time_taken))
     return jsonify({"status": "success"})
 
 @tags_bp.route('/api/tags', methods=['DELETE'])
@@ -90,11 +132,82 @@ def download_tags_csv():
     output.headers["Content-type"] = "text/csv; charset=utf-8"
     return output
 
+# ================= 新增：CSV导入重识别模块 =================
+@tags_bp.route('/api/tags/csv_import', methods=['POST'])
+def import_and_reidentify_csv():
+    """
+    接收上传的 CSV 文件，提取歌曲名并批量重新调用大模型获取 Tag。
+    识别成功后自动更新数据库。
+    """
+    if 'file' not in request.files:
+        return jsonify({"error": "未检测到文件上传"}), 400
+        
+    file = request.files['file']
+    # 引用全局变量
+    api_key = request.form.get('api_key') or GLOBAL_MODEL_MUSIC_API
+    model_name = request.form.get('model_name') or GLOBAL_MODEL_MUSIC
+    
+    if not api_key:
+        return jsonify({"error": "缺少 API Key"}), 400
+
+    try:
+        stream = io.StringIO(file.stream.read().decode("utf-8-sig"), newline=None)
+        csv_input = csv.reader(stream)
+        headers = next(csv_input, None)
+        
+        # 定位“歌曲名”列索引，若无表头默认取第0列
+        song_idx = 0
+        if headers and '歌曲名' in headers:
+            song_idx = headers.index('歌曲名')
+            
+        songs_to_process = []
+        for row in csv_input:
+            if row and len(row) > song_idx and row[song_idx].strip():
+                songs_to_process.append(row[song_idx].strip())
+                
+    except Exception as e:
+        return jsonify({"error": f"CSV解析失败: {str(e)}"}), 400
+
+    success_count = 0
+    fail_count = 0
+
+    # 为了避免通过Queue阻塞导致HTTP请求超时，此处对CSV数据直接切片并调用底层发包函数
+    for i in range(0, len(songs_to_process), MAX_BATCH_SIZE):
+        chunk = songs_to_process[i:i + MAX_BATCH_SIZE]
+        start_time = time.time()
+        
+        try:
+            result_dict = call_silicon_batch(chunk, api_key, model_name)
+            batch_time = time.time() - start_time
+            avg_time = batch_time / len(chunk)
+            
+            # 批量写入数据库
+            with sqlite3.connect(DB_PATH) as conn:
+                for song in chunk:
+                    tags = result_dict.get(song, ["未分类"])
+                    conn.execute(
+                        'INSERT OR REPLACE INTO song_tags (song_name, tags, model_name, time_taken) VALUES (?, ?, ?, ?)',
+                        (song, json.dumps(tags, ensure_ascii=False), model_name, round(avg_time, 3))
+                    )
+                    success_count += 1
+        except Exception as e:
+            print(f"[CSV Import Error] 批处理失败 (歌曲: {chunk}): {e}")
+            fail_count += len(chunk)
+
+    return jsonify({
+        "status": "completed", 
+        "success_count": success_count, 
+        "fail_count": fail_count,
+        "total": len(songs_to_process)
+    })
+
+
 # ================= AI 动态批处理核心 =================
 
 BATCH_QUEUE = queue.Queue()
 MAX_BATCH_SIZE = 5      # 每次最多打包 5 首
 BATCH_TIMEOUT = 1.0     # 最多等待 1 秒
+
 def call_silicon_batch(song_names, api_key, model_name):
     """
     底层发包函数：将多首歌一并发送给大模型，并要求强制返回严格的 JSON 对象
@@ -133,8 +246,12 @@ def call_silicon_batch(song_names, api_key, model_name):
     }
     
     try:
-        # 发送请求
-        resp = requests.post("https://api.siliconflow.cn/v1/chat/completions", json=payload, headers=headers, timeout=20)
+        # 增加对 URL 空值的校验，防止 requests 发起非法请求
+        if not GLOBAL_MODEL_MUSIC_URL:
+            raise Exception("服务端未配置环境变量 MODEL_MUSIC_URL 或其为空")
+
+        # 发送请求 (使用全局变量)
+        resp = requests.post(GLOBAL_MODEL_MUSIC_URL, json=payload, headers=headers, timeout=120)
         
         # 1. 拦截所有非 200 的状态码 (比如 429, 502 等)
         if resp.status_code != 200:
@@ -204,14 +321,18 @@ def ai_batch_worker():
         print(f"[AI Worker] 聚合发车: 共 {len(batch_items)} 首 -> {song_names}")
         
         try:
-            # 3. 真正向外发送网络请求
+            # 3. 真正向外发送网络请求并记录时间
+            req_start_time = time.time()
             result_dict = call_silicon_batch(song_names, api_key, model_name)
+            total_time = time.time() - req_start_time
+            avg_time = total_time / len(batch_items)  # 计算单首平均耗时
             
             # 4. 精确分发结果并唤醒各个阻塞的请求线程
             for item in batch_items:
                 song = item['song_name']
                 # 用 get 方法获取，防止大模型遗漏了某首歌
                 item['result'] = result_dict.get(song, ["未分类"])
+                item['time_taken'] = avg_time
                 item['event'].set()
                 
         except Exception as e:
@@ -237,8 +358,9 @@ def tag_song_api():
     data = request.json
     song_name = data.get('song_name')
     
-    api_key = data.get('api_key') or os.environ.get('SILICONFLOW_API_KEY')
-    model_name = data.get('model_name') or os.environ.get('SILICON_MODEL')
+    # 引用全局变量
+    api_key = data.get('api_key') or GLOBAL_MODEL_MUSIC_API
+    model_name = data.get('model_name') or GLOBAL_MODEL_MUSIC
     
     if not api_key:
         return jsonify({"error": "缺少 API Key"}), 400
@@ -250,6 +372,7 @@ def tag_song_api():
         'model_name': model_name,
         'event': event,
         'result': None,
+        'time_taken': 0.0,
         'error': None
     }
     
@@ -257,11 +380,15 @@ def tag_song_api():
     BATCH_QUEUE.put(req_context)
     
     # 本请求线程挂起，最多等 25 秒 (1秒等车 + 20秒大模型处理 + 缓冲)
-    success = event.wait(timeout=25.0)
+    success = event.wait(timeout=125.0)
     
     if not success:
         return jsonify({"error": "队列等待或模型响应超时"}), 504
     if req_context['error']:
         return jsonify({"error": req_context['error']}), 500
         
-    return jsonify({"tags": req_context['result']})
+    return jsonify({
+        "tags": req_context['result'],
+        "model_name": req_context['model_name'],
+        "time_taken": round(req_context['time_taken'], 3)
+    })
