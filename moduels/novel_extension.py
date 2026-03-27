@@ -16,7 +16,7 @@ novel_ai_bp = Blueprint('novel_ai', __name__, url_prefix='/api/novel')
 RESOURCE_NODE_URL = "http://one4.zin6.dpdns.org:8100" 
 DB_PATH = 'db/universal_data.db'
 
-AI_MODEL = 'huihui_ai/qwen3.5-abliterated:9b'
+AI_MODEL = 'huihui_ai/qwen2.5-abliterate:3b-instruct'
 AI_BASE_URL = "http://apple4.zin6.dpdns.org:11434/v1"
 
 # ================= 全局状态与内存缓存 =================

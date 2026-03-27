@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>下肢绝对力量与心肺训练指南</title>
+  <script src="/static/cdn/vue3.5.global.prod.js"></script>
+  <style>
+    body {
+      background-color: #f0f4f8;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .app-container {
+      max-width: 600px;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+    h1 {
+      text-align: center;
+      color: #0f172a;
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 24px;
+      letter-spacing: 0.5px;
+    }
+
+    /* 模块标题通用样式 */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1e40af;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+    .section-title i {
+      margin-right: 8px;
+    }
+
+    /* 知识库卡片样式 */
+    .knowledge-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      border-top: 4px solid #3b82f6;
+    }
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .knowledge-tag {
+      background: #f1f5f9;
+      color: #475569;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .knowledge-tag:hover {
+      background: #e2e8f0;
+    }
+    .knowledge-tag.active {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #bfdbfe;
+    }
+    .knowledge-content {
+      font-size: 14.5px;
+      color: #334155;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      background: #f8fafc;
+      padding: 14px;
+      border-radius: 8px;
+      min-height: 100px;
+    }
+
+    /* 训练计划卡片样式 */
+    .plan-card {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+    .plan-header {
+      background: #1e293b;
+      color: white;
+      padding: 12px 16px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .plan-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .plan-body {
+      padding: 16px;
+    }
+    .plan-detail-row {
+      display: flex;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 8px;
+    }
+    .plan-detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .plan-label {
+      flex: 0 0 80px;
+      font-weight: 600;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .plan-value {
+      flex: 1;
+      color: #0f172a;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .plan-highlight {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    /* 执行纪律警示框 */
+    .alert-box {
+      background: #fff1f2;
+      border-left: 4px solid #f43f5e;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    .alert-title {
+      color: #e11d48;
+      font-weight: 700;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    .alert-text {
+      color: #881337;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container" id="app">
+    <h1>下肢力量与心肺训练指南</h1>
+
+    <div class="alert-box">
+      <div class="alert-title">⚠ 排序红线 (信号通路干涉)</div>
+      <p class="alert-text">绝对力量训练（单腿深蹲/弹跳）必须在完全无疲劳状态下执行。高强度有氧（激活AMPK通路）会强烈抑制力量合成（mTOR通路）。若同日执行，必须遵循：<b>先无氧力量，后心肺有氧</b>。</p>
+    </div>
+
+    <div class="section-title"><i>🧠</i> 生理力学与核心知识</div>
+    <div class="knowledge-card">
+      <div class="tags-container">
+        <span 
+          v-for="(item, index) in knowledgeDB" 
+          :key="index"
+          @click="activeKnowledgeIndex = index"
+          class="knowledge-tag"
+          :class="{ active: activeKnowledgeIndex === index }"
+        >
+          {{ item.category }}
+        </span>
+      </div>
+      <div class="knowledge-content" v-html="currentKnowledge.content"></div>
+    </div>
+
+    <div class="section-title"><i>⚙</i> 20kg马甲负重递进计划 (体重基准72kg)</div>
+    
+    <div class="plan-card" v-for="(phase, index) in phases" :key="index">
+      <div class="plan-header">
+        <span>{{ phase.name }}</span>
+        <span class="plan-badge">{{ phase.duration }}</span>
+      </div>
+      <div class="plan-body">
+        <div class="plan-detail-row">
+          <div class="plan-label">负重设定</div>
+          <div class="plan-value"><b>{{ phase.weight }}</b></div>
+        </div>
+        <div class="plan-detail-row">
+          <div class="plan-label">组次安排</div>
+          <div class="plan-value">{{ phase.setsReps }}</div>
+        </div>
+        <div class="plan-detail-row">
+          <div class="plan-label">执行节奏</div>
+          <div class="plan-value">{{ phase.tempo }}</div>
+        </div>
+        <div class="plan-detail-row">
+          <div class="plan-label">核心目标</div>
+          <div class="plan-value">{{ phase.goal }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top: 24px;"><i>🫀</i> 有氧心肺执行标准</div>
+    <div class="plan-card">
+      <div class="plan-body" style="padding: 12px 16px;">
+        <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+          <li style="margin-bottom: 8px;"><b>当前阶段：</b> 30分钟间歇（6分钟心率170跑 + 2分钟走恢复至120）。仅在力量训练结束后进行。</li>
+          <li style="margin-bottom: 8px;"><b>未来进阶：</b> 160心率 / 12分钟阈值跑（乳酸阈值训练，提高乳酸清除率）。</li>
+          <li><b>天热调整：</b> 骑行 Zone 2（心率130-140）。作为无冲压的积极恢复手段，高踏频（90rpm），增加毛细血管密度，加速无氧恢复。</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    // 结构化知识库数据
+    const knowledgeData = [
+      { 
+        category: "稳定性与晃动", 
+        content: "单腿支撑的晃动是臀中肌和足底神经未适配的体现。不要被动等平衡，需主动建立锁定：<br><br><b>1. 足底三角抓地</b>：大脚趾球、小脚趾球、脚后跟三点死死踩实地面（建议平底鞋或赤脚）。<br><b>2. 髋关节外旋</b>：大腿根部发力，试图将膝盖向小脚趾方向外拧，瞬间激活臀中肌，死锁骨盆。<br><br><b>弱侧优先原则</b>：永远先练弱侧腿，弱侧做几个，强侧就做几个，防止结构失衡。" 
+      },
+      { 
+        category: "动作变式选择", 
+        content: "<b>1. 溜冰者深蹲（悬空腿向后）</b>：<br>强烈推荐作为主力负重动作。解除了腘绳肌柔韧性限制，完美契合跑跳发力链条，重心更稳，负重潜力远高于手枪深蹲。<br><br><b>2. 手枪深蹲（悬空腿向前）</b>：<br>作为神经控制力测试。允许悬空腿微屈（不必强求笔直导致股直肌抽筋）。双手可平举1-2kg重物作为前置配重，抵消向后翻倒的力矩。" 
+      },
+      { 
+        category: "垃圾容量辨析", 
+        content: "绝对力量（快肌纤维）的增长需在单组 1-5 次的高阻力下完成。<br><br>能够做6组共60次的“辅助深蹲”属于<b>垃圾容量</b>。由于辅助去除了最低点的“黏滞点”峰值张力，下肢并没有受到真实的极限负荷。这种练法堆积代谢疲劳（练耐力），拉长恢复周期，但无法打破绝对力量瓶颈。" 
+      },
+      { 
+        category: "马甲负重纪律", 
+        content: "负重马甲极其贴合躯干，但必须遵守以下纪律：<br><br>1. <b>微穿透递进</b>：切忌跳跃加重。采用双递进模型（先满足最高次数标准，下一次再加1-2kg）。<br>2. <b>锁紧核心</b>：马甲重量会压垮上半身，下蹲前必须深吸气进行瓦式呼吸，保持躯干绝对刚性。<br>3. <b>拒绝代偿</b>：若某次推起时膝盖出现内扣或严重抖动，立刻终止该组。" 
+      }
+    ];
+
+    // 负重阶段数据
+    const phasesData = [
+      {
+        name: "阶段一：神经适配与结构固化",
+        duration: "第 1-2 周",
+        weight: "0 - 3 kg",
+        setsReps: "3 - 4 组 / 每侧 5 - 8 次",
+        tempo: "离心下放 3 秒，底部停顿 1 秒，发力推起 1 秒",
+        goal: "消除侧向晃动。出现左右抖动即刻判定为力竭终止。建立“足底三角”发力记忆。"
+      },
+      {
+        name: "阶段二：绝对力量积累",
+        duration: "第 3-6 周",
+        weight: "5 kg 起步（逐步增至 12kg）",
+        setsReps: "3 - 5 组 / 每侧 4 - 6 次",
+        tempo: "平稳下放，底部无反弹，爆发推起",
+        goal: "双递进加重（能以某重量稳做6次后，下次训练加重1-2kg）。"
+      },
+      {
+        name: "阶段三：峰值力量突破",
+        duration: "第 6 周以后",
+        weight: "12 - 20 kg",
+        setsReps: "3 - 4 组 / 每侧 3 - 5 次",
+        tempo: "控制离心，底部无反弹，全力爆发推起",
+        goal: "挑战最大神经募集能力。不追求充血感，组间休息必须达 3-5 分钟以上。"
+      }
+    ];
+
+    createApp({
+      data() {
+        return {
+          knowledgeDB: knowledgeData,
+          activeKnowledgeIndex: 0,
+          phases: phasesData
+        }
+      },
+      computed: {
+        currentKnowledge() {
+          return this.knowledgeDB[this.activeKnowledgeIndex];
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

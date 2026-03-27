@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 章节锻造炉 - 全自动版</title>
+    <style>
+        :root { 
+            --primary: #2563eb; 
+            --primary-light: #dbeafe; 
+            --success: #059669; 
+            --bg: #f8fafc; 
+            --card: #ffffff; 
+            --text-main: #1e293b; 
+            --text-muted: #64748b; 
+            --border: #e2e8f0; 
+            --warning: #d97706;
+            --danger: #dc2626;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg); 
+            color: var(--text-main); 
+            margin: 0; 
+            padding: 20px; 
+            line-height: 1.6; 
+        }
+
+        .layout { 
+            display: grid; 
+            grid-template-columns: 1fr; 
+            gap: 24px; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+
+        @media (min-width: 900px) { 
+            .layout { grid-template-columns: 380px 1fr; } 
+        }
+
+        .card { 
+            background: var(--card); 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+            border: 1px solid var(--border); 
+            padding: 24px; 
+            margin-bottom: 20px; 
+        }
+
+        .header-section { grid-column: 1 / -1; text-align: center; margin-bottom: 10px; }
+        .header-section h1 { margin: 0; color: var(--primary); font-size: 2rem; letter-spacing: -0.025em; }
+
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-main); }
+        input[type="file"], select { 
+            width: 100%; padding: 10px; border: 1px solid var(--border); 
+            border-radius: 8px; box-sizing: border-box; background: #fff; font-size: 0.95rem;
+        }
+
+        button { 
+            width: 100%; padding: 12px; border: none; border-radius: 8px; 
+            font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; 
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); }
+        .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        .btn-download { 
+            background: transparent; color: var(--primary); 
+            border: 1.5px solid var(--primary); margin-top: 15px; 
+        }
+
+        .history-box { 
+            background: #eff6ff; border: 1px solid #bfdbfe; 
+            padding: 15px; border-radius: 10px; margin-bottom: 20px; 
+        }
+        .history-box p { margin: 0 0 10px 0; font-size: 0.85rem; color: #1e40af; font-weight: 500; }
+        .btn-ghost { 
+            background: white; border: 1px solid #bfdbfe; color: #2563eb; 
+            padding: 8px; font-size: 0.85rem; border-radius: 6px;
+        }
+
+        .status-log { 
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: #0f172a; color: #38bdf8; padding: 12px; 
+            border-radius: 8px; font-size: 0.8rem; margin-bottom: 15px;
+            border-left: 4px solid var(--primary);
+            min-height: 1.2rem;
+        }
+
+        .progress-container { background: #e2e8f0; border-radius: 10px; height: 12px; overflow: hidden; margin: 20px 0; }
+        .progress-fill { 
+            background: linear-gradient(90deg, var(--primary), #60a5fa); 
+            width: 0%; height: 100%; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); 
+        }
+
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .metric-card { background: #f1f5f9; padding: 12px; border-radius: 10px; text-align: center; }
+        .metric-card span { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; }
+        .metric-card strong { font-size: 1.1rem; color: var(--text-main); }
+
+        .eta-box { 
+            background: #ecfdf5; border-left: 4px solid var(--success); 
+            padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem; color: #065f46;
+        }
+
+        .test-box { background: #f8fafc; border: 1px solid var(--border); padding: 16px; border-radius: 10px; margin-bottom: 20px; }
+        .test-box h4 { margin: 0 0 12px 0; color: var(--text-main); display: flex; align-items: center; font-size: 1rem; }
+        
+        .chapter-list { 
+            max-height: 600px; overflow-y: auto; border: 1px solid var(--border); 
+            border-radius: 10px; background: #fafafa; padding: 12px; 
+        }
+        .chapter-item { 
+            padding: 15px; background: white; margin-bottom: 10px; 
+            border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .hidden { display: none !important; }
+        .pulsing { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    </style>
+</head>
+<body>
+    <div class="header-section">
+        <h1>AI 章节锻造炉</h1>
+    </div>
+
+    <div class="layout">
+        <div class="sidebar">
+            <div id="historyArea" class="history-box hidden">
+                <p id="historyInfo">检测到上次未完成任务...</p>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-ghost" onclick="restoreLastTask()">🔗 恢复进度并监控</button>
+                    <button class="btn-ghost" style="color:var(--danger); border-color:#fecaca;" onclick="clearHistoryAndReload()">放弃</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label>上传小说原文 (.txt)</label>
+                        <input type="file" id="novelFile" accept=".txt" required>
+                    </div>
+                    <div class="form-group">
+                        <label>分段字数控制</label>
+                        <select id="chunkSize">
+                            <option value="3000">3000 字/章 (M4 推荐)</option>
+                            <option value="5000" selected>5000 字/章</option>
+                            <option value="10000">10000 字/章</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>AI 分析深度</label>
+                        <select id="mode">
+                            <option value="fast" selected>极速模式 (首尾抽样 - 推荐)</option>
+                            <option value="full">全量模式 (阅读全文)</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="submitBtn" class="btn-primary">启动全自动锻造</button>
+                </form>
+                <button id="downloadBtn" class="btn-download hidden" onclick="downloadResult()">导出当前已完成章节</button>
+            </div>
+        </div>
+
+        <div id="monitorPanel" class="card hidden">
+            <div id="statusLog" class="status-log">> 等待指令...</div>
+
+            <div id="testArea" class="test-box hidden">
+                <h4 id="testTitle">🧪 初始化采样预览</h4>
+                <div id="testContent" style="font-size:0.9rem; line-height:1.6;">
+                    <span class="pulsing">正在请求 Ollama 处理前 500 字，请稍候...</span>
+                </div>
+            </div>
+
+            <div id="progressArea" class="hidden">
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                    <h3 id="mainStatusText" style="margin:0;">锻造进度</h3>
+                    <div class="percent-tag" style="font-size:1.6rem; font-weight:800; color:var(--primary);" id="progressPercent">0 / 0 章</div>
+                </div>
+                
+                <div class="progress-container"><div class="progress-fill" id="progressBar"></div></div>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card"><span>平均速率</span><strong id="speedVal">-</strong></div>
+                    <div class="metric-card"><span>已耗时</span><strong id="elapsedVal">-</strong></div>
+                </div>
+                
+                <div class="eta-box" id="etaBox">⏳ 正在推算完工时间...</div>
+                
+                <div class="chapter-list" id="chapterList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTaskId = null;
+        let pollInterval = null;
+        let lastChapterCount = 0;
+        let isAutoConfirmed = false; // 确保自动确认只触发一次
+
+        window.onload = () => {
+            const savedTask = localStorage.getItem('last_novel_task');
+            if (savedTask) {
+                const task = JSON.parse(savedTask);
+                document.getElementById('historyArea').classList.remove('hidden');
+                document.getElementById('historyInfo').innerText = `上次文件: ${task.fileName}`;
+                currentTaskId = task.id;
+            }
+        };
+
+        function restoreLastTask() {
+            document.getElementById('historyArea').classList.add('hidden');
+            document.getElementById('monitorPanel').classList.remove('hidden');
+            document.getElementById('progressArea').classList.remove('hidden');
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('downloadBtn').classList.remove('hidden');
+            startPolling();
+        }
+
+        function clearHistoryAndReload() {
+            localStorage.removeItem('last_novel_task');
+            location.reload();
+        }
+
+        const form = document.getElementById('uploadForm');
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('novelFile').files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('chunk_size', document.getElementById('chunkSize').value);
+            formData.append('mode', document.getElementById('mode').value);
+
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('monitorPanel').classList.remove('hidden');
+            document.getElementById('testArea').classList.remove('hidden');
+            document.getElementById('progressArea').classList.add('hidden');
+            document.getElementById('statusLog').innerText = "> 正在上传并获取初始采样...";
+            isAutoConfirmed = false;
+
+            try {
+                const res = await fetch('/ai_chapter_forge/api/v1/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.task_id) {
+                    currentTaskId = data.task_id;
+                    localStorage.setItem('last_novel_task', JSON.stringify({id: data.task_id, fileName: file.name}));
+                    startPolling();
+                }
+            } catch (err) { 
+                document.getElementById('statusLog').innerText = "❌ 任务启动失败，请检查网络";
+                document.getElementById('submitBtn').disabled = false;
+            }
+        };
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/ai_chapter_forge/api/v1/progress/${currentTaskId}`);
+                    const data = await res.json();
+
+                    if (data.overall_summary) {
+                        document.getElementById('statusLog').innerText = `> ${data.overall_summary}`;
+                    }
+
+                    // A. 自动处理采样完成状态
+                    if (data.status === 'test_completed' && !isAutoConfirmed) {
+                        isAutoConfirmed = true; // 锁定
+                        
+                        // 显示预览信息
+                        const snippet = (data.test_result.snippet || "无法获取预览").replace(/\n/g, '<br>');
+                        document.getElementById('testContent').innerHTML = `
+                            <div style="background:#f1f5f9; padding:10px; border-radius:6px; font-size:0.8rem; margin-bottom:10px; color:#475569;">
+                                <b>原文预览 (50字):</b><br> ${snippet}
+                            </div>
+                            <div style="border-left:3px solid var(--primary); padding-left:10px;">
+                                <b>标题:</b> ${data.test_result.title}<br>
+                                <b>摘要:</b> ${data.test_result.summary}
+                            </div>
+                        `;
+
+                        // 核心：静默自动请求进入全量处理
+                        document.getElementById('statusLog').innerText = "> 采样通过，自动开始全量锻造...";
+                        await fetch(`/ai_chapter_forge/api/v1/confirm_process/${currentTaskId}`, { method: 'POST' });
+                        document.getElementById('downloadBtn').classList.remove('hidden');
+                    }
+
+                    // B. 正式处理与进度显示
+                    if (data.status === 'processing' || data.status === 'completed') {
+                        document.getElementById('progressArea').classList.remove('hidden');
+                        
+                        // 进度条宽度
+                        const percent = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+                        document.getElementById('progressBar').style.width = percent + '%';
+                        
+                        // 文字显示：章节数量
+                        document.getElementById('progressPercent').innerText = `${data.current} / ${data.total} 章`;
+
+                        if (data.current > 0) {
+                            const elapsed = (Date.now() / 1000) - data.start_time;
+                            const avg = elapsed / data.current;
+                            
+                            document.getElementById('speedVal').innerText = avg.toFixed(1) + 's / 章';
+                            document.getElementById('elapsedVal').innerText = formatTime(elapsed);
+                            
+                            if(data.status !== 'completed') {
+                                const remain = (data.total - data.current) * avg;
+                                const etaDate = new Date(Date.now() + remain * 1000);
+                                document.getElementById('etaBox').innerHTML = `🏁 剩余 <b>${formatTime(remain)}</b> | 完成于 <b>${etaDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</b>`;
+                            } else {
+                                document.getElementById('etaBox').innerHTML = "✨ <b>锻造全部完成</b>";
+                                localStorage.removeItem('last_novel_task');
+                            }
+                        }
+
+                        // 增量渲染章节
+                        const doneChapters = data.chapters.filter(c => c.done);
+                        if (doneChapters.length > lastChapterCount) {
+                            for (let i = lastChapterCount; i < doneChapters.length; i++) {
+                                const ch = doneChapters[i];
+                                const div = document.createElement('div');
+                                div.className = 'chapter-item';
+                                div.innerHTML = `<strong>🔖 ${ch.title}</strong><p style="margin:5px 0 0; font-size:0.85rem; color:var(--text-muted);">${ch.summary}</p>`;
+                                document.getElementById('chapterList').prepend(div); 
+                            }
+                            lastChapterCount = doneChapters.length;
+                        }
+                    }
+                    
+                    if (data.status === 'completed') clearInterval(pollInterval);
+
+                } catch (e) { 
+                    document.getElementById('statusLog').innerText = "> 📡 正在尝试重连后端...";
+                }
+            }, 1800);
+        }
+
+        function formatTime(seconds) {
+            if (seconds < 60) return Math.round(seconds) + "秒";
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.round(seconds % 60);
+            return `${mins}分${secs}秒`;
+        }
+
+        function downloadResult() { 
+            window.location.href = `/ai_chapter_forge/api/v1/download/${currentTaskId}`; 
+        }
+    </script>
+</body>
+</html>

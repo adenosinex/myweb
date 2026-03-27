@@ -95,12 +95,24 @@ def get_dynamic_context():
 
 @docs_bp.route('/api/docs/list', methods=['GET'])
 def list_docs():
-    """扫描目录"""
+    """扫描目录，按文件修改时间倒序返回"""
     if not os.path.exists(DOCS_DIR):
         os.makedirs(DOCS_DIR)
-    files = [f[:-3] for f in os.listdir(DOCS_DIR) if f.endswith('.md')]
-    return jsonify({"docs": sorted(files)})
-
+    
+    files_with_time = []
+    for f in os.listdir(DOCS_DIR):
+        if f.endswith('.md'):
+            path = os.path.join(DOCS_DIR, f)
+            files_with_time.append({
+                'name': f[:-3],
+                'mtime': os.path.getmtime(path)
+            })
+    
+    # 按修改时间(mtime)倒序排列
+    files_with_time.sort(key=lambda x: x['mtime'], reverse=True)
+    sorted_files = [item['name'] for item in files_with_time]
+    
+    return jsonify({"docs": sorted_files})
 
 @docs_bp.route('/api/docs/content/<name>', methods=['GET'])
 def doc_content_fast(name):
@@ -135,3 +147,64 @@ def doc_content_refresh(name):
     """阶段二：前端无感调用，后端强制抓取新天气并重新返回 HTML"""
     weather_service.refresh_weather()
     return doc_content_fast(name)
+
+from flask import request
+import re
+
+# 安全路径过滤辅助函数
+def get_safe_path(name):
+    """过滤非法字符，防止目录遍历攻击 (如 ../)"""
+    # 仅允许汉字、字母、数字、下划线和横线
+    safe_name = re.sub(r'[^\w\u4e00-\u9fa5\-]', '', name)
+    if not safe_name:
+        raise ValueError("无效的文件名")
+    return os.path.join(DOCS_DIR, f"{safe_name}.md")
+
+@docs_bp.route('/api/docs/raw/<name>', methods=['GET'])
+def get_raw_doc(name):
+    """获取 Markdown 源码（用于在编辑框中回显）"""
+    try:
+        path = get_safe_path(name)
+        if not os.path.exists(path):
+            return jsonify({"error": "文档不存在"}), 404
+        with open(path, 'r', encoding='utf-8') as f:
+            return jsonify({"title": name, "content": f.read()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@docs_bp.route('/api/docs/save', methods=['POST'])
+def save_doc():
+    """新建或更新文档"""
+    data = request.json
+    name = data.get('name', '').strip()
+    content = data.get('content', '')
+    old_name = data.get('old_name', '').strip() # 用于重命名
+
+    if not name:
+        return jsonify({"error": "文档名称不能为空"}), 400
+
+    try:
+        # 处理重命名逻辑
+        if old_name and old_name != name:
+            old_path = get_safe_path(old_name)
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+        path = get_safe_path(name)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return jsonify({"message": "保存成功"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@docs_bp.route('/api/docs/delete/<name>', methods=['DELETE'])
+def delete_doc(name):
+    """删除文档"""
+    try:
+        path = get_safe_path(name)
+        if os.path.exists(path):
+            os.remove(path)
+            return jsonify({"message": "删除成功"})
+        return jsonify({"error": "文档不存在"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -12,3 +12,7 @@ moduels/__pycache__/*
 moduels/__pycache__/aiocr__extension.cpython-313.pyc
 tmp/*
 *.mp4
+caches/*
+uploads/*
+db/*
+db/docs_data/户外.md

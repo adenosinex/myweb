@@ -158,6 +158,28 @@ def get_pages_list():
         return jsonify([])
     files = [f for f in os.listdir(PAGES_DIR) if f.endswith('.html') and f != 'index.html']
     files = [f for f in files if not '-' in f]
+    file_mtime_pairs = []
+    
+    for html_file in files:
+        # 构建同名 SVG 路径 (a.html -> a.svg)
+        svg_name = os.path.splitext(html_file)[0] + ".svg"
+        svg_path = os.path.join('static/svg', svg_name)
+        
+        try:
+            # 获取 SVG 修改时间 (秒级时间戳)
+            mtime = os.path.getmtime(svg_path)
+            file_mtime_pairs.append((html_file, mtime))
+        except FileNotFoundError:
+            # 处理缺失 SVG 文件: 排在最后 (使用极大值)
+            file_mtime_pairs.append((html_file, float('inf') and 0))
+        except Exception as e:
+            print(f"⚠️ 跳过 {html_file}: 无法获取 {svg_path} 时间戳 - {str(e)}")
+            continue
+    
+    # 按 SVG 修改时间升序排序 (最早修改的排最前)
+    sorted_pairs = sorted(file_mtime_pairs, key=lambda x: x[1],reverse=True)
+
+    files=[i[0] for i in sorted_pairs]
     return jsonify([f.replace('.html', '') for f in files])
 
 @app.route('/api/<collection>', methods=['POST'])

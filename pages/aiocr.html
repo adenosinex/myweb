@@ -171,23 +171,90 @@
         }
 
         async function compressImage(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        let w = img.width, h = img.height;
-                        if (w > h && w > 2048) { h = Math.round(h * 2048 / w); w = 2048; } 
-                        else if (h > 2048) { w = Math.round(w * 2048 / h); h = 2048; }
-                        const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
-                        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-                        cvs.toBlob(blob => resolve(new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' })), 'image/jpeg', 0.85);
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
+  return new Promise((resolve, reject) => {
+    try {
+      const reader = new FileReader();
+      
+      reader.onerror = () => reject(new Error("文件读取失败"));
+      reader.onload = (e) => {
+        const img = new Image();
+        
+        img.onerror = () => reject(new Error("图片解码失败"));
+        img.onload = () => {
+          // ===== 核心优化：智能长截图保护 =====
+          const MAX_LONG_SIDE = 2048; // 最大边长
+          const MIN_SHORT_SIDE = 800; // 长截图最小短边（关键！）
+          
+          let w = img.width;
+          let h = img.height;
+          
+          // 情况1：标准图片（非极端长图）
+          if (h <= w * 2) { 
+            if (w > h && w > MAX_LONG_SIDE) {
+              h = Math.round(h * MAX_LONG_SIDE / w);
+              w = MAX_LONG_SIDE;
+            } else if (h > MAX_LONG_SIDE) {
+              w = Math.round(w * MAX_LONG_SIDE / h);
+              h = MAX_LONG_SIDE;
+            }
+          } 
+          // 情况2：长截图（高度 > 宽度*2）
+          else { 
+            // 优先保证文字清晰度：宽度不低于800px
+            if (w < MIN_SHORT_SIDE) {
+              h = Math.round(h * MIN_SHORT_SIDE / w);
+              w = MIN_SHORT_SIDE;
+            }
+            // 仍需控制最大边（避免高度过大）
+            if (h > MAX_LONG_SIDE * 1.5) { // 长截图允许略超
+              w = Math.round(w * MAX_LONG_SIDE * 1.5 / h);
+              h = Math.round(MAX_LONG_SIDE * 1.5);
+            }
+          }
+          
+          // ===== 增强兼容性处理 =====
+          const cvs = document.createElement('canvas');
+          cvs.width = w;
+          cvs.height = h;
+          
+          const ctx = cvs.getContext('2d', { willReadFrequently: true });
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, w, h);
+          
+          // 修复Safari长截图渲染问题
+          ctx.drawImage(img, 0, 0, w, h);
+          
+          // ===== 智能输出策略 =====
+          const ext = file.name.match(/\.[^/.]+$/) ? 
+            file.name.match(/\.[^/.]+$/)[0] : '.jpg';
+          
+          cvs.toBlob(
+            blob => {
+              if (!blob) return reject(new Error("Canvas转Blob失败"));
+              
+              // 保留原始扩展名（避免强制转JPG破坏透明图）
+              const newFile = new File(
+                [blob], 
+                file.name.replace(/\.[^/.]+$/, ext), 
+                { type: blob.type }
+              );
+              
+              resolve(newFile);
+            },
+            'image/webp', // 优先WebP（体积小30%+）
+            0.85
+          );
+        };
+        
+        img.src = e.target.result;
+      };
+      
+      reader.readAsDataURL(file);
+    } catch (err) {
+      reject(new Error(`压缩初始化失败: ${err.message}`));
+    }
+  });
+}
 
         async function handleFilesSelection() {
             const input = document.getElementById('fileInput');
