@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>视频影像库 (弹窗平铺专业版)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
+    <style>
+        body { font-family: -apple-system, 'PingFang SC', sans-serif; background: #0a0a0a; color: #eee; margin: 0; padding: 20px; overflow-y: scroll; }
+        
+        /* === 顶部控制栏 === */
+        .header { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #1a1a1a; padding: 15px 20px; border-radius: 12px; border: 1px solid #2a2a2a; }
+        input, select { padding: 8px 12px; background: #222; color: #fff; border: 1px solid #444; border-radius: 6px; outline: none; }
+        input:focus, select:focus { border-color: #50bfff; }
+        button.primary-btn { padding: 8px 18px; background: #50bfff; color: #000; cursor: pointer; font-weight: bold; border: none; border-radius: 6px; transition: 0.2s; }
+        button.primary-btn:hover { background: #3da8e5; transform: translateY(-1px); }
+        
+        /* === 首页视频卡片网格 === */
+        #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+        .video-card { background: #1a1a1a; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2a; transition: 0.3s; display: flex; flex-direction: column; cursor: pointer; }
+        .video-card:hover { border-color: #50bfff; transform: translateY(-4px); box-shadow: 0 8px 20px rgba(80,191,255,0.15); }
+        
+        .cover-container { width: 100%; height: 200px; background: #000; position: relative; }
+        .cover-container img { width: 100%; height: 100%; object-fit: contain; display: block; transition: 0.3s; }
+        .best-cover-badge { position: absolute; top: 10px; left: 10px; background: rgba(230, 126, 34, 0.9); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; z-index: 2;}
+        .count-badge { position: absolute; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #50bfff; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; border: 1px solid #333; pointer-events: none; }
+        
+        .video-info { padding: 15px; display: flex; flex-direction: column; gap: 6px; }
+        .v-title { color: #eee; font-weight: bold; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .v-time { color: #888; font-size: 12px; font-family: monospace; }
+        
+        #loading { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+
+        /* === 居中平铺弹窗 (Modal) === */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; backdrop-filter: blur(5px); justify-content: center; align-items: center; opacity: 0; transition: opacity 0.2s; }
+        .modal-overlay.show { display: flex; opacity: 1; }
+        
+        .modal-box { width: 92vw; height: 90vh; background: #111; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.8); border: 1px solid #333; overflow: hidden; transform: scale(0.95); transition: transform 0.2s;}
+        .modal-overlay.show .modal-box { transform: scale(1); }
+
+        .modal-header { padding: 15px 25px; background: #1a1a1a; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2a2a; }
+        .modal-title { font-size: 18px; font-weight: bold; color: #50bfff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .close-btn { background: none; border: none; color: #888; font-size: 28px; cursor: pointer; transition: 0.2s; line-height: 1; }
+        .close-btn:hover { color: #fff; transform: rotate(90deg); }
+
+        /* 画廊内部网格布局 */
+        .modal-body { flex: 1; padding: 20px 25px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; align-content: start; outline: none; }
+        
+        /* 隐藏的存储容器 */
+        .hidden-storage { display: none; }
+
+        /* === 详情图片卡片 === */
+        .frame-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid #222; background: #000; transition: 0.2s; }
+        .frame-item:hover { border-color: #50bfff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(80,191,255,0.2); }
+        .frame-item img { width: 100%; height: 110px; object-fit: cover; display: block; cursor: zoom-in; }
+        .f-time { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); font-size: 11px; text-align: center; color: #ccc; font-family: monospace; padding: 4px;}
+        
+        /* 相似图隐藏逻辑 */
+        .frame-sub { display: none; opacity: 0.6; transform: scale(0.95); border: 1px dashed #444; }
+        .frame-sub.show { display: block; }
+        .frame-sub:hover { opacity: 1; transform: scale(1); border-color: #50bfff; border-style: solid; }
+        .frame-sub::after { content: '🔗细节'; position: absolute; top: 5px; left: 5px; background: rgba(80,191,255,0.8); color: #000; font-size: 10px; padding: 2px 5px; border-radius: 4px; pointer-events: none; font-weight: bold;}
+        
+        /* 相似图展开按钮 */
+        .sim-toggle { position: absolute; top: 5px; right: 5px; background: rgba(30,30,30,0.9); color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 5px; cursor: pointer; border: 1px solid #555; font-weight: bold; z-index: 10; transition: 0.2s;}
+        .sim-toggle:hover { background: #50bfff; color: #000; border-color: #50bfff;}
+        .sim-toggle.active { background: #e67e22; color: #fff; border-color: #e67e22; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <input type="text" id="searchInput" placeholder="搜索视频..." onkeydown="if(event.key==='Enter') applyFilters()">
+        <select id="sortBy" onchange="applyFilters()">
+            <option value="video_time">按视频时间</option>
+            <option value="id">按入库顺序</option>
+        </select>
+        <button class="primary-btn" onclick="applyFilters()">搜索</button>
+    </div>
+
+    <div id="gallery"></div>
+    <div id="loading">正在初始化数据...</div>
+
+    <div id="galleryModal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modalTitle" class="modal-title"></h3>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div id="modalGrid" class="modal-body" tabindex="0"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
+    <script>
+        // Fancybox 配置
+        Fancybox.bind('[data-fancybox]', {
+            Toolbar: { display: { left: ["infobar"], middle: ["zoomIn", "zoomOut"], right: ["close"] } },
+            Images: { initialSize: "fit" }
+        });
+
+        // 计算汉明距离
+        function getHammingDistance(hash1, hash2) {
+            if (!hash1 || !hash2 || hash1.length !== 64 || hash2.length !== 64) return 99;
+            let dist = 0;
+            for (let i = 0; i < 64; i++) {
+                if (hash1[i] !== hash2[i]) dist++;
+            }
+            return dist;
+        }
+
+        /* === 弹窗与控制逻辑 === */
+        let currentOpenVideoId = null;
+
+        function openModal(safeId, title) {
+            currentOpenVideoId = safeId;
+            document.getElementById('modalTitle').innerText = title;
+            const modalGrid = document.getElementById('modalGrid');
+            
+            // 将视频卡片里的隐藏图片拷贝进弹窗展示
+            const storage = document.getElementById(safeId).querySelector('.hidden-storage');
+            modalGrid.innerHTML = storage.innerHTML;
+            
+            document.getElementById('galleryModal').classList.add('show');
+            document.body.style.overflow = 'hidden'; // 锁定底层页面滚动
+            modalGrid.focus(); // 聚焦弹窗内部，激活方向键滚动
+        }
+
+        function closeModal() {
+            currentOpenVideoId = null;
+            document.getElementById('galleryModal').classList.remove('show');
+            document.body.style.overflow = 'auto'; // 恢复底层滚动
+            document.getElementById('modalGrid').innerHTML = ''; // 清空内存
+        }
+
+        function handleOverlayClick(event) {
+            // 点击边缘透明遮罩层退出
+            if (event.target.id === 'galleryModal') {
+                closeModal();
+            }
+        }
+
+        // 键盘快捷键监听
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('galleryModal');
+            // 如果弹窗开着，且 Fancybox 没开（防止跟 Fancybox 自身的 Esc 冲突）
+            if (modal.classList.contains('show') && !Fancybox.getInstance()) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+                // 上下左右滚动交给浏览器的原生 tabindex 焦点处理
+            }
+        });
+
+        // 使用事件委托处理弹窗内的“相似图展开”点击，提升性能
+        document.getElementById('modalGrid').addEventListener('click', (e) => {
+            const btn = e.target.closest('.sim-toggle');
+            if (!btn) return;
+            
+            e.stopPropagation();
+            e.preventDefault();
+            
+            const groupId = btn.dataset.targetGroup;
+            const subs = document.getElementById('modalGrid').querySelectorAll(`.${groupId}`);
+            
+            const isExpanding = !btn.classList.contains('active');
+            btn.classList.toggle('active');
+            
+            subs.forEach(sub => {
+                const a = sub.querySelector('a');
+                if (isExpanding) {
+                    sub.classList.add('show');
+                    // 仅当展开时赋予 data-fancybox，使其加入 Fancybox 的左右切换队列
+                    a.setAttribute('data-fancybox', 'modal-gallery');
+                } else {
+                    sub.classList.remove('show');
+                    // 收起时移除，Fancybox 切换时就会自动跳过这张图
+                    a.removeAttribute('data-fancybox');
+                }
+            });
+            
+            btn.innerText = isExpanding ? '收起' : `+${subs.length} 相似`;
+            
+            // 同样同步更新底层 hidden-storage 中的状态，防止边看边加载时状态重置
+            const hiddenStorage = document.getElementById(currentOpenVideoId).querySelector('.hidden-storage');
+            hiddenStorage.innerHTML = document.getElementById('modalGrid').innerHTML;
+        });
+
+        /* === 数据加载逻辑 === */
+        let offset = 0;
+        const limit = 300; 
+        let loading = false;
+        let hasMore = true;
+        const gallery = document.getElementById('gallery');
+
+        const loadData = async () => {
+            if (loading || !hasMore) return;
+            loading = true;
+            document.getElementById('loading').innerText = "加载中...";
+
+            const q = document.getElementById('searchInput').value.trim();
+            const sortBy = document.getElementById('sortBy').value;
+            const url = `/gallery/api/frames?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}&sort_by=${sortBy}&order=desc`;
+
+            try {
+                const res = await fetch(url);
+                const json = await res.json();
+                
+                if (json.code === 200) {
+                    const data = json.data;
+                    if (data.length < limit) hasMore = false;
+
+                    data.forEach(item => {
+                        const safeId = "vid_" + item.video_name.replace(/[^a-zA-Z0-9]/g, '_');
+                        let card = document.getElementById(safeId);
+                        
+                        // 1. 初始化视频卡片
+                        if (!card) {
+                            card = document.createElement('div');
+                            card.id = safeId;
+                            card.className = 'video-card';
+                            card.setAttribute('onclick', `openModal('${safeId}', '${item.video_name.replace(/'/g, "\\'")}')`);
+                            
+                            // 存储状态数据
+                            card.dataset.count = 0;
+                            card.dataset.maxSharpness = -1;
+                            card.dataset.lastPhash = "";
+                            card.dataset.groupId = 0; 
+                            
+                            const vTime = item.formatted_video_time ? item.formatted_video_time.split(' ')[0] : '未知';
+                            
+                            card.innerHTML = `
+                                <div class="cover-container">
+                                    <div class="best-cover-badge">智能首图</div>
+                                    <img class="cover-img" src="" alt="cover">
+                                    <div class="count-badge">0 张</div>
+                                </div>
+                                <div class="video-info">
+                                    <div class="v-title" title="${item.video_name}">${item.video_name}</div>
+                                    <div class="v-time">修改日: ${vTime}</div>
+                                </div>
+                                <div class="hidden-storage"></div>
+                            `;
+                            gallery.appendChild(card);
+                        }
+
+                        // 2. 智能更新首图 (信息量最大)
+                        const itemSharp = parseFloat(item.sharpness) || 0;
+                        let currentMaxSharp = parseFloat(card.dataset.maxSharpness) || -1;
+                        if (itemSharp > currentMaxSharp) {
+                            card.dataset.maxSharpness = itemSharp;
+                            card.querySelector('.cover-img').src = item.thumbnail_url;
+                        }
+
+                        // 更新角标
+                        let count = parseInt(card.dataset.count) + 1;
+                        card.dataset.count = count;
+                        card.querySelector('.count-badge').innerText = `${count} 张`;
+
+                        // 3. 构建单帧 HTML (相似度逻辑)
+                        const storage = card.querySelector('.hidden-storage');
+                        const dist = getHammingDistance(card.dataset.lastPhash, item.phash);
+                        
+                        let generatedHTML = "";
+
+                        if (dist <= 12 && card.dataset.lastPhash !== "") {
+                            // 归为相似副图 (默认没有 data-fancybox)
+                            const groupClass = `group_${safeId}_${card.dataset.groupId}`;
+                            generatedHTML = `
+                                <div class="frame-item frame-sub ${groupClass}">
+                                    <a href="${item.original_url}" data-groupname="modal-gallery" data-caption="[细节变化] 进度: ${item.formatted_time}">
+                                        <img src="${item.thumbnail_url}" loading="lazy">
+                                    </a>
+                                    <div class="f-time">${item.formatted_time}</div>
+                                </div>
+                            `;
+                            storage.insertAdjacentHTML('beforeend', generatedHTML);
+                            
+                            // 更新主图上的相似角标
+                            const toggleBtn = storage.querySelector(`#btn_${groupClass}`);
+                            if (toggleBtn) {
+                                let simCount = parseInt(toggleBtn.dataset.sim) + 1;
+                                toggleBtn.dataset.sim = simCount;
+                                toggleBtn.style.display = 'block';
+                                if (!toggleBtn.classList.contains('active')) {
+                                    toggleBtn.innerText = `+${simCount} 相似`;
+                                }
+                            }
+                        } else {
+                            // 差异明显，新镜头主图 (默认加入 modal-gallery 队列)
+                            card.dataset.groupId = parseInt(card.dataset.groupId) + 1;
+                            const newGroupClass = `group_${safeId}_${card.dataset.groupId}`;
+                            
+                            generatedHTML = `
+                                <div class="frame-item frame-main">
+                                    <a href="${item.original_url}" data-fancybox="modal-gallery" data-caption="进度: ${item.formatted_time}">
+                                        <img src="${item.thumbnail_url}" loading="lazy">
+                                    </a>
+                                    <div class="f-time">${item.formatted_time}</div>
+                                    <button id="btn_${newGroupClass}" class="sim-toggle" data-sim="0" data-target-group="${newGroupClass}" style="display: none;"></button>
+                                </div>
+                            `;
+                            storage.insertAdjacentHTML('beforeend', generatedHTML);
+                            card.dataset.lastPhash = item.phash;
+                        }
+
+                        // 如果当前视频的弹窗正好开着（应对用户边看边自动加载下一页）
+                        if (currentOpenVideoId === safeId) {
+                            document.getElementById('modalGrid').insertAdjacentHTML('beforeend', generatedHTML);
+                        }
+                    });
+                    
+                    offset += data.length;
+                    document.getElementById('loading').innerText = hasMore ? "下滑加载更多..." : "已加载全部";
+                    
+                    // 触底自加载
+                    if (hasMore) {
+                        const rect = document.getElementById('loading').getBoundingClientRect();
+                        if (rect.top <= window.innerHeight + 200) loadData();
+                    }
+
+                }
+            } catch (err) { console.error(err); loading = false; }
+            loading = false;
+        };
+
+        window.applyFilters = () => { gallery.innerHTML = ''; offset = 0; hasMore = true; loadData(); };
+        new IntersectionObserver(e => e[0].isIntersecting && loadData()).observe(document.getElementById('loading'));
+    </script>
+</body>
+</html>

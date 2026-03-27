@@ -152,7 +152,7 @@ def login():
 
 
 # ================= 5. 核心 API 接口 =================
-@app.route('/api/_sys/pages', methods=['GET'])
+@app.route('/api2/_sys/pages', methods=['GET'])
 def get_pages_list():
     if not os.path.exists(PAGES_DIR):
         return jsonify([])
@@ -182,7 +182,7 @@ def get_pages_list():
     files=[i[0] for i in sorted_pairs]
     return jsonify([f.replace('.html', '') for f in files])
 
-@app.route('/api/<collection>', methods=['POST'])
+@app.route('/api2/<collection>', methods=['POST'])
 def save_data(collection):
     data = request.json
     with sqlite3.connect(DB_PATH) as conn:
@@ -190,7 +190,7 @@ def save_data(collection):
                      (collection, json.dumps(data, ensure_ascii=False)))
     return jsonify({"status": "success"})
 
-@app.route('/api/<collection>', methods=['GET'])
+@app.route('/api2/<collection>', methods=['GET'])
 def get_data(collection):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
@@ -204,7 +204,7 @@ def get_data(collection):
         result.append(item)
     return jsonify(result)
 
-@app.route('/api/kv/<key>', methods=['POST'])
+@app.route('/api2/kv/<key>', methods=['POST'])
 def set_kv(key):
     data = request.json
     payload = json.dumps(data.get('payload', {}), ensure_ascii=False)
@@ -215,7 +215,7 @@ def set_kv(key):
                      (key, payload, expire_at))
     return jsonify({"status": "success"})
 
-@app.route('/api/kv/<key>', methods=['GET'])
+@app.route('/api2/kv/<key>', methods=['GET'])
 def get_kv(key):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
