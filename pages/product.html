@@ -33,16 +33,16 @@
                     </div>
                 </div>
 
-                <div class="flex-grow overflow-x-auto">
-                    <table v-if="item.history && item.history.length" class="w-full text-sm text-left">
-                        <thead class="text-gray-400 border-b">
+                <div class="flex-grow overflow-auto max-h-[220px]">
+                    <table v-if="item.history && item.history.length" class="w-full text-sm text-left relative">
+                        <thead class="text-gray-400 border-b sticky top-0 bg-white z-10 shadow-sm">
                             <tr>
                                 <th class="py-2 font-normal">时间</th>
                                 <th v-for="p in item.params" :key="p" class="py-2 font-normal">{{ p }}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(record, index) in getLatestRecords(item)" :key="record.date" class="border-b last:border-0">
+                            <tr v-for="(record, index) in getAllSortedRecords(item)" :key="record.date" class="border-b last:border-0 hover:bg-gray-50 transition-colors">
                                 <td class="py-2 text-gray-500">{{ formatDate(record.date) }}</td>
                                 <td v-for="p in item.params" :key="p" class="py-2">
                                     {{ record.values[p] !== undefined ? record.values[p] : '-' }}
@@ -122,8 +122,6 @@
                 const modals = reactive({ item: false, record: false });
                 const currentTargetItem = ref(null);
                 const itemForm = reactive({ id: '', name: '', paramsInput: '', image: '' });
-                
-                // 增加 exactTime 用于存储底层的精确时间
                 const recordForm = reactive({ timeInput: '', exactTime: null, values: {} });
 
                 const loadData = async () => {
@@ -187,9 +185,7 @@
                     const now = new Date();
                     const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
                     
-                    // 绑定到输入框的 UI 时间（截断到分钟，长度 16）
                     recordForm.timeInput = localNow.toISOString().slice(0, 16);
-                    // 在后台存储打开弹窗那一刻的精确时间（含秒）
                     recordForm.exactTime = now;
                     recordForm.values = {};
                     modals.record = true;
@@ -198,15 +194,12 @@
                 const saveRecord = () => {
                     if (!recordForm.timeInput || Object.keys(recordForm.values).length === 0) return alert("请至少录入一项有效数据！");
                     
-                    // 计算出 UI 初始显示的那个字符串
                     const localNowRef = new Date(recordForm.exactTime.getTime() - recordForm.exactTime.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                     
                     let finalDateStr;
                     if (recordForm.timeInput === localNowRef) {
-                        // 如果用户没有修改输入框的时间，直接使用底层的精确时间
                         finalDateStr = recordForm.exactTime.toISOString();
                     } else {
-                        // 如果用户修改了输入框的时间，解析用户的自定义时间（精确到分钟）
                         finalDateStr = new Date(recordForm.timeInput).toISOString();
                     }
 
@@ -232,7 +225,8 @@
                     });
                 };
 
-                const getLatestRecords = (item) => [...(item.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+                // 获取所有历史记录并按时间倒序
+                const getAllSortedRecords = (item) => [...(item.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
 
                 const getTrendIcon = (item, currentIndex, param) => {
                     const sorted = [...(item.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -245,7 +239,6 @@
                     return '<span class="text-gray-300 text-xs ml-1">-</span>';
                 };
 
-                // 页面显示格式（增加秒数展示，如果数据本身只有分钟，秒数为00）
                 const formatDate = (dateStr) => {
                     if (!dateStr || dateStr === '-') return '-';
                     const d = new Date(dateStr);
@@ -254,7 +247,6 @@
                     return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
                 };
 
-                // 导出 Excel 格式保持不变 (YYYY-MM-DD HH:mm:ss)
                 const formatForExcel = (dateStr) => {
                     if (!dateStr || dateStr === '-') return '-';
                     const d = new Date(dateStr);
@@ -375,7 +367,7 @@
                 return {
                     items, modals, itemForm, recordForm, currentTargetItem,
                     openItemModal, saveItem, deleteItem, openRecordModal, saveRecord,
-                    handleImage, getLatestRecords, getTrendIcon, formatDate, guessEmoji,
+                    handleImage, getAllSortedRecords, getTrendIcon, formatDate, guessEmoji,
                     exportCSV, importCSV
                 };
             }
