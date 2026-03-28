@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码片段管理</title>
+<script src="https://cdn.staticfile.net/marked/12.0.1/marked.min.js"></script>
+    <link href="https://cdn.staticfile.net/highlight.js/11.9.0/styles/atom-one-dark.min.css" rel="stylesheet">
+    <script src="https://cdn.staticfile.net/highlight.js/11.9.0/highlight.min.js"></script>
+    <style> 
+        :root { --primary: #007bff; --border: #ddd; --bg: #f5f7fa; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* 左侧边栏 */
+        .sidebar { width: 300px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .sidebar-header { padding: 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+        .search-box { padding: 8px; border: 1px solid var(--border); border-radius: 4px; outline: none; }
+        .btn-new { background: var(--primary); color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
+        .btn-new:hover { background: #0056b3; }
+        .snippet-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+        .snippet-item { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; flex-direction: column; }
+        .snippet-item:hover { background: var(--bg); }
+        .snippet-item.active { background: #e6f2ff; border-left: 3px solid var(--primary); }
+        .item-title { font-weight: 500; color: #333; margin-bottom: 4px; }
+        .item-time { font-size: 12px; color: #888; }
+
+        /* 右侧主内容区 */
+        .main-content { flex: 1; background: var(--bg); display: flex; flex-direction: column; overflow-y: auto; }
+        .panel { padding: 30px; max-width: 900px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .hidden { display: none !important; }
+
+        /* 查看模式 */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .toolbar h2 { margin: 0; color: #333; }
+        .action-btns button { margin-left: 10px; padding: 6px 15px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer; }
+        .action-btns button.primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .action-btns button.danger { color: #dc3545; border-color: #dc3545; }
+        .action-btns button:hover { opacity: 0.8; }
+        
+        .markdown-body pre { background: #282c34; padding: 15px; border-radius: 6px; overflow-x: auto; margin-top: 10px; margin-bottom: 10px; }
+        .markdown-body code { font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; font-size: 14px; }
+        .markdown-body p code { background: #eee; color: #d63384; padding: 2px 4px; border-radius: 3px; }
+
+        /* 编辑模式 */
+        .edit-title-input { width: 100%; padding: 10px; font-size: 18px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; }
+        .edit-label { font-size: 14px; font-weight: bold; color: #555; margin-bottom: 5px; display: block; }
+        .edit-notes-textarea { width: 100%; height: 10vh; padding: 10px; font-family: sans-serif; font-size: 14px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; box-sizing: border-box; margin-bottom: 15px; }
+        .edit-code-textarea { width: 100%; height: 45vh; padding: 10px; font-family: monospace; font-size: 14px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; box-sizing: border-box; line-height: 1.5; background: #fafafa; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <button class="btn-new" onclick="showEditPanel()">+ 新建片段</button>
+            <input type="text" id="searchInput" class="search-box" placeholder="搜索标题..." onkeyup="filterList()">
+        </div>
+        <ul class="snippet-list" id="snippetList"></ul>
+    </div>
+
+    <div class="main-content">
+        <div id="emptyPanel" class="panel" style="text-align: center; color: #888; margin-top: 20%;">
+            请在左侧选择一个代码片段，或点击新建。
+        </div>
+
+        <div id="viewPanel" class="panel hidden">
+            <div class="toolbar">
+                <h2 id="viewTitle"></h2>
+                <div class="action-btns">
+                    <button class="primary" onclick="copyCode(this)">一键复制</button>
+                    <button onclick="editCurrent()">编辑</button>
+                    <button class="danger" onclick="deleteCurrent()">删除</button>
+                </div>
+            </div>
+            <div id="viewContent" class="markdown-body"></div>
+        </div>
+
+        <div id="editPanel" class="panel hidden">
+            <div class="toolbar">
+                <h2 id="editModeTitle">新建片段</h2>
+                <div class="action-btns">
+                    <button class="primary" onclick="saveSnippet()">保存</button>
+                    <button onclick="cancelEdit()">取消</button>
+                </div>
+            </div>
+            <input type="hidden" id="editId">
+            <input type="text" id="editTitle" class="edit-title-input" placeholder="输入标题 (如: Python Flask 基础模板)">
+            
+            <label class="edit-label">📝 描述/笔记 (选填，支持 Markdown)</label>
+            <textarea id="editNotes" class="edit-notes-textarea" placeholder="这里可以写一些说明文字..."></textarea>
+            
+            <label class="edit-label">💻 纯代码区 (直接粘贴，无需写 ``` 符号)</label>
+            <textarea id="editCode" class="edit-code-textarea" placeholder="直接粘贴纯代码..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        let currentSnippetRaw = null; 
+
+        document.addEventListener('DOMContentLoaded', loadList);
+
+        async function loadList(activeId = null) {
+            try {
+                const res = await fetch('/api/snippets/list');
+                const data = await res.json();
+                const listEl = document.getElementById('snippetList');
+                listEl.innerHTML = '';
+                
+                data.snippets.forEach(s => {
+                    const li = document.createElement('li');
+                    li.className = `snippet-item ${s.id === activeId ? 'active' : ''}`;
+                    li.setAttribute('data-title', s.title.toLowerCase());
+                    li.onclick = () => loadSnippet(s.id, li);
+                    
+                    const timeStr = new Date(s.created_at).toLocaleString('zh-CN', { hour12: false });
+                    
+                    li.innerHTML = `
+                        <div class="item-title">${s.title}</div>
+                        <div class="item-time">${timeStr}</div>
+                    `;
+                    listEl.appendChild(li);
+                });
+            } catch (err) {
+                console.error('加载列表失败:', err);
+            }
+        }
+
+        function filterList() {
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            const items = document.querySelectorAll('.snippet-item');
+            items.forEach(item => {
+                const title = item.getAttribute('data-title');
+                item.style.display = title.includes(keyword) ? 'flex' : 'none';
+            });
+        }
+
+        async function loadSnippet(id, liElement) {
+            document.querySelectorAll('.snippet-item').forEach(el => el.classList.remove('active'));
+            if (liElement) liElement.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/snippets/raw/${id}`);
+                const data = await res.json();
+                if (res.ok) {
+                    currentSnippetRaw = data;
+                    document.getElementById('viewTitle').innerText = data.title;
+                    
+                    document.getElementById('viewContent').innerHTML = marked.parse(data.content, {
+                        gfm: true,
+                        breaks: true
+                    });
+                    
+                    document.querySelectorAll('#viewContent pre code').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+
+                    switchPanel('view');
+                }
+            } catch (err) {
+                console.error('加载详情失败:', err);
+            }
+        }
+
+        function showEditPanel() {
+            document.querySelectorAll('.snippet-item').forEach(el => el.classList.remove('active'));
+            document.getElementById('editModeTitle').innerText = '新建片段';
+            document.getElementById('editId').value = '';
+            document.getElementById('editTitle').value = '';
+            document.getElementById('editNotes').value = '';
+            document.getElementById('editCode').value = '';
+            switchPanel('edit');
+        }
+
+        function editCurrent() {
+            if (!currentSnippetRaw) return;
+            document.getElementById('editModeTitle').innerText = '编辑片段';
+            document.getElementById('editId').value = currentSnippetRaw.id;
+            document.getElementById('editTitle').value = currentSnippetRaw.title;
+            
+            // 使用正则分离代码和笔记
+            const rawContent = currentSnippetRaw.content;
+            const codeMatch = rawContent.match(/```[a-zA-Z]*\n([\s\S]*?)\n```/);
+            
+            if (codeMatch) {
+                // 提取出了代码块
+                document.getElementById('editCode').value = codeMatch[1].trim();
+                // 将代码块从原文中移除，剩下的就是笔记
+                document.getElementById('editNotes').value = rawContent.replace(codeMatch[0], '').trim();
+            } else {
+                // 兼容老数据：如果没有代码块标记，默认全是代码
+                document.getElementById('editCode').value = rawContent.trim();
+                document.getElementById('editNotes').value = '';
+            }
+            
+            switchPanel('edit');
+        }
+
+        async function saveSnippet() {
+            const id = document.getElementById('editId').value;
+            const title = document.getElementById('editTitle').value.trim();
+            const notes = document.getElementById('editNotes').value.trim();
+            const code = document.getElementById('editCode').value.trim();
+
+            if (!title) return alert('标题不能为空');
+            if (!code && !notes) return alert('内容不能为空');
+
+            // 自动组合为带有代码块的 Markdown
+            let finalContent = '';
+            if (notes) {
+                finalContent += notes + '\n\n';
+            }
+            if (code) {
+                finalContent += '```\n' + code + '\n```';
+            }
+
+            const payload = { title, content: finalContent };
+            if (id) payload.id = parseInt(id);
+
+            try {
+                const res = await fetch('/api/snippets/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    await loadList();
+                    if (id) {
+                        loadSnippet(id);
+                    } else {
+                        switchPanel('empty');
+                    }
+                } else {
+                    const err = await res.json();
+                    alert('保存失败: ' + err.error);
+                }
+            } catch (err) {
+                alert('网络错误');
+            }
+        }
+
+        async function deleteCurrent() {
+            if (!currentSnippetRaw || !confirm('确定要删除此片段吗？')) return;
+            
+            try {
+                const res = await fetch(`/api/snippets/delete/${currentSnippetRaw.id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    currentSnippetRaw = null;
+                    await loadList();
+                    switchPanel('empty');
+                }
+            } catch (err) {
+                alert('删除失败');
+            }
+        }
+
+        function cancelEdit() {
+            if (currentSnippetRaw) {
+                switchPanel('view');
+            } else {
+                switchPanel('empty');
+            }
+        }
+
+        function switchPanel(mode) {
+            document.getElementById('emptyPanel').classList.add('hidden');
+            document.getElementById('viewPanel').classList.add('hidden');
+            document.getElementById('editPanel').classList.add('hidden');
+
+            if (mode === 'empty') document.getElementById('emptyPanel').classList.remove('hidden');
+            if (mode === 'view') document.getElementById('viewPanel').classList.remove('hidden');
+            if (mode === 'edit') document.getElementById('editPanel').classList.remove('hidden');
+        }
+
+        function copyCode(btn) {
+            const container = document.getElementById('viewContent');
+            const codeBlocks = container.querySelectorAll('code');
+            let textToCopy = '';
+            
+            if (codeBlocks.length > 0) {
+                textToCopy = Array.from(codeBlocks).map(cb => cb.innerText).join('\n\n');
+            } else {
+                textToCopy = container.innerText;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = btn.innerText;
+                btn.innerText = '已复制!';
+                btn.style.background = '#28a745';
+                btn.style.borderColor = '#28a745';
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.style.background = 'var(--primary)';
+                    btn.style.borderColor = 'var(--primary)';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

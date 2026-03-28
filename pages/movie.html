@@ -2,53 +2,46 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>视频影像库 (智能巡检版)</title>
+    <title>视频影像库 (智能提炼巡检版)</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
     <style>
         body { font-family: -apple-system, 'PingFang SC', sans-serif; background: #0a0a0a; color: #eee; margin: 0; padding: 20px; overflow-y: scroll; }
-        
-        /* === 顶部控制栏 === */
         .header { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #1a1a1a; padding: 15px 20px; border-radius: 12px; border: 1px solid #2a2a2a; align-items: center; }
         input, select { padding: 8px 12px; background: #222; color: #fff; border: 1px solid #444; border-radius: 6px; outline: none; }
         button.primary-btn { padding: 8px 18px; background: #50bfff; color: #000; cursor: pointer; font-weight: bold; border: none; border-radius: 6px; transition: 0.2s; }
         button.primary-btn:hover { background: #3da8e5; transform: translateY(-1px); }
         .kb-tips { margin-left: auto; color: #666; font-size: 12px; }
 
-        /* === 首页视频网格 === */
         #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
         .video-card { background: #1a1a1a; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2a; transition: 0.3s; display: flex; flex-direction: column; cursor: pointer; }
-        .video-card:hover { border-color: #50bfff; transform: translateY(-4px); box-shadow: 0 8px 20px rgba(80,191,255,0.15); }
+        .video-card:hover, .video-card.active-now { border-color: #50bfff; transform: translateY(-4px); box-shadow: 0 8px 20px rgba(80,191,255,0.15); }
+        .video-card.active-now { border-width: 2px; }
+
         .cover-container { width: 100%; height: 200px; background: #000; position: relative; }
         .cover-container img { width: 100%; height: 100%; object-fit: contain; display: block; }
-        .count-badge { position: absolute; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #50bfff; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; border: 1px solid #333; }
+        .count-badge { position: absolute; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #50bfff; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; border: 1px solid #333; }
         .video-info { padding: 15px; }
         .v-title { color: #eee; font-weight: bold; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* === 居中平铺弹窗 (Modal) === */
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; backdrop-filter: blur(8px); justify-content: center; align-items: center; opacity: 0; transition: opacity 0.2s; }
         .modal-overlay.show { display: flex; opacity: 1; }
         .modal-box { width: 92vw; height: 90vh; background: #111; border-radius: 12px; display: flex; flex-direction: column; border: 1px solid #333; overflow: hidden; }
-        
         .modal-header { padding: 15px 25px; background: #1a1a1a; display: flex; gap: 20px; align-items: center; border-bottom: 1px solid #2a2a2a; }
         .modal-title { flex: 1; font-size: 18px; color: #50bfff; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         
-        /* 自动巡检按钮 */
         .auto-play-btn { background: #e67e22; color: #fff; border: none; padding: 6px 15px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.3s; }
-        .auto-play-btn:hover { background: #d35400; }
         .auto-play-btn.active { background: #27ae60; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
         .close-btn { background: none; border: none; color: #888; font-size: 32px; cursor: pointer; line-height: 1; }
         .modal-body { flex: 1; padding: 20px 25px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; align-content: start; }
         
-        /* === 详情截图卡片 === */
         .frame-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid #222; background: #000; }
         .frame-item img { width: 100%; height: 110px; object-fit: cover; cursor: zoom-in; }
         .f-time { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); font-size: 11px; text-align: center; color: #ccc; padding: 3px 0; }
         
-        /* 相似图折叠 */
-        .frame-sub { display: none; opacity: 0.5; border: 1px dashed #444; transform: scale(0.96); }
-        .frame-sub.show { display: block; opacity: 1; transform: scale(1); border: 1px solid #50bfff; }
+        .frame-sub { display: none; opacity: 0.5; border: 1px dashed #444; }
+        .frame-sub.show { display: block; opacity: 1; border: 1px solid #50bfff; }
         .sim-toggle { position: absolute; top: 5px; right: 5px; background: rgba(30,30,30,0.9); color: #fff; font-size: 10px; padding: 3px 6px; border-radius: 4px; cursor: pointer; border: 1px solid #555; z-index: 10; font-weight: bold; }
         .sim-toggle.active { background: #e67e22; border-color: #e67e22; }
 
@@ -64,17 +57,17 @@
             <option value="id">按入库顺序</option>
         </select>
         <button class="primary-btn" onclick="applyFilters()">筛选</button>
-        <div class="kb-tips">快捷键: Esc 退出 | 点击边缘 退出 | 自动巡检仅播放关键帧</div>
+        <div class="kb-tips">Esc 退出 | 左右键切换关键帧 | 自动播放支持自动切视频</div>
     </div>
 
     <div id="gallery"></div>
-    <div id="loading">正在加载...</div>
+    <div id="loading">正在加载数据...</div>
 
     <div id="galleryModal" class="modal-overlay" onclick="if(event.target===this) closeModal()">
         <div class="modal-box">
             <div class="modal-header">
                 <h3 id="modalTitle" class="modal-title"></h3>
-                <button id="autoPlayBtn" class="auto-play-btn" onclick="toggleAutoPlay()">▶ 自动播放关键帧</button>
+                <button id="autoPlayBtn" class="auto-play-btn" onclick="toggleAutoPlay()">▶ 自动巡检关键帧</button>
                 <button class="close-btn" onclick="closeModal()">×</button>
             </div>
             <div id="modalGrid" class="modal-body" tabindex="0"></div>
@@ -86,9 +79,14 @@
         let autoPlayTimer = null;
         let currentOpenVideoId = null;
 
-        Fancybox.bind('[data-fancybox]', {
+        // Fancybox 全局绑定：核心在于切换时只寻找带有 data-fancybox 的元素
+        Fancybox.bind('[data-fancybox="modal-gallery"]', {
             Toolbar: { display: { left: ["infobar"], middle: [], right: ["slideshow", "close"] } },
-            on: { destroy: () => stopAutoPlay() } 
+            on: { 
+                destroy: () => {
+                    if(!autoPlayTimer) stopAutoPlay();
+                }
+            }
         });
 
         function getHammingDistance(hash1, hash2) {
@@ -101,6 +99,9 @@
         /* === 弹窗控制 === */
         function openModal(safeId, title) {
             currentOpenVideoId = safeId;
+            document.querySelectorAll('.video-card').forEach(c => c.classList.remove('active-now'));
+            document.getElementById(safeId).classList.add('active-now');
+
             document.getElementById('modalTitle').innerText = title;
             const modalGrid = document.getElementById('modalGrid');
             const storage = document.getElementById(safeId).querySelector('.hidden-storage');
@@ -115,28 +116,52 @@
             currentOpenVideoId = null;
             document.getElementById('galleryModal').classList.remove('show');
             document.body.style.overflow = 'auto';
-            document.getElementById('modalGrid').innerHTML = '';
         }
 
-        /* === 自动巡检 (Slideshow) === */
+        /* === 自动巡检 & 自动下一个视频 === */
         function toggleAutoPlay() {
+            if (autoPlayTimer) { stopAutoPlay(); return; }
+            startSlideshow();
+        }
+
+        function startSlideshow() {
+            const links = document.getElementById('modalGrid').querySelectorAll('a[data-fancybox="modal-gallery"]');
+            if (links.length === 0) { nextVideo(); return; }
+            
             const btn = document.getElementById('autoPlayBtn');
-            if (autoPlayTimer) {
-                stopAutoPlay();
+            btn.classList.add('active');
+            btn.innerText = "正在播放关键帧...";
+
+            Fancybox.show(Array.from(links).map(l => ({ src: l.href, caption: l.dataset.caption })), {
+                startIndex: 0
+            });
+
+            autoPlayTimer = setInterval(() => {
+                const instance = Fancybox.getInstance();
+                if (instance) {
+                    if (instance.getSlide().index >= instance.getSlides().length - 1) {
+                        // 当前视频播完，切换下一个
+                        stopAutoPlay();
+                        instance.close();
+                        setTimeout(nextVideo, 500);
+                    } else {
+                        instance.next();
+                    }
+                } else {
+                    stopAutoPlay();
+                }
+            }, 1000);
+        }
+
+        function nextVideo() {
+            const cards = Array.from(document.querySelectorAll('.video-card'));
+            const currentIndex = cards.findIndex(c => c.id === currentOpenVideoId);
+            if (currentIndex > -1 && currentIndex < cards.length - 1) {
+                cards[currentIndex + 1].click();
+                setTimeout(() => { if(!autoPlayTimer) startSlideshow(); }, 800);
             } else {
-                const links = document.getElementById('modalGrid').querySelectorAll('a[data-fancybox="modal-gallery"]');
-                if (links.length === 0) return;
-                
-                btn.classList.add('active');
-                btn.innerText = "正在巡检关键帧...";
-                
-                Fancybox.show(Array.from(links).map(l => ({ src: l.href, caption: l.dataset.caption })));
-                
-                autoPlayTimer = setInterval(() => {
-                    const instance = Fancybox.getInstance();
-                    if (instance) instance.next();
-                    else stopAutoPlay();
-                }, 500);
+                stopAutoPlay();
+                alert("所有视频巡检完毕");
             }
         }
 
@@ -148,7 +173,7 @@
             btn.innerText = "▶ 自动播放关键帧";
         }
 
-        /* === 事件委托处理相似图展开 === */
+        /* === 相似图手动查看逻辑 === */
         document.getElementById('modalGrid').addEventListener('click', (e) => {
             const btn = e.target.closest('.sim-toggle');
             if (!btn) return;
@@ -161,11 +186,16 @@
             subs.forEach(s => {
                 s.classList.toggle('show');
                 const a = s.querySelector('a');
-                isShow ? a.setAttribute('data-fancybox', 'modal-gallery') : a.removeAttribute('data-fancybox');
+                // 关键点：手动展开后，赋予 data-fancybox，使其可被左右键切换到
+                if (isShow) {
+                    a.setAttribute('data-fancybox', 'modal-gallery');
+                } else {
+                    a.removeAttribute('data-fancybox');
+                }
             });
             btn.innerText = isShow ? '收起' : `+${subs.length} 相似`;
             
-            // 同步回原始存储
+            // 同步数据
             const storage = document.getElementById(currentOpenVideoId).querySelector('.hidden-storage');
             storage.innerHTML = document.getElementById('modalGrid').innerHTML;
         });
@@ -177,109 +207,68 @@
         const loadData = async () => {
             if (loading || !hasMore) return;
             loading = true;
-            document.getElementById('loading').innerText = "加载中...";
-
             const q = document.getElementById('searchInput').value.trim();
-            const sortBy = document.getElementById('sortBy').value;
-            const url = `/gallery/api/frames?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}&sort_by=${sortBy}&order=desc`;
+            const sort = document.getElementById('sortBy').value;
+            const url = `/gallery/api/frames?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}&sort_by=${sort}&order=desc`;
 
             try {
                 const res = await fetch(url);
                 const json = await res.json();
-                if (json.code === 200) {
-                    const data = json.data;
-                    if (data.length < limit) hasMore = false;
+                const data = json.data;
+                if (data.length < limit) hasMore = false;
 
-                    data.forEach(item => {
-                        const safeId = "vid_" + item.video_name.replace(/[^a-zA-Z0-9]/g, '_');
-                        let card = document.getElementById(safeId);
-                        
-                        if (!card) {
-                            card = document.createElement('div');
-                            card.id = safeId;
-                            card.className = 'video-card';
-                            card.onclick = () => openModal(safeId, item.video_name);
-                            card.dataset.count = 0; card.dataset.maxS = -1; card.dataset.lastH = ""; card.dataset.gId = 0;
-                            card.innerHTML = `<div class="cover-container"><img class="cover-img"><div class="count-badge">0 张</div></div>
-                                              <div class="video-info"><div class="v-title">${item.video_name}</div></div>
-                                              <div class="hidden-storage"></div>`;
-                            gallery.appendChild(card);
+                data.forEach(item => {
+                    const safeId = "vid_" + item.video_name.replace(/[^a-zA-Z0-9]/g, '_');
+                    let card = document.getElementById(safeId);
+                    
+                    if (!card) {
+                        card = document.createElement('div');
+                        card.id = safeId; card.className = 'video-card';
+                        card.onclick = () => openModal(safeId, item.video_name);
+                        card.dataset.count = 0; card.dataset.maxS = -1; card.dataset.lastH = ""; card.dataset.gId = 0;
+                        card.innerHTML = `<div class="cover-container"><img class="cover-img"><div class="count-badge">0 张</div></div>
+                                          <div class="video-info"><div class="v-title">${item.video_name}</div></div>
+                                          <div class="hidden-storage"></div>`;
+                        gallery.appendChild(card);
+                    }
+
+                    const itemSharp = parseFloat(item.sharpness) || 0;
+                    if (itemSharp > card.dataset.maxS) {
+                        card.dataset.maxS = itemSharp;
+                        card.querySelector('.cover-img').src = item.thumbnail_url;
+                    }
+                    card.querySelector('.count-badge').innerText = `${++card.dataset.count} 张`;
+
+                    const storage = card.querySelector('.hidden-storage');
+                    const dist = getHammingDistance(card.dataset.lastH, item.phash);
+                    let html = "";
+
+                    // 相似度聚合阈值 20
+                    if ((dist <= 20 && card.dataset.lastH !== "") || itemSharp < 15) {
+                        const gClass = `group_${safeId}_${card.dataset.gId}`;
+                        html = `<div class="frame-item frame-sub ${gClass}"><a href="${item.original_url}" data-caption="细节: ${item.formatted_time}"><img src="${item.thumbnail_url}"></a><div class="f-time">${item.formatted_time}</div></div>`;
+                        storage.insertAdjacentHTML('beforeend', html);
+                        const tBtn = storage.querySelector(`#btn_${gClass}`);
+                        if (tBtn) {
+                            tBtn.dataset.sim = parseInt(tBtn.dataset.sim) + 1;
+                            tBtn.style.display = 'block';
+                            tBtn.innerText = `+${tBtn.dataset.sim} 相似`;
                         }
+                    } else {
+                        card.dataset.gId++;
+                        const gClass = `group_${safeId}_${card.dataset.gId}`;
+                        // 默认只有 Main 帧拥有 data-fancybox="modal-gallery"
+                        html = `<div class="frame-item"><a href="${item.original_url}" data-fancybox="modal-gallery" data-caption="关键帧: ${item.formatted_time}"><img src="${item.thumbnail_url}"></a><div class="f-time">${item.formatted_time}</div><button id="btn_${gClass}" class="sim-toggle" data-sim="0" data-target-group="${gClass}" style="display:none"></button></div>`;
+                        storage.insertAdjacentHTML('beforeend', html);
+                        card.dataset.lastH = item.phash;
+                    }
 
-                        // 挑最清晰做封面
-                        if (item.sharpness > card.dataset.maxS) {
-                            card.dataset.maxS = item.sharpness;
-                            card.querySelector('.cover-img').src = item.thumbnail_url;
-                        }
-                        card.querySelector('.count-badge').innerText = `${++card.dataset.count} 张`;
-
-                        // --- 相似度聚合逻辑优化 (看更少图) ---
-const storage = card.querySelector('.hidden-storage');
-const dist = getHammingDistance(card.dataset.lastH, item.phash);
-const itemSharp = parseFloat(item.sharpness) || 0;
-const lastMaxS = parseFloat(card.dataset.lastGroupMaxS) || 0;
-
-let html = "";
-
-// 聚合条件：
-// 1. 汉明距离 <= 20 (画面变化不够大，调大此值可看更少图)
-// 2. 或者：清晰度极低 (低于 15，通常是转场、模糊或全黑废帧)
-if ((dist <= 20 && card.dataset.lastH !== "") || itemSharp < 15) {
-    const gClass = `group_${safeId}_${card.dataset.gId}`;
-    
-    // 如果虽然被合并，但这张图比之前的主图更清晰，我们悄悄更新当前组的封面（可选）
-    // 这里保持归为相似副图 (不带 data-fancybox，自动巡检时会跳过)
-    html = `
-        <div class="frame-item frame-sub ${gClass}">
-            <a href="${item.original_url}" data-groupname="modal-gallery" data-caption="[细节变化] 进度: ${item.formatted_time}">
-                <img src="${item.thumbnail_url}" loading="lazy">
-            </a>
-            <div class="f-time">${item.formatted_time}</div>
-        </div>
-    `;
-    storage.insertAdjacentHTML('beforeend', html);
-    
-    const tBtn = storage.querySelector(`#btn_${gClass}`);
-    if (tBtn) {
-        let simCount = parseInt(tBtn.dataset.sim) + 1;
-        tBtn.dataset.sim = simCount;
-        tBtn.style.display = 'block';
-        if (!tBtn.classList.contains('active')) {
-            tBtn.innerText = `+${simCount} 相似`;
-        }
-    }
-} else {
-    // 差异明显 且 质量达标，定义为新的一组“关键帧”
-    card.dataset.gId++;
-    const gClass = `group_${safeId}_${card.dataset.gId}`;
-    
-    // 关键帧会赋予 data-fancybox="modal-gallery"，巡检按钮会自动播放它们
-    html = `
-        <div class="frame-item frame-main">
-            <a href="${item.original_url}" data-fancybox="modal-gallery" data-caption="关键帧: ${item.formatted_time}">
-                <img src="${item.thumbnail_url}" loading="lazy">
-            </a>
-            <div class="f-time">${item.formatted_time}</div>
-            <button id="btn_${gClass}" class="sim-toggle" data-sim="0" data-target-group="${gClass}" style="display: none;"></button>
-        </div>
-    `;
-    storage.insertAdjacentHTML('beforeend', html);
-    
-    // 更新哈希基准和清晰度基准
-    card.dataset.lastH = item.phash;
-    card.dataset.lastGroupMaxS = itemSharp;
-}
-
-// 同步更新：如果弹窗当前是打开状态，实时追加新内容
-if (currentOpenVideoId === safeId) {
-    document.getElementById('modalGrid').insertAdjacentHTML('beforeend', html);
-}
-
-                        if (currentOpenVideoId === safeId) document.getElementById('modalGrid').insertAdjacentHTML('beforeend', html);
-                    });
-                    offset += data.length;
-                    document.getElementById('loading').innerText = hasMore ? "下滑加载更多..." : "已加载全部";
-                }
+                    if (currentOpenVideoId === safeId) document.getElementById('modalGrid').insertAdjacentHTML('beforeend', html);
+                });
+                offset += data.length;
+                document.getElementById('loading').innerText = hasMore ? "下滑发现更多..." : "全部加载完毕";
+                // 触底自递归
+                if (hasMore && document.getElementById('loading').getBoundingClientRect().top <= window.innerHeight + 200) loadData();
             } catch (err) { console.error(err); }
             loading = false;
         };

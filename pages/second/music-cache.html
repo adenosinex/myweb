@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>缓存库管理</title>
-      <link rel="icon" href="/static/music.svg" type="image/svg+xml">
+     
     <style>
         :root { --bg: #0f172a; --card-bg: #1e293b; --text-main: #f8fafc; --text-sub: #94a3b8; --accent: #3b82f6; --danger: #ef4444; --success: #10b981; }
         body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text-main); padding: 20px; }
@@ -40,7 +40,7 @@
 
     <div class="header">
         <h2 style="margin:0; font-size:18px;">📦 离线管理中心</h2>
-        <a href="/player.html" class="btn">🔙 返回听歌</a>
+        <a href="/music.html" class="btn">🔙 返回听歌</a>
     </div>
 
     <div class="task-panel" id="taskPanel">
@@ -109,22 +109,33 @@
     }
 
     // --- 核心获取逻辑 (支持场景引擎) ---
+   // --- 核心获取逻辑 (支持场景引擎) ---
+  // --- 核心获取逻辑 (支持场景引擎) ---
     function getSongsForCategory(cat) {
         if (cat === '全部') return allSongs;
         
+        // 智能匹配：提取嵌套数据结构中的 tags 数组，并兼容无后缀匹配
+        const getSongTags = (song) => {
+            let record = tagsMap[song] || tagsMap[song.replace(/\.[^/.]+$/, "")];
+            
+            // 如果 record 存在且包含 tags 属性，则取 record.tags；否则降级取 record 本身或空数组
+            let tags = (record && Array.isArray(record.tags)) ? record.tags : (record || []);
+            
+            return Array.isArray(tags) ? tags : [tags];
+        };
+
         if (SCENARIOS[cat]) {
             const config = SCENARIOS[cat];
             return allSongs.filter(song => {
-                const songTags = tagsMap[song] || [];
+                const songTags = getSongTags(song);
                 const hasInclude = config.include.some(t => songTags.includes(t));
                 const hasExclude = config.exclude.some(t => songTags.includes(t));
                 return hasInclude && !hasExclude;
             });
         }
         
-        return allSongs.filter(song => (tagsMap[song] || []).includes(cat));
+        return allSongs.filter(song => getSongTags(song).includes(cat));
     }
-
     async function loadCacheData() {
         const cache = await caches.open(CACHE_NAME);
         const requests = await cache.keys();

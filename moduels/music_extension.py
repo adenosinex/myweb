@@ -303,7 +303,69 @@ def import_and_reidentify_csv():
         "fail_count": fail_count,
         "total": len(songs_to_process)
     })
+# ================= 收藏与已删除歌曲接口 =================
 
+@tags_bp.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS favorites (song_name TEXT PRIMARY KEY)')
+        cursor.execute('SELECT song_name FROM favorites')
+        rows = cursor.fetchall()
+    return jsonify([row[0] for row in rows])
+
+@tags_bp.route('/api/favorites', methods=['POST'])
+def add_favorite():
+    song_name = request.json.get('song_name')
+    if not song_name:
+        return jsonify({"error": "缺少 song_name"}), 400
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS favorites (song_name TEXT PRIMARY KEY)')
+        cursor.execute('INSERT OR IGNORE INTO favorites (song_name) VALUES (?)', (song_name,))
+    return jsonify({"status": "success"})
+
+@tags_bp.route('/api/favorites', methods=['DELETE'])
+def remove_favorite():
+    song_name = request.json.get('song_name')
+    if not song_name:
+        return jsonify({"error": "缺少 song_name"}), 400
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS favorites (song_name TEXT PRIMARY KEY)')
+        cursor.execute('DELETE FROM favorites WHERE song_name=?', (song_name,))
+    return jsonify({"status": "success"})
+
+@tags_bp.route('/api/deleted_songs', methods=['GET'])
+def get_deleted_songs():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS deleted_songs (song_name TEXT PRIMARY KEY)')
+        cursor.execute('SELECT song_name FROM deleted_songs')
+        rows = cursor.fetchall()
+    return jsonify([row[0] for row in rows])
+
+@tags_bp.route('/api/deleted_songs', methods=['POST'])
+def add_deleted_song():
+    song_name = request.json.get('song_name')
+    if not song_name:
+        return jsonify({"error": "缺少 song_name"}), 400
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS deleted_songs (song_name TEXT PRIMARY KEY)')
+        cursor.execute('INSERT OR IGNORE INTO deleted_songs (song_name) VALUES (?)', (song_name,))
+    return jsonify({"status": "success"})
+
+@tags_bp.route('/api/deleted_songs', methods=['DELETE'])
+def restore_deleted_song():
+    song_name = request.json.get('song_name')
+    if not song_name:
+        return jsonify({"error": "缺少 song_name"}), 400
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS deleted_songs (song_name TEXT PRIMARY KEY)')
+        cursor.execute('DELETE FROM deleted_songs WHERE song_name=?', (song_name,))
+    return jsonify({"status": "success"})
 
 # ================= AI 动态批处理核心 =================
 

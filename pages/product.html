@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据追踪看板</title>
+    <style>
+        :root { --primary: #2196F3; --primary-dark: #1976D2; --success: #4CAF50; --danger: #F44336; --bg: #f4f7f6; --card-bg: #ffffff; --text-main: #333; --text-sub: #777; --border: #eee; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text-main); padding: 20px; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; max-width: 900px; margin: 0 auto 20px; flex-wrap: wrap; gap: 10px; }
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+        .btn:hover { background: var(--primary-dark); }
+        .btn.danger { background: var(--danger); }
+        .btn.success { background: var(--success); }
+        .btn-cancel { background: #e0e0e0; color: #333; }
+        .btn-cancel:hover { background: #d0d0d0; }
+        
+        .container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; max-width: 900px; margin: 0 auto; }
+        
+        .card { background: var(--card-bg); border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; }
+        .card-header { display: flex; align-items: center; gap: 12px; }
+        .item-thumb { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #eee; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .card-title-area { flex-grow: 1; }
+        .card-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+        .card-info { font-size: 12px; color: var(--text-sub); background: #f9f9f9; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        
+        /* 历史记录表格样式 */
+        .history-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 5px; }
+        .history-table th, .history-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; }
+        .history-table th { color: var(--text-sub); font-weight: normal; }
+        .history-table tr:last-child td { border-bottom: none; }
+        .trend-icon { font-size: 12px; margin-left: 2px; }
+        .trend-up { color: var(--danger); } /* 默认数值上升为红色，可视需求修改 */
+        .trend-down { color: var(--success); }
+        .trend-flat { color: #ccc; }
+
+        .card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--border); }
+        
+        /* 弹窗样式 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal { background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 450px; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-size: 14px; font-weight: 500; }
+        .form-group input[type="text"], .form-group input[type="number"], .form-group input[type="datetime-local"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .form-help { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+        
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        
+        .upload-btn-wrapper { display: flex; align-items: center; gap: 10px; }
+        .upload-btn-wrapper input[type="file"] { display: none; }
+        .custom-upload-btn { background: #f0f0f0; border: 1px dashed #ccc; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>📈 数据变化追踪</h2>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn btn-cancel" onclick="exportData()" title="备份数据为 JSON">导出数据</button>
+            <button class="btn btn-cancel" onclick="document.getElementById('data-upload').click()" title="恢复数据">导入数据</button>
+            <input type="file" id="data-upload" accept=".json" style="display:none" onchange="importData(event)">
+            <button class="btn" onclick="openItemModal()">+ 新建追踪项</button>
+        </div>
+    </div>
+
+    <div class="container" id="list-container">
+        <p style="text-align: center; grid-column: 1/-1; color: #777;">加载中...</p>
+    </div>
+
+    <div class="modal-overlay" id="item-modal">
+        <div class="modal">
+            <h3 id="item-modal-title" style="margin-bottom: 15px;">新建追踪项目</h3>
+            <input type="hidden" id="item-id">
+            
+            <div class="form-group">
+                <label>物品图片 (可选)</label>
+                <div class="upload-btn-wrapper">
+                    <label class="custom-upload-btn" for="item-image">📷 拍照 / 选图</label>
+                    <input type="file" id="item-image" accept="image/*" capture="environment" onchange="handleImageUpload(event)">
+                    <img id="image-preview" src="" style="display:none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover;">
+                </div>
+                <input type="hidden" id="item-image-base64">
+            </div>
+
+            <div class="form-group">
+                <label>项目名称 (如: 某品牌锂电池)</label>
+                <input type="text" id="item-name" placeholder="输入名称">
+            </div>
+            
+            <div class="form-group">
+                <label>追踪参数设置</label>
+                <input type="text" id="item-params" placeholder="如: 容量(mAh),内阻(mΩ),循环次数">
+                <div class="form-help">多个参数请用中文或英文逗号分开。一旦建立，后续录入将按此参数列表进行。</div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeModals()">取消</button>
+                <button class="btn" onclick="saveItem()">保存项目</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="record-modal">
+        <div class="modal">
+            <h3 style="margin-bottom: 15px;">录入新数据 - <span id="record-item-name"></span></h3>
+            <input type="hidden" id="record-item-id">
+            
+            <div class="form-group">
+                <label>记录时间</label>
+                <input type="datetime-local" id="record-time">
+            </div>
+
+            <div id="dynamic-params-container">
+                </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeModals()">取消</button>
+                <button class="btn success" onclick="saveRecord()">保存记录</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api2/data_tracking'; // 可视实际后端情况修改
+        let itemsData = [];
+
+        // --- 图片处理逻辑 ---
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_SIZE = 150;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                    } else {
+                        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    document.getElementById('image-preview').src = dataUrl;
+                    document.getElementById('image-preview').style.display = 'block';
+                    document.getElementById('item-image-base64').value = dataUrl;
+                }
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+
+        function guessEmoji(name) {
+            if(name.includes('电池') || name.includes('电量')) return '🔋';
+            if(name.includes('体重') || name.includes('体脂')) return '⚖️';
+            if(name.includes('血压') || name.includes('心率')) return '❤️';
+            if(name.includes('车') || name.includes('里程')) return '🚗';
+            return '📊';
+        }
+
+        function formatDateTime(dateStr) {
+            const d = new Date(dateStr);
+            return `${d.getFullYear().toString().slice(2)}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        // --- 数据加载与保存 ---
+        async function loadData() {
+            try {
+                // 如果没有后端，这里可以换成 localStorage 逻辑用于本地测试
+                // itemsData = JSON.parse(localStorage.getItem('trackingData') || '[]');
+                const res = await fetch(API_URL);
+                if (res.status === 403) { window.location.href = '/login'; return; }
+                const data = await res.json();
+                if (data && data.length > 0 && data[0].items) {
+                    itemsData = data[0].items;
+                } else {
+                    itemsData = [];
+                }
+            } catch (err) {
+                console.warn("API request failed, falling back to empty array. Ensure API is running.");
+                itemsData = [];
+            }
+            renderList();
+        }
+
+        async function syncToServer() {
+            try {
+                // localStorage.setItem('trackingData', JSON.stringify(itemsData)); // 本地测试
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: itemsData })
+                });
+            } catch (err) {
+                console.error("Sync failed:", err);
+            }
+            renderList();
+        }
+
+        // --- 渲染逻辑 ---
+        function renderList() {
+            const container = document.getElementById('list-container');
+            container.innerHTML = '';
+            if (itemsData.length === 0) {
+                container.innerHTML = '<p style="text-align: center; grid-column: 1/-1; color: #777;">暂无数据追踪项目，请点击右上角新建。</p>';
+                return;
+            }
+
+            itemsData.forEach(item => {
+                const imageContent = item.image 
+                    ? `<img src="${item.image}" class="item-thumb">` 
+                    : `<div class="item-thumb">${guessEmoji(item.name)}</div>`;
+
+                // 构建历史记录表格 (仅展示最近 3 条)
+                let historyHtml = '';
+                if (item.history && item.history.length > 0) {
+                    // 按时间倒序
+                    const sortedHistory = [...item.history].sort((a, b) => new Date(b.date) - new Date(a.date));
+                    const latestRecords = sortedHistory.slice(0, 3);
+                    
+                    let thHtml = `<th>时间</th>` + item.params.map(p => `<th>${p}</th>`).join('');
+                    
+                    let trHtml = latestRecords.map((record, index) => {
+                        // 计算趋势 (与更早一条记录对比)
+                        const prevRecord = sortedHistory[index + 1];
+                        let tds = `<td>${formatDateTime(record.date)}</td>`;
+                        
+                        item.params.forEach(param => {
+                            const val = record.values[param] !== undefined ? record.values[param] : '-';
+                            let trendHtml = '';
+                            if (prevRecord && prevRecord.values[param] !== undefined && val !== '-') {
+                                const diff = Number(val) - Number(prevRecord.values[param]);
+                                if (diff > 0) trendHtml = '<span class="trend-icon trend-up">↑</span>';
+                                else if (diff < 0) trendHtml = '<span class="trend-icon trend-down">↓</span>';
+                                else trendHtml = '<span class="trend-icon trend-flat">-</span>';
+                            }
+                            tds += `<td>${val}${trendHtml}</td>`;
+                        });
+                        return `<tr>${tds}</tr>`;
+                    }).join('');
+
+                    historyHtml = `
+                        <table class="history-table">
+                            <thead><tr>${thHtml}</tr></thead>
+                            <tbody>${trHtml}</tbody>
+                        </table>
+                    `;
+                } else {
+                    historyHtml = `<div style="font-size:13px; color:#999; padding: 10px 0;">暂无数据记录</div>`;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        ${imageContent}
+                        <div class="card-title-area">
+                            <div class="card-title">${item.name}</div>
+                            <div class="card-info">参数: ${item.params.join(', ')}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="flex-grow: 1;">
+                        ${historyHtml}
+                    </div>
+
+                    <div class="card-actions">
+                        <button class="btn success" style="padding: 6px 10px; font-size:12px;" onclick="openRecordModal('${item.id}')">➕ 录入数据</button>
+                        <button class="btn btn-cancel" style="padding: 6px 10px; font-size:12px;" onclick="editItem('${item.id}')">编辑配置</button>
+                        <button class="btn danger" style="padding: 6px 10px; font-size:12px;" onclick="deleteItem('${item.id}')">删除</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // --- 模态框逻辑 ---
+        function closeModals() {
+            document.getElementById('item-modal').style.display = 'none';
+            document.getElementById('record-modal').style.display = 'none';
+        }
+
+        function openItemModal() {
+            document.getElementById('item-modal-title').innerText = '新建追踪项目';
+            document.getElementById('item-id').value = '';
+            document.getElementById('item-name').value = '';
+            document.getElementById('item-params').value = '';
+            document.getElementById('item-image').value = '';
+            document.getElementById('item-image-base64').value = '';
+            document.getElementById('image-preview').style.display = 'none';
+            document.getElementById('item-modal').style.display = 'flex';
+        }
+
+        function editItem(id) {
+            const item = itemsData.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('item-modal-title').innerText = '编辑追踪项目';
+            document.getElementById('item-id').value = item.id;
+            document.getElementById('item-name').value = item.name;
+            document.getElementById('item-params').value = item.params.join(', ');
+            
+            if (item.image) {
+                document.getElementById('item-image-base64').value = item.image;
+                document.getElementById('image-preview').src = item.image;
+                document.getElementById('image-preview').style.display = 'block';
+            } else {
+                document.getElementById('item-image-base64').value = '';
+                document.getElementById('image-preview').style.display = 'none';
+            }
+            document.getElementById('item-modal').style.display = 'flex';
+        }
+
+        function saveItem() {
+            const id = document.getElementById('item-id').value;
+            const name = document.getElementById('item-name').value.trim();
+            const paramsRaw = document.getElementById('item-params').value;
+            const imageBase64 = document.getElementById('item-image-base64').value;
+
+            // 处理参数分隔符 (支持中英文逗号)
+            const params = paramsRaw.split(/[,，]/).map(p => p.trim()).filter(p => p);
+
+            if (!name || params.length === 0) {
+                alert("请填写名称并至少定义一个追踪参数！");
+                return;
+            }
+
+            if (id) {
+                const index = itemsData.findIndex(i => i.id === id);
+                if (index > -1) {
+                    itemsData[index].name = name;
+                    itemsData[index].params = params;
+                    itemsData[index].image = imageBase64;
+                }
+            } else {
+                itemsData.push({
+                    id: Date.now().toString(),
+                    name,
+                    params,
+                    image: imageBase64,
+                    history: []
+                });
+            }
+
+            closeModals();
+            syncToServer();
+        }
+
+        function deleteItem(id) {
+            if (confirm("确定要删除这个项目及所有历史数据吗？")) {
+                itemsData = itemsData.filter(i => i.id !== id);
+                syncToServer();
+            }
+        }
+
+        // --- 录入数据逻辑 ---
+        function openRecordModal(id) {
+            const item = itemsData.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('record-item-id').value = item.id;
+            document.getElementById('record-item-name').innerText = item.name;
+            
+            // 设置默认时间为当前
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('record-time').value = now.toISOString().slice(0,16);
+
+            // 动态生成参数输入框
+            const container = document.getElementById('dynamic-params-container');
+            container.innerHTML = '';
+            
+            item.params.forEach((param, idx) => {
+                // 尝试获取上一条记录的值作为参考（如果有）
+                let lastVal = '';
+                if (item.history && item.history.length > 0) {
+                    const sortedHistory = [...item.history].sort((a, b) => new Date(b.date) - new Date(a.date));
+                    if(sortedHistory[0].values[param] !== undefined) {
+                        lastVal = sortedHistory[0].values[param];
+                    }
+                }
+
+                container.innerHTML += `
+                    <div class="form-group">
+                        <label>${param}</label>
+                        <input type="number" step="any" id="param-input-${idx}" data-param="${param}" placeholder="上次记录: ${lastVal || '无'}">
+                    </div>
+                `;
+            });
+
+            document.getElementById('record-modal').style.display = 'flex';
+        }
+
+        function saveRecord() {
+            const id = document.getElementById('record-item-id').value;
+            const item = itemsData.find(i => i.id === id);
+            if (!item) return;
+
+            const timeStr = document.getElementById('record-time').value;
+            if (!timeStr) { alert("请选择记录时间！"); return; }
+
+            const newRecord = {
+                date: new Date(timeStr).toISOString(),
+                values: {}
+            };
+
+            let hasValidData = false;
+            const inputs = document.querySelectorAll('#dynamic-params-container input');
+            inputs.forEach(input => {
+                const paramName = input.getAttribute('data-param');
+                const val = input.value.trim();
+                if (val !== '') {
+                    newRecord.values[paramName] = parseFloat(val);
+                    hasValidData = true;
+                }
+            });
+
+            if (!hasValidData) {
+                alert("请至少填入一项参数数据！");
+                return;
+            }
+
+            if (!item.history) item.history = [];
+            item.history.push(newRecord);
+
+            closeModals();
+            syncToServer();
+        }
+
+        // ================= 导入/导出功能 (JSON 格式更适合复杂结构) =================
+        function exportData() {
+            if (itemsData.length === 0) {
+                alert("没有数据可导出！");
+                return;
+            }
+
+            const jsonStr = JSON.stringify(itemsData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `数据追踪备份_${new Date().toLocaleDateString()}.json`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        if (confirm(`识别到 ${importedData.length} 个项目，是否覆盖当前列表？（注意：当前数据将被清空）`)) {
+                            itemsData = importedData;
+                            syncToServer();
+                            alert("导入成功！");
+                        }
+                    } else {
+                        alert("文件格式不正确！");
+                    }
+                } catch (err) {
+                    alert("解析 JSON 文件失败，请确认文件正确性。");
+                }
+                event.target.value = ''; // 清空选择
+            };
+            reader.readAsText(file);
+        }
+
+        // 初始化加载
+        loadData();
+    </script>
+</body>
+</html>
