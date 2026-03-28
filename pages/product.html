@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/compressorjs@1.2.1/dist/compressor.min.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 md:p-6 font-sans">
-    <div id="app" class="max-w-5xl mx-auto" v-cloak>
+    <div id="app" class="mx-auto" style="max-width: 800px;" v-cloak>
         <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
             <h2 class="text-2xl font-bold flex items-center gap-2">📈 数据变化追踪</h2>
             <div class="flex gap-2">
@@ -22,14 +22,14 @@
 
         <div v-if="items.length === 0" class="text-center text-gray-500 py-10">暂无数据追踪项目，请点击右上角新建。</div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="grid gap-[15px]" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
             <div v-for="item in items" :key="item.id" class="bg-white rounded-xl shadow p-5 flex flex-col gap-4">
                 <div class="flex items-center gap-3">
                     <img v-if="item.image" :src="item.image" class="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0">
                     <div v-else class="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-2xl shrink-0">{{ guessEmoji(item.name) }}</div>
                     <div class="flex-grow">
                         <h3 class="font-bold text-lg">{{ item.name }}</h3>
-                        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">参数: {{ item.params.join(', ') }}</span>
+                        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">参数: {{ item.params.map(p => p.name).join(', ') }}</span>
                     </div>
                 </div>
 
@@ -38,17 +38,22 @@
                         <thead class="text-gray-400 border-b sticky top-0 bg-white z-10 shadow-sm">
                             <tr>
                                 <th class="py-2 font-normal">时间</th>
-                                <th v-for="p in item.params" :key="p" class="py-2 font-normal">{{ p }}</th>
+                                <th v-for="p in item.params" :key="p.id" class="py-2 font-normal">{{ p.name }}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(record, index) in getAllSortedRecords(item)" :key="record.date" class="border-b last:border-0 hover:bg-gray-50 transition-colors">
-                                <td class="py-2 text-gray-500">{{ formatDate(record.date) }}</td>
-                                <td v-for="p in item.params" :key="p" class="py-2">
-                                    {{ record.values[p] !== undefined ? record.values[p] : '-' }}
-                                    <span v-html="getTrendIcon(item, index, p)"></span>
-                                </td>
-                            </tr>
+                            <template v-for="displayData in [getDisplayRecords(item)]" :key="item.id">
+                                <tr v-for="(record, index) in displayData" :key="record.date" class="border-b last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td class="py-2 text-gray-500 whitespace-nowrap">
+                                        {{ formatDate(record.date) }}
+                                        <span v-if="record._merged" class="text-[10px] text-blue-500 bg-blue-50 rounded px-1 ml-0.5" title="互补记录已合并 (明细见CSV)">合</span>
+                                    </td>
+                                    <td v-for="p in item.params" :key="p.id" class="py-2">
+                                        {{ record.values[p.id] !== undefined && record.values[p.id] !== '' ? record.values[p.id] : '-' }}
+                                        <span v-html="getTrendIcon(index, p.id, displayData)"></span>
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                     </table>
                     <div v-else class="text-sm text-gray-400 py-2">暂无数据记录</div>
@@ -56,7 +61,7 @@
 
                 <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-auto">
                     <button @click="openRecordModal(item)" class="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded text-xs">➕ 录入</button>
-                    <button @click="openItemModal(item)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">编辑</button>
+                    <button @click="openItemModal(item)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">编辑/排序</button>
                     <button @click="deleteItem(item.id)" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-600 rounded text-xs">删除</button>
                 </div>
             </div>
@@ -64,7 +69,7 @@
 
         <div v-if="modals.item || modals.record" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             
-            <div v-if="modals.item" class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <div v-if="modals.item" class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
                 <h3 class="text-lg font-bold mb-4">{{ itemForm.id ? '编辑追踪项目' : '新建追踪项目' }}</h3>
                 <div class="space-y-4">
                     <div>
@@ -80,9 +85,14 @@
                         <input v-model="itemForm.name" type="text" placeholder="如: 某品牌锂电池" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-200 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">追踪参数</label>
-                        <input v-model="itemForm.paramsInput" type="text" placeholder="如: 容量,内阻" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-200 outline-none">
-                        <p class="text-xs text-gray-500 mt-1">多个参数请用逗号隔开</p>
+                        <label class="block text-sm font-medium mb-2">追踪参数列表 (按此顺序显示)</label>
+                        <div v-for="(p, idx) in itemForm.params" :key="p.id" class="flex items-center gap-2 mb-2">
+                            <input v-model="p.name" type="text" placeholder="参数名" class="flex-grow p-1.5 border rounded focus:ring-2 focus:ring-blue-200 outline-none text-sm">
+                            <button @click="moveParam(idx, -1)" :disabled="idx === 0" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30 text-sm">↑</button>
+                            <button @click="moveParam(idx, 1)" :disabled="idx === itemForm.params.length - 1" class="p-1.5 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30 text-sm">↓</button>
+                            <button @click="removeParam(idx)" class="p-1.5 bg-red-50 text-red-500 rounded hover:bg-red-100 text-sm">✖</button>
+                        </div>
+                        <button @click="addParam" class="w-full py-2 mt-2 border border-dashed border-gray-300 rounded text-gray-500 text-sm hover:bg-gray-50">+ 添加新参数</button>
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 mt-6">
@@ -91,16 +101,16 @@
                 </div>
             </div>
 
-            <div v-if="modals.record" class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <div v-if="modals.record" class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
                 <h3 class="text-lg font-bold mb-4">录入数据 - {{ currentTargetItem.name }}</h3>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">记录时间</label>
                         <input v-model="recordForm.timeInput" type="datetime-local" class="w-full p-2 border rounded outline-none">
                     </div>
-                    <div v-for="p in currentTargetItem.params" :key="p">
-                        <label class="block text-sm font-medium mb-1">{{ p }}</label>
-                        <input v-model.number="recordForm.values[p]" type="number" step="any" placeholder="输入数值" class="w-full p-2 border rounded focus:ring-2 focus:ring-green-200 outline-none">
+                    <div v-for="p in currentTargetItem.params" :key="p.id">
+                        <label class="block text-sm font-medium mb-1">{{ p.name }}</label>
+                        <input v-model.number="recordForm.values[p.id]" type="number" step="any" placeholder="输入数值" class="w-full p-2 border rounded focus:ring-2 focus:ring-green-200 outline-none">
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 mt-6">
@@ -121,15 +131,47 @@
                 const items = ref([]);
                 const modals = reactive({ item: false, record: false });
                 const currentTargetItem = ref(null);
-                const itemForm = reactive({ id: '', name: '', paramsInput: '', image: '' });
+                const itemForm = reactive({ id: '', name: '', params: [], image: '' });
                 const recordForm = reactive({ timeInput: '', exactTime: null, values: {} });
+
+                // 生成唯一ID的辅助函数
+                const generateId = (prefix) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+                // 数据结构迁移：将旧的字符串数组转为对象数组，保留历史数据映射
+                const migrateOldData = (dataList) => {
+                    dataList.forEach(item => {
+                        if (item.params && item.params.length > 0 && typeof item.params[0] === 'string') {
+                            const newParams = [];
+                            const paramMap = {}; // 记录 { "旧名称": "新ID" }
+                            item.params.forEach(pName => {
+                                const newId = generateId('p');
+                                newParams.push({ id: newId, name: pName });
+                                paramMap[pName] = newId;
+                            });
+                            item.params = newParams;
+                            
+                            // 迁移历史记录的 key
+                            if (item.history) {
+                                item.history.forEach(record => {
+                                    const newValues = {};
+                                    for (const [oldName, val] of Object.entries(record.values)) {
+                                        if (paramMap[oldName]) newValues[paramMap[oldName]] = val;
+                                    }
+                                    record.values = newValues;
+                                });
+                            }
+                        }
+                    });
+                };
 
                 const loadData = async () => {
                     try {
                         const res = await fetch(API_URL);
                         if (res.status === 403) return window.location.href = '/login';
                         const data = await res.json();
-                        items.value = data[0]?.items || [];
+                        const fetchedItems = data[0]?.items || [];
+                        migrateOldData(fetchedItems);
+                        items.value = fetchedItems;
                     } catch (err) {
                         items.value = [];
                     }
@@ -145,28 +187,45 @@
                     } catch (e) { console.error("同步失败", e); }
                 };
 
+                // --- 项目参数编辑逻辑 ---
                 const openItemModal = (item = null) => {
                     if (item) {
                         itemForm.id = item.id;
                         itemForm.name = item.name;
-                        itemForm.paramsInput = item.params.join(',');
                         itemForm.image = item.image;
+                        // 深度克隆，防止未保存前直接污染页面
+                        itemForm.params = JSON.parse(JSON.stringify(item.params));
                     } else {
-                        Object.assign(itemForm, { id: '', name: '', paramsInput: '', image: '' });
+                        Object.assign(itemForm, { id: '', name: '', params: [], image: '' });
                     }
                     modals.item = true;
                 };
 
+                const addParam = () => {
+                    itemForm.params.push({ id: generateId('p'), name: '' });
+                };
+
+                const removeParam = (index) => {
+                    itemForm.params.splice(index, 1);
+                };
+
+                const moveParam = (index, dir) => {
+                    if (index + dir < 0 || index + dir >= itemForm.params.length) return;
+                    const temp = itemForm.params[index];
+                    itemForm.params[index] = itemForm.params[index + dir];
+                    itemForm.params[index + dir] = temp;
+                };
+
                 const saveItem = () => {
-                    const params = itemForm.paramsInput.split(/[,，]/).map(p => p.trim()).filter(Boolean);
-                    if (!itemForm.name || !params.length) return alert("名称和参数不可为空！");
+                    const validParams = itemForm.params.filter(p => p.name.trim() !== '');
+                    if (!itemForm.name || validParams.length === 0) return alert("名称不可为空，且至少需保留一个命名的参数！");
 
                     if (itemForm.id) {
                         const target = items.value.find(i => i.id === itemForm.id);
-                        Object.assign(target, { name: itemForm.name, params, image: itemForm.image });
+                        Object.assign(target, { name: itemForm.name, params: validParams, image: itemForm.image });
                     } else {
                         items.value.push({
-                            id: Date.now().toString(), name: itemForm.name, params, image: itemForm.image, history: []
+                            id: generateId('item'), name: itemForm.name, params: validParams, image: itemForm.image, history: []
                         });
                     }
                     modals.item = false;
@@ -180,6 +239,7 @@
                     }
                 };
 
+                // --- 录入数据逻辑 ---
                 const openRecordModal = (item) => {
                     currentTargetItem.value = item;
                     const now = new Date();
@@ -206,7 +266,7 @@
                     if (!currentTargetItem.value.history) currentTargetItem.value.history = [];
                     currentTargetItem.value.history.push({
                         date: finalDateStr,
-                        values: { ...recordForm.values }
+                        values: { ...recordForm.values } // 这里存的 key 是 param.id
                     });
                     modals.record = false;
                     syncData();
@@ -225,15 +285,54 @@
                     });
                 };
 
-                // 获取所有历史记录并按时间倒序
-                const getAllSortedRecords = (item) => [...(item.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                const getTrendIcon = (item, currentIndex, param) => {
+                // --- 表格展示计算 ---
+                const getDisplayRecords = (item) => {
                     const sorted = [...(item.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
-                    const current = sorted[currentIndex]?.values[param];
-                    const prev = sorted[currentIndex + 1]?.values[param];
-                    if (current === undefined || prev === undefined) return '';
-                    const diff = current - prev;
+                    const merged = [];
+                    
+                    for (const rec of sorted) {
+                        if (merged.length === 0) {
+                            merged.push({ date: rec.date, values: { ...rec.values }, _merged: false });
+                            continue;
+                        }
+                        
+                        const last = merged[merged.length - 1];
+                        const diffMs = Math.abs(new Date(last.date).getTime() - new Date(rec.date).getTime());
+                        
+                        // 依据 Param ID 进行冲突检测
+                        if (diffMs <= 7200000) {
+                            let canMerge = true;
+                            for (const [pId, v] of Object.entries(rec.values)) {
+                                if (v !== undefined && v !== null && v !== '') {
+                                    if (last.values[pId] !== undefined && last.values[pId] !== null && last.values[pId] !== '') {
+                                        canMerge = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (canMerge) {
+                                for (const [pId, v] of Object.entries(rec.values)) {
+                                    if (v !== undefined && v !== null && v !== '') {
+                                        last.values[pId] = v;
+                                    }
+                                }
+                                last._merged = true;
+                            } else {
+                                merged.push({ date: rec.date, values: { ...rec.values }, _merged: false });
+                            }
+                        } else {
+                            merged.push({ date: rec.date, values: { ...rec.values }, _merged: false });
+                        }
+                    }
+                    return merged;
+                };
+
+                const getTrendIcon = (currentIndex, paramId, displayData) => {
+                    const current = displayData[currentIndex]?.values[paramId];
+                    const prev = displayData[currentIndex + 1]?.values[paramId];
+                    if (current === undefined || current === '' || prev === undefined || prev === '') return '';
+                    const diff = Number(current) - Number(prev);
                     if (diff > 0) return '<span class="text-red-500 text-xs ml-1">↑</span>';
                     if (diff < 0) return '<span class="text-green-500 text-xs ml-1">↓</span>';
                     return '<span class="text-gray-300 text-xs ml-1">-</span>';
@@ -262,6 +361,7 @@
                     return '📊';
                 };
 
+                // --- 导入导出 (映射底层ID与展示名称) ---
                 const exportCSV = () => {
                     if (items.value.length === 0) return alert("没有数据可导出！");
                     
@@ -270,9 +370,13 @@
                     items.value.forEach(item => {
                         if (item.history && item.history.length > 0) {
                             item.history.forEach(record => {
-                                Object.entries(record.values).forEach(([key, value]) => {
+                                Object.entries(record.values).forEach(([pId, value]) => {
                                     if (value !== null && value !== undefined && value !== '') {
-                                        rows.push([item.name, formatForExcel(record.date), key, value]);
+                                        // 反查 ID 对应的名称
+                                        const paramObj = item.params.find(p => p.id === pId);
+                                        if (paramObj) {
+                                            rows.push([item.name, formatForExcel(record.date), paramObj.name, value]);
+                                        }
                                     }
                                 });
                             });
@@ -308,21 +412,28 @@
                                 const cols = lines[i].split(",");
                                 if (cols.length < 4) continue;
 
-                                const [name, dateStr, param, val] = cols.map(c => c.trim());
+                                const [name, dateStr, paramName, val] = cols.map(c => c.trim());
                                 if (!name) continue;
 
                                 if (!tempMap[name]) {
                                     tempMap[name] = {
-                                        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                                        id: generateId('item'),
                                         name: name,
-                                        params: new Set(),
+                                        paramsList: [],
+                                        paramsDict: {}, // {"名称": "ID"} 查重用
                                         image: '', 
                                         historyDict: {} 
                                     };
                                 }
 
-                                if (param && param !== '-') {
-                                    tempMap[name].params.add(param);
+                                if (paramName && paramName !== '-') {
+                                    // 按需生成和复用 ID
+                                    let pId = tempMap[name].paramsDict[paramName];
+                                    if (!pId) {
+                                        pId = generateId('p');
+                                        tempMap[name].paramsDict[paramName] = pId;
+                                        tempMap[name].paramsList.push({ id: pId, name: paramName });
+                                    }
                                     
                                     let isoDate = '-';
                                     if (dateStr && dateStr !== '-') {
@@ -333,7 +444,7 @@
                                     if (isoDate && isoDate !== '-') {
                                         if (!tempMap[name].historyDict[isoDate]) tempMap[name].historyDict[isoDate] = {};
                                         if (val !== '-' && !isNaN(parseFloat(val))) {
-                                            tempMap[name].historyDict[isoDate][param] = parseFloat(val);
+                                            tempMap[name].historyDict[isoDate][pId] = parseFloat(val);
                                         }
                                     }
                                 }
@@ -342,7 +453,7 @@
                             const newItems = Object.values(tempMap).map(item => ({
                                 id: item.id,
                                 name: item.name,
-                                params: Array.from(item.params),
+                                params: item.paramsList,
                                 image: item.image,
                                 history: Object.keys(item.historyDict).map(d => ({
                                     date: d,
@@ -366,8 +477,8 @@
 
                 return {
                     items, modals, itemForm, recordForm, currentTargetItem,
-                    openItemModal, saveItem, deleteItem, openRecordModal, saveRecord,
-                    handleImage, getAllSortedRecords, getTrendIcon, formatDate, guessEmoji,
+                    openItemModal, addParam, removeParam, moveParam, saveItem, deleteItem, openRecordModal, saveRecord,
+                    handleImage, getDisplayRecords, getTrendIcon, formatDate, guessEmoji,
                     exportCSV, importCSV
                 };
             }
