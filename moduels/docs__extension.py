@@ -197,6 +197,60 @@ def save_doc():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+import os
+@docs_bp.route('/api/docs/search', methods=['GET'])
+def search_docs():
+    """全文本地搜索文档（排除目录前缀干扰，修复扩展名导致无法打开的问题）"""
+    keyword = request.args.get('q', '').strip().lower()
+    if not keyword:
+        return jsonify({"results": []})
+
+    results = []
+    try:
+        base_dir = os.path.dirname(get_safe_path('dummy_filename_for_dir_calc'))
+        
+        for filename in os.listdir(base_dir):
+            if filename.startswith('.'):
+                continue
+                
+            filepath = os.path.join(base_dir, filename)
+            if not os.path.isfile(filepath):
+                continue
+            
+            try:
+                # 1. 修复打不开问题：去除物理扩展名，还原前端所需的标准 doc_id
+                doc_id, _ = os.path.splitext(filename)
+                
+                # 2. 排除前缀干扰：剥离类似 folder_subfolder_ 的前缀，提取真实的纯文件名
+                pure_name = doc_id.split('_')[-1]
+
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                    # 搜索条件：仅让纯文件名和文件正文参与匹配，忽略模拟目录的标识前缀
+                    if keyword in pure_name.lower() or keyword in content.lower():
+                        title = pure_name
+                        
+                        # 尝试从正文首行提取标准 markdown 标题作为最优展示
+                        first_line = content.split('\n')[0].strip() if content else ''
+                        if first_line.startswith('#'):
+                            title = first_line.lstrip('#').strip()
+                            
+                        # 标题防溢出截断
+                        if len(title) > 60:
+                            title = title[:60] + '...'
+                            
+                        results.append({
+                            "id": doc_id,  # 必须返回包含层级但无扩展名的完整 doc_id（如 A_B_C）
+                            "title": title
+                        })
+            except Exception:
+                continue
+
+        return jsonify({"results": results})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 @docs_bp.route('/api/docs/rename', methods=['POST'])
 def rename_doc():
     """重命名或移动文档（更改所属分类名）"""
@@ -224,7 +278,7 @@ def rename_doc():
         return jsonify({"message": "重命名/移动成功"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-        
+
 @docs_bp.route('/api/docs/delete/<name>', methods=['DELETE'])
 def delete_doc(name):
     """删除文档"""

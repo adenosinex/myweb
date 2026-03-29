@@ -52,83 +52,109 @@
                 <h3 class="m-0 text-base font-semibold flex items-center gap-2 pointer-events-none">📂 知识库 (根目录)</h3>
                 <a href="/docs-edit" class="text-xs text-blue-600 no-underline px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition z-10">编辑</a>
             </div>
+
+            <div class="px-4 py-3 border-b border-slate-200 bg-slate-50/50">
+                <div class="relative">
+                    <input type="text" x-model="searchQuery" @input.debounce.300ms="performSearch" placeholder="全文搜索..." 
+                           class="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                </div>
+            </div>
             
             <div class="flex-1 p-3 overflow-y-auto no-scrollbar pb-24 relative" x-ref="sidebarScroll" @dragover="autoScroll($event)">
                 
-                <template x-for="folder1 in Object.values(tree.folders)" :key="folder1.path">
-                    <div class="mb-2 rounded-lg border-2 border-transparent transition-colors"
-                         @dragover.prevent.stop="dragOverFolder = folder1.path; autoScroll($event)"
-                         @dragleave.prevent.stop="dragOverFolder = null"
-                         @drop.prevent.stop="handleDrop($event, folder1.path)"
-                         :class="dragOverFolder === folder1.path ? 'drop-zone-active' : ''">
-                        
-                        <div @click="folder1.open = !folder1.open" 
-                             class="px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100">
-                            <div class="flex items-center gap-2 font-medium pointer-events-none">
-                                <span x-text="folder1.open ? '📂' : '📁'"></span>
-                                <span x-text="folder1.name"></span>
+                <div x-show="searchQuery !== ''">
+                    <div x-show="isSearching" class="text-center text-sm text-slate-400 py-4">搜索中...</div>
+                    <div x-show="!isSearching && searchResults && searchResults.length === 0" class="text-center text-sm text-slate-400 py-4">未找到相关文档</div>
+                    
+                    <div x-show="!isSearching && searchResults && searchResults.length > 0" class="space-y-1">
+                        <template x-for="doc in searchResults" :key="doc.id">
+                            <div @click.stop="selectDoc(doc.id)"
+                                 class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                                 :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
                             </div>
-                            <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folder1.open ? '' : '-rotate-90'">▼</span>
-                        </div>
-                        
-                        <div x-show="folder1.open" x-collapse>
-                            <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                                
-                                <template x-for="folder2 in Object.values(folder1.folders)" :key="folder2.path">
-                                    <div class="mb-1 rounded-md border-2 border-transparent transition-colors"
-                                         @dragover.prevent.stop="dragOverFolder = folder2.path; autoScroll($event)"
-                                         @dragleave.prevent.stop="dragOverFolder = null"
-                                         @drop.prevent.stop="handleDrop($event, folder2.path)"
-                                         :class="dragOverFolder === folder2.path ? 'drop-zone-active' : ''">
-                                        
-                                        <div @click="folder2.open = !folder2.open"
-                                             class="px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100">
-                                            <div class="flex items-center gap-2 pointer-events-none">
-                                                <span x-text="folder2.open ? '📂' : '📁'"></span>
-                                                <span x-text="folder2.name"></span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div x-show="folder2.open" x-collapse>
-                                            <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                                                <template x-for="doc in folder2.items" :key="doc.id">
-                                                    <div @click.stop="selectDoc(doc.id)"
-                                                         draggable="true" @dragstart.stop="dragStart($event, doc.id, folder2.path)"
-                                                         class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                                                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                                        <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <template x-for="doc in folder1.items" :key="doc.id">
-                                    <div @click.stop="selectDoc(doc.id)"
-                                         draggable="true" @dragstart.stop="dragStart($event, doc.id, folder1.path)"
-                                         class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white mx-1"
-                                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                        <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
+                        </template>
                     </div>
-                </template>
+                </div>
 
-                <div class="space-y-1 mt-3 pt-2 border-t border-slate-100">
-                    <template x-for="doc in tree.items" :key="doc.id">
-                        <div @click.stop="selectDoc(doc.id)"
-                             draggable="true" @dragstart.stop="dragStart($event, doc.id, '')"
-                             class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                             :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                            <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                            <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                <div x-show="searchQuery === ''">
+                    <template x-for="folder1 in Object.values(tree.folders)" :key="folder1.path">
+                        <div class="mb-2 rounded-lg border-2 border-transparent transition-colors"
+                             @dragover.prevent.stop="dragOverFolder = folder1.path; autoScroll($event)"
+                             @dragleave.prevent.stop="dragOverFolder = null"
+                             @drop.prevent.stop="handleDrop($event, folder1.path)"
+                             :class="dragOverFolder === folder1.path ? 'drop-zone-active' : ''">
+                            
+                            <div @click="folder1.open = !folder1.open" 
+                                 class="px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100">
+                                <div class="flex items-center gap-2 font-medium pointer-events-none">
+                                    <span x-text="folder1.open ? '📂' : '📁'"></span>
+                                    <span x-text="folder1.name"></span>
+                                </div>
+                                <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folder1.open ? '' : '-rotate-90'">▼</span>
+                            </div>
+                            
+                            <div x-show="folder1.open" x-collapse>
+                                <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
+                                    
+                                    <template x-for="folder2 in Object.values(folder1.folders)" :key="folder2.path">
+                                        <div class="mb-1 rounded-md border-2 border-transparent transition-colors"
+                                             @dragover.prevent.stop="dragOverFolder = folder2.path; autoScroll($event)"
+                                             @dragleave.prevent.stop="dragOverFolder = null"
+                                             @drop.prevent.stop="handleDrop($event, folder2.path)"
+                                             :class="dragOverFolder === folder2.path ? 'drop-zone-active' : ''">
+                                            
+                                            <div @click="folder2.open = !folder2.open"
+                                                 class="px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100">
+                                                <div class="flex items-center gap-2 pointer-events-none">
+                                                    <span x-text="folder2.open ? '📂' : '📁'"></span>
+                                                    <span x-text="folder2.name"></span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div x-show="folder2.open" x-collapse>
+                                                <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
+                                                    <template x-for="doc in folder2.items" :key="doc.id">
+                                                        <div @click.stop="selectDoc(doc.id)"
+                                                             draggable="true" @dragstart.stop="dragStart($event, doc.id, folder2.path)"
+                                                             class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                                                             :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                                            <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                                            <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template x-for="doc in folder1.items" :key="doc.id">
+                                        <div @click.stop="selectDoc(doc.id)"
+                                             draggable="true" @dragstart.stop="dragStart($event, doc.id, folder1.path)"
+                                             class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white mx-1"
+                                             :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                            <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                            <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
                         </div>
                     </template>
+
+                    <div class="space-y-1 mt-3 pt-2 border-t border-slate-100">
+                        <template x-for="doc in tree.items" :key="doc.id">
+                            <div @click.stop="selectDoc(doc.id)"
+                                 draggable="true" @dragstart.stop="dragStart($event, doc.id, '')"
+                                 class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                                 :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
         </div>
@@ -155,12 +181,37 @@
                         请从左侧选择文档
                     </div>`,
                 abortController: null,
+                
+                // 搜索相关状态
+                searchQuery: '',
+                isSearching: false,
+                searchResults: null,
 
                 async init() {
                     window.addEventListener('resize', () => {
                         if (window.innerWidth >= 768) this.sidebarOpen = true;
                     });
                     await this.loadList();
+                },
+
+                // 新增：执行搜索逻辑
+                async performSearch() {
+                    if (!this.searchQuery.trim()) {
+                        this.searchResults = null;
+                        return;
+                    }
+                    
+                    this.isSearching = true;
+                    try {
+                        const res = await fetch(`/api/docs/search?q=${encodeURIComponent(this.searchQuery)}`);
+                        const data = await res.json();
+                        this.searchResults = data.results || [];
+                    } catch(e) {
+                        console.error('搜索请求失败:', e);
+                        this.searchResults = [];
+                    } finally {
+                        this.isSearching = false;
+                    }
                 },
 
                 async loadList() {
@@ -221,21 +272,19 @@
                     }
                 },
 
-                // 新增：自动边缘滚动计算逻辑
                 autoScroll(e) {
                     const container = this.$refs.sidebarScroll;
                     if (!container) return;
-                    const threshold = 60; // 距离上下边缘的像素阈值
+                    const threshold = 60; 
                     const rect = container.getBoundingClientRect();
                     
                     if (e.clientY - rect.top < threshold) {
-                        container.scrollTop -= 15; // 向上滚动
+                        container.scrollTop -= 15; 
                     } else if (rect.bottom - e.clientY < threshold) {
-                        container.scrollTop += 15; // 向下滚动
+                        container.scrollTop += 15; 
                     }
                 },
 
-                // 拖拽记录：同时传递文件 ID 和所属的当前目录前缀
                 dragStart(e, docId, currentPath) {
                     e.dataTransfer.setData('text/plain', JSON.stringify({ docId, currentPath }));
                     e.dataTransfer.effectAllowed = 'move';
@@ -249,7 +298,6 @@
                     try {
                         const { docId: oldId, currentPath } = JSON.parse(dataStr);
                         
-                        // 安全提取纯文件名：仅切除前置关联目录，不破坏文件名原有的 "_"
                         let pureFileName = oldId;
                         if (currentPath && oldId.startsWith(currentPath + '_')) {
                             pureFileName = oldId.substring(currentPath.length + 1);
