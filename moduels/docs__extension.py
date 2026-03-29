@@ -197,6 +197,34 @@ def save_doc():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@docs_bp.route('/api/docs/rename', methods=['POST'])
+def rename_doc():
+    """重命名或移动文档（更改所属分类名）"""
+    data = request.json
+    old_name = data.get('oldName', '').strip()
+    new_name = data.get('newName', '').strip()
+
+    if not old_name or not new_name:
+        return jsonify({"error": "原文件名和新文件名均不能为空"}), 400
+
+    if old_name == new_name:
+        return jsonify({"message": "文件名未变动"})
+
+    try:
+        old_path = get_safe_path(old_name)
+        new_path = get_safe_path(new_name)
+
+        if not os.path.exists(old_path):
+            return jsonify({"error": "原文件不存在"}), 404
+
+        if os.path.exists(new_path):
+            return jsonify({"error": "目标文件名已存在，请先重命名或删除冲突文件"}), 409
+
+        os.rename(old_path, new_path)
+        return jsonify({"message": "重命名/移动成功"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
 @docs_bp.route('/api/docs/delete/<name>', methods=['DELETE'])
 def delete_doc(name):
     """删除文档"""

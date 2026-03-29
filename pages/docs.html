@@ -9,16 +9,21 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <style>
-        /* 覆盖 NProgress 默认主题色，匹配原版的蓝色 (#2563eb) */
         #nprogress .bar { background: #2563eb !important; height: 3px !important; }
         #nprogress .peg { box-shadow: 0 0 10px #2563eb, 0 0 5px #2563eb !important; }
-        #nprogress .spinner { display: none !important; } /* 隐藏加载圈 */
-        
-        /* 修正 Markdown 容器背景以融合卡片设计 */
+        #nprogress .spinner { display: none !important; }
         .markdown-body { background-color: transparent; }
+        
+        /* 隐藏滚动条但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 拖拽悬停时的过度效果 */
+        .drop-zone-active { background-color: #eff6ff !important; border-color: #93c5fd !important; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden h-screen flex flex-col font-sans" x-data="docApp()">
@@ -38,20 +43,93 @@
         
         <div class="w-[280px] bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-transform duration-300 shadow-lg md:shadow-none"
              :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'">
-            <div class="p-6 border-b border-slate-200 flex justify-between items-center">
-                <h3 class="m-0 text-base font-semibold flex items-center gap-2">📂 知识库</h3>
-                <a href="/docs-edit" class="text-xs text-blue-600 no-underline px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition">编辑</a>
+            
+            <div class="p-5 border-b border-slate-200 flex justify-between items-center shrink-0 transition-colors sticky top-0 bg-white/95 backdrop-blur z-20 border-2 border-transparent"
+                 @dragover.prevent.stop="dragOverFolder = 'root'"
+                 @dragleave.prevent.stop="dragOverFolder = null"
+                 @drop.prevent.stop="handleDrop($event, '')"
+                 :class="dragOverFolder === 'root' ? 'drop-zone-active text-blue-800' : ''">
+                <h3 class="m-0 text-base font-semibold flex items-center gap-2 pointer-events-none">📂 知识库 (根目录)</h3>
+                <a href="/docs-edit" class="text-xs text-blue-600 no-underline px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition z-10">编辑</a>
             </div>
             
-            <div class="flex-1 p-3 overflow-y-auto space-y-1">
-                <template x-for="(doc, index) in docs" :key="doc.id">
-                    <div @click="selectDoc(doc.id)"
-                         class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-4"
-                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                        <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-50'">📄</span>
-                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1" x-text="`${index + 1}. ${doc.title}`"></span>
+            <div class="flex-1 p-3 overflow-y-auto no-scrollbar pb-24 relative" x-ref="sidebarScroll" @dragover="autoScroll($event)">
+                
+                <template x-for="folder1 in Object.values(tree.folders)" :key="folder1.path">
+                    <div class="mb-2 rounded-lg border-2 border-transparent transition-colors"
+                         @dragover.prevent.stop="dragOverFolder = folder1.path; autoScroll($event)"
+                         @dragleave.prevent.stop="dragOverFolder = null"
+                         @drop.prevent.stop="handleDrop($event, folder1.path)"
+                         :class="dragOverFolder === folder1.path ? 'drop-zone-active' : ''">
+                        
+                        <div @click="folder1.open = !folder1.open" 
+                             class="px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100">
+                            <div class="flex items-center gap-2 font-medium pointer-events-none">
+                                <span x-text="folder1.open ? '📂' : '📁'"></span>
+                                <span x-text="folder1.name"></span>
+                            </div>
+                            <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folder1.open ? '' : '-rotate-90'">▼</span>
+                        </div>
+                        
+                        <div x-show="folder1.open" x-collapse>
+                            <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
+                                
+                                <template x-for="folder2 in Object.values(folder1.folders)" :key="folder2.path">
+                                    <div class="mb-1 rounded-md border-2 border-transparent transition-colors"
+                                         @dragover.prevent.stop="dragOverFolder = folder2.path; autoScroll($event)"
+                                         @dragleave.prevent.stop="dragOverFolder = null"
+                                         @drop.prevent.stop="handleDrop($event, folder2.path)"
+                                         :class="dragOverFolder === folder2.path ? 'drop-zone-active' : ''">
+                                        
+                                        <div @click="folder2.open = !folder2.open"
+                                             class="px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100">
+                                            <div class="flex items-center gap-2 pointer-events-none">
+                                                <span x-text="folder2.open ? '📂' : '📁'"></span>
+                                                <span x-text="folder2.name"></span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div x-show="folder2.open" x-collapse>
+                                            <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
+                                                <template x-for="doc in folder2.items" :key="doc.id">
+                                                    <div @click.stop="selectDoc(doc.id)"
+                                                         draggable="true" @dragstart.stop="dragStart($event, doc.id, folder2.path)"
+                                                         class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                                                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                                        <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <template x-for="doc in folder1.items" :key="doc.id">
+                                    <div @click.stop="selectDoc(doc.id)"
+                                         draggable="true" @dragstart.stop="dragStart($event, doc.id, folder1.path)"
+                                         class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white mx-1"
+                                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                        <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
                     </div>
                 </template>
+
+                <div class="space-y-1 mt-3 pt-2 border-t border-slate-100">
+                    <template x-for="doc in tree.items" :key="doc.id">
+                        <div @click.stop="selectDoc(doc.id)"
+                             draggable="true" @dragstart.stop="dragStart($event, doc.id, '')"
+                             class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                             :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                            <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                            <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
 
@@ -67,8 +145,10 @@
         document.addEventListener('alpine:init', () => {
             Alpine.data('docApp', () => ({
                 sidebarOpen: window.innerWidth >= 768,
-                docs: [],
+                tree: { items: [], folders: {} },
                 activeDoc: null,
+                maxLevel: 2, 
+                dragOverFolder: null,
                 content: `
                     <div class="text-center pt-24 text-slate-500">
                         <div class="text-5xl mb-4 opacity-20">📄</div>
@@ -77,53 +157,139 @@
                 abortController: null,
 
                 async init() {
-                    // 监听窗口大小变化以自动控制侧边栏
                     window.addEventListener('resize', () => {
                         if (window.innerWidth >= 768) this.sidebarOpen = true;
                     });
+                    await this.loadList();
+                },
 
+                async loadList() {
                     try {
                         const res = await fetch('/api/docs/list');
                         const data = await res.json();
-                        // 初始化数据结构
-                        this.docs = data.docs.map(name => ({ id: name, title: name }));
+                        
+                        let newTree = { items: [], folders: {} };
+                        let fetchQueue = [];
 
-                        // 懒加载标题
-                        this.docs.forEach(async (doc, index) => {
+                        data.docs.forEach(docName => {
+                            let parts = docName.split('_');
+                            let folderDepth = Math.min(parts.length - 1, this.maxLevel);
+                            
+                            let folders = parts.slice(0, folderDepth);
+                            let title = parts.slice(folderDepth).join('_');
+                            let docObj = { id: docName, title: title };
+
+                            let currentLevel = newTree;
+                            let currentPath = '';
+
+                            folders.forEach(f => {
+                                currentPath = currentPath ? `${currentPath}_${f}` : f;
+                                if (!currentLevel.folders[f]) {
+                                    currentLevel.folders[f] = { 
+                                        name: f, 
+                                        path: currentPath,
+                                        open: true, 
+                                        items: [], 
+                                        folders: {} 
+                                    };
+                                }
+                                currentLevel = currentLevel.folders[f];
+                            });
+
+                            currentLevel.items.push(docObj);
+                            fetchQueue.push(docObj);
+                        });
+
+                        this.tree = newTree;
+
+                        fetchQueue.forEach(async (docObj) => {
                             try {
-                                const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(doc.id)}`);
+                                const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(docObj.id)}`);
                                 if (rawRes.ok) {
                                     const rawData = await rawRes.json();
                                     const match = rawData.content.match(/^(?:#+\s*)?([^\n]+)/);
                                     if (match && match[1]) {
-                                        const title = match[1].trim();
-                                        if (title.length < 40) this.docs[index].title = title;
+                                        const parsedTitle = match[1].trim();
+                                        if (parsedTitle.length < 40) docObj.title = parsedTitle;
                                     }
                                 }
                             } catch (e) {}
                         });
+
                     } catch (e) {
                         this.content = '<p class="text-red-500 p-5 text-center">列表获取失败</p>';
                     }
                 },
 
-                async selectDoc(docId) {
-                    // 手机端选择文档后自动收起目录
-                    if (window.innerWidth < 768) this.sidebarOpen = false;
+                // 新增：自动边缘滚动计算逻辑
+                autoScroll(e) {
+                    const container = this.$refs.sidebarScroll;
+                    if (!container) return;
+                    const threshold = 60; // 距离上下边缘的像素阈值
+                    const rect = container.getBoundingClientRect();
                     
+                    if (e.clientY - rect.top < threshold) {
+                        container.scrollTop -= 15; // 向上滚动
+                    } else if (rect.bottom - e.clientY < threshold) {
+                        container.scrollTop += 15; // 向下滚动
+                    }
+                },
+
+                // 拖拽记录：同时传递文件 ID 和所属的当前目录前缀
+                dragStart(e, docId, currentPath) {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ docId, currentPath }));
+                    e.dataTransfer.effectAllowed = 'move';
+                },
+
+                async handleDrop(e, targetPath) {
+                    this.dragOverFolder = null;
+                    const dataStr = e.dataTransfer.getData('text/plain');
+                    if (!dataStr) return;
+
+                    try {
+                        const { docId: oldId, currentPath } = JSON.parse(dataStr);
+                        
+                        // 安全提取纯文件名：仅切除前置关联目录，不破坏文件名原有的 "_"
+                        let pureFileName = oldId;
+                        if (currentPath && oldId.startsWith(currentPath + '_')) {
+                            pureFileName = oldId.substring(currentPath.length + 1);
+                        }
+
+                        const newId = targetPath ? `${targetPath}_${pureFileName}` : pureFileName;
+                        if (oldId === newId) return;
+
+                        NProgress.start();
+                        
+                        const res = await fetch('/api/docs/rename', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ oldName: oldId, newName: newId })
+                        });
+                        
+                        if (!res.ok) throw new Error('移动失败，请检查后端接口');
+
+                        if (this.activeDoc === oldId) this.activeDoc = newId;
+                        await this.loadList();
+
+                    } catch (e) {
+                        alert(`⚠️ ${e.message}`);
+                    } finally {
+                        NProgress.done();
+                    }
+                },
+
+                async selectDoc(docId) {
+                    if (window.innerWidth < 768) this.sidebarOpen = false;
                     this.activeDoc = docId;
 
-                    // 中止之前的请求
                     if (this.abortController) this.abortController.abort();
                     this.abortController = new AbortController();
                     const signal = this.abortController.signal;
 
-                    // 加载状态
                     this.content = '<div class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>';
                     NProgress.start();
 
                     try {
-                        // 阶段1：快速加载缓存内容
                         const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docId)}`, { signal });
                         const dataFast = await resFast.json();
                         if (dataFast.error) throw new Error(dataFast.error);
@@ -132,7 +298,6 @@
                         this.$refs.scrollContainer.scrollTop = 0;
                         NProgress.set(0.6);
 
-                        // 阶段2：后台刷新差异
                         const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
                         const dataFresh = await resFresh.json();
 
