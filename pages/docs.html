@@ -4,499 +4,152 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>动态知识库</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
     <style>
-        :root {
-            --bg-main: #f4f7f9;
-            --bg-side: #ffffff;
-            --accent: #2563eb;
-            --accent-light: #eff6ff;
-            --text-main: #0f172a;
-            --text-sub: #64748b;
-            --border: #e2e8f0;
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            --sidebar-width: 280px;
-            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            background: var(--bg-main); 
-            color: var(--text-main); 
-            overflow-x: hidden;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* 顶部进度条 */
-        #topProgress {
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            height: 3px; 
-            background: var(--accent);
-            width: 0%; 
-            transition: width 0.3s ease, opacity 0.3s ease; 
-            z-index: 1000; 
-            opacity: 0;
-            box-shadow: 0 0 10px var(--accent);
-        }
-
-        /* 顶部控制栏 - 手机端关键 */
-        .header-bar {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            background: white;
-            border-bottom: 1px solid var(--border);
-            z-index: 50;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .menu-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 12px;
-            background: var(--bg-side);
-            color: var(--text-main);
-            font-size: 20px;
-            cursor: pointer;
-            transition: var(--transition);
-            flex-shrink: 0;
-        }
+        /* 覆盖 NProgress 默认主题色，匹配原版的蓝色 (#2563eb) */
+        #nprogress .bar { background: #2563eb !important; height: 3px !important; }
+        #nprogress .peg { box-shadow: 0 0 10px #2563eb, 0 0 5px #2563eb !important; }
+        #nprogress .spinner { display: none !important; } /* 隐藏加载圈 */
         
-        .menu-btn:hover {
-            background: var(--accent-light);
-            color: var(--accent);
-        }
-
-        .header-title {
-            font-weight: 600;
-            font-size: 18px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* 主内容区域 */
-        .main-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-        }
-
-        /* 侧边栏 - 响应式核心 */
-        .sidebar {
-            width: var(--sidebar-width);
-            background: var(--bg-side);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            z-index: 40;
-            height: 100%;
-            transform: translateX(calc(-1 * var(--sidebar-width)));
-            transition: transform 0.3s ease;
-            position: absolute;
-            left: 0;
-            top: 0;
-        }
-
-        /* 手机端：默认隐藏侧边栏 */
-        @media (max-width: 767px) {
-            .sidebar {
-                box-shadow: var(--shadow-md);
-            }
-        }
-
-        /* 平板/桌面：显示侧边栏 */
-        @media (min-width: 768px) {
-            .sidebar {
-                position: relative;
-                transform: none;
-                border-right: 1px solid var(--border);
-            }
-            .menu-btn {
-                display: none;
-            }
-        }
-
-        /* 侧边栏展开状态 */
-        .sidebar.open {
-            transform: translateX(0);
-        }
-
-        .sidebar-header { 
-            padding: 24px 20px; 
-            border-bottom: 1px solid var(--border); 
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .sidebar-header h3 { 
-            margin: 0; 
-            font-size: 16px; 
-            font-weight: 600; 
-            color: var(--text-main); 
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .sidebar-header a { 
-            font-size: 12px; 
-            color: var(--accent); 
-            text-decoration: none; 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            background: var(--accent-light);
-            transition: var(--transition);
-        }
-        .sidebar-header a:hover { 
-            background: #dbeafe; 
-        }
-        
-        #docList { 
-            flex: 1; 
-            padding: 12px 10px; 
-            overflow-y: auto; 
-            height: calc(100vh - 100px);
-        }
-        
-        /* 列表项动效 */
-        .doc-item { 
-            padding: 10px 14px; 
-            margin-bottom: 4px; 
-            cursor: pointer; 
-            border-radius: 6px; 
-            color: var(--text-sub); 
-            font-size: 14px; 
-            transition: var(--transition); 
-            border-left: 3px solid transparent;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .doc-item:hover { 
-            background: #f8fafc; 
-            color: var(--text-main); 
-            transform: translateX(4px);
-            border-left-color: #cbd5e1;
-        }
-        .doc-item.active { 
-            background: var(--accent-light); 
-            color: var(--accent); 
-            font-weight: 500; 
-            border-left-color: var(--accent);
-            transform: translateX(4px);
-        }
-        .doc-icon { 
-            opacity: 0.5; 
-            font-size: 16px; 
-            transition: 0.2s; 
-        }
-        .doc-item.active .doc-icon { 
-            opacity: 1; 
-        }
-        .doc-name { 
-            white-space: nowrap; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-            flex: 1; 
-        }
-
-        /* 内容区 - 响应式优化 */
-        .content-area { 
-            flex: 1; 
-            overflow-y: auto; 
-            scroll-behavior: smooth; 
-            position: relative;
-            height: 100%;
-            padding-top: 56px; /* 避开顶部栏 */
-        }
-        
-        .doc-wrapper { 
-            max-width: 880px; 
-            margin: 0 auto; 
-            padding: 0 20px; 
-        }
-        
-        .doc-container { 
-            background: white; 
-            padding: 40px 30px; 
-            border-radius: 16px; 
-            box-shadow: var(--shadow-md); 
-            line-height: 1.7;
-            font-size: 16px;
-            min-height: calc(100vh - 120px);
-        }
-
-        /* 骨架屏加载提示 */
-        .loading-skeleton {
-            text-align: center; 
-            padding-top: 100px; 
-            color: var(--text-sub);
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        @keyframes pulse { 
-            0%, 100% { opacity: 1; } 
-            50% { opacity: 0.5; } 
-        }
-
-        /* 遮罩层 - 手机端关键 */
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.4);
-            z-index: 30;
-            opacity: 0;
-            visibility: hidden;
-            transition: var(--transition);
-        }
-        
-        .overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        /* Markdown 样式精简优化 */
-        .doc-container h1 { 
-            font-size: 2.0em; 
-            margin-top: 0; 
-            padding-bottom: 12px; 
-            font-weight: 700; 
-            color: #0f172a; 
-        }
-        .doc-container h2 { 
-            margin-top: 1.5em; 
-            color: #1e293b; 
-        }
-        .doc-container table { 
-            width: 100%; 
-            margin: 20px 0; 
-            border-radius: 8px; 
-            overflow: hidden; 
-        }
-        .doc-container th, .doc-container td { 
-            padding: 10px 14px; 
-            border-bottom: 1px solid var(--border); 
-        }
-        .doc-container code { 
-            background: #f1f5f9; 
-            padding: 3px 6px; 
-            border-radius: 6px; 
-            color: #e11d48; 
-        }
+        /* 修正 Markdown 容器背景以融合卡片设计 */
+        .markdown-body { background-color: transparent; }
     </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-900 overflow-x-hidden h-screen flex flex-col font-sans" x-data="docApp()">
 
-    <div id="topProgress"></div>
-    
-    <!-- 顶部控制栏 - 手机端关键 -->
-    <div class="header-bar">
-        <div class="menu-btn" id="menuToggle">☰</div>
-        <div class="header-title">知识库文档</div>
+    <div class="flex items-center p-3 bg-white border-b border-slate-200 z-50 shadow-sm">
+        <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition md:hidden shrink-0">
+            ☰
+        </button>
+        <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap">知识库文档</div>
     </div>
 
-    <div class="main-container">
-        <!-- 遮罩层 - 点击收起目录 -->
-        <div class="overlay" id="overlay"></div>
+    <div class="flex flex-1 overflow-hidden relative">
+        <div x-show="sidebarOpen && window.innerWidth < 768" 
+             x-transition.opacity 
+             @click="sidebarOpen = false"
+             class="fixed inset-0 bg-black/40 z-30 md:hidden"></div>
         
-        <!-- 侧边栏 - 响应式核心 -->
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h3>📂 知识库</h3>
-                <a href="/docs-edit">编辑</a>
+        <div class="w-[280px] bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-transform duration-300 shadow-lg md:shadow-none"
+             :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+                <h3 class="m-0 text-base font-semibold flex items-center gap-2">📂 知识库</h3>
+                <a href="/docs-edit" class="text-xs text-blue-600 no-underline px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition">编辑</a>
             </div>
-            <div id="docList"></div>
+            
+            <div class="flex-1 p-3 overflow-y-auto space-y-1">
+                <template x-for="(doc, index) in docs" :key="doc.id">
+                    <div @click="selectDoc(doc.id)"
+                         class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-4"
+                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                        <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-50'">📄</span>
+                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1" x-text="`${index + 1}. ${doc.title}`"></span>
+                    </div>
+                </template>
+            </div>
         </div>
 
-        <!-- 内容区 -->
-        <div class="content-area" id="scrollContainer">
-            <div class="doc-wrapper">
-                <div class="doc-container" id="docContent">
-                    <div style="text-align:center; padding-top:100px; color:var(--text-sub);">
-                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.2;">📄</div>
-                        请从左侧选择文档
-                    </div>
+        <div class="flex-1 overflow-y-auto scroll-smooth relative h-full pt-14 md:pt-10" x-ref="scrollContainer">
+            <div class="max-w-[880px] mx-auto px-5 pb-10">
+                <div class="bg-white px-8 py-10 rounded-2xl shadow-md min-h-[calc(100vh-120px)] markdown-body" x-html="content">
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // DOM元素
-        const menuToggle = document.getElementById('menuToggle');
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('overlay');
-        const progressBar = document.getElementById('topProgress');
-        const contentArea = document.getElementById('docContent');
-        const scrollContainer = document.getElementById('scrollContainer');
-        
-        let currentAbortController = null;
-        let isSidebarOpen = false;
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('docApp', () => ({
+                sidebarOpen: window.innerWidth >= 768,
+                docs: [],
+                activeDoc: null,
+                content: `
+                    <div class="text-center pt-24 text-slate-500">
+                        <div class="text-5xl mb-4 opacity-20">📄</div>
+                        请从左侧选择文档
+                    </div>`,
+                abortController: null,
 
-        // 切换目录状态
-        function toggleSidebar() {
-            isSidebarOpen = !isSidebarOpen;
-            sidebar.classList.toggle('open', isSidebarOpen);
-            overlay.classList.toggle('active', isSidebarOpen);
-            document.body.style.overflow = isSidebarOpen ? 'hidden' : '';
-        }
+                async init() {
+                    // 监听窗口大小变化以自动控制侧边栏
+                    window.addEventListener('resize', () => {
+                        if (window.innerWidth >= 768) this.sidebarOpen = true;
+                    });
 
-        // 点击遮罩层收起目录
-        overlay.addEventListener('click', toggleSidebar);
-        
-        // 菜单按钮事件
-        menuToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleSidebar();
-        });
-
-        // 窗口大小变化时自动收起目录（平板/桌面宽度）
-        window.addEventListener('resize', () => {
-            if (window.innerWidth >= 768) {
-                isSidebarOpen = false;
-                sidebar.classList.remove('open');
-                overlay.classList.remove('active');
-                document.body.style.overflow = '';
-            }
-        });
-
-        // 进度条控制
-        function setProgress(val) {
-            if (val === 0) {
-                progressBar.style.opacity = '0';
-                setTimeout(() => { progressBar.style.width = '0%'; }, 300);
-            } else {
-                progressBar.style.opacity = '1';
-                progressBar.style.width = val + '%';
-            }
-        }
-
-        // 初始化文档列表
-        async function initDocList() {
-            try {
-                const res = await fetch('/api/docs/list');
-                const data = await res.json();
-                const listEl = document.getElementById('docList');
-                
-                listEl.innerHTML = data.docs.map((doc, index) => `
-                    <div class="doc-item" id="nav-${doc}" onclick="handleDocSelect('${doc}')">
-                        <span class="doc-icon">📄</span>
-                        <span class="doc-name">${index + 1}. ${doc}</span>
-                    </div>
-                `).join('');
-
-                // 懒加载标题
-                data.docs.forEach(async (doc, index) => {
                     try {
-                        const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(doc)}`);
-                        if (rawRes.ok) {
-                            const rawData = await rawRes.json();
-                            const match = rawData.content.match(/^(?:#+\s*)?([^\n]+)/);
-                            if (match && match[1]) {
-                                const title = match[1].trim();
-                                const item = document.getElementById(`nav-${doc}`);
-                                if (item) {
-                                    if (title.length < 40) {  // 正确使用 .length 属性
-  item.querySelector('.doc-name').textContent = `${index + 1}. ${title}`;
-}
+                        const res = await fetch('/api/docs/list');
+                        const data = await res.json();
+                        // 初始化数据结构
+                        this.docs = data.docs.map(name => ({ id: name, title: name }));
+
+                        // 懒加载标题
+                        this.docs.forEach(async (doc, index) => {
+                            try {
+                                const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(doc.id)}`);
+                                if (rawRes.ok) {
+                                    const rawData = await rawRes.json();
+                                    const match = rawData.content.match(/^(?:#+\s*)?([^\n]+)/);
+                                    if (match && match[1]) {
+                                        const title = match[1].trim();
+                                        if (title.length < 40) this.docs[index].title = title;
+                                    }
                                 }
-                            }
-                        }
+                            } catch (e) {}
+                        });
                     } catch (e) {
-                        console.error(`标题加载失败: ${doc}`, e);
+                        this.content = '<p class="text-red-500 p-5 text-center">列表获取失败</p>';
                     }
-                });
+                },
 
-            } catch (e) {
-                document.getElementById('docList').innerHTML = 
-                    `<p style="color:#ef4444;padding:20px;text-align:center;">列表获取失败</p>`;
-            }
-        }
+                async selectDoc(docId) {
+                    // 手机端选择文档后自动收起目录
+                    if (window.innerWidth < 768) this.sidebarOpen = false;
+                    
+                    this.activeDoc = docId;
 
-        // 文档选择处理
-        async function handleDocSelect(docName) {
-            // 手机端选择文档后自动收起目录
-            if (window.innerWidth < 768) {
-                toggleSidebar();
-            }
+                    // 中止之前的请求
+                    if (this.abortController) this.abortController.abort();
+                    this.abortController = new AbortController();
+                    const signal = this.abortController.signal;
 
-            // 更新选中状态
-            document.querySelectorAll('.doc-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            const selectedItem = document.getElementById(`nav-${docName}`);
-            if (selectedItem) selectedItem.classList.add('active');
+                    // 加载状态
+                    this.content = '<div class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>';
+                    NProgress.start();
 
-            // 清理现有请求
-            if (currentAbortController) currentAbortController.abort();
-            currentAbortController = new AbortController();
-            const signal = currentAbortController.signal;
+                    try {
+                        // 阶段1：快速加载缓存内容
+                        const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docId)}`, { signal });
+                        const dataFast = await resFast.json();
+                        if (dataFast.error) throw new Error(dataFast.error);
 
-            // 显示加载状态
-            contentArea.classList.remove('animate-enter');
-            contentArea.innerHTML = `<div class="loading-skeleton">加载中...</div>`;
+                        this.content = dataFast.html;
+                        this.$refs.scrollContainer.scrollTop = 0;
+                        NProgress.set(0.6);
 
-            try {
-                // 阶段1：快速加载缓存内容
-                setProgress(30);
-                const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docName)}`, { signal });
-                const dataFast = await resFast.json();
-                if (dataFast.error) throw new Error(dataFast.error);
+                        // 阶段2：后台刷新差异
+                        const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
+                        const dataFresh = await resFresh.json();
 
-                // 显示内容
-                contentArea.innerHTML = dataFast.html;
-                scrollContainer.scrollTop = 0;
-                setProgress(60);
+                        if (!dataFresh.error && dataFresh.html !== dataFast.html) {
+                            this.content = dataFresh.html;
+                        }
+                        NProgress.done();
 
-                // 阶段2：后台刷新
-                const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docName)}`, { signal });
-                const dataFresh = await resFresh.json();
-
-                if (!dataFresh.error && dataFresh.html !== dataFast.html) {
-                    contentArea.innerHTML = dataFresh.html;
+                    } catch (e) {
+                        if (e.name !== 'AbortError') {
+                            this.content = `<div class="text-red-500 p-5 text-center">⚠️ 加载失败: ${e.message}</div>`;
+                            NProgress.done();
+                        }
+                    }
                 }
-                setProgress(100);
-
-            } catch (e) {
-                if (e.name !== 'AbortError') {
-                    contentArea.innerHTML = 
-                        `<div style="color:#ef4444; padding:20px; text-align:center;">
-                         ⚠️ 加载失败: ${e.message}
-                        </div>`;
-                    setProgress(100);
-                }
-            } finally {
-                setTimeout(() => setProgress(0), 400);
-            }
-        }
-
-        // 初始化
-        window.onload = () => {
-            initDocList();
-            
-            // 桌面端默认展开目录
-            if (window.innerWidth >= 768) {
-                isSidebarOpen = true;
-                sidebar.classList.add('open');
-            }
-        };
+            }));
+        });
     </script>
 </body>
 </html>
