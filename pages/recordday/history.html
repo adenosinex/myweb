@@ -4,35 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>时光切片档案</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.css">
+    <link href="/static/cdn/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/cdn/viewer.min.css">
+    <!-- <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.css"> -->
     <style>
-        .manual-img { transition: transform 0.3s ease; cursor: zoom-in; }
-        .prose table { border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #e5e7eb; }
-        .prose th, .prose td { border: 1px solid #e5e7eb; padding: 0.5rem; text-align: left; }
-        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
-        
-        @media (max-width: 767px) {
-            #modalBody[data-view="text"] #modalImgContainer { display: none; }
-            #modalBody[data-view="image"] #modalTextContainer { display: none; }
-        }
+        .manual-img{cursor:zoom-in;transition:transform .2s}.manual-img:hover{transform:scale(1.02)}
+        .viewer-container img{cursor:zoom-in!important}.viewer-move{cursor:grab!important}
+        .viewer-move:active{cursor:grabbing!important}.custom-scrollbar::-webkit-scrollbar{height:6px;width:6px}
+        .custom-scrollbar::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+        @media(max-width:767px){#modalBody[data-view="text"] #modalImgContainer,#modalBody[data-view="image"] #modalTextContainer{display:none}}
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
-
     <nav class="bg-white shadow-sm border-b border-gray-200 px-4 md:px-6 py-4 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center gap-4 justify-between">
             <div class="flex items-center justify-between flex-1">
-                <h1 class="text-xl font-bold text-gray-800 tracking-tight flex-shrink-0 mr-6">⏳ 时光记录</h1>
-                <button onclick="openUploadModal()" class="bg-black hover:bg-gray-800 text-white text-sm font-bold py-2 px-4 rounded-full shadow-md transition-all flex items-center gap-1 shrink-0 md:order-last">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>添加记录
+                <h1 class="text-xl font-bold text-gray-800 tracking-tight mr-6">⏳ 时光记录</h1>
+                <button onclick="openUploadModal()" class="bg-black hover:bg-gray-800 text-white text-sm font-bold py-2 px-4 rounded-full shrink-0 md:order-last">
+                    <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>添加记录
                 </button>
-                <div class="hidden md:block flex-1 max-w-xl mx-4">
-                    <input type="text" id="searchInput" class="w-full bg-gray-100 border-transparent focus:bg-white focus:border-gray-500 rounded-xl px-4 py-2.5 text-sm outline-none" placeholder="🔍 搜索事件..." oninput="renderGallery()">
-                </div>
+                <input type="text" id="searchInput" class="hidden md:block flex-1 max-w-xl mx-4 bg-gray-100 border-transparent focus:bg-white focus:border-gray-500 rounded-xl px-4 py-2.5 text-sm outline-none" placeholder="🔍 搜索事件..." oninput="renderGallery()">
             </div>
         </div>
     </nav>
@@ -40,7 +32,7 @@
     <div class="max-w-7xl mx-auto px-4 md:px-6 pt-6">
         <div class="flex items-center justify-between mb-3">
             <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">周期状态大盘 (距今最久优先)</h2>
-            <button onclick="document.getElementById('searchInput').value=''; renderGallery();" class="text-[10px] text-blue-500 hover:underline">查看全部</button>
+            <button onclick="searchInput.value='';renderGallery()" class="text-[10px] text-blue-500 hover:underline">查看全部</button>
         </div>
         <div id="eventStatsDashboard" class="flex gap-3 overflow-x-auto custom-scrollbar pb-3"></div>
     </div>
@@ -50,10 +42,10 @@
     </main>
 
     <div id="uploadModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+        <div class="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
             <div class="p-5 border-b flex justify-between items-center bg-gray-50/50">
-                <h3 class="font-bold text-gray-800 flex items-center gap-2">📸 存档生活切片</h3>
-                <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-900 text-2xl leading-none">&times;</button>
+                <h3 class="font-bold text-gray-800">📸 存档生活切片</h3>
+                <button onclick="closeUploadModal()" class="text-gray-400 text-2xl leading-none">&times;</button>
             </div>
             <div class="p-6">
                 <div class="mb-4">
@@ -62,43 +54,35 @@
                     <div id="quickSelectContainer" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar"></div>
                 </div>
                 <div class="mb-4">
-                    <label class="block text-xs font-bold text-gray-700 mb-1">实际发生时间 (自动提取/可修改)</label>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">实际发生时间</label>
                     <input type="datetime-local" id="overrideTime" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none">
                 </div>
-
-                <div class="border-2 border-dashed border-gray-300 bg-gray-50 rounded-2xl p-8 text-center hover:bg-gray-100 transition-all cursor-pointer mb-4" onclick="document.getElementById('fileInput').click()">
+                <div class="border-2 border-dashed border-gray-300 bg-gray-50 rounded-2xl p-8 text-center hover:bg-gray-100 mb-4" onclick="fileInput.click()">
                     <p class="text-sm font-semibold text-gray-700">点击选择多张生活照片</p>
-                    <input type="file" id="fileInput" accept="image/*" multiple class="hidden" onchange="handleFilesSelection()">
+                    <input type="file" id="fileInput" accept="image/*" multiple class="hidden" onchange="handleFiles()">
                 </div>
-                
-                <div id="previewContainer" class="hidden mb-4 rounded-xl overflow-x-auto border border-gray-200 p-2 flex gap-2 custom-scrollbar h-28 items-center bg-gray-50">
-                </div>
-
-                <button onclick="submitRecord()" class="w-full bg-gray-300 text-gray-500 font-bold py-3.5 px-4 rounded-xl transition-all disabled:opacity-50" id="btnSubmit" disabled>
-                    等待选择照片...
-                </button>
+                <div id="previewContainer" class="hidden mb-4 rounded-xl overflow-x-auto border border-gray-200 p-2 flex gap-2 custom-scrollbar h-28 bg-gray-50"></div>
+                <button id="btnSubmit" onclick="submitRecord()" class="w-full bg-gray-300 text-gray-500 font-bold py-3.5 px-4 rounded-xl" disabled>等待选择照片...</button>
             </div>
         </div>
     </div>
 
     <div id="detailModal" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[80] hidden flex items-center justify-center md:p-4">
-        <div class="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+        <div class="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl flex flex-col shadow-2xl">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50 z-10">
                 <h3 class="font-bold text-gray-800 flex items-center gap-2 pr-4">
-                    <span id="modalEventTitle" class="truncate text-lg">切片详情</span>
+                    <span id="modalEventTitle" class="truncate text-lg"></span>
                     <span id="modalDate" class="text-xs font-normal text-gray-500 bg-gray-200 px-2 py-1 rounded"></span>
                 </h3>
-                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-900 bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center">&times;</button>
+                <button onclick="closeModal()" class="text-gray-500 bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center">&times;</button>
             </div>
-
             <div class="md:hidden flex bg-gray-100 p-2 gap-2 border-b">
                 <button onclick="setModalView('text')" id="btnViewText" class="flex-1 py-1.5 bg-white shadow rounded-lg text-sm font-bold text-gray-800">📝 环境档案</button>
                 <button onclick="setModalView('image')" id="btnViewImg" class="flex-1 py-1.5 text-gray-500 hover:bg-gray-200 rounded-lg text-sm font-bold">🖼️ 视觉快照</button>
             </div>
-
             <div id="modalBody" data-view="image" class="flex-1 flex flex-col md:flex-row overflow-hidden bg-white">
                 <div id="modalImgContainer" class="w-full md:w-1/2 lg:w-3/5 h-full bg-black flex items-center justify-center border-gray-200 relative">
-                    <img id="modalDetailImg" src="" class="max-w-full max-h-full object-contain cursor-zoom-in">
+                    <img id="modalDetailImg" class="max-w-full max-h-full object-contain cursor-zoom-in">
                     <div id="modalFilename" class="absolute bottom-2 left-2 text-[10px] text-white/50 bg-black/50 px-2 py-1 rounded select-all"></div>
                 </div>
                 <div id="modalTextContainer" class="w-full md:w-1/2 lg:w-2/5 h-full overflow-y-auto p-5 md:p-8 bg-gray-50">
@@ -109,341 +93,213 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.js"></script>
     <script>
-        const API_BASE = (window.location.protocol === 'blob:' || window.location.protocol === 'file:' || window.location.hostname.includes('usercontent.goog')) 
-            ? 'http://127.0.0.1:5000' 
-            : '';
+        const API_BASE = (location.protocol.match(/^(blob|file|https?:\/\/usercontent\.goog)/) ? 'http://127.0.0.1:5000' : '');
+        let viewer, modalViewer, pollInterval;
 
-        let viewer, pollInterval, modalViewer;
-        let allSnapshots = []; 
-        let currentFiles = [];
+        // 核心工具函数
+        const formatDateTime = (d) => d ? new Date(d.replace(' ', 'T')).toISOString().replace(/[-T:]/g, '').slice(0, 12) : '未知';
+        const getTimeAgo = (d) => {
+            if (!d) return '未知';
+            const diff = (Date.now() - new Date(d.replace(' ', 'T')).getTime()) / 864e5;
+            return diff < 1 ? '今天' : diff < 2 ? '昨天' : diff > 365 ? `${~~(diff/365)}年前` : diff > 30 ? `${~~(diff/30)}个月前` : `${~~diff}天前`;
+        };
 
-        function formatDateTime(dateStr) {
-            if (!dateStr) return '未知';
-            const d = new Date(dateStr.replace(' ', 'T'));
-            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        // 动态图片绑定 Viewer.js
+        const initViewers = () => {
+            if (viewer) viewer.destroy();
+            viewer = new Viewer(document.getElementById('gallery'), {
+                filter: img => img.classList.contains('manual-img'),
+                viewed() {
+                    this.viewer.canvas.addEventListener('click', e => {
+                        if (e.target === this.viewer.canvas) viewer.hide();
+                    });
+                }
+            });
+        };
+
+        // 主数据流
+        async function loadData() {
+            allSnapshots = await (await fetch(API_BASE + '/api/snapshots')).json();
+            renderStats();
+            renderGallery();
         }
 
-        function getTimeAgo(dateStr) {
-            if (!dateStr) return '未知';
-            const past = new Date(dateStr.replace(' ', 'T')).getTime();
-            const now = new Date().getTime();
-            const diffDays = Math.floor((now - past) / (1000 * 60 * 60 * 24));
-            
-            if (diffDays === 0) return '今天';
-            if (diffDays === 1) return '昨天';
-            if (diffDays > 365) return `${Math.floor(diffDays/365)}年前`;
-            if (diffDays > 30) return `${Math.floor(diffDays/30)}个月前`;
-            return `${diffDays}天前`;
-        }
-
-        // 新增/优化：同时渲染“首页大盘”和“弹窗快捷选项”
-        function renderEventStats() {
-            const dashboardContainer = document.getElementById('eventStatsDashboard');
-            const quickSelectContainer = document.getElementById('quickSelectContainer');
-            if (!dashboardContainer) return;
-
-            const eventStats = {};
-            // 提取每个事件的最后一次发生时间
+        // 渲染状态大盘
+        function renderStats() {
+            const stats = {};
             allSnapshots.forEach(item => {
                 const type = item.event_type || '未命名记录';
-                if (type === '未命名记录' || type.trim() === '') return;
-                
-                const itemTime = new Date(item.record_time.replace(' ', 'T')).getTime();
-                if (!eventStats[type] || itemTime > eventStats[type].time) {
-                    eventStats[type] = { time: itemTime, record_time: item.record_time };
+                if (!type.trim()) return;
+                const time = new Date(item.record_time.replace(' ', 'T')).getTime();
+                if (!stats[type] || time > stats[type].time) {
+                    stats[type] = { time, record_time: item.record_time };
                 }
             });
 
-            // 首页大盘排序逻辑：按距今越久（时间戳越小）排在越前面，作为周期提醒
-            const sortedForDashboard = Object.keys(eventStats).sort((a, b) => eventStats[a].time - eventStats[b].time);
-            
-            // 弹窗快捷排序逻辑：按最近更新（时间戳越大）排在越前面，方便连续记录
-            const sortedForQuickSelect = Object.keys(eventStats).sort((a, b) => eventStats[b].time - eventStats[a].time);
-
-            if (sortedForDashboard.length === 0) {
-                dashboardContainer.innerHTML = '<span class="text-xs text-gray-400">暂无项目记录，快去添加你的第一个切片吧！</span>';
-                if (quickSelectContainer) quickSelectContainer.innerHTML = '';
-                return;
-            }
-
-            // 1. 渲染首页大盘
-            dashboardContainer.innerHTML = sortedForDashboard.map(type => {
-                const timeAgo = getTimeAgo(eventStats[type].record_time);
-                // 距离今天越久，颜色略有不同（可选增强）
-                return `<div onclick="document.getElementById('searchInput').value='${type}'; renderGallery();" class="bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-sm shrink-0 flex flex-col cursor-pointer hover:border-black hover:shadow-md transition-all group min-w-[100px]">
+            // 首页大盘：距今越久越靠前
+            const sortedDashboard = Object.keys(stats).sort((a, b) => stats[a].time - stats[b].time);
+            document.getElementById('eventStatsDashboard').innerHTML = sortedDashboard.map(type => `
+                <div onclick="searchInput.value='${type}';renderGallery()" class="bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-sm shrink-0 cursor-pointer hover:border-black hover:shadow-md group min-w-[100px]">
                     <span class="text-sm font-bold text-gray-800 group-hover:text-black">${type}</span>
-                    <span class="text-[11px] text-gray-500 mt-0.5">上次: <span class="font-mono">${timeAgo}</span></span>
-                </div>`;
-            }).join('');
+                    <span class="text-[11px] text-gray-500 mt-0.5">上次: ${getTimeAgo(stats[type].record_time)}</span>
+                </div>
+            `).join('');
 
-            // 2. 渲染上传弹窗快捷选项
-            if (quickSelectContainer) {
-                quickSelectContainer.innerHTML = sortedForQuickSelect.map(type => {
-                    const timeAgo = getTimeAgo(eventStats[type].record_time);
-                    return `<button onclick="quickSubmit('${type}')" class="px-3 py-1.5 bg-gray-100 hover:bg-black hover:text-white text-gray-700 rounded-xl transition-all flex flex-col items-start text-left shrink-0">
-                        <span class="text-[11px] font-bold">${type}</span>
-                        <span class="text-[9px] opacity-70">上次: ${timeAgo}</span>
-                    </button>`;
-                }).join('');
-            }
+            // 上传弹窗快捷标签：最近更新优先
+            const sortedQuick = Object.keys(stats).sort((a, b) => stats[b].time - stats[a].time);
+            document.getElementById('quickSelectContainer').innerHTML = sortedQuick.map(type => `
+                <button onclick="eventType.value='${type}';currentFiles.length && submitRecord()" class="px-3 py-1.5 bg-gray-100 hover:bg-black hover:text-white text-gray-700 rounded-xl text-left">
+                    <span class="text-[11px] font-bold">${type}</span>
+                    <span class="text-[9px] opacity-70">上次: ${getTimeAgo(stats[type].record_time)}</span>
+                </button>
+            `).join('');
         }
 
-        function quickSubmit(type) {
-            document.getElementById('eventType').value = type;
-            if (currentFiles.length > 0) {
-                submitRecord();
-            } else {
-                document.getElementById('fileInput').click();
-            }
-        }
-
-        async function compressImage(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        let w = img.width, h = img.height;
-                        if (w > h && w > 2048) { h = Math.round(h * 2048 / w); w = 2048; } 
-                        else if (h > 2048) { w = Math.round(w * 2048 / h); h = 2048; }
-                        const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
-                        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-                        cvs.toBlob(blob => resolve(new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' })), 'image/jpeg', 0.85);
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
-        function handleFilesSelection() {
-            const input = document.getElementById('fileInput');
-            if (!input.files.length) return;
-            
-            currentFiles = Array.from(input.files);
-            const previewContainer = document.getElementById('previewContainer');
-            previewContainer.innerHTML = '';
-            previewContainer.classList.remove('hidden');
-
-            const overrideTimeInput = document.getElementById('overrideTime');
-            if (!overrideTimeInput.value && currentFiles.length > 0) {
-                const file = currentFiles[0];
-                let dateToSet = new Date(file.lastModified);
-
-                EXIF.getData(file, function() {
-                    const exifDate = EXIF.getTag(this, "DateTimeOriginal");
-                    if (exifDate) {
-                        const parts = exifDate.split(/[: ]/);
-                        if (parts.length === 6) {
-                            dateToSet = new Date(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5]);
-                        }
-                    }
-                    const yyyy = dateToSet.getFullYear();
-                    const MM = String(dateToSet.getMonth() + 1).padStart(2, '0');
-                    const dd = String(dateToSet.getDate()).padStart(2, '0');
-                    const HH = String(dateToSet.getHours()).padStart(2, '0');
-                    const mm = String(dateToSet.getMinutes()).padStart(2, '0');
-                    overrideTimeInput.value = `${yyyy}-${MM}-${dd}T${HH}:${mm}`;
-                });
-            }
-
-            currentFiles.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.className = 'h-24 w-24 object-cover rounded shadow border border-gray-200 shrink-0';
-                    previewContainer.appendChild(img);
-                };
-                reader.readAsDataURL(file);
-            });
-
-            const btn = document.getElementById('btnSubmit');
-            btn.disabled = false;
-            btn.className = "w-full bg-black hover:bg-gray-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg";
-            btn.innerHTML = `✅ 立即入库 (${currentFiles.length} 张)`;
-            
-            // 选完图片后，自动判断如果已填好分类，直接提交（实现"一键打卡"）
-            const currentEvent = document.getElementById('eventType').value.trim();
-            if (currentEvent) {
-                submitRecord();
-            }
-        }
-
-        async function submitRecord() {
-            if (!currentFiles.length) return;
-            const btn = document.getElementById('btnSubmit');
-            btn.disabled = true;
-
-            const eventType = document.getElementById('eventType').value;
-            const overrideTime = document.getElementById('overrideTime').value;
-
-            try {
-                let completed = 0;
-                for (let i = 0; i < currentFiles.length; i++) {
-                    btn.innerHTML = `处理中... (${completed + 1}/${currentFiles.length})`;
-                    
-                    const compressed = await compressImage(currentFiles[i]);
-                    const fd = new FormData(); 
-                    fd.append('file', compressed);
-                    fd.append('original_filename', currentFiles[i].name);
-                    
-                    if(eventType) fd.append('event_type', eventType);
-                    if(overrideTime) fd.append('record_time', overrideTime.replace('T', ' '));
-
-                    await fetch(API_BASE + '/api/snapshots/upload', { method: 'POST', body: fd });
-                    completed++;
-                }
-                closeUploadModal();
-                loadSnapshots();
-            } catch(e) {
-                alert("部分或全部保存失败: " + e.message);
-                btn.disabled = false; 
-                btn.innerHTML = `✅ 继续入库剩余项`;
-            }
-        }
-
-        async function requestAI(id, event) {
-            event.stopPropagation();
-            const btn = event.currentTarget;
-            btn.innerHTML = `<span class="animate-pulse">🤖 分析中...</span>`;
-            btn.disabled = true;
-            await fetch(API_BASE + '/api/snapshots/analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
-            loadSnapshots(); startPolling();
-        }
-
+        // 渲染画廊
         function renderGallery() {
-            const gallery = document.getElementById('gallery');
-            const keyword = document.getElementById('searchInput').value.toLowerCase();
-            let needPolling = false;
-
-            gallery.innerHTML = allSnapshots.filter(item => 
-                (item.event_type || "").toLowerCase().includes(keyword) || 
-                (item.description || "").toLowerCase().includes(keyword) ||
-                (item.original_filename || "").toLowerCase().includes(keyword)
+            const kw = searchInput.value.toLowerCase();
+            const html = allSnapshots.filter(item => 
+                (item.event_type || '').toLowerCase().includes(kw) ||
+                (item.description || '').toLowerCase().includes(kw) ||
+                (item.original_filename || '').toLowerCase().includes(kw)
             ).map(item => {
-                if (item.status === 'analyzing_context') needPolling = true;
-                
-                let statusOverlay = item.status === 'analyzing_context' ? '🤖 AI 分析中...' : '';
-                const tagsHTML = (item.tags || []).map(t => `<span class="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded border">${t}</span>`).join('');
-                const isFailed = item.description && (item.description.includes('失败') || item.description.includes('异常') || (item.tags && item.tags.includes('AI解析异常')));
+                const time = formatDateTime(item.record_time);
+                const tags = (item.tags || []).map(t => `<span class="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded border">${t}</span>`).join('');
+                const status = item.status === 'analyzing_context' 
+                    ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center text-xs text-white font-bold">🤖 AI 分析中...</div>`
+                    : '';
 
-                let actionBtn = '';
+                let btn = '';
                 if (item.status === 'analyzing_context') {
-                    actionBtn = `<button disabled class="w-full py-2 bg-gray-100 text-gray-400 text-[11px] font-bold rounded-xl">🤖 分析中...</button>`;
-                } else if (!item.description || isFailed) {
-                    const btnText = isFailed ? '🤖 重新提取环境' : '🤖 AI 提取环境 (可选)';
-                    const btnClass = isFailed ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-100';
-                    actionBtn = `<button onclick="requestAI('${item.id}', event)" class="w-full py-2 ${btnClass} text-[11px] font-bold rounded-xl transition-all border">${btnText}</button>`;
+                    btn = `<button disabled class="w-full py-2 bg-gray-100 text-gray-400 text-[11px] font-bold rounded-xl">🤖 分析中...</button>`;
+                } else if (!item.description || /失败|异常/.test(item.description)) {
+                    const isFailed = /失败|异常/.test(item.description);
+                    btn = `<button onclick="requestAI('${item.id}',event)" class="w-full py-2 ${isFailed ? 'bg-red-50 hover:bg-red-100 text-red-600' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'} text-[11px] font-bold rounded-xl border">${isFailed ? '🤖 重新提取环境' : '🤖 AI 提取环境 (可选)'}</button>`;
                 } else {
-                    actionBtn = `<button onclick="showDetail('${item.id}')" class="w-full py-2 bg-gray-50 hover:bg-gray-200 text-gray-700 text-[11px] font-bold rounded-xl transition-all border border-gray-200">查看环境档案</button>`;
+                    btn = `<button onclick="showDetail('${item.id}')" class="w-full py-2 bg-gray-50 hover:bg-gray-200 text-gray-700 text-[11px] font-bold rounded-xl border border-gray-200">查看环境档案</button>`;
                 }
 
                 return `
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col group relative">
-                    <button class="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-red-500 hover:bg-red-50 transition-all" onclick="deleteSnapshot('${item.id}', event)" title="删除"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                    
-                    <div class="relative h-40 sm:h-52 overflow-hidden bg-gray-100">
-                        <img src="${API_BASE}${item.url}" class="w-full h-full object-cover manual-img cursor-zoom-in">
-                        ${statusOverlay ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center text-xs text-white animate-pulse font-bold">${statusOverlay}</div>` : ''}
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden group relative">
+                    <button onclick="deleteSnapshot('${item.id}',event)" class="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-red-500 hover:bg-red-50" title="删除">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                    <div class="relative h-40 sm:h-52 bg-gray-100">
+                        <img src="${API_BASE}${item.url}" class="w-full h-full object-cover manual-img">
+                        ${status}
                         <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                            <div class="text-[10px] text-gray-200 font-mono flex justify-between items-center w-full">
-                                <span>${formatDateTime(item.record_time)}</span>
-                            </div>
+                            <div class="text-[10px] text-gray-200 font-mono">${time}</div>
                         </div>
                     </div>
-                    
-                    <div class="p-3 sm:p-4 flex-1 flex flex-col bg-white">
-                        <div class="text-sm font-bold text-gray-900 truncate mb-1" title="${item.original_filename || item.event_type}">${item.event_type}</div>
-                        <div class="flex flex-wrap gap-1 mb-3 h-5 overflow-hidden">${tagsHTML}</div>
-                        <div class="mt-auto">${actionBtn}</div>
+                    <div class="p-3 sm:p-4 flex-1 flex flex-col">
+                        <div class="text-sm font-bold text-gray-900 truncate mb-1">${item.event_type}</div>
+                        <div class="flex flex-wrap gap-1 mb-3 h-5 overflow-hidden">${tags}</div>
+                        ${btn}
                     </div>
                 </div>`;
             }).join('');
 
-            if (viewer) viewer.destroy();
-            viewer = new Viewer(gallery, { filter(img) { return img.classList.contains('manual-img'); }});
-            return needPolling;
+            document.getElementById('gallery').innerHTML = html;
+            initViewers(); // 重新绑定 Viewer
+            return !!allSnapshots.some(i => i.status === 'analyzing_context');
         }
 
-        async function loadSnapshots() {
-            const res = await fetch(API_BASE + '/api/snapshots');
-            allSnapshots = await res.json();
-            renderEventStats(); // 渲染顶层大盘和快捷选择
-            return renderGallery();
-        }
-
-        async function deleteSnapshot(id, event) {
-            event.stopPropagation();
-            if(!confirm("⚠️ 确定要删除该记录吗？")) return;
-            await fetch(API_BASE + `/api/snapshots/${id}`, { method: 'DELETE' });
-            loadSnapshots();
-        }
-
+        // 详情页大图查看器
         function showDetail(id) {
-            const item = allSnapshots.find(m => m.id === id);
-            document.getElementById('modalEventTitle').innerText = item.event_type;
-            document.getElementById('modalDate').innerText = formatDateTime(item.record_time);
-            document.getElementById('modalContent').innerHTML = marked.parse(item.description || "无环境描述");
-            
-            const filenameEl = document.getElementById('modalFilename');
-            if(item.original_filename) {
-                filenameEl.innerText = item.original_filename;
-                filenameEl.classList.remove('hidden');
-            } else {
-                filenameEl.classList.add('hidden');
-            }
+            const item = allSnapshots.find(i => i.id === id);
+            modalEventTitle.textContent = item.event_type;
+            modalDate.textContent = formatDateTime(item.record_time);
+            modalContent.innerHTML = marked.parse(item.description || "无环境描述");
+            modalFilename.textContent = item.original_filename || '';
+            modalFilename.classList.toggle('hidden', !item.original_filename);
 
-            const imgEl = document.getElementById('modalDetailImg');
-            imgEl.src = API_BASE + item.url;
+            const img = modalDetailImg;
+            img.src = API_BASE + item.url;
+            img.onload = () => {
+                if (modalViewer) modalViewer.destroy();
+                modalViewer = new Viewer(img, {
+                    navbar: false,
+                    title: false,
+                    toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 },
+                    viewed() {
+                        const canvas = this.viewer.canvas;
+                        canvas.addEventListener('click', e => {
+                            if (e.target === canvas) modalViewer.hide();
+                        });
+                    }
+                });
+            };
+
             setModalView('image');
-            
-            if(modalViewer) modalViewer.destroy();
-            modalViewer = new Viewer(imgEl, { navbar: false, title: false });
-
-            document.getElementById('detailModal').classList.remove('hidden'); 
+            detailModal.classList.remove('hidden');
         }
 
-        function setModalView(view) {
-            document.getElementById('modalBody').setAttribute('data-view', view);
-            if (view === 'image') {
-                document.getElementById('btnViewImg').classList.replace('text-gray-500', 'text-gray-800');
-                document.getElementById('btnViewImg').classList.add('bg-white', 'shadow');
-                document.getElementById('btnViewText').classList.replace('text-gray-800', 'text-gray-500');
-                document.getElementById('btnViewText').classList.remove('bg-white', 'shadow');
-            } else {
-                document.getElementById('btnViewText').classList.replace('text-gray-500', 'text-gray-800');
-                document.getElementById('btnViewText').classList.add('bg-white', 'shadow');
-                document.getElementById('btnViewImg').classList.replace('text-gray-800', 'text-gray-500');
-                document.getElementById('btnViewImg').classList.remove('bg-white', 'shadow');
+        // 上传逻辑
+        function handleFiles() {
+            const files = fileInput.files;
+            if (!files.length) return;
+            
+            const overrideTime = document.getElementById('overrideTime');
+            if (!overrideTime.value && files[0]) {
+                EXIF.getData(files[0], function() {
+                    const date = EXIF.getTag(this, "DateTimeOriginal") || new Date(files[0].lastModified);
+                    overrideTime.value = new Date(date).toISOString().slice(0, 16);
+                });
+            }
+
+            previewContainer.innerHTML = Array.from(files).map(file => {
+                return `<img src="${URL.createObjectURL(file)}" class="h-24 w-24 object-cover rounded shadow border border-gray-200">`;
+            }).join('');
+            previewContainer.classList.remove('hidden');
+
+            btnSubmit.disabled = false;
+            btnSubmit.className = "w-full bg-black hover:bg-gray-800 text-white font-bold py-3.5 px-4 rounded-xl";
+            btnSubmit.innerHTML = `✅ 立即入库 (${files.length} 张)`;
+        }
+
+        async function submitRecord() {
+            if (!fileInput.files.length) return;
+            btnSubmit.disabled = true;
+            const fd = new FormData();
+            fd.append('event_type', eventType.value);
+            fd.append('record_time', overrideTime.value.replace('T', ' '));
+            
+            try {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    btnSubmit.innerHTML = `处理中... (${i+1}/${fileInput.files.length})`;
+                    fd.set('file', await compressImage(fileInput.files[i]));
+                    await fetch(API_BASE + '/api/snapshots/upload', { method: 'POST', body: fd });
+                }
+                closeUploadModal();
+                loadData();
+            } catch (e) {
+                alert("保存失败: " + e.message);
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = "✅ 继续入库剩余项";
             }
         }
 
-        function openUploadModal() { 
-            document.getElementById('uploadModal').classList.remove('hidden'); 
-            document.getElementById('eventType').value = '';
-            document.getElementById('overrideTime').value = '';
-            document.getElementById('fileInput').value = '';
-            
-            document.getElementById('previewContainer').innerHTML = '';
-            document.getElementById('previewContainer').classList.add('hidden');
-            currentFiles = [];
-            
-            document.getElementById('btnSubmit').disabled = true;
-            document.getElementById('btnSubmit').className = "w-full bg-gray-300 text-gray-500 font-bold py-3.5 px-4 rounded-xl";
-            document.getElementById('btnSubmit').innerHTML = "等待选择照片...";
-        }
-        function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); }
-        function closeModal() { document.getElementById('detailModal').classList.add('hidden'); }
-
-        function startPolling() { 
-            if (pollInterval) clearInterval(pollInterval); 
-            pollInterval = setInterval(async () => { if (!(await loadSnapshots())) clearInterval(pollInterval); }, 3000); 
+        // 核心工具
+        function compressImage(file) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const [w, h] = [img.width, img.height].map(d => d > 2048 ? 2048 : d);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(blob => resolve(new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' })), 'image/jpeg', 0.85);
+                };
+                img.src = URL.createObjectURL(file);
+            });
         }
 
-        loadSnapshots();
+        // 启动
+        loadData();
     </script>
 </body>
 </html>

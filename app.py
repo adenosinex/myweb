@@ -154,33 +154,42 @@ def login():
 # ================= 5. 核心 API 接口 =================
 @app.route('/api2/_sys/pages', methods=['GET'])
 def get_pages_list():
+    
+    
     if not os.path.exists(PAGES_DIR):
         return jsonify([])
-    files = [f for f in os.listdir(PAGES_DIR) if f.endswith('.html') and f != 'index.html']
-    files = [f for f in files if not '-' in f]
+    
+    # ✅ 递归遍历所有子目录（核心修改）
     file_mtime_pairs = []
+    for root, _, files in os.walk(PAGES_DIR):
+        for f in files:
+            # 跳过不符合条件的文件
+            if not f.endswith('.html') or f == 'index.html' or '-' in f:
+                continue
+                
+            # ✅ 获取相对于 PAGES_DIR 的路径（保留子目录结构）
+            rel_path = os.path.relpath(os.path.join(root, f), PAGES_DIR)
+            
+            # ✅ 构造同名 SVG 路径（仅用文件名，不包含子目录）
+            svg_name = os.path.splitext(f)[0] + ".svg"
+            svg_path = os.path.join('static/svg', svg_name)
+            
+            try:
+                mtime = os.path.getmtime(svg_path)
+                file_mtime_pairs.append((rel_path, mtime))
+            except FileNotFoundError:
+                # ✅ 修正原逻辑错误：直接使用 0 代替 float('inf') and 0
+                file_mtime_pairs.append((rel_path, 0))
+            except Exception as e:
+                app.logger.warning(f"跳过 {rel_path}: 无法获取 {svg_path} 时间戳 - {str(e)}")
     
-    for html_file in files:
-        # 构建同名 SVG 路径 (a.html -> a.svg)
-        svg_name = os.path.splitext(html_file)[0] + ".svg"
-        svg_path = os.path.join('static/svg', svg_name)
-        
-        try:
-            # 获取 SVG 修改时间 (秒级时间戳)
-            mtime = os.path.getmtime(svg_path)
-            file_mtime_pairs.append((html_file, mtime))
-        except FileNotFoundError:
-            # 处理缺失 SVG 文件: 排在最后 (使用极大值)
-            file_mtime_pairs.append((html_file, float('inf') and 0))
-        except Exception as e:
-            print(f"⚠️ 跳过 {html_file}: 无法获取 {svg_path} 时间戳 - {str(e)}")
-            continue
+    # ✅ 按 SVG 修改时间降序排序（最新修改的排最前）
+    sorted_pairs = sorted(file_mtime_pairs, key=lambda x: x[1], reverse=True)
     
-    # 按 SVG 修改时间升序排序 (最早修改的排最前)
-    sorted_pairs = sorted(file_mtime_pairs, key=lambda x: x[1],reverse=True)
-
-    files=[i[0] for i in sorted_pairs]
-    return jsonify([f.replace('.html', '') for f in files])
+    # ✅ 提取路径并移除 .html 扩展名（保留子目录结构）
+    result = [os.path.splitext(path)[0] for path, _ in sorted_pairs]
+    
+    return jsonify(result)
 
 @app.route('/api2/<collection>', methods=['POST'])
 def save_data(collection):
@@ -246,6 +255,7 @@ def serve_html_with_icon(filename):
             return "Page not found", 404
 
     base_name = filename[:-5] 
+    base_name=base_name if not '/' in base_name else base_name.split('/')[-1]
     base_name = base_name.split('-')[0] if '-' in base_name else base_name
     svg_path = os.path.join('static', "svg", f'{base_name}.svg')
 
@@ -264,7 +274,7 @@ def serve_html_with_icon(filename):
 
     return send_from_directory(PAGES_DIR2, filename)
 
-@app.route('/')
+@app.route('/x')
 def index():
     return serve_html_with_icon('index.html')
 

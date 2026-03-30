@@ -43,14 +43,23 @@
                     grid.innerHTML = '<p style="color:#999; grid-column: 1/-1;">还没有子页面</p>';
                     return;
                 }
-                grid.innerHTML = pages.map(page => `
-                    <a href="/${page}" class="card" target="_blank">
-                        <img src="/static/svg/${page}.svg" 
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                        <div class="icon-placeholder">📄</div>
-                        <div class="card-title">${page.toUpperCase()}</div>
-                    </a>
-                `).join('');
+                grid.innerHTML = pages.map(page => {
+  // ✅ 核心修改：提取纯文件名（移除路径）
+  const fileName = page.split('/').pop().split('\\').pop().toUpperCase();
+  
+  return `
+    <a href="/${page}" class="card" target="_blank">
+      <!-- ✅ 修复：SVG路径保持完整路径（后端需要） -->
+      <img src="/static/svg/${fileName}.svg" 
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+      
+      <div class="icon-placeholder">📄</div>
+      
+      <!-- ✅ 仅显示文件名（不含路径） -->
+      <div class="card-title">${fileName}</div>
+    </a>
+  `;
+}).join('');
             });
     </script>
 </body>
