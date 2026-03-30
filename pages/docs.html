@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>动态知识库</title>
     
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown.min.css">
+    <script src="/static/cdn/tailwindcss3.4.17.js"></script>
+    <link rel="stylesheet" href="/static/cdn/github-markdown.min.css">
+    <link rel="stylesheet" href="/static/cdn/nprogress.min.css">
+    <script src="/static/cdn/nprogress.min.js"></script>
+    <script defer src="/static/cdn/alpine.collapse.cdn.min.js"></script>
+    <script defer src="/static/cdn/alpinejs.cdn.min.js"></script>
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script> -->
 
     <style>
         #nprogress .bar { background: #2563eb !important; height: 3px !important; }
@@ -28,8 +33,8 @@
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden h-screen flex flex-col font-sans" x-data="docApp()">
 
-    <div class="flex items-center p-3 bg-white border-b border-slate-200 z-50 shadow-sm">
-        <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition md:hidden shrink-0">
+    <div class="flex items-center p-3 bg-white border-b border-slate-200 z-50 shadow-sm relative">
+        <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition shrink-0">
             ☰
         </button>
         <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap">知识库文档</div>
@@ -41,8 +46,8 @@
              @click="sidebarOpen = false"
              class="fixed inset-0 bg-black/40 z-30 md:hidden"></div>
         
-        <div class="w-[280px] bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-transform duration-300 shadow-lg md:shadow-none"
-             :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'">
+        <div class="w-[280px] shrink-0 bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-all duration-300 shadow-lg md:shadow-none"
+             :class="sidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-[280px]'">
             
             <div class="p-5 border-b border-slate-200 flex justify-between items-center shrink-0 transition-colors sticky top-0 bg-white/95 backdrop-blur z-20 border-2 border-transparent"
                  @dragover.prevent.stop="dragOverFolder = 'root'"
@@ -182,19 +187,15 @@
                     </div>`,
                 abortController: null,
                 
-                // 搜索相关状态
                 searchQuery: '',
                 isSearching: false,
                 searchResults: null,
 
                 async init() {
-                    window.addEventListener('resize', () => {
-                        if (window.innerWidth >= 768) this.sidebarOpen = true;
-                    });
+                    // 移除了强行改变侧边栏状态的 resize 监听逻辑，尊重用户的手动点击意愿
                     await this.loadList();
                 },
 
-                // 新增：执行搜索逻辑
                 async performSearch() {
                     if (!this.searchQuery.trim()) {
                         this.searchResults = null;
@@ -326,6 +327,7 @@
                     }
                 },
 
+                // 修改后的文档选择函数
                 async selectDoc(docId) {
                     if (window.innerWidth < 768) this.sidebarOpen = false;
                     this.activeDoc = docId;
@@ -344,6 +346,10 @@
 
                         this.content = dataFast.html;
                         this.$refs.scrollContainer.scrollTop = 0;
+                        
+                        // 首次加载后尝试高亮
+                        this.$nextTick(() => this.highlightAndScroll());
+
                         NProgress.set(0.6);
 
                         const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
@@ -351,6 +357,8 @@
 
                         if (!dataFresh.error && dataFresh.html !== dataFast.html) {
                             this.content = dataFresh.html;
+                            // 内容更新后再次高亮
+                            this.$nextTick(() => this.highlightAndScroll());
                         }
                         NProgress.done();
 
@@ -359,6 +367,39 @@
                             this.content = `<div class="text-red-500 p-5 text-center">⚠️ 加载失败: ${e.message}</div>`;
                             NProgress.done();
                         }
+                    }
+                },
+
+                // 新增：高亮并滚动到关键词的方法
+                highlightAndScroll() {
+                    const query = this.searchQuery.trim();
+                    if (!query) return;
+
+                    const container = this.$refs.scrollContainer.querySelector('.markdown-body');
+                    if (!container) return;
+
+                    // 1. 执行高亮 (仅处理文本节点，防止破坏 HTML 标签结构)
+                    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+                    const nodes = [];
+                    while(walker.nextNode()) nodes.push(walker.currentNode);
+
+                    const regex = new RegExp(`(${query})`, 'gi');
+                    let firstMatch = null;
+
+                    nodes.forEach(node => {
+                        if (regex.test(node.nodeValue)) {
+                            const span = document.createElement('span');
+                            span.innerHTML = node.nodeValue.replace(regex, '<mark class="bg-yellow-200 text-black rounded px-0.5 select-none">$1</mark>');
+                            node.parentNode.replaceChild(span, node);
+                            if (!firstMatch) firstMatch = span.querySelector('mark');
+                        }
+                    });
+
+                    // 2. 自动滚动到第一个匹配项
+                    if (firstMatch) {
+                        setTimeout(() => {
+                            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
                     }
                 }
             }));
