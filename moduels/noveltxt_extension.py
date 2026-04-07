@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify, render_template, Response
 
 ai_chapter_bp = Blueprint('ai_chapter_forge', __name__, template_folder='templates', url_prefix='/ai_chapter_forge')
 
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = 'db/uploadsnovel'
 CACHE_FOLDER = 'caches'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(CACHE_FOLDER, exist_ok=True)

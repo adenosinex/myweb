@@ -4,9 +4,37 @@
     <meta charset="UTF-8">
     <title>个人控制台</title>
     <style>
-        body { font-family: system-ui; background: #f0f2f5; color: #333; max-width: 800px; margin: 40px auto; padding: 20px; }
+        body { font-family: system-ui; background: #f0f2f5; color: #333; max-width: 900px; margin: 40px auto; padding: 20px; }
         .header { text-align: center; margin-bottom: 40px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
+        
+        /* 分类折叠相关样式 */
+        .category-section { margin-bottom: 25px; background: transparent; }
+        .category-title { 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #555; 
+            padding: 10px 0; 
+            border-bottom: 2px solid #e0e0e0; 
+            cursor: pointer; 
+            list-style: none; /* 隐藏默认的三角形 */
+            display: flex;
+            align-items: center;
+            user-select: none;
+        }
+        /* 自定义折叠指示器 */
+        .category-title::before {
+            content: '▼';
+            font-size: 12px;
+            margin-right: 10px;
+            color: #888;
+            transition: transform 0.2s ease;
+        }
+        details[open] .category-title::before { transform: rotate(0deg); }
+        details:not([open]) .category-title::before { transform: rotate(-90deg); }
+        .category-title:hover { color: #007bff; }
+        
+        /* 内部网格布局 */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; padding-top: 15px; }
         .card { 
             background: white; padding: 25px 15px; border-radius: 16px; 
             text-align: center; text-decoration: none; color: #333; 
@@ -16,7 +44,7 @@
         .card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); color: #007bff;}
         .card img { width: 50px; height: 50px; margin-bottom: 12px; }
         .card .icon-placeholder { font-size: 40px; margin-bottom: 12px; display: none; }
-        .card-title { font-weight: bold; font-size: 16px; }
+        .card-title { font-weight: bold; font-size: 16px; word-break: break-all; }
         .hint { text-align: center; color: #888; margin-top: 50px; font-size: 14px; }
     </style>
 </head>
@@ -26,8 +54,8 @@
         <p>Universal Record Engine Engaged</p>
     </div>
 
-    <div class="grid" id="appGrid">
-        <p style="color:#999;">正在扫描应用列表...</p>
+    <div id="appContainer">
+        <p style="color:#999; text-align:center;">正在扫描应用列表...</p>
     </div>
 
     <div class="hint">
@@ -35,31 +63,102 @@
     </div>
 
     <script>
+        // 动态路径分类处理逻辑
+        function parseCategories(pages) {
+            const grouped = {};
+            pages.forEach(page => {
+                // 统一路径分隔符并拆分
+                const parts = page.replace(/\\/g, '/').split('/');
+                
+                // 核心分类逻辑：如果路径包含层级（如 a/b），则分类为 a；否则分类为 Root
+                let categoryName = parts.length > 1 ? parts[0] : 'Root (根目录)';
+                
+                // 首字母大写美化显示
+                categoryName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
+
+                if (!grouped[categoryName]) {
+                    grouped[categoryName] = [];
+                }
+                grouped[categoryName].push(page);
+            });
+            return grouped;
+        }
+
         fetch('/api2/_sys/pages')
             .then(res => res.json())
             .then(pages => {
-                const grid = document.getElementById('appGrid');
-                if (pages.length === 0) {
-                    grid.innerHTML = '<p style="color:#999; grid-column: 1/-1;">还没有子页面</p>';
+                const container = document.getElementById('appContainer');
+                if (!pages || pages.length === 0) {
+                    container.innerHTML = '<p style="color:#999; text-align:center;">还没有子页面</p>';
                     return;
                 }
-                grid.innerHTML = pages.map(page => {
-  // ✅ 核心修改：提取纯文件名（移除路径）
-  const fileName = page.split('/').pop().split('\\').pop().toUpperCase();
-  
-  return `
-    <a href="/${page}" class="card" target="_blank">
-      <!-- ✅ 修复：SVG路径保持完整路径（后端需要） -->
-      <img src="/static/svg/${fileName}.svg" 
-           onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-      
-      <div class="icon-placeholder">📄</div>
-      
-      <!-- ✅ 仅显示文件名（不含路径） -->
-      <div class="card-title">${fileName}</div>
-    </a>
-  `;
-}).join('');
+
+                // 1. 动态生成分组数据
+                const groupedPages = parseCategories(pages);
+
+                // 2. 构建 HTML 结构
+                let htmlContent = '';
+                
+                // 对分类名称进行排序：Root 置顶，其他按成员数量降序，数量相同按名称排序
+                const categoryNames = Object.keys(groupedPages).sort((a, b) => {
+                    if (a === 'Root (根目录)') return -1;
+                    if (b === 'Root (根目录)') return 1;
+                    
+                    const countDiff = groupedPages[b].length - groupedPages[a].length;
+                    if (countDiff !== 0) {
+                        return countDiff;
+                    }
+                    return a.localeCompare(b);
+                });
+
+                categoryNames.forEach(categoryName => {
+                    const catPages = groupedPages[categoryName];
+                    htmlContent += `
+                        <details class="category-section" data-category="${categoryName}">
+                            <summary class="category-title">${categoryName} (${catPages.length})</summary>
+                            <div class="grid">
+                                ${catPages.map(page => {
+                                    // 提取最终的文件名用于显示
+                                    const fileName = page.split('/').pop().split('\\').pop().toUpperCase();
+                                    return `
+                                        <a href="/${page}" class="card" target="_blank">
+                                            <img src="/static/svg/${fileName}.svg" 
+                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                            <div class="icon-placeholder">📄</div>
+                                            <div class="card-title">${fileName}</div>
+                                        </a>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </details>
+                    `;
+                });
+
+                container.innerHTML = htmlContent;
+
+                // 3. 绑定展开/折叠的本地存储逻辑
+                const detailsElements = document.querySelectorAll('details.category-section');
+                detailsElements.forEach(details => {
+                    const catName = details.getAttribute('data-category');
+                    const storageKey = `ui_state_category_${catName}`;
+                    
+                    // 读取本地状态，默认展开（除非本地明确记录了 closed）
+                    const savedState = localStorage.getItem(storageKey);
+                    if (savedState === 'closed') {
+                        details.removeAttribute('open');
+                    } else {
+                        details.setAttribute('open', '');
+                    }
+
+                    // 监听折叠事件并写入本地存储
+                    details.addEventListener('toggle', () => {
+                        localStorage.setItem(storageKey, details.open ? 'open' : 'closed');
+                    });
+                });
+            })
+            .catch(err => {
+                document.getElementById('appContainer').innerHTML = '<p style="color:red; text-align:center;">数据加载失败，请检查接口</p>';
+                console.error("页面加载错误:", err);
             });
     </script>
 </body>

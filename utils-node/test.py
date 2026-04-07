@@ -2,7 +2,7 @@ import os
 
 # 配置需要扫描的后缀和排除的文件夹
 EXTENSIONS = ('.py', '.html', '.js', '.css')
-EXCLUDE_DIRS = {'venv', '.git', '__pycache__', 'node_modules'}
+EXCLUDE_DIRS = {'venv', '.git', '__pycache__', 'node_modules','static'}
 
 def count_lines():
     files_info = []

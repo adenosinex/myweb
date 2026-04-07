@@ -59,6 +59,7 @@
       <button @click="uploadGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
         {{ loading ? '数据解算与拓扑映射中...' : '启动分析引擎' }}
       </button>
+     <a href="/export_csv">📥 导出分析规律报告 (CSV)</a>
       <div v-if="lastRecordTime" class="text-center text-success mt-2" style="font-size: 12px;">已自动加载上次分析缓存 ({{ lastRecordTime }})</div>
       <div v-if="error" class="text-danger text-center mt-3">{{ error }}</div>
     </div>

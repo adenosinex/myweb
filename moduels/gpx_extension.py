@@ -258,3 +258,47 @@ def analyze_gpx():
         'events': events_data,
         'segments': final_table
     })
+
+@gpx_bp.route('/export_csv', methods=['POST'])
+def export_csv():
+    """
+    接收分析后的 segments 数据并导出为 CSV
+    """
+    data = request.get_json()
+    if not data or 'segments' not in data:
+        return jsonify({'error': '无数据可导出'}), 400
+
+    segments = data['segments']
+    
+    # 创建内存文件对象
+    output = io.StringIO()
+    # 解决中文乱码
+    output.write('\ufeff') 
+    
+    # 定义表头
+    fieldnames = [
+        'time_str', 'offset_min', 'cum_dist_km', 'lat', 'lon', 'ele', 
+        'speed_kmh', 'accel', 'jerk', 'slope_pct', 'bearing', 'dt', 'dist_m'
+    ]
+    
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    
+    # 写入翻译后的表头（可选，方便Excel阅读）
+    # writer.writerow({f: f for f in fieldnames}) 
+    
+    for row in segments:
+        # 只写入存在的字段，防止报错
+        writer.writerow({k: row.get(k, '') for k in fieldnames})
+
+    # 重置文件指针
+    output.seek(0)
+    
+    # 生成响应
+    filename = f"ride_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    response = make_response(output.getvalue())
+    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    response.headers["Content-type"] = "text/csv; charset=utf-8"
+    
+    return response

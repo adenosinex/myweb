@@ -4,55 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>动态知识库</title>
-    
     <script src="/static/cdn/tailwindcss3.4.17.js"></script>
     <link rel="stylesheet" href="/static/cdn/github-markdown.min.css">
     <link rel="stylesheet" href="/static/cdn/nprogress.min.css">
     <script src="/static/cdn/nprogress.min.js"></script>
     <script defer src="/static/cdn/alpine.collapse.cdn.min.js"></script>
     <script defer src="/static/cdn/alpinejs.cdn.min.js"></script>
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script> -->
-
     <style>
-        #nprogress .bar { background: #2563eb !important; height: 3px !important; }
-        #nprogress .peg { box-shadow: 0 0 10px #2563eb, 0 0 5px #2563eb !important; }
-        #nprogress .spinner { display: none !important; }
-        .markdown-body { background-color: transparent; }
-        
-        /* 隐藏滚动条但保留功能 */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* 拖拽悬停时的过度效果 */
-        .drop-zone-active { background-color: #eff6ff !important; border-color: #93c5fd !important; }
+        #nprogress .bar{background:#2563eb!important;height:3px!important}
+        #nprogress .peg{box-shadow:0 0 10px #2563eb,0 0 5px #2563eb!important}
+        #nprogress .spinner{display:none!important}
+        .markdown-body{background-color:transparent}
+        .no-scrollbar::-webkit-scrollbar{display:none}
+        .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+        .drop-zone-active{background-color:#eff6ff!important;border-color:#93c5fd!important}
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden h-screen flex flex-col font-sans" x-data="docApp()">
 
     <div class="flex items-center p-3 bg-white border-b border-slate-200 z-50 shadow-sm relative">
-        <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition shrink-0">
-            ☰
-        </button>
+        <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition shrink-0">☰</button>
         <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap">知识库文档</div>
     </div>
 
     <div class="flex flex-1 overflow-hidden relative">
-        <div x-show="sidebarOpen && window.innerWidth < 768" 
-             x-transition.opacity 
-             @click="sidebarOpen = false"
-             class="fixed inset-0 bg-black/40 z-30 md:hidden"></div>
+        <div x-show="sidebarOpen && window.innerWidth < 768" x-transition.opacity @click="sidebarOpen = false" class="fixed inset-0 bg-black/40 z-30 md:hidden"></div>
         
-        <div class="w-[280px] shrink-0 bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-all duration-300 shadow-lg md:shadow-none"
-             :class="sidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-[280px]'">
+        <div class="w-[280px] shrink-0 bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-all duration-300 shadow-lg md:shadow-none" :class="sidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-[280px]'">
             
             <div class="p-5 border-b border-slate-200 flex justify-between items-center shrink-0 transition-colors sticky top-0 bg-white/95 backdrop-blur z-20 border-2 border-transparent"
-                 @dragover.prevent.stop="dragOverFolder = 'root'"
-                 @dragleave.prevent.stop="dragOverFolder = null"
-                 @drop.prevent.stop="handleDrop($event, '')"
+                 @dragover.prevent.stop="dragOverFolder = 'root'" @dragleave.prevent.stop="dragOverFolder = null" @drop.prevent.stop="handleDrop($event, '')"
                  :class="dragOverFolder === 'root' ? 'drop-zone-active text-blue-800' : ''">
                 <h3 class="m-0 text-base font-semibold flex items-center gap-2 pointer-events-none">📂 知识库 (根目录)</h3>
                 <a href="/docs-edit" class="text-xs text-blue-600 no-underline px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition z-10">编辑</a>
@@ -71,11 +52,9 @@
                 <div x-show="searchQuery !== ''">
                     <div x-show="isSearching" class="text-center text-sm text-slate-400 py-4">搜索中...</div>
                     <div x-show="!isSearching && searchResults && searchResults.length === 0" class="text-center text-sm text-slate-400 py-4">未找到相关文档</div>
-                    
                     <div x-show="!isSearching && searchResults && searchResults.length > 0" class="space-y-1">
                         <template x-for="doc in searchResults" :key="doc.id">
-                            <div @click.stop="selectDoc(doc.id)"
-                                 class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                            <div @click.stop="selectDoc(doc.id)" class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
                                  :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
                                 <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
                                 <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
@@ -85,6 +64,18 @@
                 </div>
 
                 <div x-show="searchQuery === ''">
+                    
+                    <div class="space-y-1 mb-2 pb-2 border-b border-slate-100" x-show="tree.items && tree.items.length > 0">
+                        <template x-for="doc in tree.items" :key="doc.id">
+                            <div @click.stop="selectDoc(doc.id)" draggable="true" @dragstart.stop="dragStart($event, doc.id, '')"
+                                 class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                                 :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                                <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                                <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
+                            </div>
+                        </template>
+                    </div>
+
                     <template x-for="folder1 in Object.values(tree.folders)" :key="folder1.path">
                         <div class="mb-2 rounded-lg border-2 border-transparent transition-colors"
                              @dragover.prevent.stop="dragOverFolder = folder1.path; autoScroll($event)"
@@ -92,8 +83,7 @@
                              @drop.prevent.stop="handleDrop($event, folder1.path)"
                              :class="dragOverFolder === folder1.path ? 'drop-zone-active' : ''">
                             
-                            <div @click="folder1.open = !folder1.open" 
-                                 class="px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100">
+                            <div @click="toggleFolder(folder1)" class="px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100">
                                 <div class="flex items-center gap-2 font-medium pointer-events-none">
                                     <span x-text="folder1.open ? '📂' : '📁'"></span>
                                     <span x-text="folder1.name"></span>
@@ -103,7 +93,6 @@
                             
                             <div x-show="folder1.open" x-collapse>
                                 <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                                    
                                     <template x-for="folder2 in Object.values(folder1.folders)" :key="folder2.path">
                                         <div class="mb-1 rounded-md border-2 border-transparent transition-colors"
                                              @dragover.prevent.stop="dragOverFolder = folder2.path; autoScroll($event)"
@@ -111,8 +100,7 @@
                                              @drop.prevent.stop="handleDrop($event, folder2.path)"
                                              :class="dragOverFolder === folder2.path ? 'drop-zone-active' : ''">
                                             
-                                            <div @click="folder2.open = !folder2.open"
-                                                 class="px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100">
+                                            <div @click="toggleFolder(folder2)" class="px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100">
                                                 <div class="flex items-center gap-2 pointer-events-none">
                                                     <span x-text="folder2.open ? '📂' : '📁'"></span>
                                                     <span x-text="folder2.name"></span>
@@ -122,8 +110,7 @@
                                             <div x-show="folder2.open" x-collapse>
                                                 <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
                                                     <template x-for="doc in folder2.items" :key="doc.id">
-                                                        <div @click.stop="selectDoc(doc.id)"
-                                                             draggable="true" @dragstart.stop="dragStart($event, doc.id, folder2.path)"
+                                                        <div @click.stop="selectDoc(doc.id)" draggable="true" @dragstart.stop="dragStart($event, doc.id, folder2.path)"
                                                              class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
                                                              :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
                                                             <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
@@ -136,8 +123,7 @@
                                     </template>
 
                                     <template x-for="doc in folder1.items" :key="doc.id">
-                                        <div @click.stop="selectDoc(doc.id)"
-                                             draggable="true" @dragstart.stop="dragStart($event, doc.id, folder1.path)"
+                                        <div @click.stop="selectDoc(doc.id)" draggable="true" @dragstart.stop="dragStart($event, doc.id, folder1.path)"
                                              class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white mx-1"
                                              :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
                                             <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
@@ -148,26 +134,13 @@
                             </div>
                         </div>
                     </template>
-
-                    <div class="space-y-1 mt-3 pt-2 border-t border-slate-100">
-                        <template x-for="doc in tree.items" :key="doc.id">
-                            <div @click.stop="selectDoc(doc.id)"
-                                 draggable="true" @dragstart.stop="dragStart($event, doc.id, '')"
-                                 class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                                 :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                            </div>
-                        </template>
-                    </div>
                 </div>
             </div>
         </div>
 
         <div class="flex-1 overflow-y-auto scroll-smooth relative h-full pt-14 md:pt-10" x-ref="scrollContainer">
             <div class="max-w-[880px] mx-auto px-5 pb-10">
-                <div class="bg-white px-8 py-10 rounded-2xl shadow-md min-h-[calc(100vh-120px)] markdown-body" x-html="content">
-                </div>
+                <div class="bg-white px-8 py-10 rounded-2xl shadow-md min-h-[calc(100vh-120px)] markdown-body" x-html="content"></div>
             </div>
         </div>
     </div>
@@ -180,35 +153,33 @@
                 activeDoc: null,
                 maxLevel: 2, 
                 dragOverFolder: null,
-                content: `
-                    <div class="text-center pt-24 text-slate-500">
-                        <div class="text-5xl mb-4 opacity-20">📄</div>
-                        请从左侧选择文档
-                    </div>`,
+                content: `<div class="text-center pt-24 text-slate-500"><div class="text-5xl mb-4 opacity-20">📄</div>请从左侧选择文档</div>`,
                 abortController: null,
-                
                 searchQuery: '',
                 isSearching: false,
                 searchResults: null,
 
                 async init() {
-                    // 移除了强行改变侧边栏状态的 resize 监听逻辑，尊重用户的手动点击意愿
                     await this.loadList();
                 },
 
+                // 切换文件夹并保存状态到 localStorage
+                toggleFolder(folder) {
+                    folder.open = !folder.open;
+                    try {
+                        let state = JSON.parse(localStorage.getItem('docFolderState') || '{}');
+                        state[folder.path] = folder.open;
+                        localStorage.setItem('docFolderState', JSON.stringify(state));
+                    } catch (e) { console.error('保存状态失败', e); }
+                },
+
                 async performSearch() {
-                    if (!this.searchQuery.trim()) {
-                        this.searchResults = null;
-                        return;
-                    }
-                    
+                    if (!this.searchQuery.trim()) return this.searchResults = null;
                     this.isSearching = true;
                     try {
                         const res = await fetch(`/api/docs/search?q=${encodeURIComponent(this.searchQuery)}`);
-                        const data = await res.json();
-                        this.searchResults = data.results || [];
+                        this.searchResults = (await res.json()).results || [];
                     } catch(e) {
-                        console.error('搜索请求失败:', e);
                         this.searchResults = [];
                     } finally {
                         this.isSearching = false;
@@ -219,18 +190,18 @@
                     try {
                         const res = await fetch('/api/docs/list');
                         const data = await res.json();
-                        
                         let newTree = { items: [], folders: {} };
                         let fetchQueue = [];
+                        let savedState = {};
+                        
+                        try { savedState = JSON.parse(localStorage.getItem('docFolderState') || '{}'); } catch (e) {}
 
                         data.docs.forEach(docName => {
                             let parts = docName.split('_');
                             let folderDepth = Math.min(parts.length - 1, this.maxLevel);
-                            
                             let folders = parts.slice(0, folderDepth);
                             let title = parts.slice(folderDepth).join('_');
                             let docObj = { id: docName, title: title };
-
                             let currentLevel = newTree;
                             let currentPath = '';
 
@@ -238,11 +209,9 @@
                                 currentPath = currentPath ? `${currentPath}_${f}` : f;
                                 if (!currentLevel.folders[f]) {
                                     currentLevel.folders[f] = { 
-                                        name: f, 
-                                        path: currentPath,
-                                        open: true, 
-                                        items: [], 
-                                        folders: {} 
+                                        name: f, path: currentPath,
+                                        open: savedState[currentPath] !== undefined ? savedState[currentPath] : true, 
+                                        items: [], folders: {} 
                                     };
                                 }
                                 currentLevel = currentLevel.folders[f];
@@ -258,32 +227,22 @@
                             try {
                                 const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(docObj.id)}`);
                                 if (rawRes.ok) {
-                                    const rawData = await rawRes.json();
-                                    const match = rawData.content.match(/^(?:#+\s*)?([^\n]+)/);
-                                    if (match && match[1]) {
-                                        const parsedTitle = match[1].trim();
-                                        if (parsedTitle.length < 40) docObj.title = parsedTitle;
-                                    }
+                                    const match = (await rawRes.json()).content.match(/^(?:#+\s*)?([^\n]+)/);
+                                    if (match && match[1] && match[1].trim().length < 40) docObj.title = match[1].trim();
                                 }
                             } catch (e) {}
                         });
-
                     } catch (e) {
                         this.content = '<p class="text-red-500 p-5 text-center">列表获取失败</p>';
                     }
                 },
 
                 autoScroll(e) {
-                    const container = this.$refs.sidebarScroll;
-                    if (!container) return;
-                    const threshold = 60; 
-                    const rect = container.getBoundingClientRect();
-                    
-                    if (e.clientY - rect.top < threshold) {
-                        container.scrollTop -= 15; 
-                    } else if (rect.bottom - e.clientY < threshold) {
-                        container.scrollTop += 15; 
-                    }
+                    const c = this.$refs.sidebarScroll;
+                    if (!c) return;
+                    const rect = c.getBoundingClientRect();
+                    if (e.clientY - rect.top < 60) c.scrollTop -= 15; 
+                    else if (rect.bottom - e.clientY < 60) c.scrollTop += 15; 
                 },
 
                 dragStart(e, docId, currentPath) {
@@ -298,28 +257,20 @@
 
                     try {
                         const { docId: oldId, currentPath } = JSON.parse(dataStr);
-                        
-                        let pureFileName = oldId;
-                        if (currentPath && oldId.startsWith(currentPath + '_')) {
-                            pureFileName = oldId.substring(currentPath.length + 1);
-                        }
-
+                        let pureFileName = currentPath && oldId.startsWith(currentPath + '_') ? oldId.substring(currentPath.length + 1) : oldId;
                         const newId = targetPath ? `${targetPath}_${pureFileName}` : pureFileName;
                         if (oldId === newId) return;
 
                         NProgress.start();
-                        
                         const res = await fetch('/api/docs/rename', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ oldName: oldId, newName: newId })
                         });
-                        
                         if (!res.ok) throw new Error('移动失败，请检查后端接口');
 
                         if (this.activeDoc === oldId) this.activeDoc = newId;
                         await this.loadList();
-
                     } catch (e) {
                         alert(`⚠️ ${e.message}`);
                     } finally {
@@ -327,11 +278,9 @@
                     }
                 },
 
-                // 修改后的文档选择函数
                 async selectDoc(docId) {
                     if (window.innerWidth < 768) this.sidebarOpen = false;
                     this.activeDoc = docId;
-
                     if (this.abortController) this.abortController.abort();
                     this.abortController = new AbortController();
                     const signal = this.abortController.signal;
@@ -346,10 +295,7 @@
 
                         this.content = dataFast.html;
                         this.$refs.scrollContainer.scrollTop = 0;
-                        
-                        // 首次加载后尝试高亮
                         this.$nextTick(() => this.highlightAndScroll());
-
                         NProgress.set(0.6);
 
                         const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
@@ -357,11 +303,9 @@
 
                         if (!dataFresh.error && dataFresh.html !== dataFast.html) {
                             this.content = dataFresh.html;
-                            // 内容更新后再次高亮
                             this.$nextTick(() => this.highlightAndScroll());
                         }
                         NProgress.done();
-
                     } catch (e) {
                         if (e.name !== 'AbortError') {
                             this.content = `<div class="text-red-500 p-5 text-center">⚠️ 加载失败: ${e.message}</div>`;
@@ -370,15 +314,12 @@
                     }
                 },
 
-                // 新增：高亮并滚动到关键词的方法
                 highlightAndScroll() {
                     const query = this.searchQuery.trim();
                     if (!query) return;
-
                     const container = this.$refs.scrollContainer.querySelector('.markdown-body');
                     if (!container) return;
 
-                    // 1. 执行高亮 (仅处理文本节点，防止破坏 HTML 标签结构)
                     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
                     const nodes = [];
                     while(walker.nextNode()) nodes.push(walker.currentNode);
@@ -395,12 +336,7 @@
                         }
                     });
 
-                    // 2. 自动滚动到第一个匹配项
-                    if (firstMatch) {
-                        setTimeout(() => {
-                            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 100);
-                    }
+                    if (firstMatch) setTimeout(() => firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
                 }
             }));
         });

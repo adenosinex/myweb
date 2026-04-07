@@ -273,8 +273,23 @@
                         const res = await fetch('/api/docs/list');
                         const data = await res.json();
                         
-                        // 核心修复：强制在前端进行稳定排序（支持中文拼音及数字自然大小）
-                        rawDocs.value = data.docs.sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true }));
+                        if (rawDocs.value.length === 0) {
+                            // 首次加载：执行强制稳定排序（支持中文拼音及数字自然大小）
+                            rawDocs.value = data.docs.sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true }));
+                        } else {
+                            // 非首次加载：维护当前会话的列表顺序
+                            const fetchedSet = new Set(data.docs);
+                            const oldSet = new Set(rawDocs.value);
+                            
+                            // 1. 过滤出仍然存在的旧文档，严格保持它们在当前界面的相对顺序
+                            const retainedDocs = rawDocs.value.filter(d => fetchedSet.has(d));
+                            
+                            // 2. 筛选出服务端新增加的文档（新建或被重命名的文件）
+                            const newDocs = data.docs.filter(d => !oldSet.has(d));
+                            
+                            // 3. 将新文档统一追加到数组尾部，确保渲染在目录最下方
+                            rawDocs.value = [...retainedDocs, ...newDocs];
+                        }
                         
                         selectedDocs.value = selectedDocs.value.filter(id => rawDocs.value.includes(id));
                     } catch (e) {

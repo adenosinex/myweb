@@ -17,7 +17,37 @@ const AppState = {
 };
 
 /* ==========================================================================
-   2. 引擎模块
+   2. 🌟 高性能媒体引擎 (核心优化点)
+   ========================================================================== */
+const MediaEngine = {
+    updateWindow: (currentIndex) => {
+        const cards = document.querySelectorAll('.video-card');
+        cards.forEach(card => {
+            const idx = parseInt(card.dataset.index);
+            const video = card.querySelector('video');
+            const dataSrc = video.getAttribute('data-src');
+
+            // 核心：仅维持窗口大小为 3（上一个，当前，下一个）
+            if (Math.abs(idx - currentIndex) <= 1) {
+                // 如果尚未挂载源，或者源被清理了，则重新挂载
+                if (!video.src || video.src === window.location.href || video.src === '') {
+                    video.src = dataSrc;
+                }
+                // 当前视频全速缓冲，相邻视频仅缓冲元数据，节省带宽
+                video.preload = (idx === currentIndex) ? 'auto' : 'metadata';
+            } else {
+                // 核心：超出窗口的视频，强制卸载源，瞬间释放硬件解码器和几百MB内存
+                if (video.src && video.src !== window.location.href) {
+                    video.removeAttribute('src');
+                    video.load(); 
+                }
+            }
+        });
+    }
+};
+
+/* ==========================================================================
+   3. 业务引擎模块
    ========================================================================== */
 const NavigationEngine = {
     scrollToVideo: (index) => {
@@ -33,11 +63,11 @@ const NavigationEngine = {
     prev: () => NavigationEngine.scrollToVideo(AppState.currentIndex - 1),
     toggleLikeCurrent: () => {
         const card = document.getElementById(`card-${AppState.currentIndex}`);
-        if (card) AppActions.toggleLike(card.querySelector('.action-btn:not(.btn-dislike)'), card.querySelector('video').src.split('/').pop());
+        if (card) AppActions.toggleLike(card.querySelector('.action-btn:not(.btn-dislike)'), card.querySelector('video').getAttribute('data-src').split('/').pop());
     },
     deleteCurrent: () => {
         const card = document.getElementById(`card-${AppState.currentIndex}`);
-        if (card) AppActions.deleteCard(card.querySelector('.btn-dislike, .text-green-400'), card.querySelector('video').src.split('/').pop());
+        if (card) AppActions.deleteCard(card.querySelector('.btn-dislike, .text-green-400'), card.querySelector('video').getAttribute('data-src').split('/').pop());
     },
     seekCurrent: (direction) => {
         const card = document.getElementById(`card-${AppState.currentIndex}`);
@@ -270,7 +300,9 @@ const UIRenderer = {
     buildCardDOM: (v, index) => {
         if (document.getElementById(`card-${index}`)) return;
         const card = document.createElement('div');
-        card.className = 'video-card paused'; card.id = `card-${index}`; card.dataset.index = index;
+        // 添加背板颜色 bg-black
+        card.className = 'video-card paused relative w-full h-full overflow-hidden bg-black'; 
+        card.id = `card-${index}`; card.dataset.index = index;
         const jsSafeName = encodeURIComponent(v.filename), isDislikeMode = AppState.filter === 'disliked';
         const deleteBtnHtml = isDislikeMode ? `<button class="action-btn text-green-400" onclick="AppActions.deleteCard(this, '${jsSafeName}')"><div class="icon-circle">♻️</div><span class="text-[10px] font-bold shadow-black">恢复</span></button>` : `<button class="action-btn btn-dislike" onclick="AppActions.deleteCard(this, '${jsSafeName}')"><div class="icon-circle">💔</div><span class="text-[10px] font-bold shadow-black">不喜欢</span></button>`;
         let cleanTitle = v.filename.replace(/^\[NEW\]_/i, '').replace(/\.(mp4|mov|mkv|webm|avi)$/i, '').replace(/#([^#\s.]+)/g, '').trim();
@@ -288,7 +320,16 @@ const UIRenderer = {
         if (v.category && v.category !== '未分类') aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); AppActions.setTag('${v.category}')">#${v.category}</span>`;
         (v.ai_tags || []).forEach(t => aiTagsHtml += `<span class="ai-tag px-2 py-0.5 rounded text-[11px] cursor-pointer" onclick="event.stopPropagation(); AppActions.setTag('${t}')">#${t}</span>`);
 
-        card.innerHTML = `<div class="blur-bg" style="background-image: url('${v.url}')"></div><video src="${v.url}" class="video-player" loop playsinline preload="metadata"></video><div class="click-area" id="area-${index}"></div><div class="play-icon"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div class="seek-toast" id="toast-${index}"></div><div class="action-sidebar"><button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="AppActions.toggleLike(this, '${jsSafeName}')"><div class="icon-circle">${v.is_liked ? '❤️' : '🤍'}</div><span class="text-[10px] font-bold shadow-black">喜欢</span></button>${deleteBtnHtml}</div><div class="info-bottom pointer-events-auto"><h2 class="text-[15px] font-bold mb-3 line-clamp-2 drop-shadow-md flex items-center">${simBadgeHtml}<span>${cleanTitle}</span></h2>${aiTagsHtml ? `<div class="tag-group mb-2">${aiTagsHtml}</div>` : ''}</div><div class="progress-container"><div class="progress-bar" id="prog-${index}"></div></div>`;
+        // 🌟 性能优化：去除了 blur-bg，极大地释放了 GPU 压力
+        card.innerHTML = `
+            <video data-src="${v.url}" class="video-player absolute inset-0 w-full h-full object-contain z-10" loop playsinline preload="none" disablePictureInPicture></video>
+            <div class="click-area absolute inset-0 z-20" id="area-${index}"></div>
+            <div class="play-icon absolute z-30"><svg class="w-20 h-20 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+            <div class="seek-toast absolute z-30" id="toast-${index}"></div>
+            <div class="action-sidebar"><button class="action-btn ${v.is_liked ? 'liked' : ''}" onclick="AppActions.toggleLike(this, '${jsSafeName}')"><div class="icon-circle">${v.is_liked ? '❤️' : '🤍'}</div><span class="text-[10px] font-bold shadow-black">喜欢</span></button>${deleteBtnHtml}</div>
+            <div class="info-bottom pointer-events-auto"><h2 class="text-[15px] font-bold mb-3 line-clamp-2 drop-shadow-md flex items-center">${simBadgeHtml}<span>${cleanTitle}</span></h2>${aiTagsHtml ? `<div class="tag-group mb-2">${aiTagsHtml}</div>` : ''}</div>
+            <div class="progress-container"><div class="progress-bar" id="prog-${index}"></div></div>
+        `;
         AppState.DOMFeed.appendChild(card);
 
         const video = card.querySelector('video'), prog = card.querySelector(`#prog-${index}`);
@@ -305,18 +346,31 @@ const InteractionEngine = {
             entries.forEach(entry => {
                 const card = entry.target, video = card.querySelector('video'), idx = parseInt(card.dataset.index);
                 if (entry.isIntersecting) {
-                    const fname = decodeURIComponent(video.src.split('/').pop());
+                    const fname = decodeURIComponent(video.getAttribute('data-src').split('/').pop());
                     if (AppState.filter !== 'similar' && AppState.filter !== 'similar_vision') {
                         AppState.sourceVideo = fname;
                         document.getElementById('nav-similar')?.classList.remove('hidden');
                         document.getElementById('nav-similar-vision')?.classList.remove('hidden');
                     }
                     AppState.currentIndex = idx;
+                    
+                    // 🌟 核心触发：调度媒体引擎进行资源挂载/卸载
+                    MediaEngine.updateWindow(idx);
+
                     video.muted = false;
                     video.play().then(() => {
                         card.classList.remove('paused');
                         if (AppState.filter !== 'disliked') SyncEngine.record(fname, 'play');
-                    }).catch(() => card.classList.add('paused'));
+                    }).catch((err) => {
+                        video.muted = true;
+                        video.play().then(() => {
+                            card.classList.remove('paused');
+                            if (AppState.filter !== 'disliked') SyncEngine.record(fname, 'play');
+                        }).catch(() => {
+                            card.classList.add('paused');
+                        });
+                    });
+
                     if (idx >= AppState.data.length - 3 && AppState.hasMore) DataLoader.fetchNextPage(false);
                 } else {
                     video.pause(); video.currentTime = 0; card.classList.add('paused');
@@ -356,12 +410,10 @@ const InteractionEngine = {
             startX = 0; startY = 0; isSeeking = false;
         };
 
-        // 1. 移动端触摸手势
         touchArea.addEventListener('touchstart', e => handleStart(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
         touchArea.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY, e), { passive: false });
         touchArea.addEventListener('touchend', e => handleEnd(e.changedTouches[0].clientX));
         
-        // 2. 🌟 恢复：PC端鼠标拖拽手势
         let isMouseDown = false;
         touchArea.addEventListener('mousedown', e => { isMouseDown = true; handleStart(e.clientX, e.clientY); });
         touchArea.addEventListener('mousemove', e => { if (isMouseDown) handleMove(e.clientX, e.clientY, e); });
@@ -369,10 +421,10 @@ const InteractionEngine = {
         touchArea.addEventListener('mouseup', mouseEnd);
         touchArea.addEventListener('mouseleave', mouseEnd);
 
-        // 3. 点击播放/暂停
         touchArea.addEventListener('click', (e) => {
             if (justSeeked) { e.preventDefault(); return; }
             const card = touchArea.closest('.video-card');
+            if (video.muted) video.muted = false;
             video.paused ? (video.play(), card.classList.remove('paused')) : (video.pause(), card.classList.add('paused'));
         });
     },
@@ -380,7 +432,6 @@ const InteractionEngine = {
     setupGlobalListeners: () => {
         let wheelLock = false;
         
-        // 滚轮切换视频
         AppState.DOMFeed.addEventListener('wheel', (e) => {
             if (window.matchMedia("(hover: none)").matches) return;
             e.preventDefault(); 
@@ -392,7 +443,6 @@ const InteractionEngine = {
             setTimeout(() => { wheelLock = false; }, 500);
         }, { passive: false });
 
-        // 🌟 修复：键盘快捷键控制
         window.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT') return;
             switch (e.key.toLowerCase()) {
@@ -400,7 +450,6 @@ const InteractionEngine = {
                 case 'x': e.preventDefault(); NavigationEngine.deleteCurrent(); break;
                 case ' ': 
                     e.preventDefault(); 
-                    // 修复此处由于 const 声明造成的语法作用域崩溃问题
                     document.getElementById(`card-${AppState.currentIndex}`)?.querySelector('.click-area')?.click(); 
                     break;
                 case 'arrowdown': e.preventDefault(); NavigationEngine.next(); break;

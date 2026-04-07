@@ -239,18 +239,30 @@ def get_kv(key):
             return jsonify(json.loads(v))
         return jsonify({"error": "提取码不存在或已被销毁"}), 404
 
-
+def get_html_path(filename):
+    # 遍历 PAGES_DIR 及其所有子目录
+    for root, dirs, files in os.walk(PAGES_DIR):
+        if filename in files:
+            return os.path.join(root, filename)
+    
+    # 如果遍历结束仍未找到文件
+    return None
 # ================= 6. 静态页面与路由 =================
 def serve_html_with_icon(filename):
+    if not filename or not isinstance(filename, str):
+        app.logger.error("无效的文件名: %s", filename)
+        abort(400, "无效的文件名")
+
     if not filename.endswith('.html'):
         filename += '.html'
-        
+    
     PAGES_DIR2 = PAGES_DIR
     html_path = os.path.join(PAGES_DIR, filename)
     
     if not os.path.exists(html_path):
-        PAGES_DIR2 = os.path.join(PAGES_DIR, "second")
-        html_path = os.path.join(PAGES_DIR2, filename)
+        html_path=get_html_path(filename)
+        # PAGES_DIR2 = os.path.join(PAGES_DIR, "second")
+        # html_path = os.path.join(PAGES_DIR2, filename)
         if not os.path.exists(html_path):
             return "Page not found", 404
 
