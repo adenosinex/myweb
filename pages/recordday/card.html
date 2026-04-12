@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>认知索引层</title>
+      <script src="/static/cdn/tailwindcss3.4.17.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script> -->
+    <script src="/static/cdn/echarts.min.js"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 flex flex-col gap-5">
+            <div class="flex gap-3">
+                <input type="text" id="searchInput" placeholder="检索认知库..." 
+                    class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 transition text-lg">
+                <button onclick="fetchCards()" class="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg transition font-medium text-lg shadow-lg shadow-green-900/20">搜索</button>
+                <button onclick="openModal('uploadModal', true)" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition font-medium text-lg">录入新卡片</button>
+                <button onclick="resetHome()" class="px-6 py-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded-lg transition text-lg">回到首页</button>
+            </div>
+            
+            <div class="flex flex-col gap-2">
+                <div class="flex justify-between items-end px-1">
+                    <h2 class="text-gray-400 text-sm font-bold uppercase tracking-wider">全局认知标签</h2>
+                    <div class="flex gap-3 items-center">
+                        <div id="statsContainer" class="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full border border-gray-700">
+                            载入统计中...
+                        </div>
+                        <a href="/card-tag.html" class="text-sm text-blue-400 hover:text-blue-300 font-medium px-2 border-l border-gray-700">配置常识 & 管理</a>
+                    </div>
+                </div>
+                <div id="tagContainer" class="flex flex-wrap gap-3 p-3 bg-gray-800/50 rounded-xl border border-gray-800 min-h-[60px] items-center"></div>
+            </div>
+        </header>
+
+        <div id="cardGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
+    </div>
+
+    <div id="detailModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4 overflow-y-auto" onclick="closeOnBg(event, 'detailModal')">
+        <div class="bg-gray-800 w-full max-w-4xl rounded-xl shadow-2xl flex flex-col my-auto transition-transform duration-200">
+            <div class="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900/30">
+                <h3 id="modalTitle" class="text-2xl font-bold text-white"></h3>
+                <button onclick="closeModal('detailModal')" class="text-gray-400 hover:text-white transition text-2xl leading-none">&times;</button>
+            </div>
+            
+            <div class="p-6 flex flex-col gap-6 max-h-[80vh] overflow-y-auto">
+                <div id="modalTags" class="flex flex-wrap gap-2"></div>
+                
+                <div id="modalStatsDashboard" class="hidden flex-col gap-5 border border-gray-700 bg-gray-900/40 p-5 rounded-xl shadow-inner">
+                    <h4 class="text-sm font-bold text-green-400 uppercase tracking-wider flex items-center gap-2">
+                        <span>📊</span> 物理资源分析特征
+                    </h4>
+                    
+                    <div id="statsSummaryGrid" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-800/80 border border-gray-700 rounded-lg p-2 h-56 relative">
+                            <div id="chartSize" class="w-full h-full"></div>
+                        </div>
+                        <div class="bg-gray-800/80 border border-gray-700 rounded-lg p-2 h-56 relative">
+                            <div id="chartDuration" class="w-full h-full"></div>
+                        </div>
+                        <div class="bg-gray-800/80 border border-gray-700 rounded-lg p-2 h-56 relative">
+                            <div id="chartResolution" class="w-full h-full"></div>
+                        </div>
+                        <div class="bg-gray-800/80 border border-gray-700 rounded-lg p-2 h-56 relative">
+                            <div id="chartTimeline" class="w-full h-full"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="whitespace-pre-wrap text-gray-300 leading-relaxed text-base pt-2 border-t border-gray-700/50" id="modalBody"></div>
+            </div>
+            
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-3 bg-gray-900/30">
+                <button onclick="closeModal('detailModal')" class="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4" onclick="closeOnBg(event, 'editModal')">
+        <div class="bg-gray-800 w-full max-w-md rounded-xl shadow-2xl flex flex-col transition-transform duration-200">
+            <div class="p-5 border-b border-gray-700 bg-gray-900/30">
+                <h3 class="text-xl font-bold">快速编辑标签</h3>
+            </div>
+            <div class="p-6 flex flex-col gap-4">
+                <input type="hidden" id="editCardId">
+                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700/50">
+                    <label class="block text-base font-bold text-green-400 mb-2">🏷️ 重新分配标签 (任意分隔符)</label>
+                    <input type="text" id="editTagsInput" class="w-full px-4 py-3 text-lg font-medium text-white bg-gray-900 border-2 border-gray-600 rounded-lg focus:outline-none focus:border-green-500 transition shadow-inner placeholder-gray-600">
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-3 bg-gray-900/30">
+                <button onclick="closeModal('editModal')" class="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition">取消</button>
+                <button onclick="submitEdit()" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold shadow-lg shadow-green-900/20 transition">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+  <div id="uploadModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4" onclick="closeOnBg(event, 'uploadModal')">
+        <div class="bg-gray-800 w-full max-w-lg rounded-xl shadow-2xl flex flex-col transition-transform duration-200 max-h-[90vh]">
+            
+            <div class="p-5 border-b border-gray-700 bg-gray-900/30 shrink-0">
+                <h3 class="text-xl font-bold">录入新认知</h3>
+            </div>
+            
+            <div class="p-6 flex flex-col gap-5 overflow-y-auto">
+                <div id="pasteArea" class="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center text-gray-400 relative hover:border-green-500 transition bg-gray-900/50 shrink-0">
+                    <input type="file" id="upCover" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewImage(this.files[0])">
+                    <div id="uploadHint" class="pointer-events-none py-2">点击选择文件，或直接此处 Ctrl+V 粘贴图片</div>
+                    <img id="previewImg" class="hidden max-h-48 mx-auto rounded mt-2 object-contain pointer-events-none shadow-md">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">检索 Key (主标题)</label>
+                    <input type="text" id="upQuery" class="w-full px-4 py-2.5 text-base bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 transition">
+                </div>
+                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700/50">
+                    <label class="block text-base font-bold text-green-400 mb-2">🏷️ 灵魂标签</label>
+                    <input type="text" id="upTags" class="w-full px-4 py-3 text-lg font-medium text-white bg-gray-900 border-2 border-gray-600 rounded-lg focus:outline-none focus:border-green-500 transition shadow-inner">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">描述补充 (Markdown)</label>
+                    <textarea id="upDesc" rows="3" class="w-full px-4 py-2 text-sm bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 resize-y transition"></textarea>
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-3 bg-gray-900/30 shrink-0">
+                <button onclick="closeModal('uploadModal')" class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition">取消</button>
+                <button onclick="submitUpload()" class="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold shadow-lg shadow-green-900/20 transition">确认保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script> const API_BASE = '/card-tag/'; 
+        let currentTags = new Set();
+        let echartInstances = []; 
+        
+        // --- 懒加载核心状态变量 ---
+        let allCardsData = [];          // 存储从后端拿到的所有数据
+        let currentRenderIndex = 0;     // 当前已渲染的数量
+        const RENDER_CHUNK_SIZE = 12;   // 每次滚动加载的卡片数 (24是2,3,4列的公倍数，排版最整齐)
+        let observer = null;            // 滚动监听器
+
+        window.addEventListener('resize', () => {
+            echartInstances.forEach(chart => chart && chart.resize());
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStats();
+            fetchTags(); 
+            fetchCards();
+            document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') fetchCards(); });
+            document.addEventListener('paste', handlePaste);
+            
+            // 初始化滚动监听器：距离底部 300px 时提前触发加载，保证丝滑
+            observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) {
+                    observer.disconnect(); // 暂停监听当前元素
+                    renderNextChunk();     // 渲染下一批
+                }
+            }, { rootMargin: '300px' });
+        });
+
+        // 统计与标签加载逻辑保持不变
+        async function fetchStats() {
+            try {
+                const res = await fetch(`${API_BASE}api/stats`);
+                const data = await res.json();
+                document.getElementById('statsContainer').innerHTML = `
+                    总计入库 <span class="text-green-400 font-bold">${data.total_cards}</span> 项 / 
+                    共有 <span class="text-green-400 font-bold">${data.total_tags}</span> 个灵魂标签
+                `;
+            } catch (err) { console.error("加载统计失败:", err); }
+        }
+
+        function handlePaste(e) {
+            const uploadModal = document.getElementById('uploadModal');
+            if (uploadModal.classList.contains('hidden')) return; 
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let item of items) {
+                if (item.type.indexOf("image") !== -1) {
+                    const blob = item.getAsFile();
+                    previewImage(blob);
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(new File([blob], "pasted_image.png", { type: blob.type }));
+                    document.getElementById('upCover').files = dataTransfer.files;
+                    break;
+                }
+            }
+        }
+
+        function previewImage(file) {
+            if (!file) return;
+            const img = document.getElementById('previewImg');
+            const hint = document.getElementById('uploadHint');
+            img.src = URL.createObjectURL(file);
+            img.classList.remove('hidden');
+            hint.classList.add('hidden');
+        }
+
+        async function fetchTags() {
+            try {
+                const res = await fetch(`${API_BASE}api/tags`);
+                const tags = await res.json();
+                if (!Array.isArray(tags)) return;
+                const container = document.getElementById('tagContainer');
+                container.innerHTML = tags.map(tag => `
+                    <button onclick="toggleTag('${tag}')" id="tag-${tag}" 
+                        class="px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm">
+                        ${tag}
+                    </button>
+                `).join('');
+                currentTags.forEach(t => updateTagStyle(t, true));
+            } catch (err) { console.error(err); }
+        }
+
+        function toggleTag(tag) {
+            currentTags.has(tag) ? currentTags.delete(tag) : currentTags.add(tag);
+            updateTagStyle(tag, currentTags.has(tag));
+            fetchCards();
+        }
+
+        function updateTagStyle(tag, isActive) {
+            const el = document.getElementById(`tag-${tag}`);
+            if(!el) return;
+            if (isActive) {
+                el.className = "px-4 py-2 text-sm md:text-base font-bold rounded-full border-2 border-green-500 bg-green-500/20 text-green-400 transition cursor-pointer shadow-md shadow-green-900/30 scale-105 transform";
+            } else {
+                el.className = "px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm";
+            }
+        }
+
+        function resetHome() {
+            document.getElementById('searchInput').value = '';
+            currentTags.clear();
+            fetchTags(); 
+            fetchCards();
+        }
+
+        function escapeHTML(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        }
+
+        // --- 核心改造：分步渲染 ---
+        async function fetchCards() {
+            try {
+                const q = document.getElementById('searchInput').value;
+                const tags = Array.from(currentTags).join(',');
+                const res = await fetch(`${API_BASE}api/search?q=${encodeURIComponent(q)}&tags=${encodeURIComponent(tags)}`);
+                const cards = await res.json();
+                if (!Array.isArray(cards)) return;
+
+                // 重置懒加载状态
+                allCardsData = cards;
+                currentRenderIndex = 0;
+                document.getElementById('cardGrid').innerHTML = ''; // 清空画板
+                
+                // 渲染第一批
+                renderNextChunk();
+            } catch (err) { console.error(err); }
+        }
+
+        function renderNextChunk() {
+            if (currentRenderIndex >= allCardsData.length) return; // 已经到底了
+
+            const chunk = allCardsData.slice(currentRenderIndex, currentRenderIndex + RENDER_CHUNK_SIZE);
+            const grid = document.getElementById('cardGrid');
+
+            const html = chunk.map(card => {
+                let coverUrl = card.cover ? card.cover.replace(/^\.\/covers\//, '') : '';
+                if(coverUrl && !coverUrl.startsWith('http')) coverUrl = `${API_BASE}covers/${coverUrl}`;
+                let tagsStr = card.tags.join(' ').replace(/'/g, "\\'");
+                const safeCardInfo = escapeHTML(JSON.stringify(card));
+                
+                return `
+                <div onclick='openDetail(${safeCardInfo})' 
+                     class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden cursor-pointer hover:-translate-y-1.5 hover:border-gray-500 transition-all duration-200 shadow-lg flex flex-col group relative">
+                    <div class="h-52 overflow-hidden bg-gray-900/80 relative flex justify-center items-center p-1">
+                        <img src="${coverUrl}" loading="lazy" class="w-full h-full object-contain group-hover:scale-[1.02] transition duration-300" onerror="this.style.display='none'">
+                    </div>
+                    <div class="p-5 flex-1 flex flex-col">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="font-bold text-lg text-gray-100 leading-tight">${escapeHTML(card.query)}</h4>
+                            ${card.stats_data ? '<span class="text-[10px] bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded whitespace-nowrap">已校验</span>' : ''}
+                        </div>
+                        <div class="flex justify-between items-end mt-auto pt-3 border-t border-gray-700/50 relative">
+                            <div class="flex flex-wrap gap-2 flex-1">
+                                ${card.tags.map(t => `<span onclick="event.stopPropagation(); toggleTag('${t}')" class="bg-gray-900 border border-gray-600 hover:border-green-500 hover:text-green-400 text-gray-300 px-2.5 py-1 rounded text-xs font-medium z-10 relative transition shadow-sm">${escapeHTML(t)}</span>`).join('')}
+                            </div>
+                            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-2 z-10">
+                                <button onclick="event.stopPropagation(); openEditModal('${card.id}', '${tagsStr}')" class="px-2.5 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">编辑</button>
+                                <button onclick="event.stopPropagation(); openUploadWithTags('${tagsStr}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">+ 同类</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`
+            }).join('');
+
+            // 追加渲染到 DOM，而不是覆盖
+            grid.insertAdjacentHTML('beforeend', html);
+            currentRenderIndex += RENDER_CHUNK_SIZE;
+
+            // 如果还有没渲染完的数据，把监听器挂在当前最后一张卡片上
+            if (currentRenderIndex < allCardsData.length) {
+                const cardsElements = grid.children;
+                const lastCard = cardsElements[cardsElements.length - 1];
+                if (lastCard) observer.observe(lastCard);
+            }
+        }
+
+        // ================= 核心：详情渲染与图表绘制 =================
+        function openDetail(card) {
+            document.getElementById('modalTitle').textContent = card.query;
+            document.getElementById('modalBody').textContent = card.content_body || '暂无文字描述...';
+            
+            const modalTags = document.getElementById('modalTags');
+            if (card.tags && card.tags.length > 0) {
+                modalTags.innerHTML = card.tags.map(t => `<span class="bg-gray-700 border border-gray-500 text-gray-200 px-3 py-1 rounded-full text-sm font-medium shadow-sm">${escapeHTML(t)}</span>`).join('');
+                modalTags.style.display = 'flex';
+            } else {
+                modalTags.style.display = 'none';
+            }
+
+            const dbContainer = document.getElementById('modalStatsDashboard');
+            echartInstances.forEach(c => c && c.dispose());
+            echartInstances = [];
+
+            if (card.stats_data) {
+                dbContainer.classList.remove('hidden');
+                dbContainer.classList.add('flex');
+                
+                const s = card.stats_data.summary;
+                const c = card.stats_data.charts;
+
+                document.getElementById('statsSummaryGrid').innerHTML = `
+                    <div class="bg-gray-800 p-3 rounded text-center border border-gray-700"><div class="text-xs text-gray-400 mb-1">物理文件数</div><div class="text-lg font-bold text-white">${s.file_count} <span class="text-xs text-gray-500 font-normal">个</span></div></div>
+                    <div class="bg-gray-800 p-3 rounded text-center border border-gray-700"><div class="text-xs text-gray-400 mb-1">总体积规模</div><div class="text-lg font-bold text-blue-400">${s.total_size_gb} <span class="text-xs text-blue-500 font-normal">GB</span></div></div>
+                    <div class="bg-gray-800 p-3 rounded text-center border border-gray-700"><div class="text-xs text-gray-400 mb-1">总计时长</div><div class="text-lg font-bold text-yellow-400">${s.total_duration_h} <span class="text-xs text-yellow-500 font-normal">H</span></div></div>
+                    <div class="bg-gray-800 p-3 rounded text-center border border-gray-700"><div class="text-xs text-gray-400 mb-1">推导特征</div><div class="text-sm mt-1.5 font-bold text-green-400 leading-tight">${s.size_feature}</div></div>
+                `;
+
+                const darkTheme = 'dark';
+                const commonOpt = { backgroundColor: 'transparent', tooltip: { trigger: 'item' } };
+
+                const chartSize = echarts.init(document.getElementById('chartSize'), darkTheme);
+                chartSize.setOption({
+                    ...commonOpt,
+                    title: { text: '容量分布', textStyle: { fontSize: 12, color: '#9ca3af' }, top: 0, left: 'center' },
+                    grid: { top: 30, bottom: 20, left: 30, right: 10 },
+                    xAxis: { type: 'category', data: Object.keys(c.size_dist), axisLabel: { color: '#6b7280' } },
+                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#374151' } } },
+                    series: [{ data: Object.values(c.size_dist), type: 'bar', itemStyle: { borderRadius: [4, 4, 0, 0], color: '#3b82f6' } }]
+                });
+
+                const chartDur = echarts.init(document.getElementById('chartDuration'), darkTheme);
+                chartDur.setOption({
+                    ...commonOpt,
+                    title: { text: '时长分布', textStyle: { fontSize: 12, color: '#9ca3af' }, top: 0, left: 'center' },
+                    grid: { top: 30, bottom: 20, left: 30, right: 10 },
+                    xAxis: { type: 'category', data: Object.keys(c.duration_dist), axisLabel: { color: '#6b7280' } },
+                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#374151' } } },
+                    series: [{ data: Object.values(c.duration_dist), type: 'bar', itemStyle: { borderRadius: [4, 4, 0, 0], color: '#eab308' } }]
+                });
+
+                const resData = Object.entries(c.resolution_dist).map(([name, value]) => ({ name, value }));
+                const chartRes = echarts.init(document.getElementById('chartResolution'), darkTheme);
+                chartRes.setOption({
+                    ...commonOpt,
+                    title: { text: '画质分布', textStyle: { fontSize: 12, color: '#9ca3af' }, top: 0, left: 'center' },
+                    series: [{ type: 'pie', radius: ['40%', '70%'], center: ['50%', '55%'], data: resData, label: { color: '#d1d5db' }, itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 } }]
+                });
+
+                const chartTime = echarts.init(document.getElementById('chartTimeline'), darkTheme);
+                chartTime.setOption({
+                    ...commonOpt,
+                    tooltip: { trigger: 'axis' },
+                    title: { text: '日期', textStyle: { fontSize: 12, color: '#9ca3af' }, top: 0, left: 'center' },
+                    grid: { top: 30, bottom: 20, left: 30, right: 10 },
+                    xAxis: { type: 'category', boundaryGap: false, data: Object.keys(c.timeline), axisLabel: { color: '#6b7280' } },
+                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#374151' } } },
+                    series: [{ data: Object.values(c.timeline), type: 'line', smooth: true, areaStyle: { opacity: 0.3, color: '#22c55e' }, itemStyle: { color: '#22c55e' } }]
+                });
+
+                echartInstances.push(chartSize, chartDur, chartRes, chartTime);
+            } else {
+                dbContainer.classList.add('hidden');
+                dbContainer.classList.remove('flex');
+            }
+
+            document.getElementById('detailModal').classList.replace('hidden', 'flex');
+            
+            if (card.stats_data) {
+                setTimeout(() => echartInstances.forEach(c => c.resize()), 100);
+            }
+        }
+
+        // ================= 模态框通用操作 =================
+        function openModal(id, isReset = false) {
+            if (id === 'uploadModal' && isReset) {
+                document.getElementById('upCover').value = '';
+                document.getElementById('previewImg').src = '';
+                document.getElementById('previewImg').classList.add('hidden');
+                document.getElementById('uploadHint').classList.remove('hidden');
+                document.getElementById('upQuery').value = '';
+                document.getElementById('upTags').value = '';
+                document.getElementById('upDesc').value = '';
+            }
+            document.getElementById(id).classList.replace('hidden', 'flex');
+            if (id === 'uploadModal') setTimeout(() => document.getElementById('upQuery').focus(), 100);
+            if (id === 'editModal') setTimeout(() => document.getElementById('editTagsInput').focus(), 100);
+        }
+
+        function openUploadWithTags(tagsStr) {
+            openModal('uploadModal', true); 
+            document.getElementById('upTags').value = tagsStr; 
+        }
+
+        function openEditModal(cardId, tagsStr) {
+            document.getElementById('editCardId').value = cardId;
+            document.getElementById('editTagsInput').value = tagsStr;
+            openModal('editModal');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.replace('flex', 'hidden');
+        }
+
+        function closeOnBg(e, id) { 
+            if (e.target.id === id) {
+                if (id === 'uploadModal' || id === 'editModal') {
+                    const modalContent = e.target.querySelector('.bg-gray-800');
+                    modalContent.classList.add('scale-[1.02]');
+                    setTimeout(() => modalContent.classList.remove('scale-[1.02]'), 150);
+                    return;
+                }
+                closeModal(id);
+            } 
+        }
+
+        async function submitEdit() {
+            const cardId = document.getElementById('editCardId').value;
+            const fd = new FormData();
+            fd.append('tags', document.getElementById('editTagsInput').value);
+
+            try {
+                const res = await fetch(`${API_BASE}api/edit/${cardId}`, { method: 'POST', body: fd });
+                if ((await res.json()).status === 'success') {
+                    closeModal('editModal'); fetchStats(); fetchTags(); fetchCards();
+                } else alert('修改失败');
+            } catch (e) { alert('网络异常'); }
+        }
+
+        async function submitUpload() {
+            const files = document.getElementById('upCover').files;
+            const query = document.getElementById('upQuery').value.trim();
+            if (!files.length || !query) return alert("截图和Key为必填");
+
+            const fd = new FormData();
+            fd.append('cover', files[0]); fd.append('query', query);
+            fd.append('tags', document.getElementById('upTags').value);
+            fd.append('description', document.getElementById('upDesc').value);
+
+            try {
+                const res = await fetch(`${API_BASE}api/upload`, { method: 'POST', body: fd });
+                if ((await res.json()).status === 'success') {
+                    closeModal('uploadModal'); fetchStats(); fetchTags(); fetchCards();
+                } else alert('录入失败');
+            } catch (e) { alert('网络异常'); }
+        }</script>
+</body>
+</html>

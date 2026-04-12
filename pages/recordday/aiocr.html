@@ -9,7 +9,12 @@
     <link rel="stylesheet" href="/static/cdn/viewer.min.css">
     <style>
         /* 基础与组件样式 */
-        .manual-img { transition: transform 0.3s ease; cursor: zoom-in; }
+        .manual-img { 
+            transition: transform 0.3s ease; 
+            cursor: zoom-in;
+            /* 占位符样式 */
+            background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+        }
         .prose table { border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #e5e7eb; }
         .prose th, .prose td { border: 1px solid #e5e7eb; padding: 0.5rem; text-align: left; }
         .prose th { background-color: #f9fafb; }
@@ -192,7 +197,43 @@
             reader.readAsDataURL(file);
         });
 
-        // ================= 3. UI 与渲染逻辑 =================
+        // ================= 3. 懒加载实现 =================
+        const lazyLoadImages = () => {
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const realSrc = img.dataset.src;
+                        
+                        // 创建临时图片预加载
+                        const tempImg = new Image();
+                        tempImg.onload = () => {
+                            img.src = realSrc;
+                            img.classList.remove('lazy-loading');
+                            img.classList.add('loaded');
+                            observer.unobserve(img);
+                        };
+                        tempImg.onerror = () => {
+                            // 加载失败时显示占位符
+                            img.src = '/static/cdn/placeholder.svg';
+                            img.classList.remove('lazy-loading');
+                            observer.unobserve(img);
+                        };
+                        tempImg.src = realSrc;
+                    }
+                });
+            }, {
+                rootMargin: '50px', // 提前50px开始加载
+                threshold: 0.01
+            });
+
+            // 观察所有懒加载图片
+            document.querySelectorAll('.lazy-loading').forEach(img => {
+                imageObserver.observe(img);
+            });
+        };
+
+        // ================= 4. UI 与渲染逻辑 =================
         const renderTags = () => {
             let total = 0, counts = {};
             state.data.forEach(i => {
@@ -245,7 +286,10 @@
                     <button class="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-red-500 hover:bg-red-50" onclick="DocCtrl.del('${i.id}')" title="删除"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                     <button class="absolute top-2 right-12 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-purple-600 hover:bg-purple-50" onclick="DocCtrl.reanalyze('${i.id}')" title="重分类"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg></button>
                     <button class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-blue-500 hover:bg-blue-50" onclick="DocCtrl.retry('${i.id}')" title="全量重试"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></button>
-                    <div class="relative h-32 sm:h-44 overflow-hidden bg-gray-50"><img src="${i.url}" class="w-full h-full object-cover manual-img">${overlay}</div>
+                    <div class="relative h-32 sm:h-44 overflow-hidden bg-gray-50">
+                        <img data-src="${i.url}" class="w-full h-full object-cover lazy-loading manual-img">
+                        ${overlay}
+                    </div>
                     <div class="p-3 sm:p-4 flex-1 flex flex-col">
                         <div class="text-[11px] font-bold text-gray-700 truncate mb-2">📄 ${i.filename}</div>
                         <div class="flex flex-wrap gap-1 mb-2 h-6 overflow-hidden">${tags}</div>
@@ -255,8 +299,23 @@
                 </div>`;
             }).join('');
 
+            // 初始化懒加载
+            lazyLoadImages();
+            
             if (state.viewer) state.viewer.destroy();
-            state.viewer = new Viewer($('gallery'), { filter: img => img.classList.contains('manual-img'), navbar: true, title: true, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 } });
+            state.viewer = new Viewer($('gallery'), { 
+                filter: img => img.classList.contains('manual-img'),
+                navbar: true, 
+                title: true, 
+                toolbar: { 
+                    zoomIn: 1, 
+                    zoomOut: 1, 
+                    oneToOne: 1, 
+                    reset: 1, 
+                    rotateLeft: 1, 
+                    rotateRight: 1 
+                } 
+            });
             return needPoll;
         };
 
@@ -270,7 +329,7 @@
             }
         };
 
-        // ================= 4. 控制与交互流 =================
+        // ================= 5. 控制与交互流 =================
         const setFilter = t => { state.activeTag = t; renderTags(); renderGallery(); };
         const pollCtrl = () => { clearInterval(state.poll); state.poll = setInterval(async () => { if (!(await loadData())) clearInterval(state.poll); }, 3000); };
         
@@ -325,10 +384,32 @@
                 const item = state.data.find(m => m.id === id); if (!item) return;
                 $('modalTitle').innerText = item.filename;
                 $('modalContent').innerHTML = marked.parse(item.ocr_text || "提取中...");
-                $('modalDetailImg').src = item.url;
+                $('modalDetailImg').dataset.src = item.url;  // 使用data-src属性
                 DetailCtrl.setView('text');
+                
+                // 懒加载模态框中的图片
+                const tempImg = new Image();
+                tempImg.onload = () => {
+                    $('modalDetailImg').src = item.url;
+                };
+                tempImg.onerror = () => {
+                    $('modalDetailImg').src = '/static/cdn/placeholder.svg';
+                };
+                tempImg.src = item.url;
+                
                 if(state.modalViewer) state.modalViewer.destroy();
-                state.modalViewer = new Viewer($('modalDetailImg'), { navbar: false, title: false, toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 }});
+                state.modalViewer = new Viewer($('modalDetailImg'), { 
+                    navbar: false, 
+                    title: false, 
+                    toolbar: { 
+                        zoomIn: 1, 
+                        zoomOut: 1, 
+                        oneToOne: 1, 
+                        reset: 1, 
+                        rotateLeft: 1, 
+                        rotateRight: 1 
+                    }
+                });
                 toggleModal('detailModal', true);
             },
             setView: v => {
@@ -347,7 +428,7 @@
             setTimeout(() => { if($('copyBtnPc')) $('copyBtnPc').innerText = "📋 复制"; if($('copyBtnMobile')) $('copyBtnMobile').innerText = "📋 复制全文"; }, 2000);
         };
 
-        // ================= 5. 初始化 =================
+        // ================= 6. 初始化 =================
         loadData();
     </script>
 </body>

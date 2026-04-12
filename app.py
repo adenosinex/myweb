@@ -238,44 +238,48 @@ def get_kv(key):
                 return jsonify({"error": "提取码已过期，数据已永久销毁"}), 404
             return jsonify(json.loads(v))
         return jsonify({"error": "提取码不存在或已被销毁"}), 404
-
 def get_html_path(filename):
-    # 遍历 PAGES_DIR 及其所有子目录
+    """在 PAGES_DIR 及其子目录中查找匹配的 HTML 文件路径"""
+    # 1. 优先检查精确路径（支持直接传入带路径的请求，如 sub/page.html）
+    exact_path = os.path.join(PAGES_DIR, filename)
+    if os.path.exists(exact_path):
+        return exact_path
+        
+    # 2. 如果精确路径不存在，提取纯文件名并在目录树中递归查找
+    base_filename = os.path.basename(filename)
     for root, dirs, files in os.walk(PAGES_DIR):
-        if filename in files:
-            return os.path.join(root, filename)
-    
-    # 如果遍历结束仍未找到文件
+        if base_filename in files:
+            return os.path.join(root, base_filename)
+            
     return None
+
 # ================= 6. 静态页面与路由 =================
 def serve_html_with_icon(filename):
     if not filename or not isinstance(filename, str):
         app.logger.error("无效的文件名: %s", filename)
-        abort(400, "无效的文件名")
+        return "Invalid filename", 400  # 替换未导入的 abort，改用直接返回错误与状态码
 
     if not filename.endswith('.html'):
         filename += '.html'
     
-    PAGES_DIR2 = PAGES_DIR
-    html_path = os.path.join(PAGES_DIR, filename)
+    # 1. 获取文件真实的本地系统路径
+    html_path = get_html_path(filename)
     
-    if not os.path.exists(html_path):
-        html_path=get_html_path(filename)
-        # PAGES_DIR2 = os.path.join(PAGES_DIR, "second")
-        # html_path = os.path.join(PAGES_DIR2, filename)
-        if not os.path.exists(html_path):
-            return "Page not found", 404
+    if not html_path or not os.path.exists(html_path):
+        return "Page Not Found", 404
 
-    base_name = filename[:-5] 
-    base_name=base_name if not '/' in base_name else base_name.split('/')[-1]
-    base_name = base_name.split('-')[0] if '-' in base_name else base_name
-    svg_path = os.path.join('static', "svg", f'{base_name}.svg')
+    # 2. 提取用于查找 SVG 的基础名（处理路径剥离与子网页 '-' 分割逻辑）
+    # 示例: subfolder/main-sub.html -> base_name: main-sub -> main_name: main
+    base_name = os.path.basename(html_path).replace('.html', '')
+    main_name = base_name.split('-')[0] if '-' in base_name else base_name
+    svg_path = os.path.join('static', 'svg', f'{main_name}.svg')
 
+    # 3. 如果存在对应的 SVG 图标，读取文件并注入到 HTML 的 <head> 中
     if os.path.exists(svg_path):
         with open(html_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        icon_tag = f'<link rel="icon" href="/static/svg/{base_name}.svg" type="image/svg+xml">'
+        icon_tag = f'<link rel="icon" href="/static/svg/{main_name}.svg" type="image/svg+xml">'
         
         if '</head>' in content:
             content = content.replace('</head>', f'    {icon_tag}\n</head>', 1)
@@ -284,7 +288,10 @@ def serve_html_with_icon(filename):
             
         return content
 
-    return send_from_directory(PAGES_DIR2, filename)
+    # 4. 如果不存在 SVG，动态提取实际所在的子目录，直接返回源文件
+    directory = os.path.dirname(html_path)
+    file_name = os.path.basename(html_path)
+    return send_from_directory(directory, file_name)
 
 @app.route('/x')
 def index():
@@ -293,8 +300,7 @@ def index():
 @app.route('/<path:filename>')
 def serve_pages(filename):
     return serve_html_with_icon(filename)
-
-
+    
 # ================= 7. 启动入口 =================
 if __name__ == '__main__':
     os.makedirs(PAGES_DIR, exist_ok=True)

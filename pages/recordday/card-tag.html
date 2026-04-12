@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>认知标签控制台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-8">
+    <div class="max-w-5xl mx-auto">
+        <header class="flex justify-between items-center mb-10 pb-6 border-b border-gray-800">
+            <div>
+                <h1 class="text-3xl font-bold text-white mb-2">全局标签控制台</h1>
+                <p class="text-gray-400">审视系统熵值，避免词汇发散灾难。</p>
+            </div>
+            <a href="/card-tag/" class="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg font-medium transition flex items-center gap-2">
+                &larr; 返回认知库
+            </a>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            <div class="md:col-span-2 flex flex-col gap-6">
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 text-center shadow-lg">
+                        <div class="text-gray-400 text-sm font-bold mb-1">总卡片数</div>
+                        <div id="statCards" class="text-3xl font-black text-white">-</div>
+                    </div>
+                    <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 text-center shadow-lg">
+                        <div class="text-gray-400 text-sm font-bold mb-1">唯一标签数</div>
+                        <div id="statTags" class="text-3xl font-black text-green-400">-</div>
+                    </div>
+                    <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 text-center shadow-lg">
+                        <div class="text-gray-400 text-sm font-bold mb-1">标签复用率</div>
+                        <div id="statRatio" class="text-3xl font-black text-blue-400">-</div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col">
+                    <div class="p-5 border-b border-gray-700 bg-gray-900/30">
+                        <h2 class="text-lg font-bold">标签频次排行榜 (Tag Frequencies)</h2>
+                    </div>
+                    <div class="p-6">
+                        <div id="freqContainer" class="flex flex-wrap gap-3">
+                            <div class="text-gray-500 text-sm">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+           <div class="flex flex-col gap-6">
+                <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-lg">
+                    <h2 class="text-lg font-bold text-green-400 mb-4 flex items-center gap-2">
+                        <span>📌</span> 核心分类法则 (最高控制在60个词以内)
+                    </h2>
+                    
+                    <div class="space-y-5 text-sm text-gray-300 leading-relaxed">
+                        <div>
+                            <h3 class="font-bold text-white mb-1">1. 四维强制打标法</h3>
+                            <p class="mb-2">每张卡片标签数严格控制在 <span class="text-red-400 font-bold">3 ~ 5</span> 个，必须从以下维度拼图：</p>
+                            <ul class="list-disc pl-5 space-y-1 text-gray-400">
+                                <li><strong class="text-blue-300">时长媒介：</strong>短视频 / 长片 / 合集精剪</li>
+                                <li><strong class="text-blue-300">调性来源：</strong>素人真实 / 专业厂牌 / 网黄福利</li>
+                                <li><strong class="text-blue-300">人身体态：</strong>少女 / 少妇 / 饱满 / 纤细 / 微胖</li>
+                                <li><strong class="text-blue-300">场景行为：</strong>裸舞 / 剧情 / POV视角 / 户外 / 车内</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-bold text-white mb-1">2. 严禁同义词灾难</h3>
+                            <p>绝对不允许同时出现“丰满”和“饱满”，或“年轻”和“少女”。选定一个主干词后，永久沿用。</p>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-bold text-white mb-1">3. 拒绝正文污染</h3>
+                            <p>标签是用来<strong class="text-white">聚类检索</strong>的，不是用来写描述的。具体的衣服颜色、对白、演员名字，请写在底部的 Markdown 详情正文里！</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // 绑定固定前缀
+        const API_BASE = '/card-tag/';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // 加载基础统计
+                const statsRes = await fetch(`${API_BASE}api/stats`);
+                const stats = await statsRes.json();
+                document.getElementById('statCards').innerText = stats.total_cards;
+                document.getElementById('statTags').innerText = stats.total_tags;
+                
+                // 加载频次数据
+                const freqRes = await fetch(`${API_BASE}api/tags_freq`);
+                const freqData = await freqRes.json();
+                
+                // 计算复用率 (总打标次数 / 唯一标签数)
+                let ratio = freqData.total_instances / (stats.total_tags || 1);
+                document.getElementById('statRatio').innerText = ratio.toFixed(1);
+
+                // 渲染带大小与深浅权重的标签墙
+                const container = document.getElementById('freqContainer');
+                if (freqData.tag_frequencies.length === 0) {
+                    container.innerHTML = `<span class="text-gray-500">暂无数据</span>`;
+                    return;
+                }
+                
+                const maxCount = freqData.tag_frequencies[0].count;
+                
+                container.innerHTML = freqData.tag_frequencies.map(item => {
+                    // 基于频次计算视觉权重：高频的更大更亮
+                    const weight = item.count / maxCount;
+                    let bgColor = 'bg-gray-800';
+                    let borderColor = 'border-gray-600';
+                    let textColor = 'text-gray-400';
+                    let sizeClass = 'text-xs px-2 py-1';
+                    
+                    if (weight > 0.6) {
+                        bgColor = 'bg-green-900/30';
+                        borderColor = 'border-green-500';
+                        textColor = 'text-green-400 font-bold';
+                        sizeClass = 'text-base px-3 py-1.5';
+                    } else if (weight > 0.2) {
+                        bgColor = 'bg-gray-700/50';
+                        borderColor = 'border-gray-500';
+                        textColor = 'text-gray-200';
+                        sizeClass = 'text-sm px-2.5 py-1';
+                    }
+                    
+                    return `
+                    <div class="flex items-center gap-1.5 border ${borderColor} ${bgColor} rounded-md ${sizeClass} shadow-sm">
+                        <span class="${textColor}">${item.tag}</span>
+                        <span class="bg-gray-900/60 text-gray-500 text-[10px] px-1.5 rounded-sm ml-1">${item.count}</span>
+                    </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error("加载控制台数据失败:", err);
+                document.getElementById('freqContainer').innerHTML = `<span class="text-red-400">加载失败，请检查网络或后端状态。</span>`;
+            }
+        });
+    </script>
+</body>
+</html>
