@@ -25,10 +25,16 @@ OCR_CONFIG = {
 }
 
 NLP_CONFIG = {
-    "base_url": "https://api.siliconflow.cn/v1/chat/completions",
-    "api_key": os.getenv("SILICONFLOW_API_KEY"),
-    "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+    "base_url": "https://openrouter.ai/api/v1/chat/completions",
+    "api_key": os.getenv("OP_API_KEY"),
+    "model": "x-ai/grok-4-fast"
+    # "model": "minimax/minimax-m2.5:free"
 }
+# NLP_CONFIG = {
+#     "base_url": "https://api.siliconflow.cn/v1/chat/completions",
+#     "api_key": os.getenv("SILICONFLOW_API_KEY"),
+#     "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+# }
 
 # ================= 核心请求方法 =================
 def call_openai_compatible_api(config, messages):
@@ -141,7 +147,7 @@ def process_nlp_task(record_id):
         ]
         
         raw_tags = call_openai_compatible_api(NLP_CONFIG, nlp_messages).strip()
-        
+        print('tag:',raw_tags)
         match = re.search(r'\[.*\]', raw_tags, re.DOTALL)
         tags_list = json.loads(match.group(0)) if match else ["未分类"]
         

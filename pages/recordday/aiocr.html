@@ -146,7 +146,13 @@
 
         let state = {
             viewer: null, modalViewer: null, poll: null, searchTimeout: null,
-            data: [], activeTag: '全部', validIds: []
+            data: [], activeTag: '全部', validIds: [],
+            // 新增滚动懒加载核心参数
+            filteredData: [], 
+            renderIndex: 0, 
+            chunkSize: 10, 
+            scrollObserver: null,
+            imageObserver: null
         };
 
         // 防抖搜索
@@ -174,7 +180,6 @@
                     const MAX = 2048, MIN = 800;
                     let w = img.width, h = img.height;
                     
-                    // 智能长图判断
                     if (h <= w * 2) {
                         if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
                         else if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
@@ -197,43 +202,40 @@
             reader.readAsDataURL(file);
         });
 
-        // ================= 3. 懒加载实现 =================
-        const lazyLoadImages = () => {
-            const imageObserver = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        const realSrc = img.dataset.src;
-                        
-                        // 创建临时图片预加载
-                        const tempImg = new Image();
-                        tempImg.onload = () => {
-                            img.src = realSrc;
-                            img.classList.remove('lazy-loading');
-                            img.classList.add('loaded');
-                            observer.unobserve(img);
-                        };
-                        tempImg.onerror = () => {
-                            // 加载失败时显示占位符
-                            img.src = '/static/cdn/placeholder.svg';
-                            img.classList.remove('lazy-loading');
-                            observer.unobserve(img);
-                        };
-                        tempImg.src = realSrc;
-                    }
-                });
-            }, {
-                rootMargin: '50px', // 提前50px开始加载
-                threshold: 0.01
-            });
+        // ================= 3. 图片预加载与懒加载机制 =================
+        const initImageObserver = () => {
+            if (!state.imageObserver) {
+                state.imageObserver = new IntersectionObserver((entries, observer) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const img = entry.target;
+                            const realSrc = img.dataset.src;
+                            const tempImg = new Image();
+                            tempImg.onload = () => {
+                                img.src = realSrc;
+                                img.classList.remove('lazy-loading');
+                                img.classList.add('loaded');
+                                observer.unobserve(img);
+                            };
+                            tempImg.onerror = () => {
+                                img.src = '/static/cdn/placeholder.svg';
+                                img.classList.remove('lazy-loading');
+                                observer.unobserve(img);
+                            };
+                            tempImg.src = realSrc;
+                        }
+                    });
+                }, { rootMargin: '50px', threshold: 0.01 });
+            }
 
-            // 观察所有懒加载图片
-            document.querySelectorAll('.lazy-loading').forEach(img => {
-                imageObserver.observe(img);
+            // 对新添加的未观察的图片进行监听
+            document.querySelectorAll('.lazy-loading:not(.observed)').forEach(img => {
+                img.classList.add('observed');
+                state.imageObserver.observe(img);
             });
         };
 
-        // ================= 4. UI 与渲染逻辑 =================
+        // ================= 4. UI 与渲染逻辑 (分块渲染) =================
         const renderTags = () => {
             let total = 0, counts = {};
             state.data.forEach(i => {
@@ -248,13 +250,11 @@
             const activeCls = "bg-gray-900 text-white shadow-md", normalCls = "bg-white text-gray-600 border-gray-200 hover:bg-gray-100";
             const getCls = t => state.activeTag === t ? activeCls : normalCls;
 
-            // 顶部快捷标签
             let topHtml = `<span class="filter-tag cursor-pointer px-4 py-1.5 rounded-full text-xs font-bold border ${getCls('全部')}" onclick="setFilter('全部')">全部 (${total})</span>`;
             top.forEach(([t, c]) => topHtml += `<span class="filter-tag cursor-pointer px-4 py-1.5 rounded-full text-[11px] font-bold border ${getCls(t)}" onclick="setFilter('${t}')">${t} <span class="opacity-60 ml-0.5">${c}</span></span>`);
             if (sorted.length > 5) topHtml += `<button onclick="toggleModal('tagsModal', true)" class="px-3 py-1.5 rounded-full text-[11px] font-bold border bg-blue-50 text-blue-600 border-blue-100">更多 (${sorted.length})</button>`;
             $('tagFilterContainer').innerHTML = topHtml;
 
-            // 弹窗全量字典
             const gridCls = t => state.activeTag === t ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100";
             let gridHtml = `<div class="cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold border flex justify-between items-center ${gridCls('全部')}" onclick="setFilter('全部'); toggleModal('tagsModal', false);"><span>全部档案</span> <span class="bg-black/10 px-2 py-0.5 rounded-full text-xs">${total}</span></div>`;
             sorted.forEach(([t, c]) => gridHtml += `<div class="cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold border flex justify-between items-center ${gridCls(t)}" onclick="setFilter('${t}'); toggleModal('tagsModal', false);"><span class="truncate pr-2">${t}</span><span class="bg-black/10 px-2 py-0.5 rounded-full text-xs">${c}</span></div>`);
@@ -263,16 +263,33 @@
 
         const renderGallery = () => {
             const kw = $('searchPc').value.toLowerCase();
-            let needPoll = false;
-
-            const filtered = state.data.filter(i => {
+            
+            // 过滤并存储到 state.filteredData 以备分块渲染
+            state.filteredData = state.data.filter(i => {
                 const text = (i.ocr_text || "") + (i.tags?.join(' ') || "") + (i.filename || "");
                 return text.toLowerCase().includes(kw) && (state.activeTag === '全部' || i.tags?.includes(state.activeTag));
             });
 
-            $('gallery').innerHTML = filtered.map(i => {
-                if (['pending', 'pending_ocr', 'processing_ocr', 'pending_nlp', 'processing_nlp'].includes(i.status)) needPoll = true;
-                
+            // 检查整体是否有处于处理中状态的数据用于轮询判断
+            const needPoll = state.filteredData.some(i => ['pending', 'pending_ocr', 'processing_ocr', 'pending_nlp', 'processing_nlp'].includes(i.status));
+
+            // 初始化渲染状态，清空画板
+            state.renderIndex = 0;
+            $('gallery').innerHTML = '';
+            
+            // 开始渲染第一块 DOM
+            renderNextChunk();
+            
+            return needPoll;
+        };
+
+        const renderNextChunk = () => {
+            if (state.renderIndex >= state.filteredData.length) return;
+
+            // 截取接下来 10 条数据
+            const chunk = state.filteredData.slice(state.renderIndex, state.renderIndex + state.chunkSize);
+            
+            const html = chunk.map(i => {
                 const sMap = { 'pending': '排队中...', 'pending_ocr': '准备提取...', 'processing_ocr': '👁️ 提取中...', 'pending_nlp': '等待分类...', 'processing_nlp': '🧠 分类中...' };
                 const fMap = { 'failed': '❌ 失败', 'ocr_failed': '❌ 提取失败', 'nlp_failed': '⚠️ 分类失败' };
                 const overlay = sMap[i.status] ? `<div class="absolute inset-0 bg-black/60 backdrop-blur flex items-center justify-center text-xs text-white font-bold animate-pulse tracking-widest">${sMap[i.status]}</div>` : 
@@ -282,7 +299,7 @@
                 const disabled = !['completed', 'nlp_failed'].includes(i.status) ? 'disabled' : '';
 
                 return `
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative hover:shadow-xl hover:-translate-y-1 transition-all">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative hover:shadow-xl hover:-translate-y-1 transition-all gallery-item">
                     <button class="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-red-500 hover:bg-red-50" onclick="DocCtrl.del('${i.id}')" title="删除"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                     <button class="absolute top-2 right-12 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-purple-600 hover:bg-purple-50" onclick="DocCtrl.reanalyze('${i.id}')" title="重分类"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg></button>
                     <button class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white/90 shadow rounded-full p-2 text-blue-500 hover:bg-blue-50" onclick="DocCtrl.retry('${i.id}')" title="全量重试"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></button>
@@ -299,24 +316,36 @@
                 </div>`;
             }).join('');
 
-            // 初始化懒加载
-            lazyLoadImages();
+            // 向画板追加新DOM
+            $('gallery').insertAdjacentHTML('beforeend', html);
+            state.renderIndex += state.chunkSize;
+
+            // 重新初始化懒加载图片监听和 Viewer 预览控件
+            initImageObserver();
             
             if (state.viewer) state.viewer.destroy();
             state.viewer = new Viewer($('gallery'), { 
                 filter: img => img.classList.contains('manual-img'),
-                navbar: true, 
-                title: true, 
-                toolbar: { 
-                    zoomIn: 1, 
-                    zoomOut: 1, 
-                    oneToOne: 1, 
-                    reset: 1, 
-                    rotateLeft: 1, 
-                    rotateRight: 1 
-                } 
+                navbar: true, title: true, 
+                toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 } 
             });
-            return needPoll;
+
+            // 核心：设置滑动触底触发下一块渲染
+            if (state.scrollObserver) state.scrollObserver.disconnect();
+            if (state.renderIndex < state.filteredData.length) {
+                state.scrollObserver = new IntersectionObserver((entries) => {
+                    if (entries[0].isIntersecting) {
+                        state.scrollObserver.disconnect();
+                        renderNextChunk();
+                    }
+                }, { rootMargin: '300px' }); // 距离底部300px提前触发，保证丝滑
+                
+                const children = $('gallery').children;
+                if (children.length > 0) {
+                    // 监听当前已渲染的最后一张卡片
+                    state.scrollObserver.observe(children[children.length - 1]);
+                }
+            }
         };
 
         const updateStats = () => {
@@ -384,31 +413,18 @@
                 const item = state.data.find(m => m.id === id); if (!item) return;
                 $('modalTitle').innerText = item.filename;
                 $('modalContent').innerHTML = marked.parse(item.ocr_text || "提取中...");
-                $('modalDetailImg').dataset.src = item.url;  // 使用data-src属性
+                $('modalDetailImg').dataset.src = item.url;
                 DetailCtrl.setView('text');
                 
-                // 懒加载模态框中的图片
                 const tempImg = new Image();
-                tempImg.onload = () => {
-                    $('modalDetailImg').src = item.url;
-                };
-                tempImg.onerror = () => {
-                    $('modalDetailImg').src = '/static/cdn/placeholder.svg';
-                };
+                tempImg.onload = () => { $('modalDetailImg').src = item.url; };
+                tempImg.onerror = () => { $('modalDetailImg').src = '/static/cdn/placeholder.svg'; };
                 tempImg.src = item.url;
                 
                 if(state.modalViewer) state.modalViewer.destroy();
                 state.modalViewer = new Viewer($('modalDetailImg'), { 
-                    navbar: false, 
-                    title: false, 
-                    toolbar: { 
-                        zoomIn: 1, 
-                        zoomOut: 1, 
-                        oneToOne: 1, 
-                        reset: 1, 
-                        rotateLeft: 1, 
-                        rotateRight: 1 
-                    }
+                    navbar: false, title: false, 
+                    toolbar: { zoomIn: 1, zoomOut: 1, oneToOne: 1, reset: 1, rotateLeft: 1, rotateRight: 1 }
                 });
                 toggleModal('detailModal', true);
             },

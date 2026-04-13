@@ -134,7 +134,71 @@
         </div>
     </div>
 
-    <script> const API_BASE = '/card-tag/'; 
+    <script> 
+    // ================= 甜点级极速图片压缩引擎 =================
+        function compressImage(file) {
+            return new Promise((resolve, reject) => {
+                // 【优化 1：极速放行】如果文件本身体积很小（<250KB），且不需要转格式，直接放行，0 延迟
+                if (file.size < 250 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/webp')) {
+                    return resolve(file);
+                }
+
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        // 【优化 2：放宽分辨率】使用 1280px 作为长边上限，保证高分屏下的清晰度
+                        const maxEdge = 1280;
+                        let width = img.width;
+                        let height = img.height;
+
+                        // 等比例缩放逻辑（处理横图和竖图）
+                        if (width > maxEdge || height > maxEdge) {
+                            if (width > height) {
+                                height = Math.round((height * maxEdge) / width);
+                                width = maxEdge;
+                            } else {
+                                width = Math.round((width * maxEdge) / height);
+                                height = maxEdge;
+                            }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+
+                        // 开启适度的平滑抗锯齿
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'medium';
+
+                        // 填充纯白背景（抹除透明通道冗余，防止转 JPG 变黑）
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // 【优化 3：甜点压缩率】输出 0.85 画质的 JPEG，视觉无损且完美压制在 100~250KB 左右
+                        canvas.toBlob((blob) => {
+                            // 为了避免没有后缀名的剪贴板文件，统一强制命名为 .jpg
+                            const originalName = file.name || 'clipboard_image';
+                            const newFileName = originalName.replace(/\.[^/.]+$/, "") + "_opt.jpg";
+                            
+                            const compressedFile = new File([blob], newFileName, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now(),
+                            });
+                            resolve(compressedFile);
+                        }, 'image/jpeg', 0.85);
+                    };
+                    img.onerror = error => reject(error);
+                };
+                reader.onerror = error => reject(error);
+            });
+        }
+
+    const API_BASE = '/card-tag/'; 
         let currentTags = new Set();
         let echartInstances = []; 
         
@@ -455,23 +519,53 @@
                 } else alert('修改失败');
             } catch (e) { alert('网络异常'); }
         }
-
+// ================= 重写：接入压缩流程的上传函数 =================
         async function submitUpload() {
             const files = document.getElementById('upCover').files;
             const query = document.getElementById('upQuery').value.trim();
             if (!files.length || !query) return alert("截图和Key为必填");
 
-            const fd = new FormData();
-            fd.append('cover', files[0]); fd.append('query', query);
-            fd.append('tags', document.getElementById('upTags').value);
-            fd.append('description', document.getElementById('upDesc').value);
+            // 获取按钮，在压缩和上传期间锁定状态，防止重复点击
+            const submitBtn = document.querySelector('#uploadModal button.bg-green-600');
+            const originalBtnText = submitBtn.innerText;
+            submitBtn.innerText = "压缩处理中...";
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
+                // 1. 执行前端压缩 (限制最大宽度 800px，画质 80%)
+                const compressedFile = await compressImage(files[0], 800, 0.8);
+
+                // 2. 组装表单
+                const fd = new FormData();
+                fd.append('cover', compressedFile); // 传入已被压缩的 File 对象
+                fd.append('query', query);
+                fd.append('tags', document.getElementById('upTags').value);
+                fd.append('description', document.getElementById('upDesc').value);
+
+                submitBtn.innerText = "高速上传中...";
+
+                // 3. 提交至服务器
                 const res = await fetch(`${API_BASE}api/upload`, { method: 'POST', body: fd });
                 if ((await res.json()).status === 'success') {
-                    closeModal('uploadModal'); fetchStats(); fetchTags(); fetchCards();
-                } else alert('录入失败');
-            } catch (e) { alert('网络异常'); }
-        }</script>
+                    closeModal('uploadModal'); 
+                    fetchStats(); 
+                    fetchTags(); 
+                    fetchCards();
+                } else {
+                    alert('录入失败，请检查服务端日志');
+                }
+            } catch (e) { 
+                alert('处理异常: ' + e.message); 
+                console.error(e);
+            } finally {
+                // 恢复按钮状态
+                submitBtn.innerText = originalBtnText;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
+        </script>
 </body>
 </html>

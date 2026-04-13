@@ -4,320 +4,485 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>动态知识库</title>
+    <script src="/static/cdn/vue3.5.31.js"></script>
     <script src="/static/cdn/tailwindcss3.4.17.js"></script>
     <link rel="stylesheet" href="/static/cdn/github-markdown.min.css">
     <link rel="stylesheet" href="/static/cdn/nprogress.min.css">
     <script src="/static/cdn/nprogress.min.js"></script>
-    <script defer src="/static/cdn/alpine.collapse.cdn.min.js"></script>
-    <script defer src="/static/cdn/alpinejs.cdn.min.js"></script>
+
     <style>
-        #nprogress .bar{background:#2563eb!important;height:3px!important}
-        #nprogress .peg{box-shadow:0 0 10px #2563eb,0 0 5px #2563eb!important}
-        #nprogress .spinner{display:none!important}
-        .markdown-body{background-color:transparent}
-        .no-scrollbar::-webkit-scrollbar{display:none}
-        .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-        .drop-zone-active{background-color:#eff6ff!important;border-color:#93c5fd!important}
+        #nprogress .bar { background: #2563eb !important; height: 3px !important; }
+        #nprogress .peg { box-shadow: 0 0 10px #2563eb, 0 0 5px #2563eb !important; }
+        #nprogress .spinner { display: none !important; }
+        .markdown-body { background-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .drop-zone-active { background-color: #eff6ff !important; border-color: #93c5fd !important; }
+        .editor-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        
+        /* 文件夹操作图标显隐控制 */
+        .folder-action { opacity: 0; transition: opacity 0.2s; }
+        .folder-row:hover .folder-action { opacity: 1; }
+        @media (max-width: 768px) {
+            .folder-action { opacity: 1; } 
+        }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 overflow-x-hidden h-screen flex flex-col font-sans" x-data="docApp()">
+<body class="bg-slate-50 text-slate-900 h-screen flex overflow-hidden font-sans" id="app">
 
-    <div class="flex items-center p-3 bg-white border-b border-slate-200 z-50 shadow-sm relative">
-        <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition shrink-0">☰</button>
-        <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap">知识库文档</div>
+    <div v-show="isSidebarOpen" class="fixed inset-0 bg-slate-900/40 z-[40] md:hidden backdrop-blur-sm transition-opacity" @click="isSidebarOpen = false"></div>
+
+    <div v-show="showMoveModal" class="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center backdrop-blur-sm" style="display: none;" @click.self="showMoveModal = false">
+        <div class="bg-white rounded-xl shadow-2xl w-[420px] max-w-[90vw] flex flex-col max-h-[80vh] overflow-hidden transform transition-all">
+            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+                <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    移动 {{ selectedDocs.length }} 个文档至...
+                </h3>
+                <button @click="showMoveModal = false" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-3 overflow-y-auto flex-1 space-y-1">
+                <div @click="executeBulkMove('')" class="px-3 py-2.5 hover:bg-blue-50 cursor-pointer rounded-lg flex items-center gap-2 text-sm font-medium text-slate-700 transition-colors border border-transparent hover:border-blue-100">
+                    <span>📂</span> 知识库 (根目录)
+                </div>
+                <div v-for="path in allFolderPaths" :key="path" @click="executeBulkMove(path)" class="px-3 py-2.5 hover:bg-blue-50 cursor-pointer rounded-lg flex items-center gap-2 text-sm text-slate-700 transition-colors border border-transparent hover:border-blue-100">
+                    <span>📁</span> {{ path.replace(/_/g, ' / ') }}
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="flex flex-1 overflow-hidden relative">
-        <div x-show="sidebarOpen && window.innerWidth < 768" x-transition.opacity @click="sidebarOpen = false" class="fixed inset-0 bg-black/40 z-30 md:hidden"></div>
+    <div class="w-[280px] bg-white border-r border-slate-200 flex flex-col z-[50] shadow-xl md:shadow-sm shrink-0 h-full fixed md:relative transition-transform duration-300 md:translate-x-0"
+         :class="isSidebarOpen ? 'translate-x-0' : '-translate-x-full'">
         
-        <div class="w-[280px] shrink-0 bg-white border-r border-slate-200 flex flex-col z-40 h-full absolute md:relative left-0 top-0 transition-all duration-300 shadow-lg md:shadow-none" :class="sidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-[280px]'">
-            
-            <div class="p-5 border-b border-slate-200 flex justify-between items-center shrink-0 transition-colors sticky top-0 bg-white/95 backdrop-blur z-20 border-2 border-transparent"
-                 @dragover.prevent.stop="dragOverFolder = 'root'" @dragleave.prevent.stop="dragOverFolder = null" @drop.prevent.stop="handleDrop($event, '')"
-                 :class="dragOverFolder === 'root' ? 'drop-zone-active text-blue-800' : ''">
-                <h3 class="m-0 text-base font-semibold flex items-center gap-2 pointer-events-none">📂 知识库 (根目录)</h3>
-                <a href="/docs-edit" class="text-xs text-blue-600 no-underline px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition z-10">编辑</a>
-            </div>
-
-            <div class="px-4 py-3 border-b border-slate-200 bg-slate-50/50">
-                <div class="relative">
-                    <input type="text" x-model="searchQuery" @input.debounce.300ms="performSearch" placeholder="全文搜索..." 
-                           class="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+        <div class="p-4 border-b border-slate-200 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <div class="flex bg-slate-100 p-1 rounded-lg w-full">
+                    <button @click="switchMode('view')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">📖 阅读</button>
+                    <button @click="switchMode('edit')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">✍️ 编辑</button>
                 </div>
+                <button @click="isSidebarOpen = false" class="ml-2 p-1.5 text-slate-400 md:hidden hover:bg-slate-100 rounded-md">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
             
-            <div class="flex-1 p-3 overflow-y-auto no-scrollbar pb-24 relative" x-ref="sidebarScroll" @dragover="autoScroll($event)">
-                
-                <div x-show="searchQuery !== ''">
-                    <div x-show="isSearching" class="text-center text-sm text-slate-400 py-4">搜索中...</div>
-                    <div x-show="!isSearching && searchResults && searchResults.length === 0" class="text-center text-sm text-slate-400 py-4">未找到相关文档</div>
-                    <div x-show="!isSearching && searchResults && searchResults.length > 0" class="space-y-1">
-                        <template x-for="doc in searchResults" :key="doc.id">
-                            <div @click.stop="selectDoc(doc.id)" class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                                 :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                            </div>
-                        </template>
+            <button v-show="currentMode === 'edit'" @click="createNew" class="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-md text-sm font-medium transition flex items-center justify-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                新建文档
+            </button>
+
+            <div class="relative">
+                <input type="text" v-model="searchQuery" @input="debouncedSearch" placeholder="全文搜索..." 
+                       class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+            </div>
+        </div>
+        
+        <div class="px-4 py-2 border-b border-slate-100 flex justify-between items-center shrink-0 transition-colors sticky top-0 bg-white/95 backdrop-blur z-20 border-2 border-transparent"
+             @dragover.prevent.stop="dragOverTarget = 'root'" @dragleave.prevent.stop="dragOverTarget = null" @drop.prevent.stop="handleDrop($event, '')"
+             :class="dragOverTarget === 'root' ? 'drop-zone-active text-blue-800' : ''">
+            <h3 class="m-0 text-sm font-semibold flex items-center gap-1.5 pointer-events-none text-slate-600">📂 知识库</h3>
+            <div class="flex items-center gap-1">
+                <button @click="expandAll" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition" title="展开全部">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>
+                </button>
+                <button @click="collapseAll" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition" title="折叠全部">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 11 12 6 17 11"></polyline><polyline points="7 18 12 13 17 18"></polyline></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 p-2 overflow-y-auto no-scrollbar relative pb-20" ref="sidebarScroll" @dragover="autoScroll">
+            
+            <div v-show="searchQuery !== ''">
+                <div v-if="isSearching" class="text-center text-sm text-slate-400 py-4">搜索中...</div>
+                <div v-else-if="searchResults && searchResults.length === 0" class="text-center text-sm text-slate-400 py-4">未找到相关文档</div>
+                <div v-else class="space-y-1">
+                    <div v-for="doc in searchResults" :key="doc.id" @click.stop="handleDocClick($event, doc.id)"
+                         class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
+                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
+                        <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
+                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none">{{ doc.title }}</span>
                     </div>
                 </div>
+            </div>
 
-                <div x-show="searchQuery === ''">
+            <div v-show="searchQuery === ''">
+                <div v-for="(folder1, path1) in tree.folders" :key="path1" class="mb-1 rounded-lg border-2 border-transparent transition-colors"
+                     :class="dragOverTarget === path1 ? 'drop-zone-active' : ''"
+                     @dragover.prevent.stop="dragOverTarget = path1; autoScroll($event)" @dragleave.prevent.stop="dragOverTarget = null" @drop.prevent.stop="handleDrop($event, path1)">
                     
-                    <div class="space-y-1 mb-2 pb-2 border-b border-slate-100" x-show="tree.items && tree.items.length > 0">
-                        <template x-for="doc in tree.items" :key="doc.id">
-                            <div @click.stop="selectDoc(doc.id)" draggable="true" @dragstart.stop="dragStart($event, doc.id, '')"
-                                 class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                                 :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                            </div>
-                        </template>
+                    <div class="folder-row px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100" @click="toggleFolder(path1)">
+                        <div class="flex items-center gap-2 font-medium pointer-events-none">
+                            <span>{{ folderState[path1] ? '📂' : '📁' }}</span>
+                            <span>{{ folder1.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button v-show="currentMode === 'edit'" @click.stop="renameFolder(path1)" class="folder-action text-blue-500 hover:bg-blue-100 p-1 rounded" title="重命名文件夹">
+                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folderState[path1] ? '' : '-rotate-90'">▼</span>
+                        </div>
                     </div>
-
-                    <template x-for="folder1 in Object.values(tree.folders)" :key="folder1.path">
-                        <div class="mb-2 rounded-lg border-2 border-transparent transition-colors"
-                             @dragover.prevent.stop="dragOverFolder = folder1.path; autoScroll($event)"
-                             @dragleave.prevent.stop="dragOverFolder = null"
-                             @drop.prevent.stop="handleDrop($event, folder1.path)"
-                             :class="dragOverFolder === folder1.path ? 'drop-zone-active' : ''">
-                            
-                            <div @click="toggleFolder(folder1)" class="px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100">
-                                <div class="flex items-center gap-2 font-medium pointer-events-none">
-                                    <span x-text="folder1.open ? '📂' : '📁'"></span>
-                                    <span x-text="folder1.name"></span>
+                    
+                    <div v-show="folderState[path1]">
+                        <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
+                            <div v-for="(folder2, path2) in folder1.folders" :key="path2" class="mb-1 rounded-md border-2 border-transparent transition-colors"
+                                 :class="dragOverTarget === path2 ? 'drop-zone-active' : ''"
+                                 @dragover.prevent.stop="dragOverTarget = path2; autoScroll($event)" @dragleave.prevent.stop="dragOverTarget = null" @drop.prevent.stop="handleDrop($event, path2)">
+                                
+                                <div class="folder-row px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100" @click="toggleFolder(path2)">
+                                    <div class="flex items-center gap-2 pointer-events-none">
+                                        <span>{{ folderState[path2] ? '📂' : '📁' }}</span>
+                                        <span>{{ folder2.name }}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <button v-show="currentMode === 'edit'" @click.stop="renameFolder(path2)" class="folder-action text-blue-500 hover:bg-blue-100 p-1 rounded" title="重命名文件夹">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                        </button>
+                                        <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folderState[path2] ? '' : '-rotate-90'">▼</span>
+                                    </div>
                                 </div>
-                                <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folder1.open ? '' : '-rotate-90'">▼</span>
+                                
+                                <div v-show="folderState[path2]">
+                                    <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
+                                        <div v-for="doc in folder2.items" :key="doc.id" @click.stop="handleDocClick($event, doc.id)" :draggable="currentMode === 'edit'" @dragstart.stop="dragStart($event, doc.id, path2)"
+                                             class="group px-3 py-2 md:py-1.5 cursor-pointer rounded-md text-sm transition-all duration-200 flex items-center justify-between border-l-2 relative"
+                                             :class="[
+                                                selectedDocs.includes(doc.id) && currentMode === 'edit' ? 'bg-blue-50/90 border-blue-400 shadow-[0_0_0_1px_rgba(96,165,250,0.5)] z-10' : 'border-transparent bg-white hover:bg-slate-50 hover:border-slate-300',
+                                                activeDoc === doc.id && !selectedDocs.includes(doc.id) ? 'bg-blue-50 text-blue-600 font-medium border-blue-600' : ''
+                                             ]">
+                                            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                                <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
+                                                <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
+                                            </div>
+                                            <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="text-red-500 hover:bg-red-100 p-1 rounded opacity-0 group-hover:opacity-100 transition shrink-0" title="删除">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <div x-show="folder1.open" x-collapse>
-                                <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                                    <template x-for="folder2 in Object.values(folder1.folders)" :key="folder2.path">
-                                        <div class="mb-1 rounded-md border-2 border-transparent transition-colors"
-                                             @dragover.prevent.stop="dragOverFolder = folder2.path; autoScroll($event)"
-                                             @dragleave.prevent.stop="dragOverFolder = null"
-                                             @drop.prevent.stop="handleDrop($event, folder2.path)"
-                                             :class="dragOverFolder === folder2.path ? 'drop-zone-active' : ''">
-                                            
-                                            <div @click="toggleFolder(folder2)" class="px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100">
-                                                <div class="flex items-center gap-2 pointer-events-none">
-                                                    <span x-text="folder2.open ? '📂' : '📁'"></span>
-                                                    <span x-text="folder2.name"></span>
-                                                </div>
-                                            </div>
-                                            
-                                            <div x-show="folder2.open" x-collapse>
-                                                <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                                                    <template x-for="doc in folder2.items" :key="doc.id">
-                                                        <div @click.stop="selectDoc(doc.id)" draggable="true" @dragstart.stop="dragStart($event, doc.id, folder2.path)"
-                                                             class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                                                             :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                                            <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                                            <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </template>
 
-                                    <template x-for="doc in folder1.items" :key="doc.id">
-                                        <div @click.stop="selectDoc(doc.id)" draggable="true" @dragstart.stop="dragStart($event, doc.id, folder1.path)"
-                                             class="px-3 py-1.5 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white mx-1"
-                                             :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                                            <span class="text-base transition-opacity duration-200 cursor-grab active:cursor-grabbing" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                                            <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none" x-text="doc.title"></span>
-                                        </div>
-                                    </template>
+                            <div v-for="doc in folder1.items" :key="doc.id" @click.stop="handleDocClick($event, doc.id)" :draggable="currentMode === 'edit'" @dragstart.stop="dragStart($event, doc.id, path1)"
+                                 class="group px-3 py-2 md:py-1.5 cursor-pointer rounded-md text-sm transition-all duration-200 flex items-center justify-between border-l-2 relative mx-1"
+                                 :class="[
+                                    selectedDocs.includes(doc.id) && currentMode === 'edit' ? 'bg-blue-50/90 border-blue-400 shadow-[0_0_0_1px_rgba(96,165,250,0.5)] z-10' : 'border-transparent bg-white hover:bg-slate-50 hover:border-slate-300',
+                                    activeDoc === doc.id && !selectedDocs.includes(doc.id) ? 'bg-blue-50 text-blue-600 font-medium border-blue-600' : ''
+                                 ]">
+                                <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                    <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
+                                    <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
                                 </div>
+                                <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="text-red-500 hover:bg-red-100 p-1 rounded opacity-0 group-hover:opacity-100 transition shrink-0" title="删除">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
                             </div>
                         </div>
-                    </template>
+                    </div>
+                </div>
+
+                <div class="space-y-1 mt-2 pt-2 border-t border-slate-100">
+                    <div v-for="doc in tree.items" :key="doc.id" @click.stop="handleDocClick($event, doc.id)" :draggable="currentMode === 'edit'" @dragstart.stop="dragStart($event, doc.id, '')"
+                         class="group px-3 py-2.5 md:py-2 cursor-pointer rounded-md text-sm transition-all duration-200 flex items-center justify-between border-l-2 relative"
+                         :class="[
+                            selectedDocs.includes(doc.id) && currentMode === 'edit' ? 'bg-blue-50/90 border-blue-400 shadow-[0_0_0_1px_rgba(96,165,250,0.5)] z-10' : 'border-transparent bg-white hover:bg-slate-50 hover:border-slate-300',
+                            activeDoc === doc.id && !selectedDocs.includes(doc.id) ? 'bg-blue-50 text-blue-600 font-medium border-blue-600' : ''
+                         ]">
+                        <div class="flex items-center gap-2 overflow-hidden flex-1">
+                            <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
+                            <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
+                        </div>
+                        <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="text-red-500 hover:bg-red-100 p-1 rounded opacity-0 group-hover:opacity-100 transition shrink-0" title="删除">
+                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto scroll-smooth relative h-full pt-14 md:pt-10" x-ref="scrollContainer">
-            <div class="max-w-[880px] mx-auto px-5 pb-10">
-                <div class="bg-white px-8 py-10 rounded-2xl shadow-md min-h-[calc(100vh-120px)] markdown-body" x-html="content"></div>
+        <div v-show="selectedDocs.length > 0 && currentMode === 'edit'" class="absolute bottom-0 left-0 right-0 p-3 bg-blue-50/95 backdrop-blur border-t border-blue-200 flex justify-between items-center z-30 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)]">
+            <div class="text-sm font-medium text-blue-800">已选 {{ selectedDocs.length }} 项</div>
+            <div class="flex gap-2">
+                <button @click="selectedDocs = []" class="px-2 py-1.5 text-slate-500 hover:text-slate-700 text-xs rounded transition">取消</button>
+                <button @click="showMoveModal = true" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded shadow hover:bg-blue-700 transition">移动至...</button>
             </div>
         </div>
+    </div>
+
+    <div class="flex-1 flex flex-col bg-slate-50 relative w-full overflow-hidden">
+        
+        <div v-if="!activeDoc && currentMode === 'view'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
+            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <div class="text-5xl mb-4 opacity-20">📄</div>
+            <div class="text-sm md:text-base">选择左侧文档开始阅读</div>
+        </div>
+
+        <div v-else-if="!activeDoc && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
+            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <div class="text-5xl mb-4 opacity-20">✍️</div>
+            <div class="text-sm md:text-base">选择左侧文档或新建开始编辑</div>
+        </div>
+
+        <template v-if="currentMode === 'view' && activeDoc">
+            <div class="flex items-center p-3 bg-white border-b border-slate-200 z-10 shadow-sm shrink-0">
+                <button @click="isSidebarOpen = !isSidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition md:hidden shrink-0">☰</button>
+                <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap text-slate-700 flex-1">{{ getTitle(activeDoc) }}</div>
+            </div>
+            <div class="flex-1 overflow-y-auto scroll-smooth relative p-4 md:p-8" ref="viewScrollContainer">
+                <div class="max-w-[880px] mx-auto bg-white px-6 md:px-10 py-8 md:py-12 rounded-2xl shadow-sm min-h-[calc(100vh-120px)] markdown-body" v-html="viewHtml"></div>
+            </div>
+        </template>
+
+        <template v-if="currentMode === 'edit' && (activeDoc || docTitle !== '')">
+            <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0">
+                <button @click="isSidebarOpen = true" class="p-1.5 md:hidden text-slate-600 hover:bg-slate-100 rounded-md transition" title="打开目录">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+                
+                <div class="flex-1 min-w-[180px] flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
+                    <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
+                    <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音 (支持下划线目录)">
+                </div>
+                
+                <div class="flex gap-2 w-full md:w-auto justify-end">
+                    <button @click="deleteDoc(activeDoc)" class="px-3 py-2 text-xs md:text-sm font-medium rounded-md transition border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300" title="删除当前文档">删除</button>
+                    <button @click="saveDoc" class="px-3 md:px-4 py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
+                            :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
+                        {{ saveSuccess ? '✅ 已保存' : '保存修改' }}
+                    </button>
+                    <button @click="togglePreview" class="px-3 md:px-4 py-2 text-xs md:text-sm font-medium rounded-md transition border"
+                            :class="isPreview ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
+                        {{ isPreview ? '关闭预览' : '预览' }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex overflow-hidden bg-white">
+                <textarea v-show="!isPreview" v-model="editContent" ref="editorRef"
+                          class="flex-1 p-4 md:p-8 border-none outline-none resize-none editor-font text-[15px] leading-relaxed bg-slate-50 text-slate-700 focus:ring-0" 
+                          placeholder="# 在这里输入 Markdown 标题...&#10;&#10;输入正文内容..."></textarea>
+                
+                <div v-show="isPreview" class="flex-1 p-4 md:p-8 overflow-y-auto bg-white transition-opacity">
+                    <div class="max-w-[880px] mx-auto markdown-body" v-html="editPreviewHtml"></div>
+                </div>
+            </div>
+        </template>
     </div>
 
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('docApp', () => ({
-                sidebarOpen: window.innerWidth >= 768,
-                tree: { items: [], folders: {} },
-                activeDoc: null,
-                maxLevel: 2, 
-                dragOverFolder: null,
-                content: `<div class="text-center pt-24 text-slate-500"><div class="text-5xl mb-4 opacity-20">📄</div>请从左侧选择文档</div>`,
-                abortController: null,
-                searchQuery: '',
-                isSearching: false,
-                searchResults: null,
+        const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
-                async init() {
-                    await this.loadList();
-                },
+        createApp({
+            setup() {
+                // =============== 全局状态 ===============
+                const currentMode = ref('view'); // 'view' 或 'edit'
+                const isSidebarOpen = ref(window.innerWidth >= 768);
+                const rawDocs = ref([]);
+                const activeDoc = ref(null);
+                const maxLevel = 2;
+                const abortController = ref(null);
 
-                // 切换文件夹并保存状态到 localStorage
-                toggleFolder(folder) {
-                    folder.open = !folder.open;
-                    try {
-                        let state = JSON.parse(localStorage.getItem('docFolderState') || '{}');
-                        state[folder.path] = folder.open;
-                        localStorage.setItem('docFolderState', JSON.stringify(state));
-                    } catch (e) { console.error('保存状态失败', e); }
-                },
+                // =============== 搜索与目录状态 ===============
+                const dragOverTarget = ref(null);
+                const searchQuery = ref('');
+                const isSearching = ref(false);
+                const searchResults = ref(null);
+                let searchTimeout = null;
 
-                async performSearch() {
-                    if (!this.searchQuery.trim()) return this.searchResults = null;
-                    this.isSearching = true;
-                    try {
-                        const res = await fetch(`/api/docs/search?q=${encodeURIComponent(this.searchQuery)}`);
-                        this.searchResults = (await res.json()).results || [];
-                    } catch(e) {
-                        this.searchResults = [];
-                    } finally {
-                        this.isSearching = false;
+                const folderState = ref(JSON.parse(localStorage.getItem('docFolderState') || '{}'));
+                watch(folderState, (newVal) => {
+                    localStorage.setItem('docFolderState', JSON.stringify(newVal));
+                }, { deep: true });
+
+                // =============== 编辑器状态 ===============
+                const isPreview = ref(false);
+                const saveSuccess = ref(false);
+                const docTitle = ref('');
+                const oldDocTitle = ref('');
+                const editContent = ref('');
+                const editPreviewHtml = ref('');
+                const editorRef = ref(null);
+                
+                const selectedDocs = ref([]);
+                const showMoveModal = ref(false);
+
+                // =============== 阅读器状态 ===============
+                const viewHtml = ref('');
+                const viewScrollContainer = ref(null);
+                const sidebarScroll = ref(null);
+
+                // =============== 模式切换 ===============
+                const switchMode = async (mode) => {
+                    currentMode.value = mode;
+                    selectedDocs.value = [];
+                    if (activeDoc.value) {
+                        await loadDoc(activeDoc.value);
+                    } else if (mode === 'edit') {
+                        createNew();
                     }
-                },
+                };
 
-                async loadList() {
+                // =============== 数据计算 ===============
+                const allFolderPaths = computed(() => {
+                    let paths = [];
+                    for (let f1 in tree.value.folders) {
+                        paths.push(tree.value.folders[f1].path);
+                        for (let f2 in tree.value.folders[f1].folders) {
+                            paths.push(tree.value.folders[f1].folders[f2].path);
+                        }
+                    }
+                    return paths;
+                });
+
+                const tree = computed(() => {
+                    let root = { items: [], folders: {} };
+                    rawDocs.value.forEach(docObj => {
+                        let docName = docObj.id;
+                        let parts = docName.split('_');
+                        let depth = Math.min(parts.length - 1, maxLevel);
+                        let folders = parts.slice(0, depth);
+                        
+                        let currentLevel = root;
+                        let currentPath = '';
+
+                        folders.forEach(f => {
+                            currentPath = currentPath ? `${currentPath}_${f}` : f;
+                            if (!currentLevel.folders[f]) {
+                                if (folderState.value[currentPath] === undefined) {
+                                    folderState.value[currentPath] = false; // 默认折叠
+                                }
+                                currentLevel.folders[f] = { name: f, path: currentPath, items: [], folders: {} };
+                            }
+                            currentLevel = currentLevel.folders[f];
+                        });
+                        currentLevel.items.push(docObj);
+                    });
+                    return root;
+                });
+
+                const getTitle = (docId) => {
+                    const doc = rawDocs.value.find(d => d.id === docId);
+                    return doc ? doc.title : docId;
+                };
+
+                // =============== API 与加载逻辑 ===============
+                const loadList = async () => {
                     try {
                         const res = await fetch('/api/docs/list');
                         const data = await res.json();
-                        let newTree = { items: [], folders: {} };
-                        let fetchQueue = [];
-                        let savedState = {};
                         
-                        try { savedState = JSON.parse(localStorage.getItem('docFolderState') || '{}'); } catch (e) {}
-
-                        data.docs.forEach(docName => {
-                            let parts = docName.split('_');
-                            let folderDepth = Math.min(parts.length - 1, this.maxLevel);
-                            let folders = parts.slice(0, folderDepth);
-                            let title = parts.slice(folderDepth).join('_');
-                            let docObj = { id: docName, title: title };
-                            let currentLevel = newTree;
-                            let currentPath = '';
-
-                            folders.forEach(f => {
-                                currentPath = currentPath ? `${currentPath}_${f}` : f;
-                                if (!currentLevel.folders[f]) {
-                                    currentLevel.folders[f] = { 
-                                        name: f, path: currentPath,
-                                        open: savedState[currentPath] !== undefined ? savedState[currentPath] : true, 
-                                        items: [], folders: {} 
-                                    };
-                                }
-                                currentLevel = currentLevel.folders[f];
-                            });
-
-                            currentLevel.items.push(docObj);
-                            fetchQueue.push(docObj);
+                        // 统一结构为对象数组以支持标题显示
+                        let docObjects = data.docs.map(id => {
+                            let parts = id.split('_');
+                            let depth = Math.min(parts.length - 1, maxLevel);
+                            return { id: id, title: parts.slice(depth).join('_') };
                         });
 
-                        this.tree = newTree;
+                        // 排序
+                        docObjects.sort((a, b) => a.id.localeCompare(b.id, 'zh-CN', { numeric: true }));
+                        rawDocs.value = docObjects;
 
-                        fetchQueue.forEach(async (docObj) => {
+                        // 异步获取真实标题 (静默更新)
+                        rawDocs.value.forEach(async (docObj) => {
                             try {
                                 const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(docObj.id)}`);
                                 if (rawRes.ok) {
                                     const match = (await rawRes.json()).content.match(/^(?:#+\s*)?([^\n]+)/);
-                                    if (match && match[1] && match[1].trim().length < 40) docObj.title = match[1].trim();
+                                    if (match && match[1] && match[1].trim().length < 40) {
+                                        docObj.title = match[1].trim();
+                                    }
                                 }
                             } catch (e) {}
                         });
+
+                        selectedDocs.value = selectedDocs.value.filter(id => rawDocs.value.some(d => d.id === id));
                     } catch (e) {
-                        this.content = '<p class="text-red-500 p-5 text-center">列表获取失败</p>';
+                        console.error('列表获取失败', e);
                     }
-                },
+                };
 
-                autoScroll(e) {
-                    const c = this.$refs.sidebarScroll;
-                    if (!c) return;
-                    const rect = c.getBoundingClientRect();
-                    if (e.clientY - rect.top < 60) c.scrollTop -= 15; 
-                    else if (rect.bottom - e.clientY < 60) c.scrollTop += 15; 
-                },
+                const loadDoc = async (docId) => {
+                    activeDoc.value = docId;
+                    docTitle.value = docId;
+                    oldDocTitle.value = docId;
 
-                dragStart(e, docId, currentPath) {
-                    e.dataTransfer.setData('text/plain', JSON.stringify({ docId, currentPath }));
-                    e.dataTransfer.effectAllowed = 'move';
-                },
+                    if (window.innerWidth < 768) isSidebarOpen.value = false;
 
-                async handleDrop(e, targetPath) {
-                    this.dragOverFolder = null;
-                    const dataStr = e.dataTransfer.getData('text/plain');
-                    if (!dataStr) return;
+                    if (abortController.value) abortController.value.abort();
+                    abortController.value = new AbortController();
+                    const signal = abortController.value.signal;
 
+                    NProgress.start();
                     try {
-                        const { docId: oldId, currentPath } = JSON.parse(dataStr);
-                        let pureFileName = currentPath && oldId.startsWith(currentPath + '_') ? oldId.substring(currentPath.length + 1) : oldId;
-                        const newId = targetPath ? `${targetPath}_${pureFileName}` : pureFileName;
-                        if (oldId === newId) return;
+                        if (currentMode.value === 'edit') {
+                            const res = await fetch(`/api/docs/raw/${encodeURIComponent(docId)}`, { signal });
+                            if (!res.ok) throw new Error('读取失败');
+                            const data = await res.json();
+                            editContent.value = data.content;
+                            if (isPreview.value) await refreshPreview();
+                        } else {
+                            viewHtml.value = '<div class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>';
+                            
+                            // Fast Load
+                            const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docId)}`, { signal });
+                            const dataFast = await resFast.json();
+                            if (dataFast.error) throw new Error(dataFast.error);
+                            viewHtml.value = dataFast.html;
+                            
+                            if (viewScrollContainer.value) viewScrollContainer.value.scrollTop = 0;
+                            nextTick(() => highlightAndScroll());
+                            NProgress.set(0.6);
 
-                        NProgress.start();
-                        const res = await fetch('/api/docs/rename', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ oldName: oldId, newName: newId })
-                        });
-                        if (!res.ok) throw new Error('移动失败，请检查后端接口');
-
-                        if (this.activeDoc === oldId) this.activeDoc = newId;
-                        await this.loadList();
+                            // Refresh Load
+                            const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
+                            const dataFresh = await resFresh.json();
+                            if (!dataFresh.error && dataFresh.html !== dataFast.html) {
+                                viewHtml.value = dataFresh.html;
+                                nextTick(() => highlightAndScroll());
+                            }
+                        }
                     } catch (e) {
-                        alert(`⚠️ ${e.message}`);
+                        if (e.name !== 'AbortError') {
+                            if (currentMode.value === 'view') {
+                                viewHtml.value = `<div class="text-red-500 p-5 text-center">⚠️ 加载失败: ${e.message}</div>`;
+                            } else {
+                                alert(e.message);
+                            }
+                        }
                     } finally {
                         NProgress.done();
                     }
-                },
+                };
 
-                async selectDoc(docId) {
-                    if (window.innerWidth < 768) this.sidebarOpen = false;
-                    this.activeDoc = docId;
-                    if (this.abortController) this.abortController.abort();
-                    this.abortController = new AbortController();
-                    const signal = this.abortController.signal;
-
-                    this.content = '<div class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>';
-                    NProgress.start();
-
-                    try {
-                        const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docId)}`, { signal });
-                        const dataFast = await resFast.json();
-                        if (dataFast.error) throw new Error(dataFast.error);
-
-                        this.content = dataFast.html;
-                        this.$refs.scrollContainer.scrollTop = 0;
-                        this.$nextTick(() => this.highlightAndScroll());
-                        NProgress.set(0.6);
-
-                        const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
-                        const dataFresh = await resFresh.json();
-
-                        if (!dataFresh.error && dataFresh.html !== dataFast.html) {
-                            this.content = dataFresh.html;
-                            this.$nextTick(() => this.highlightAndScroll());
+                // =============== 搜索与高亮 ===============
+                const debouncedSearch = () => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(async () => {
+                        if (!searchQuery.value.trim()) {
+                            searchResults.value = null;
+                            return;
                         }
-                        NProgress.done();
-                    } catch (e) {
-                        if (e.name !== 'AbortError') {
-                            this.content = `<div class="text-red-500 p-5 text-center">⚠️ 加载失败: ${e.message}</div>`;
-                            NProgress.done();
+                        isSearching.value = true;
+                        try {
+                            const res = await fetch(`/api/docs/search?q=${encodeURIComponent(searchQuery.value)}`);
+                            searchResults.value = (await res.json()).results || [];
+                        } catch(e) {
+                            searchResults.value = [];
+                        } finally {
+                            isSearching.value = false;
                         }
-                    }
-                },
+                    }, 300);
+                };
 
-                highlightAndScroll() {
-                    const query = this.searchQuery.trim();
-                    if (!query) return;
-                    const container = this.$refs.scrollContainer.querySelector('.markdown-body');
+                const highlightAndScroll = () => {
+                    const query = searchQuery.value.trim();
+                    if (!query || !viewScrollContainer.value) return;
+                    const container = viewScrollContainer.value.querySelector('.markdown-body');
                     if (!container) return;
 
                     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
@@ -337,9 +502,323 @@
                     });
 
                     if (firstMatch) setTimeout(() => firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
-                }
-            }));
-        });
+                };
+
+                // =============== 目录与交互控制 ===============
+                const expandAll = () => {
+                    for (let key in folderState.value) folderState.value[key] = true;
+                };
+
+                const collapseAll = () => {
+                    for (let key in folderState.value) folderState.value[key] = false;
+                };
+
+                const toggleFolder = (path) => {
+                    folderState.value[path] = !folderState.value[path];
+                };
+
+                const toggleSelect = (docId) => {
+                    if (currentMode.value !== 'edit') return;
+                    const idx = selectedDocs.value.indexOf(docId);
+                    if (idx > -1) selectedDocs.value.splice(idx, 1);
+                    else selectedDocs.value.push(docId);
+                };
+
+                const handleDocClick = (e, docId) => {
+                    if (currentMode.value === 'edit' && (e.ctrlKey || e.metaKey)) {
+                        toggleSelect(docId);
+                    } else {
+                        if (!selectedDocs.value.includes(docId) || selectedDocs.value.length > 1) {
+                            selectedDocs.value = [];
+                        }
+                        loadDoc(docId);
+                    }
+                };
+
+                const renameFolder = async (folderPath) => {
+                    const newName = prompt(`重命名文件夹 "${folderPath}"\n请输入新名称 (请勿包含下划线):`);
+                    if (!newName || newName.includes('_')) return;
+
+                    const pathParts = folderPath.split('_');
+                    pathParts[pathParts.length - 1] = newName;
+                    const newPath = pathParts.join('_');
+
+                    if (folderPath === newPath) return;
+
+                    NProgress.start();
+                    const filesToRename = rawDocs.value.filter(doc => doc.id.startsWith(folderPath + '_'));
+
+                    try {
+                        for (const docObj of filesToRename) {
+                            const oldId = docObj.id;
+                            const pureName = oldId.substring(folderPath.length + 1);
+                            const newId = `${newPath}_${pureName}`;
+                            
+                            await fetch('/api/docs/rename', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ oldName: oldId, newName: newId })
+                            });
+
+                            if (activeDoc.value === oldId) {
+                                activeDoc.value = newId;
+                                oldDocTitle.value = newId;
+                                docTitle.value = newId;
+                            }
+                        }
+                        if (folderState.value[folderPath] !== undefined) {
+                            folderState.value[newPath] = folderState.value[folderPath];
+                        }
+                        await loadList();
+                    } catch(e) {
+                        alert("部分文件重命名失败，请检查网络");
+                    } finally {
+                        NProgress.done();
+                    }
+                };
+
+                // =============== 编辑器专有逻辑 ===============
+                const createNew = () => {
+                    if (currentMode.value !== 'edit') switchMode('edit');
+                    activeDoc.value = null;
+                    docTitle.value = '';
+                    oldDocTitle.value = '';
+                    editContent.value = '';
+                    if (window.innerWidth < 768) isSidebarOpen.value = false;
+                    if (isPreview.value) togglePreview();
+                    setTimeout(() => editorRef.value?.focus(), 50);
+                };
+
+                const saveDoc = async () => {
+                    let name = docTitle.value.trim();
+                    const old_name = oldDocTitle.value.trim();
+                    const docContent = editContent.value;
+
+                    if (!name) {
+                        const match = docContent.match(/^(?:#+\s*)?([^\n]+)/);
+                        if (match && match[1]) {
+                            name = match[1].trim().replace(/[\\/:*?"<>|]/g, '').substring(0, 50);
+                            docTitle.value = name;
+                        }
+                    }
+
+                    if (!name) return alert('无法自动提取到有效文件名，请手动输入');
+
+                    NProgress.start();
+                    try {
+                        const res = await fetch('/api/docs/save', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name, old_name, content: docContent })
+                        });
+
+                        if (res.ok) {
+                            oldDocTitle.value = name;
+                            activeDoc.value = name;
+                            await loadList();
+                            
+                            saveSuccess.value = true;
+                            setTimeout(() => saveSuccess.value = false, 1500);
+                            if (isPreview.value) await refreshPreview();
+                        } else {
+                            const err = await res.json();
+                            alert('保存失败: ' + err.error);
+                        }
+                    } catch (e) {
+                        alert('网络错误，保存失败');
+                    } finally {
+                        NProgress.done();
+                    }
+                };
+
+                const deleteDoc = async (docId) => {
+                    if (!docId) return;
+                    if (!confirm(`确定要删除文档 "${docId}" 吗？此操作不可恢复。`)) return;
+
+                    NProgress.start();
+                    try {
+                        const res = await fetch(`/api/docs/delete/${encodeURIComponent(docId)}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            if (oldDocTitle.value === docId) activeDoc.value = null;
+                            await loadList();
+                        } else {
+                            alert('删除失败');
+                        }
+                    } catch (e) {
+                        alert('网络错误');
+                    } finally {
+                        NProgress.done();
+                    }
+                };
+
+                const togglePreview = async () => {
+                    isPreview.value = !isPreview.value;
+                    if (isPreview.value) await refreshPreview();
+                };
+
+                const refreshPreview = async () => {
+                    const name = oldDocTitle.value;
+                    if (name) {
+                        try {
+                            const res = await fetch(`/api/docs/content/${encodeURIComponent(name)}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                editPreviewHtml.value = data.html;
+                                return;
+                            }
+                        } catch (e) {}
+                    }
+                    editPreviewHtml.value = '<div class="text-slate-400 pt-5">* 文档尚未保存至服务器，当前无法预览效果。<br>请先点击“保存修改”。</div>';
+                };
+
+                // =============== 拖拽控制 ===============
+                const autoScroll = (e) => {
+                    if (!sidebarScroll.value) return;
+                    const threshold = 60; 
+                    const rect = sidebarScroll.value.getBoundingClientRect();
+                    if (e.clientY - rect.top < threshold) sidebarScroll.value.scrollTop -= 15;
+                    else if (rect.bottom - e.clientY < threshold) sidebarScroll.value.scrollTop += 15;
+                };
+
+                const dragStart = (e, docId, currentPath) => {
+                    if (currentMode.value !== 'edit') {
+                        e.preventDefault();
+                        return;
+                    }
+                    let dragItems = [];
+                    if (selectedDocs.value.includes(docId)) {
+                        dragItems = selectedDocs.value.map(id => {
+                            let parts = id.split('_');
+                            let depth = Math.min(parts.length - 1, maxLevel);
+                            return { docId: id, currentPath: parts.slice(0, depth).join('_') };
+                        });
+                    } else {
+                        dragItems = [{ docId, currentPath }];
+                    }
+                    e.dataTransfer.setData('application/json', JSON.stringify(dragItems));
+                    e.dataTransfer.effectAllowed = 'move';
+                };
+
+                const handleDrop = async (e, targetPath) => {
+                    dragOverTarget.value = null;
+                    const dataStr = e.dataTransfer.getData('application/json');
+                    if (!dataStr) return;
+
+                    try {
+                        const dragItems = JSON.parse(dataStr);
+                        NProgress.start();
+                        
+                        let hasChanges = false;
+                        for (const item of dragItems) {
+                            const oldId = item.docId;
+                            const currentPath = item.currentPath;
+                            
+                            let pureFileName = oldId;
+                            if (currentPath && oldId.startsWith(currentPath + '_')) {
+                                pureFileName = oldId.substring(currentPath.length + 1);
+                            }
+
+                            const newId = targetPath ? `${targetPath}_${pureFileName}` : pureFileName;
+                            if (oldId === newId) continue;
+                            
+                            hasChanges = true;
+                            await fetch('/api/docs/rename', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ oldName: oldId, newName: newId })
+                            });
+
+                            if (activeDoc.value === oldId) {
+                                activeDoc.value = newId;
+                                oldDocTitle.value = newId;
+                                docTitle.value = newId;
+                            }
+                        }
+                        
+                        if (hasChanges) {
+                            selectedDocs.value = [];
+                            await loadList();
+                        }
+                    } catch (e) {
+                        alert(`⚠️ 文件移动失败: ${e.message}`);
+                    } finally {
+                        NProgress.done();
+                    }
+                };
+
+                const executeBulkMove = async (targetPath) => {
+                    showMoveModal.value = false;
+                    NProgress.start();
+                    try {
+                        for (let oldId of selectedDocs.value) {
+                            let parts = oldId.split('_');
+                            let depth = Math.min(parts.length - 1, maxLevel);
+                            let currentPath = parts.slice(0, depth).join('_');
+                            
+                            let pureFileName = oldId;
+                            if (currentPath && oldId.startsWith(currentPath + '_')) {
+                                pureFileName = oldId.substring(currentPath.length + 1);
+                            }
+                            const newId = targetPath ? `${targetPath}_${pureFileName}` : pureFileName;
+                            if (oldId === newId) continue;
+
+                            await fetch('/api/docs/rename', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ oldName: oldId, newName: newId })
+                            });
+
+                            if (activeDoc.value === oldId) {
+                                activeDoc.value = newId;
+                                oldDocTitle.value = newId;
+                                docTitle.value = newId;
+                            }
+                        }
+                        selectedDocs.value = [];
+                        await loadList();
+                    } catch (e) {
+                        alert("部分文件移动失败");
+                    } finally {
+                        NProgress.done();
+                    }
+                };
+
+                // =============== 快捷键 ===============
+                const handleKeydown = (e) => {
+                    const isModifierPressed = e.ctrlKey || e.metaKey;
+                    if (isModifierPressed && currentMode.value === 'edit' && activeDoc.value) {
+                        if (e.key.toLowerCase() === 's') {
+                            e.preventDefault();
+                            saveDoc();
+                        }
+                        if (e.key.toLowerCase() === 'p') {
+                            e.preventDefault();
+                            togglePreview();
+                        }
+                    }
+                };
+
+                onMounted(() => {
+                    loadList();
+                    window.addEventListener('keydown', handleKeydown);
+                });
+
+                onUnmounted(() => {
+                    window.removeEventListener('keydown', handleKeydown);
+                });
+
+                return {
+                    currentMode, switchMode, isSidebarOpen, 
+                    tree, folderState, activeDoc, dragOverTarget, isPreview, saveSuccess,
+                    docTitle, editContent, editPreviewHtml, editorRef, sidebarScroll, viewScrollContainer,
+                    selectedDocs, showMoveModal, allFolderPaths, executeBulkMove,
+                    toggleFolder, renameFolder, createNew, loadDoc, saveDoc, deleteDoc, togglePreview,
+                    autoScroll, dragStart, handleDrop, handleDocClick, toggleSelect,
+                    expandAll, collapseAll, viewHtml, getTitle,
+                    searchQuery, isSearching, searchResults, debouncedSearch
+                };
+            }
+        }).mount('#app');
     </script>
 </body>
 </html>
