@@ -156,7 +156,7 @@
                                                 <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
                                                 <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
                                             </div>
-                                            <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="text-red-500 hover:bg-red-100 p-1 rounded opacity-0 group-hover:opacity-100 transition shrink-0" title="删除">
+                                            <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="hidden md:block text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded opacity-0 group-hover:opacity-100 transition shrink-0 ml-1" title="删除">
                                                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                             </button>
                                         </div>
@@ -174,7 +174,7 @@
                                     <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
                                     <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
                                 </div>
-                                <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="text-red-500 hover:bg-red-100 p-1 rounded opacity-0 group-hover:opacity-100 transition shrink-0" title="删除">
+                                <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="hidden md:block text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded opacity-0 group-hover:opacity-100 transition shrink-0 ml-1" title="删除">
                                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                 </button>
                             </div>
@@ -193,7 +193,7 @@
                             <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
                             <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
                         </div>
-                        <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="text-red-500 hover:bg-red-100 p-1 rounded opacity-0 group-hover:opacity-100 transition shrink-0" title="删除">
+                        <button v-show="currentMode === 'edit'" @click.stop="deleteDoc(doc.id)" class="hidden md:block text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded opacity-0 group-hover:opacity-100 transition shrink-0 ml-1" title="删除">
                             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
                     </div>
@@ -220,7 +220,7 @@
             <div class="text-sm md:text-base">选择左侧文档开始阅读</div>
         </div>
 
-        <div v-else-if="!activeDoc && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
+        <div v-else-if="!activeDoc && !isCreating && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
             <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
             </button>
@@ -238,27 +238,38 @@
             </div>
         </template>
 
-        <template v-if="currentMode === 'edit' && (activeDoc || docTitle !== '')">
-            <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0">
-                <button @click="isSidebarOpen = true" class="p-1.5 md:hidden text-slate-600 hover:bg-slate-100 rounded-md transition" title="打开目录">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                </button>
+        <template v-if="currentMode === 'edit' && (activeDoc || isCreating)">
+            <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0 justify-between">
                 
-                <div class="flex-1 min-w-[180px] flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
-                    <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
-                    <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音 (支持下划线目录)">
+                <div class="flex items-center gap-2 flex-1 min-w-[150px]">
+                    <button @click="isSidebarOpen = true" class="p-1.5 md:hidden text-slate-600 hover:bg-slate-100 rounded-md transition" title="打开目录">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                     <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4" title="删除当前文档">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" class="hidden md:inline"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        删除文档
+                    </button>
+                    <div class="flex-1 flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
+                        <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
+                        <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音 (支持下划线目录)">
+                    </div>
                 </div>
                 
-                <div class="flex gap-2 w-full md:w-auto justify-end">
-                    <button @click="deleteDoc(activeDoc)" class="px-3 py-2 text-xs md:text-sm font-medium rounded-md transition border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300" title="删除当前文档">删除</button>
-                    <button @click="saveDoc" class="px-3 md:px-4 py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
-                            :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
-                        {{ saveSuccess ? '✅ 已保存' : '保存修改' }}
-                    </button>
-                    <button @click="togglePreview" class="px-3 md:px-4 py-2 text-xs md:text-sm font-medium rounded-md transition border"
-                            :class="isPreview ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
-                        {{ isPreview ? '关闭预览' : '预览' }}
-                    </button>
+                <div class="w-full md:w-auto flex justify-between md:justify-end gap-2 items-center mt-1 md:mt-0">
+                    <!-- <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4" title="删除当前文档">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" class="hidden md:inline"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        删除文档
+                    </button> -->
+                    <div class="flex gap-2">
+                        <button @click="saveDoc" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
+                                :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
+                            {{ saveSuccess ? '✅ 已保存' : '保存修改' }}
+                        </button>
+                        <button @click="togglePreview" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition border"
+                                :class="isPreview ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
+                            {{ isPreview ? '关闭预览' : '预览' }}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -280,10 +291,11 @@
         createApp({
             setup() {
                 // =============== 全局状态 ===============
-                const currentMode = ref('view'); // 'view' 或 'edit'
+                const currentMode = ref('view'); 
                 const isSidebarOpen = ref(window.innerWidth >= 768);
                 const rawDocs = ref([]);
                 const activeDoc = ref(null);
+                const isCreating = ref(false); // 控制新建状态标记
                 const maxLevel = 2;
                 const abortController = ref(null);
 
@@ -324,6 +336,8 @@
                         await loadDoc(activeDoc.value);
                     } else if (mode === 'edit') {
                         createNew();
+                    } else {
+                        isCreating.value = false;
                     }
                 };
 
@@ -354,7 +368,7 @@
                             currentPath = currentPath ? `${currentPath}_${f}` : f;
                             if (!currentLevel.folders[f]) {
                                 if (folderState.value[currentPath] === undefined) {
-                                    folderState.value[currentPath] = false; // 默认折叠
+                                    folderState.value[currentPath] = false; 
                                 }
                                 currentLevel.folders[f] = { name: f, path: currentPath, items: [], folders: {} };
                             }
@@ -376,18 +390,15 @@
                         const res = await fetch('/api/docs/list');
                         const data = await res.json();
                         
-                        // 统一结构为对象数组以支持标题显示
                         let docObjects = data.docs.map(id => {
                             let parts = id.split('_');
                             let depth = Math.min(parts.length - 1, maxLevel);
                             return { id: id, title: parts.slice(depth).join('_') };
                         });
 
-                        // 排序
                         docObjects.sort((a, b) => a.id.localeCompare(b.id, 'zh-CN', { numeric: true }));
                         rawDocs.value = docObjects;
 
-                        // 异步获取真实标题 (静默更新)
                         rawDocs.value.forEach(async (docObj) => {
                             try {
                                 const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(docObj.id)}`);
@@ -408,6 +419,7 @@
 
                 const loadDoc = async (docId) => {
                     activeDoc.value = docId;
+                    isCreating.value = false;
                     docTitle.value = docId;
                     oldDocTitle.value = docId;
 
@@ -428,7 +440,6 @@
                         } else {
                             viewHtml.value = '<div class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>';
                             
-                            // Fast Load
                             const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docId)}`, { signal });
                             const dataFast = await resFast.json();
                             if (dataFast.error) throw new Error(dataFast.error);
@@ -438,7 +449,6 @@
                             nextTick(() => highlightAndScroll());
                             NProgress.set(0.6);
 
-                            // Refresh Load
                             const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
                             const dataFresh = await resFresh.json();
                             if (!dataFresh.error && dataFresh.html !== dataFast.html) {
@@ -581,6 +591,7 @@
                 const createNew = () => {
                     if (currentMode.value !== 'edit') switchMode('edit');
                     activeDoc.value = null;
+                    isCreating.value = true;
                     docTitle.value = '';
                     oldDocTitle.value = '';
                     editContent.value = '';
@@ -809,7 +820,7 @@
 
                 return {
                     currentMode, switchMode, isSidebarOpen, 
-                    tree, folderState, activeDoc, dragOverTarget, isPreview, saveSuccess,
+                    tree, folderState, activeDoc, isCreating, dragOverTarget, isPreview, saveSuccess,
                     docTitle, editContent, editPreviewHtml, editorRef, sidebarScroll, viewScrollContainer,
                     selectedDocs, showMoveModal, allFolderPaths, executeBulkMove,
                     toggleFolder, renameFolder, createNew, loadDoc, saveDoc, deleteDoc, togglePreview,
