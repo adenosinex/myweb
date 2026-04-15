@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订阅与虚拟资产看板</title>
+    <script src="/static/cdn/tailwindcss3.4.17.js"></script>
+    <script src="/static/cdn/vue3.5.global.prod.js"></script>
+    <script src="/static/cdn/compressor.min.js"></script>
+    <style> 
+        [v-cloak] { display: none; } 
+        /* 进度条动画 */
+        .progress-bar { transition: width 0.5s ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 p-4 md:p-6 font-sans">
+    <div id="app" class="mx-auto" style="max-width: 900px;" v-cloak>
+        <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h2 class="text-2xl font-bold flex items-center gap-2">🔄 订阅与虚拟资产看板</h2>
+            <div class="flex gap-2">
+                <button @click="openItemModal()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm text-sm">+ 新建资产项</button>
+            </div>
+        </header>
+
+        <div v-if="items.length === 0" class="text-center text-gray-400 py-16 border-2 border-dashed border-gray-200 rounded-xl">
+            暂无追踪项目，请点击右上角新建。
+        </div>
+        
+        <div class="grid gap-5" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+            <div v-for="item in items" :key="item.id" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
+                
+                <div v-if="item.type === 'sub' && item.autoRenew" class="absolute top-0 right-0 bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-bl-lg font-bold">
+                    ♻️ 自动续费
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <img v-if="item.image" :src="item.image" class="w-12 h-12 rounded-xl object-cover bg-gray-50 shrink-0 border">
+                    <div v-else class="w-12 h-12 rounded-xl bg-gray-50 border flex items-center justify-center text-2xl shrink-0">{{ guessEmoji(item.name, item.type) }}</div>
+                    <div class="flex-grow min-w-0">
+                        <h3 class="font-bold text-lg truncate">{{ item.name }}</h3>
+                        <span class="text-xs text-gray-400">{{ item.type === 'sub' ? '周期订阅' : '额度消耗' }}</span>
+                    </div>
+                </div>
+
+                <div v-if="item.type === 'sub'" class="bg-gray-50 rounded-xl p-3">
+                    <div class="flex justify-between items-end mb-2">
+                        <div class="text-sm text-gray-500">距离到期还有</div>
+                        <div class="text-2xl font-black" :class="getDaysLeft(item.expireDate) <= 7 ? 'text-red-500' : 'text-gray-800'">
+                            {{ getDaysLeft(item.expireDate) }} <span class="text-xs font-normal">天</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-xs border-t border-gray-200 pt-2 mt-2">
+                        <span class="text-gray-500">到期日: {{ formatDateOnly(item.expireDate) }}</span>
+                        <span class="font-bold">¥{{ item.cost }} / {{ item.cycle }}</span>
+                    </div>
+                </div>
+
+                <div v-if="item.type === 'quota'" class="bg-gray-50 rounded-xl p-3">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-500">已用 / 总计</span>
+                        <span class="font-bold">{{ item.usedQuota }} <span class="font-normal text-xs text-gray-400">/ {{ item.totalQuota }} {{ item.unit }}</span></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2 overflow-hidden">
+                        <div class="h-2.5 rounded-full progress-bar" :class="getQuotaColor(item)" :style="`width: ${getQuotaPercent(item)}%`"></div>
+                    </div>
+                    <div class="text-[11px] text-gray-400 flex justify-between">
+                        <span>占用 {{ getQuotaPercent(item) }}%</span>
+                        <span v-if="item.resetDay">每月 {{ item.resetDay }} 日重置</span>
+                    </div>
+                </div>
+
+                <div class="flex-grow">
+                    <div class="text-[11px] text-gray-400 mb-1 border-b pb-1">最近操作记录</div>
+                    <div v-if="item.history && item.history.length" class="space-y-1 mt-2 max-h-24 overflow-y-auto custom-scrollbar text-xs">
+                        <div v-for="rec in item.history.slice(0, 5)" :key="rec.date" class="flex justify-between text-gray-600">
+                            <span>{{ formatDateOnly(rec.date) }}</span>
+                            <span v-if="item.type === 'sub'" class="text-green-600">续费 ¥{{ rec.cost || item.cost }}</span>
+                            <span v-if="item.type === 'quota'" class="text-blue-600">更新用量: {{ rec.used }} {{ item.unit }}</span>
+                        </div>
+                    </div>
+                    <div v-else class="text-xs text-gray-300 py-1">暂无记录</div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-auto">
+                    <button @click="openRecordModal(item)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded text-xs">
+                        {{ item.type === 'sub' ? '📝 登记续费' : '📊 更新进度' }}
+                    </button>
+                    <button @click="openItemModal(item)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">编辑</button>
+                    <button @click="deleteItem(item.id)" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded text-xs">删除</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="modals.item" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+                <h3 class="text-lg font-bold mb-4">{{ itemForm.id ? '编辑资产项目' : '新建资产项目' }}</h3>
+                <div class="space-y-4">
+                    <div v-if="!itemForm.id" class="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                        <button @click="itemForm.type = 'sub'" :class="itemForm.type === 'sub' ? 'bg-white shadow' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">📅 周期订阅</button>
+                        <button @click="itemForm.type = 'quota'" :class="itemForm.type === 'quota' ? 'bg-white shadow' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">🗄️ 额度消耗</button>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-1">名称</label>
+                        <input v-model="itemForm.name" type="text" placeholder="如: Netflix 会员 / 移动5G套餐" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-200 outline-none">
+                    </div>
+
+                    <template v-if="itemForm.type === 'sub'">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">到期日期</label>
+                                <input v-model="itemForm.expireDate" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">扣费周期</label>
+                                <select v-model="itemForm.cycle" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                    <option value="月">每月</option>
+                                    <option value="季">每季</option>
+                                    <option value="年">每年</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">单次扣费金额 (¥)</label>
+                                <input v-model.number="itemForm.cost" type="number" step="0.1" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            <div class="flex items-center mt-6">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                    <input type="checkbox" v-model="itemForm.autoRenew" class="w-4 h-4 text-blue-600 rounded">
+                                    开启自动续费预警
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template v-if="itemForm.type === 'quota'">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">总额度上限</label>
+                                <input v-model.number="itemForm.totalQuota" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">当前已使用</label>
+                                <input v-model.number="itemForm.usedQuota" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">计量单位</label>
+                                <input v-model="itemForm.unit" type="text" placeholder="如: GB, 次, TB" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">每月重置日(可选)</label>
+                                <input v-model.number="itemForm.resetDay" type="number" min="1" max="31" placeholder="填 1-31" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="modals.item = false" class="px-4 py-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-600">取消</button>
+                    <button @click="saveItem" class="px-4 py-2 bg-black text-white rounded-xl text-sm font-bold">保存配置</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="modals.record" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+                <h3 class="text-lg font-bold mb-4">{{ currentTargetItem.type === 'sub' ? '登记续费 - ' : '更新进度 - ' }}{{ currentTargetItem.name }}</h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">操作日期</label>
+                        <input v-model="recordForm.date" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                    </div>
+
+                    <template v-if="currentTargetItem.type === 'sub'">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">实际支付金额 (¥)</label>
+                            <input v-model.number="recordForm.cost" type="number" step="0.1" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">续期至 (自动推算)</label>
+                            <input v-model="recordForm.newExpireDate" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-blue-600 font-bold">
+                        </div>
+                    </template>
+
+                    <template v-if="currentTargetItem.type === 'quota'">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">当前已用额度 ({{ currentTargetItem.unit }})</label>
+                            <input v-model.number="recordForm.used" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="modals.record = false" class="px-4 py-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-600">取消</button>
+                    <button @click="saveRecord" class="px-4 py-2 bg-blue-500 text-white rounded-xl text-sm font-bold">确认提交</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const API_URL ='/tracker_data/sync/daily';// 替换为你的真实接口
+                const items = ref([]);
+                const modals = reactive({ item: false, record: false });
+                const currentTargetItem = ref(null);
+                
+                // 表单模型
+                const itemForm = reactive({ 
+                    id: '', name: '', type: 'sub', image: '',
+                    // 订阅相关
+                    expireDate: '', cycle: '月', cost: 0, autoRenew: true,
+                    // 消耗相关
+                    totalQuota: 0, usedQuota: 0, unit: 'GB', resetDay: null
+                });
+
+                const recordForm = reactive({
+                    date: '', cost: 0, newExpireDate: '', used: 0
+                });
+
+                const generateId = (prefix) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+                const loadData = async () => {
+                    try {
+                        const res = await fetch(API_URL);
+                        if (res.ok) {
+                            const data = await res.json();
+                            items.value = data[0]?.items || [];
+                        } else {
+                            throw new Error("加载失败");
+                        }
+                    } catch (err) {
+                        // 本地测试 fallback
+                        console.warn("API 失败，使用本地空数据", err);
+                        items.value = []; 
+                    }
+                };
+
+                const syncData = async () => {
+                    try {
+                        await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ items: items.value })
+                        });
+                    } catch (e) { 
+                        console.error("同步失败，仅在本地生效", e); 
+                    }
+                };
+
+                // --- 业务计算逻辑 ---
+                const getDaysLeft = (dateStr) => {
+                    if (!dateStr) return 0;
+                    const diffTime = new Date(dateStr) - new Date();
+                    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                };
+
+                const getQuotaPercent = (item) => {
+                    if (!item.totalQuota) return 0;
+                    const pct = (item.usedQuota / item.totalQuota) * 100;
+                    return pct > 100 ? 100 : Math.round(pct * 10) / 10;
+                };
+
+                const getQuotaColor = (item) => {
+                    const pct = getQuotaPercent(item);
+                    if (pct >= 90) return 'bg-red-500';
+                    if (pct >= 75) return 'bg-orange-400';
+                    return 'bg-blue-500';
+                };
+
+                const addMonths = (dateStr, num) => {
+                    const d = new Date(dateStr);
+                    d.setMonth(d.getMonth() + num);
+                    return d.toISOString().split('T')[0];
+                };
+
+                // --- 弹窗逻辑 ---
+                const openItemModal = (item = null) => {
+                    if (item) {
+                        Object.assign(itemForm, item);
+                    } else {
+                        Object.assign(itemForm, { 
+                            id: '', name: '', type: 'sub', image: '',
+                            expireDate: new Date().toISOString().split('T')[0], cycle: '月', cost: 0, autoRenew: true,
+                            totalQuota: 100, usedQuota: 0, unit: 'GB', resetDay: 1
+                        });
+                    }
+                    modals.item = true;
+                };
+
+                const saveItem = () => {
+                    if (!itemForm.name.trim()) return alert("名称不可为空！");
+                    
+                    const payload = { ...itemForm, history: itemForm.history || [] };
+
+                    if (itemForm.id) {
+                        const idx = items.value.findIndex(i => i.id === itemForm.id);
+                        if(idx > -1) items.value[idx] = payload;
+                    } else {
+                        payload.id = generateId('asset');
+                        payload.history = [];
+                        items.value.push(payload);
+                    }
+                    modals.item = false;
+                    syncData();
+                };
+
+                const deleteItem = (id) => {
+                    if (confirm("确认删除该资产及所有记录？")) {
+                        items.value = items.value.filter(i => i.id !== id);
+                        syncData();
+                    }
+                };
+
+                // --- 记录录入逻辑 ---
+                const openRecordModal = (item) => {
+                    currentTargetItem.value = item;
+                    const today = new Date().toISOString().split('T')[0];
+                    
+                    recordForm.date = today;
+                    if (item.type === 'sub') {
+                        recordForm.cost = item.cost;
+                        // 自动推算下一次到期时间
+                        let addM = item.cycle === '年' ? 12 : (item.cycle === '季' ? 3 : 1);
+                        recordForm.newExpireDate = addMonths(item.expireDate || today, addM);
+                    } else {
+                        recordForm.used = item.usedQuota;
+                    }
+                    modals.record = true;
+                };
+
+                const saveRecord = () => {
+                    const target = items.value.find(i => i.id === currentTargetItem.value.id);
+                    if (!target) return;
+
+                    const newRecord = { date: recordForm.date };
+
+                    if (target.type === 'sub') {
+                        newRecord.cost = recordForm.cost;
+                        target.expireDate = recordForm.newExpireDate; // 更新主表到期日
+                    } else {
+                        newRecord.used = recordForm.used;
+                        target.usedQuota = recordForm.used; // 更新主表用量
+                    }
+
+                    if (!target.history) target.history = [];
+                    target.history.unshift(newRecord); // 插到最前面
+                    
+                    modals.record = false;
+                    syncData();
+                };
+
+                // --- 工具格式化 ---
+                const formatDateOnly = (dateStr) => dateStr ? dateStr.split('T')[0] : '-';
+
+                const guessEmoji = (name, type) => {
+                    const n = name.toLowerCase();
+                    if(n.includes('netflix') || n.includes('爱奇艺') || n.includes('影视')) return '🍿';
+                    if(n.includes('流量') || n.includes('宽带')) return '📶';
+                    if(n.includes('云') || n.includes('网盘') || n.includes('icloud')) return '☁️';
+                    if(n.includes('健身') || n.includes('gym')) return '🏋️';
+                    if(n.includes('杂志') || n.includes('阅读')) return '📖';
+                    return type === 'sub' ? '💳' : '📊';
+                };
+
+                onMounted(loadData);
+
+                return {
+                    items, modals, itemForm, recordForm, currentTargetItem,
+                    openItemModal, saveItem, deleteItem, openRecordModal, saveRecord,
+                    getDaysLeft, getQuotaPercent, getQuotaColor, formatDateOnly, guessEmoji
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

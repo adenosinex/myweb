@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高价值资产与生命周期追踪</title>
+    <script src="/static/cdn/tailwindcss3.4.17.js"></script>
+    <script src="/static/cdn/vue3.5.global.prod.js"></script>
+    <script src="/static/cdn/echarts.min.js"></script>
+    <script src="/static/cdn/marked.min.js"></script>
+    <script src="/static/cdn/compressor.min.js"></script>
+   <style>
+        [v-cloak] { display: none; }
+        .markdown-body { font-size: 0.875rem; line-height: 1.6; color: #374151; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; margin-top: 0.75em; margin-bottom: 0.25em; color: #111827; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; }
+        .markdown-body a { color: #3b82f6; text-decoration: none; }
+        .markdown-body blockquote { border-left: 3px solid #cbd5e1; padding-left: 1em; color: #64748b; background: #f8fafc; padding: 0.25em 1em; border-radius: 2px;}
+        .markdown-body p { margin-bottom: 0.5em; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 p-4 md:p-6 font-sans">
+    <div id="app" class="mx-auto" style="max-width: 1000px;" v-cloak>
+        <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h2 class="text-2xl font-bold flex items-center gap-2">💎 资产与生命周期管理</h2>
+            <div class="flex gap-2">
+                <button @click="exportCSV" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导出备份</button>
+                <button @click="$refs.fileInput.click()" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导入恢复</button>
+                <input type="file" ref="fileInput" accept=".json" class="hidden" @change="importJSON">
+                <button @click="openItemModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded shadow-sm text-sm">+ 录入新资产</button>
+            </div>
+        </header>
+
+        <div v-if="items.length === 0" class="text-center text-slate-400 py-20 bg-white rounded-xl shadow-sm border border-slate-200">
+            暂无资产记录。点击上方按钮开始录入你的第一件高价值物品。
+        </div>
+
+        <div class="grid gap-6 grid-cols-1 md:grid-cols-2">
+            <div v-for="item in items" :key="item.id" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                
+                <div class="p-5 flex gap-4 relative">
+                    <span :class="getStatusColor(item.status)" class="absolute top-4 right-4 text-[10px] px-2 py-0.5 rounded-full font-bold border">
+                        {{ getStatusText(item.status) }}
+                    </span>
+                    <img v-if="item.image" :src="item.image" @click="zoomImage(item.image)" class="w-20 h-20 rounded-lg object-cover bg-slate-50 border cursor-zoom-in shrink-0">
+                    <div v-else class="w-20 h-20 rounded-lg bg-slate-50 border flex items-center justify-center text-3xl shrink-0">{{ guessEmoji(item.name) }}</div>
+                    
+                    <div class="flex-grow pt-1">
+                        <h3 class="font-bold text-lg mb-1 pr-12 truncate" :title="item.name">{{ item.name }}</h3>
+                        <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-slate-500">
+                            <div>买入: <span class="text-slate-800">¥{{ item.purchasePrice || 0 }}</span></div>
+                            <div>日期: <span class="text-slate-800">{{ item.purchaseDate || '-' }}</span></div>
+                            <div>保修: <span :class="getWarrantyStatus(item).color">{{ getWarrantyStatus(item).text }}</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-5 py-3 bg-[#fbfbf9] border-y border-slate-100 shadow-inner">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-semibold text-slate-500 flex items-center gap-1">📝 详细备忘</span>
+                        <button @click="toggleEditDesc(item)" class="text-xs px-2 py-0.5 rounded" :class="editingDesc[item.id] ? 'bg-blue-500 text-white hover:bg-blue-600' : 'text-blue-500 hover:bg-blue-50 border border-blue-200'">
+                            {{ editingDesc[item.id] ? '保存' : '编辑' }}
+                        </button>
+                    </div>
+                    
+                    <div v-if="editingDesc[item.id]">
+                        <textarea v-model="item.description" rows="6" class="w-full p-2 border rounded text-sm font-mono outline-none focus:ring-2 focus:ring-blue-100 bg-white" placeholder="支持 Markdown 格式..."></textarea>
+                    </div>
+                    <div v-else class="markdown-body max-h-[160px] overflow-y-auto" v-html="renderMarkdown(item.description) || '<span class=\'text-slate-400 text-xs italic\'>暂无备忘信息...</span>'"></div>
+                </div>
+
+                <div class="border-b border-slate-100">
+                    <button @click="toggleChart(item)" class="w-full px-5 py-3 flex justify-between items-center text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors focus:outline-none">
+                        <span class="flex items-center gap-2">
+                            <span>📈 财务成本分析</span>
+                            <span class="font-normal text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">当前评估: <span class="text-blue-600 font-bold">¥{{ getLatestPrice(item) }}</span></span>
+                        </span>
+                        <span class="text-slate-400">{{ expandedCharts[item.id] ? '▲ 收起' : '▼ 展开面板' }}</span>
+                    </button>
+                    
+                    <div v-if="expandedCharts[item.id]" class="px-5 pb-3 bg-white">
+                        <div class="grid grid-cols-4 gap-2 mb-3 text-center border-b border-slate-50 pb-3">
+                            <div class="bg-slate-50 p-1.5 rounded">
+                                <div class="text-[10px] text-slate-400">累计维护投入</div>
+                                <div class="text-xs font-bold text-slate-700">¥{{ getMaintenanceCost(item) }}</div>
+                            </div>
+                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help">
+                                <div class="text-[10px] text-slate-400">真实 TCO</div>
+                                <div class="text-xs font-bold text-slate-700">¥{{ calculateTCO(item) }}</div>
+                                <div class="hidden group-hover:block absolute z-10 w-40 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
+                                    总成本 = 买入价 + 累计维护投入 - 当前残值
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 p-1.5 rounded">
+                                <div class="text-[10px] text-slate-400">持有日均成本</div>
+                                <div class="text-xs font-bold text-slate-700">¥{{ getDailyCost(item) }}</div>
+                            </div>
+                            <div class="bg-slate-50 p-1.5 rounded">
+                                <div class="text-[10px] text-slate-400">贬值/出手建议</div>
+                                <div class="text-xs font-bold truncate" :class="getPlateauStatus(item).color" :title="getPlateauStatus(item).text">{{ getPlateauStatus(item).text }}</div>
+                            </div>
+                        </div>
+
+                        <div :ref="el => { if (el) chartsRefs[item.id] = el }" style="height: 140px; width: 100%;"></div>
+                    </div>
+                </div>
+
+                <div class="px-5 py-4 flex-grow max-h-[160px] overflow-y-auto bg-white">
+                    <div class="text-xs font-semibold text-slate-400 mb-3">历史记录与维护</div>
+                    <div v-if="getEvents(item).length === 0" class="text-xs text-slate-300">暂无事件记录</div>
+                    <div class="relative border-l-2 border-slate-100 ml-2 space-y-4">
+                        <div v-for="event in getEvents(item)" :key="event.id" class="relative pl-4">
+                            <div class="absolute w-2 h-2 bg-slate-300 rounded-full -left-[5px] top-1.5 border-2 border-white"></div>
+                            <div class="text-[10px] text-slate-400 mb-0.5">{{ formatDate(event.date) }}</div>
+                            <div class="text-sm font-medium text-slate-700">
+                                {{ event.value }} 
+                                <span v-if="event.cost" class="text-red-500 font-bold ml-1 text-xs">(-¥{{ event.cost }})</span>
+                            </div>
+                            <div v-if="event.note" class="text-xs text-slate-500 mt-1 bg-slate-50 p-1.5 rounded inline-block">{{ event.note }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center mt-auto">
+                    <div class="flex gap-2">
+                        <button @click="openRecordModal(item, 'event')" class="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-xs font-medium">添加维护开销</button>
+                        <button @click="openRecordModal(item, 'price')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium">更新估价</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button v-if="item.receiptImage" @click="zoomImage(item.receiptImage)" class="px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-100 rounded text-xs text-slate-600">发票</button>
+                        <button @click="openItemModal(item)" class="px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-100 rounded text-xs text-slate-600">属性</button>
+                        <button @click="deleteItem(item.id)" class="px-2.5 py-1.5 text-red-500 hover:bg-red-50 rounded text-xs">删除</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="modals.item" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex justify-center items-start z-40 p-4 overflow-y-auto" @paste="handlePaste">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8 flex flex-col">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white rounded-t-xl z-10">
+                    <h3 class="text-xl font-bold">{{ itemForm.id ? '编辑资产基础属性' : '录入新资产' }}</h3>
+                    <button @click="modals.item = false" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+                </div>
+                
+                <div class="p-6 space-y-5 overflow-y-auto">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 text-slate-700">资产名称 <span class="text-red-500">*</span></label>
+                                <input v-model="itemForm.name" type="text" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-semibold mb-1 text-slate-700">购入日期</label>
+                                    <input v-model="itemForm.purchaseDate" type="date" class="w-full p-2 border rounded-lg outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold mb-1 text-slate-700">当前状态</label>
+                                    <select v-model="itemForm.status" class="w-full p-2 border rounded-lg outline-none bg-white">
+                                        <option value="active">在用 (良好)</option>
+                                        <option value="idle">吃灰 (闲置)</option>
+                                        <option value="repairing">故障 (待修)</option>
+                                        <option value="sold">已出 (二手)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-semibold mb-1 text-slate-700">买入价格 (¥)</label>
+                                    <input v-model.number="itemForm.purchasePrice" type="number" class="w-full p-2 border rounded-lg outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold mb-1 text-slate-700">保修期 (月)</label>
+                                    <input v-model.number="itemForm.warrantyMonths" type="number" class="w-full p-2 border rounded-lg outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 text-slate-700">资产主图 <span class="text-xs font-normal text-slate-400 ml-2">(支持直接粘贴)</span></label>
+                                <div class="flex items-center gap-3">
+                                    <button @click="$refs.imageInput.click()" class="px-4 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-sm hover:bg-slate-100 w-full text-left text-slate-500">📷 选图/粘贴</button>
+                                    <input type="file" ref="imageInput" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'image')">
+                                    <div class="relative group shrink-0">
+                                        <img v-if="itemForm.image" :src="itemForm.image" class="w-12 h-12 rounded-lg object-cover border cursor-zoom-in" @click="zoomImage(itemForm.image)">
+                                        <button v-if="itemForm.image" @click="itemForm.image = ''" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center">&times;</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 text-slate-700">单据/发票凭证</label>
+                                <div class="flex items-center gap-3">
+                                    <button @click="$refs.receiptInput.click()" class="px-4 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-sm hover:bg-slate-100 w-full text-left text-slate-500">🧾 选图/粘贴</button>
+                                    <input type="file" ref="receiptInput" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'receiptImage')">
+                                    <div class="relative group shrink-0">
+                                        <img v-if="itemForm.receiptImage" :src="itemForm.receiptImage" class="w-12 h-12 rounded-lg object-cover border cursor-zoom-in" @click="zoomImage(itemForm.receiptImage)">
+                                        <button v-if="itemForm.receiptImage" @click="itemForm.receiptImage = ''" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center">&times;</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 rounded-b-xl">
+                    <button @click="modals.item = false" class="px-5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50">取消</button>
+                    <button @click="saveItem" class="px-5 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 shadow-sm">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="modals.record" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+                <div class="p-5 border-b border-slate-100">
+                    <h3 class="text-lg font-bold">{{ recordForm.type === 'price' ? '💰 更新二手估价' : '🔧 添加记录与开销' }}</h3>
+                    <p class="text-xs text-slate-500 mt-1">目标: {{ currentTargetItem?.name }}</p>
+                </div>
+                <div class="p-5 space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1 text-slate-700">时间</label>
+                        <input v-model="recordForm.date" type="datetime-local" class="w-full p-2 border rounded-lg outline-none">
+                    </div>
+                    
+                    <template v-if="recordForm.type === 'price'">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-slate-700">当前二手残值评估 (¥)</label>
+                            <input v-model.number="recordForm.value" type="number" placeholder="输入最新市价估值" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+                        </div>
+                    </template>
+                    
+                    <template v-if="recordForm.type === 'event'">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-slate-700">记录内容</label>
+                            <input v-model="recordForm.value" type="text" placeholder="如：更换机油、洗车、年检" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-100">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-slate-700">本次花费金额 (¥)</label>
+                            <input v-model.number="recordForm.cost" type="number" placeholder="纳入 TCO 计算，无花费留空" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-100">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-slate-700">补充备注 (可选)</label>
+                            <input v-model="recordForm.note" type="text" placeholder="具体型号、里程等..." class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-100">
+                        </div>
+                    </template>
+                </div>
+                <div class="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                    <button @click="modals.record = false" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium">取消</button>
+                    <button @click="saveRecord" class="px-4 py-2 text-white rounded-lg text-sm font-medium" :class="recordForm.type === 'price' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="zoomedImageSrc" class="fixed inset-0 bg-black bg-opacity-90 flex justify-center items-center z-[60] p-4 cursor-zoom-out" @click="zoomedImageSrc = ''">
+            <img :src="zoomedImageSrc" class="max-w-full max-h-full object-contain rounded" @click.stop>
+            <button @click="zoomedImageSrc = ''" class="absolute top-6 right-6 text-white text-4xl hover:text-slate-300">&times;</button>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const API_URL = '/tracker_data/sync/assets';
+                const items = ref([]);
+                const modals = reactive({ item: false, record: false });
+                const currentTargetItem = ref(null);
+                const zoomedImageSrc = ref('');
+                
+                const editingDesc = reactive({});
+                const expandedCharts = reactive({});
+                const chartsRefs = reactive({});
+                const chartInstances = {};
+
+                const itemForm = reactive({ id: '', name: '', purchaseDate: '', purchasePrice: 0, warrantyMonths: 0, status: 'active', description: '', image: '', receiptImage: '' });
+                const recordForm = reactive({ type: 'price', date: '', value: '', note: '', cost: '' });
+
+                const generateId = (prefix) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+                const loadData = async () => {
+                    try {
+                        const res = await fetch(API_URL);
+                        if (res.status === 403) return window.location.href = '/login';
+                        const data = await res.json();
+                        items.value = data[0]?.items || [];
+                    } catch (err) {
+                        items.value = [];
+                    }
+                };
+
+                const syncData = async () => {
+                    try {
+                        await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ items: items.value })
+                        });
+                    } catch (e) { console.error("同步失败", e); }
+                };
+
+                const renderMarkdown = (text) => {
+                    if (!text) return '';
+                    return marked.parse(text, { breaks: true });
+                };
+
+                const toggleEditDesc = (item) => {
+                    if (editingDesc[item.id]) {
+                        editingDesc[item.id] = false;
+                        syncData();
+                    } else {
+                        editingDesc[item.id] = true;
+                    }
+                };
+
+                const toggleChart = async (item) => {
+                    expandedCharts[item.id] = !expandedCharts[item.id];
+                    if (expandedCharts[item.id]) {
+                        await nextTick();
+                        renderChart(item);
+                    }
+                };
+
+                const openItemModal = (item = null) => {
+                    if (item) {
+                        Object.assign(itemForm, JSON.parse(JSON.stringify(item)));
+                    } else {
+                        Object.assign(itemForm, { id: '', name: '', purchaseDate: new Date().toISOString().split('T')[0], purchasePrice: '', warrantyMonths: '', status: 'active', description: '', image: '', receiptImage: '' });
+                    }
+                    modals.item = true;
+                };
+
+                const saveItem = () => {
+                    if (!itemForm.name.trim()) return alert("资产名称为必填。");
+                    const targetData = { ...itemForm, purchasePrice: Number(itemForm.purchasePrice) || 0, warrantyMonths: Number(itemForm.warrantyMonths) || 0 };
+                    
+                    if (targetData.id) {
+                        const idx = items.value.findIndex(i => i.id === targetData.id);
+                        if (idx !== -1) items.value[idx] = { ...items.value[idx], ...targetData };
+                    } else {
+                        items.value.unshift({ ...targetData, id: generateId('asset'), history: [] });
+                        if (targetData.purchasePrice > 0 && targetData.purchaseDate) {
+                            items.value[0].history.push({
+                                id: generateId('h'), type: 'price', date: new Date(targetData.purchaseDate).toISOString(), value: targetData.purchasePrice, note: '购入价格'
+                            });
+                        }
+                    }
+                    modals.item = false;
+                    syncData();
+                    if (targetData.id && expandedCharts[targetData.id]) nextTick(() => renderChart(items.value.find(i=>i.id === targetData.id)));
+                };
+
+                const deleteItem = (id) => {
+                    if (confirm("确认删除该记录？")) {
+                        items.value = items.value.filter(i => i.id !== id);
+                        if (chartInstances[id]) { chartInstances[id].dispose(); delete chartInstances[id]; }
+                        syncData();
+                    }
+                };
+
+                const openRecordModal = (item, type) => {
+                    currentTargetItem.value = item;
+                    const localNow = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                    recordForm.type = type;
+                    recordForm.date = localNow;
+                    recordForm.value = type === 'price' ? getLatestPrice(item, false) : '';
+                    recordForm.note = '';
+                    recordForm.cost = '';
+                    modals.record = true;
+                };
+
+                const saveRecord = () => {
+                    if (recordForm.value === '') return alert("内容不可为空。");
+                    if (!currentTargetItem.value.history) currentTargetItem.value.history = [];
+                    
+                    currentTargetItem.value.history.push({
+                        id: generateId('h'), type: recordForm.type, date: new Date(recordForm.date).toISOString(),
+                        value: recordForm.type === 'price' ? Number(recordForm.value) : recordForm.value,
+                        note: recordForm.note,
+                        cost: recordForm.type === 'event' && recordForm.cost ? Number(recordForm.cost) : undefined
+                    });
+                    
+                    currentTargetItem.value.history.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    modals.record = false;
+                    syncData();
+                    
+                    if (expandedCharts[currentTargetItem.value.id]) {
+                        nextTick(() => renderChart(currentTargetItem.value));
+                    }
+                };
+
+                const getLatestPrice = (item, formatted = true) => {
+                    const prices = (item.history || []).filter(h => h.type === 'price').sort((a, b) => new Date(b.date) - new Date(a.date));
+                    if (prices.length > 0) return formatted ? prices[0].value.toLocaleString() : prices[0].value;
+                    return formatted ? (item.purchasePrice ? item.purchasePrice.toLocaleString() : '-') : (item.purchasePrice || 0);
+                };
+
+                const getEvents = (item) => {
+                    return (item.history || []).filter(h => h.type === 'event').sort((a, b) => new Date(b.date) - new Date(a.date));
+                };
+
+                // 新增：累计维护成本计算
+                const getMaintenanceCost = (item) => {
+                    const total = (item.history || []).reduce((sum, h) => h.type === 'event' && h.cost ? sum + Number(h.cost) : sum, 0);
+                    return total.toLocaleString();
+                };
+
+                // 修改：真实 TCO = 买入价 + 维护总成本 - 当前价
+                const calculateTCO = (item) => {
+                    const currentVal = getLatestPrice(item, false);
+                    if (typeof currentVal !== 'number' || !item.purchasePrice) return '-';
+                    const maintenance = Number(getMaintenanceCost(item).replace(/,/g, ''));
+                    return (item.purchasePrice + maintenance - currentVal).toLocaleString();
+                };
+
+                // 新增：计算日均成本
+                const getDailyCost = (item) => {
+                    if (!item.purchaseDate) return '-';
+                    const tcoStr = calculateTCO(item);
+                    if (tcoStr === '-') return '-';
+                    
+                    const tco = Number(tcoStr.replace(/,/g, ''));
+                    const days = Math.max(1, Math.ceil((new Date() - new Date(item.purchaseDate)) / 86400000));
+                    return (tco / days).toFixed(2);
+                };
+
+                // 新增：平台期判断与出手建议
+                const getPlateauStatus = (item) => {
+                    const prices = (item.history || []).filter(h => h.type === 'price').sort((a, b) => new Date(a.date) - new Date(b.date));
+                    if (prices.length < 3) return { text: '数据不足', color: 'text-slate-400' };
+                    
+                    const last = prices[prices.length - 1];
+                    const prev = prices[prices.length - 2];
+                    const oldest = prices[0];
+
+                    const totalDays = Math.max(1, (new Date(last.date) - new Date(oldest.date)) / 86400000);
+                    const totalDropRate = (oldest.value - last.value) / totalDays;
+
+                    const recentDays = Math.max(1, (new Date(last.date) - new Date(prev.date)) / 86400000);
+                    const recentDropRate = (prev.value - last.value) / recentDays;
+
+                    if (recentDropRate <= 0) return { text: '逆势升值/横盘', color: 'text-emerald-500' };
+                    // 近期贬值率不到整体平均的三分之一，判定为平台期
+                    if (recentDropRate < totalDropRate * 0.3) return { text: '平台期 (适宜出手)', color: 'text-blue-600' };
+                    if (recentDropRate > totalDropRate * 1.5) return { text: '快速跳水期', color: 'text-red-500' };
+                    return { text: '平稳贬值中', color: 'text-slate-600' };
+                };
+
+                const getWarrantyStatus = (item) => {
+                    if (!item.purchaseDate || !item.warrantyMonths) return { text: '无', color: 'text-slate-400' };
+                    const end = new Date(item.purchaseDate);
+                    end.setMonth(end.getMonth() + item.warrantyMonths);
+                    const diffDays = Math.ceil((end - new Date()) / 86400000);
+                    
+                    if (diffDays < 0) return { text: '已过保', color: 'text-slate-400' };
+                    if (diffDays <= 30) return { text: `剩 ${diffDays} 天`, color: 'text-amber-500 font-semibold' };
+                    return { text: `保修内`, color: 'text-emerald-500' };
+                };
+
+                const compressAndRead = (file, targetField) => {
+                    new window.Compressor(file, {
+                        quality: 0.7, maxWidth: 1200,
+                        success(result) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => itemForm[targetField] = e.target.result;
+                            reader.readAsDataURL(result);
+                        }
+                    });
+                };
+
+                const handleImageUpload = (e, field) => {
+                    if (e.target.files[0]) compressAndRead(e.target.files[0], field);
+                    e.target.value = '';
+                };
+
+                const handlePaste = (e) => {
+                    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                    for (let index in items) {
+                        const item = items[index];
+                        if (item.kind === 'file' && item.type.includes('image/')) {
+                            const targetField = (!itemForm.image || document.activeElement.tagName === 'BODY') ? 'image' : 'receiptImage';
+                            compressAndRead(item.getAsFile(), targetField);
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                };
+
+                const zoomImage = (src) => { zoomedImageSrc.value = src; };
+
+                const renderChart = (item) => {
+                    const dom = chartsRefs[item.id];
+                    if (!dom) return;
+
+                    let chart = chartInstances[item.id];
+                    if (!chart) {
+                        chart = echarts.init(dom);
+                        chartInstances[item.id] = chart;
+                    }
+
+                    let priceData = (item.history || []).filter(h => h.type === 'price').map(h => ({ date: h.date, value: h.value }));
+                    if (item.purchaseDate && item.purchasePrice) {
+                        const pd = new Date(item.purchaseDate).toISOString().split('T')[0];
+                        if (!priceData.some(p => p.date.startsWith(pd))) {
+                            priceData.push({ date: new Date(item.purchaseDate).toISOString(), value: item.purchasePrice });
+                        }
+                    }
+                    
+                    priceData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                    if (priceData.length === 0) {
+                        chart.clear(); return;
+                    }
+
+                    chart.setOption({
+                        grid: { top: 10, bottom: 20, left: 40, right: 10 },
+                        tooltip: { trigger: 'axis', formatter: '{b}<br/>估值: ¥{c}' },
+                        xAxis: {
+                            type: 'category',
+                            data: priceData.map(d => {
+                                const dt = new Date(d.date);
+                                return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+                            }),
+                            axisLine: { lineStyle: { color: '#e2e8f0' } },
+                            axisLabel: { color: '#94a3b8', fontSize: 10 }
+                        },
+                        yAxis: { 
+                            type: 'value', min: 'dataMin', 
+                            splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } },
+                            axisLabel: { color: '#94a3b8', fontSize: 10 }
+                        },
+                        series: [{
+                            data: priceData.map(d => d.value),
+                            type: 'line', smooth: true, symbol: 'circle', symbolSize: 6,
+                            itemStyle: { color: '#3b82f6' }, lineStyle: { color: '#3b82f6', width: 2 },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: 'rgba(59, 130, 246, 0.2)' }, { offset: 1, color: 'rgba(59, 130, 246, 0)' }
+                                ])
+                            }
+                        }]
+                    });
+                };
+
+                window.addEventListener('resize', () => {
+                    Object.values(chartInstances).forEach(chart => chart.resize());
+                });
+
+                const getStatusColor = (status) => {
+                    const map = { active: 'bg-emerald-50 text-emerald-600 border-emerald-200', idle: 'bg-slate-50 text-slate-500 border-slate-200', repairing: 'bg-amber-50 text-amber-600 border-amber-200', sold: 'bg-red-50 text-red-500 border-red-200' };
+                    return map[status] || map.active;
+                };
+                const getStatusText = (status) => {
+                    const map = { active: '在用', idle: '吃灰', repairing: '维修中', sold: '已出二手' };
+                    return map[status] || '未知';
+                };
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return '';
+                    const d = new Date(dateStr);
+                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                };
+                const guessEmoji = (name) => {
+                    if(/相机|镜头|微单|索尼|佳能|尼康/.test(name)) return '📷';
+                    if(/车|摩托|自行车|头盔|豪爵/.test(name)) return '🛵';
+                    if(/手机|电脑|平板|Mac|iPhone/.test(name)) return '💻';
+                    if(/表|劳力士|Apple Watch/.test(name)) return '⌚';
+                    if(/吸尘器|冰箱|洗衣机|戴森/.test(name)) return '🔌';
+                    return '📦';
+                };
+
+                const exportCSV = () => {
+                    const dataStr = JSON.stringify(items.value, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8;' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob); 
+                    a.download = `资产追踪备份_${new Date().toLocaleDateString()}.json`;
+                    a.click();
+                };
+
+                const importJSON = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const parsed = JSON.parse(event.target.result);
+                            if (Array.isArray(parsed) && confirm(`覆盖当前数据，确认导入？`)) {
+                                items.value = parsed;
+                                syncData();
+                            }
+                        } catch (err) { alert("导入失败：文件格式错误。"); }
+                        e.target.value = '';
+                    };
+                    reader.readAsText(file);
+                };
+
+                onMounted(loadData);
+
+                return {
+                    items, modals, itemForm, recordForm, currentTargetItem, chartsRefs, zoomedImageSrc,
+                    editingDesc, expandedCharts, toggleEditDesc, toggleChart,
+                    openItemModal, saveItem, deleteItem, openRecordModal, saveRecord,
+                    getLatestPrice, getEvents, getMaintenanceCost, calculateTCO, getDailyCost, getPlateauStatus, getWarrantyStatus, renderMarkdown,
+                    handleImageUpload, handlePaste, zoomImage,
+                    getStatusColor, getStatusText, formatDate, guessEmoji, exportCSV, importJSON
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

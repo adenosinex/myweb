@@ -110,9 +110,51 @@
                     }
                     return a.localeCompare(b);
                 });
+                function removeLeadingNumber(fileName) {
+            // 使用正则表达式去除开头的数字
+            return fileName.replace(/^\d+/, '');
+        }
+
+        // 排序函数（数字从1-9顺序）
+// 排序函数（数字从1-9顺序，美术字排在后面）
+function sortPagesByFileName(pages) {
+    return pages.sort((a, b) => {
+        const fileA = a.split('/').pop().split('\\').pop();
+        const fileB = b.split('/').pop().split('\\').pop();
+        
+        // 检查是否以数字开头
+        const startsWithDigitA = /^\d/.test(fileA);
+        const startsWithDigitB = /^\d/.test(fileB);
+        
+        // 如果一个是数字开头，一个不是，数字开头的排在前面
+        if (startsWithDigitA && !startsWithDigitB) return -1;
+        if (!startsWithDigitA && startsWithDigitB) return 1;
+        
+        // 如果都是数字开头，按数字大小排序
+        if (startsWithDigitA && startsWithDigitB) {
+            const numMatchA = fileA.match(/^\d+/);
+            const numMatchB = fileB.match(/^\d+/);
+            
+            const numA = numMatchA ? parseInt(numMatchA[0], 10) : 0;
+            const numB = numMatchB ? parseInt(numMatchB[0], 10) : 0;
+            
+            if (numA !== numB) {
+                return numA - numB;
+            }
+            // 数字相同时，按剩余部分排序
+            const remainingA = fileA.substring(numMatchA[0].length);
+            const remainingB = fileB.substring(numMatchB[0].length);
+            return remainingA.localeCompare(remainingB);
+        }
+        
+        // 如果都不是数字开头（美术字），按字母顺序排序
+        return fileA.localeCompare(fileB);
+    });
+}
 
                 categoryNames.forEach(categoryName => {
-                    const catPages = groupedPages[categoryName];
+                    let catPages = groupedPages[categoryName];
+                    catPages=sortPagesByFileName(catPages)
                     htmlContent += `
                         <details class="category-section" data-category="${categoryName}">
                             <summary class="category-title">${categoryName} (${catPages.length})</summary>
@@ -120,12 +162,13 @@
                                 ${catPages.map(page => {
                                     // 提取最终的文件名用于显示
                                     const fileName = page.split('/').pop().split('\\').pop().toUpperCase();
+                                    const fn2=removeLeadingNumber(fileName)
                                     return `
                                         <a href="/${page}" class="card" target="_blank">
-                                            <img src="/static/svg/${fileName}.svg" 
+                                            <img src="/static/svg/${fn2}.svg" 
                                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                                             <div class="icon-placeholder">📄</div>
-                                            <div class="card-title">${fileName}</div>
+                                            <div class="card-title">${fn2}</div>
                                         </a>
                                     `;
                                 }).join('')}

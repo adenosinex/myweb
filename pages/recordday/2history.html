@@ -35,7 +35,7 @@
                 <button onclick="UI.toggleModal('uploadModal', true)" class="bg-black hover:bg-gray-800 text-white text-sm font-bold py-2 px-4 rounded-full shrink-0 md:order-last ml-auto md:ml-0">
                     <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>添加记录
                 </button>
-                <input type="text" id="searchInput" class="hidden md:block flex-1 max-w-xl mx-4 bg-gray-100 border-transparent focus:bg-white focus:border-gray-500 rounded-xl px-4 py-2.5 text-sm outline-none" placeholder="🔍 搜索事件..." oninput="UI.renderGallery()">
+                <input type="text" id="searchInput" class="hidden md:block flex-1 max-w-xl mx-4 bg-gray-100 border-transparent focus:bg-white focus:border-gray-500 rounded-xl px-4 py-2.5 text-sm outline-none" placeholder="🔍 搜索事件..." oninput="UI.renderGallery(true)">
             </div>
         </div>
     </nav>
@@ -43,13 +43,14 @@
     <div class="max-w-7xl mx-auto px-4 md:px-6 pt-6">
         <div class="flex items-center justify-between mb-3 w-full overflow-hidden">
             <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap overflow-hidden overflow-ellipsis min-w-0 flex-1 pr-2">近期活跃事件 (Top 8)</h2>
-            <button onclick="Utils.$('searchInput').value='';UI.renderGallery()" class="text-[10px] text-blue-500 hover:underline shrink-0 whitespace-nowrap">查看全部</button>
+            <button onclick="Utils.$('searchInput').value='';UI.renderGallery(true)" class="text-[10px] text-blue-500 hover:underline shrink-0 whitespace-nowrap">查看全部</button>
         </div>
         <div id="eventStatsDashboard" class="flex space-x-3 overflow-x-auto no-scrollbar pb-3 snap-x"></div>
     </div>
 
     <main class="max-w-7xl mx-auto px-4 md:px-6 py-4">
         <div id="gallery" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"></div>
+        <div id="lazyLoadTrigger" class="w-full text-center text-xs text-gray-400 py-6 font-bold tracking-widest"></div>
     </main>
 
     <div id="uploadModal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" style="z-index: 70;">
@@ -107,30 +108,72 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.js"></script>
+ <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.js"></script>
     <script>
         // ================= 1. 配置与状态 =================
         const API_BASE = location.protocol.match(/^(blob|file|https?:\/\/usercontent\.goog)/) ? 'http://127.0.0.1:5000' : '';
-        const State = { snapshots: [], viewer: null, modalViewer: null };
+        const State = { snapshots: [], viewer: null, modalViewer: null, displayLimit: 10, observer: null };
 
         // ================= 2. 核心工具库 =================
         const Utils = {
             $: id => document.getElementById(id),
-            formatDT: d => d ? new Date(d.replace(' ', 'T')).toISOString().replace(/[-T:]/g, '').slice(0, 12) : '未知',
+            // 修复：后端传来的已经是本地时间，直接去掉横线冒号取前12位，避免 toISOString() 造成8小时时差
+            formatDT: d => d ? d.replace('T', ' ').substring(0, 16) : '未知',
             timeAgo: d => {
                 if (!d) return '未知';
                 const diff = (Date.now() - new Date(d.replace(' ', 'T')).getTime()) / 864e5;
                 return diff < 1 ? '今天' : diff < 2 ? '昨天' : diff > 365 ? `${~~(diff/365)}年前` : diff > 30 ? `${~~(diff/30)}个月前` : `${~~diff}天前`;
             },
-            compressImg: file => new Promise(res => {
-                const img = new Image();
-                img.onload = () => {
-                    const [w, h] = [img.width, img.height].map(d => d > 2048 ? 2048 : d);
-                    const cvs = document.createElement('canvas');
-                    cvs.width = w; cvs.height = h;
-                    cvs.getContext('2d').drawImage(img, 0, 0, w, h);
-                    cvs.toBlob(b => res(new File([b], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' })), 'image/jpeg', 0.85);
+            compressImage: file => new Promise((resolve, reject) => {
+                if (file.size < 250 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/webp')) {
+                    return resolve(file);
+                }
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const maxEdge = 1280;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > maxEdge || height > maxEdge) {
+                            if (width > height) {
+                                height = Math.round((height * maxEdge) / width);
+                                width = maxEdge;
+                            } else {
+                                width = Math.round((width * maxEdge) / height);
+                                height = maxEdge;
+                            }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'medium';
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        canvas.toBlob((blob) => {
+                            const originalName = file.name || 'clipboard_image';
+                            const newFileName = originalName.replace(/\.[^/.]+$/, "") + "_opt.jpg";
+                            const compressedFile = new File([blob], newFileName, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now(),
+                            });
+                            resolve(compressedFile);
+                        }, 'image/jpeg', 0.85);
+                    };
+                    img.onerror = error => reject(error);
                 };
-                img.src = URL.createObjectURL(file);
+                reader.onerror = error => reject(error);
             })
         };
 
@@ -138,7 +181,7 @@
         const API = {
             load: async () => {
                 State.snapshots = await (await fetch(API_BASE + '/api/snapshots')).json();
-                UI.renderStats(); UI.renderGallery();
+                UI.renderStats(); UI.renderGallery(true);
             },
             del: async (id, e) => {
                 e.stopPropagation();
@@ -173,7 +216,7 @@
                 const topDashboard = sortedKeys.slice(0, 8); 
 
                 Utils.$('eventStatsDashboard').innerHTML = topDashboard.map(t => `
-                    <div onclick="Utils.$('searchInput').value='${t}';UI.renderGallery()" class="bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-sm shrink-0 cursor-pointer hover:border-black hover:shadow-md group min-w-[100px] snap-center">
+                    <div onclick="Utils.$('searchInput').value='${t}';UI.renderGallery(true)" class="bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-sm shrink-0 cursor-pointer hover:border-black hover:shadow-md group min-w-[100px] snap-center">
                         <span class="text-sm font-bold text-gray-800 group-hover:text-black">${t}</span>
                         <div class="text-[11px] text-gray-500 mt-0.5">上次: ${Utils.timeAgo(stats[t].rt)}</div>
                     </div>`).join('');
@@ -183,10 +226,15 @@
                         <span class="text-[11px] font-bold">${t}</span><span class="text-[9px] opacity-70 ml-1">上次: ${Utils.timeAgo(stats[t].rt)}</span>
                     </button>`).join('');
             },
-            renderGallery: () => {
+            renderGallery: (reset = false) => {
+                if (reset) State.displayLimit = 10;
+                
                 const kw = Utils.$('searchInput').value.toLowerCase();
-                const html = State.snapshots.filter(i => (i.event_type||'').toLowerCase().includes(kw) || (i.description||'').toLowerCase().includes(kw) || (i.original_filename||'').toLowerCase().includes(kw))
-                .map(i => {
+                const filtered = State.snapshots.filter(i => (i.event_type||'').toLowerCase().includes(kw) || (i.description||'').toLowerCase().includes(kw) || (i.original_filename||'').toLowerCase().includes(kw));
+                
+                const currentBatch = filtered.slice(0, State.displayLimit);
+
+                const html = currentBatch.map(i => {
                     const isAi = i.status === 'analyzing_context', isErr = /失败|异常/.test(i.description);
                     const btn = isAi ? `<button disabled class="w-full py-2 bg-gray-100 text-gray-400 text-[11px] font-bold rounded-xl">🤖 分析中...</button>` 
                                      : (!i.description || isErr) ? `<button onclick="API.reqAI('${i.id}',event)" class="w-full py-2 ${isErr?'bg-red-50 text-red-600':'bg-indigo-50 text-indigo-600'} text-[11px] font-bold rounded-xl border">${isErr?'🤖 重新提取':'🤖 AI 提取环境'}</button>`
@@ -210,8 +258,29 @@
                 }).join('');
 
                 Utils.$('gallery').innerHTML = html;
+                
                 if (State.viewer) State.viewer.destroy();
                 State.viewer = new Viewer(Utils.$('gallery'), { filter: img => img.classList.contains('manual-img'), viewed() { this.viewer.canvas.addEventListener('click', e => { if(e.target===this.viewer.canvas) State.viewer.hide(); }); } });
+
+                const trigger = Utils.$('lazyLoadTrigger');
+                if (State.displayLimit < filtered.length) {
+                    trigger.innerHTML = '滑动加载更多...';
+                    if (!State.observer) {
+                        State.observer = new IntersectionObserver((entries) => {
+                            if (entries[0].isIntersecting) {
+                                State.displayLimit += 10;
+                                UI.renderGallery(false);
+                            }
+                        }, { rootMargin: "100px" });
+                    }
+                    State.observer.observe(trigger);
+                } else {
+                    trigger.innerHTML = filtered.length > 0 ? '到底啦' : '暂无数据';
+                    if (State.observer) {
+                        State.observer.disconnect();
+                        State.observer = null;
+                    }
+                }
             }
         };
 
@@ -234,7 +303,23 @@
             handleFiles: () => {
                 const files = Utils.$('fileInput').files; if(!files.length) return;
                 const ot = Utils.$('overrideTime');
-                if(!ot.value && files[0]) { EXIF.getData(files[0], function() { ot.value = new Date(EXIF.getTag(this, "DateTimeOriginal") || files[0].lastModified).toISOString().slice(0, 16); }); }
+                
+                if(!ot.value && files[0]) { 
+                    EXIF.getData(files[0], function() { 
+                        let d;
+                        const exifTime = EXIF.getTag(this, "DateTimeOriginal");
+                        if (exifTime) {
+                            // 修复 EXIF 冒号格式导致 invalid date，转为标准格式
+                            const parts = exifTime.split(' ');
+                            d = new Date(parts[0].replace(/:/g, '-') + 'T' + parts[1]);
+                        } else {
+                            d = new Date(files[0].lastModified);
+                        }
+                        // 修复：提取本地时间拼接，强制规避 toISOString 带来的时区偏移
+                        const pad = n => n.toString().padStart(2, '0');
+                        ot.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    }); 
+                }
                 
                 Utils.$('previewContainer').innerHTML = Array.from(files).map(f => `<img src="${URL.createObjectURL(f)}" class="h-24 w-24 object-cover rounded shadow border">`).join('');
                 Utils.$('previewContainer').classList.remove('hidden');
@@ -250,7 +335,7 @@
                 try {
                     for(let i=0; i<files.length; i++) {
                         btn.innerHTML = `处理中... (${i+1}/${files.length})`;
-                        fd.set('file', await Utils.compressImg(files[i]));
+                        fd.set('file', await Utils.compressImage(files[i]));
                         await fetch(API_BASE + '/api/snapshots/upload', { method: 'POST', body: fd });
                     }
                     UI.toggleModal('uploadModal', false); API.load();

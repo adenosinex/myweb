@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory, redirect, make_response, Blueprint
 import sqlite3, time
-import os
+import os,re
 import json
 import importlib
 from dotenv import load_dotenv
@@ -272,14 +272,15 @@ def serve_html_with_icon(filename):
     # 示例: subfolder/main-sub.html -> base_name: main-sub -> main_name: main
     base_name = os.path.basename(html_path).replace('.html', '')
     main_name = base_name.split('-')[0] if '-' in base_name else base_name
-    svg_path = os.path.join('static', 'svg', f'{main_name}.svg')
-
+    main_name2 = re.sub(r'^\d+', '', main_name)
+    svg_path = os.path.join('static', 'svg', f'{main_name2}.svg')
+    print('--------',svg_path)
     # 3. 如果存在对应的 SVG 图标，读取文件并注入到 HTML 的 <head> 中
     if os.path.exists(svg_path):
         with open(html_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        icon_tag = f'<link rel="icon" href="/static/svg/{main_name}.svg" type="image/svg+xml">'
+        print('svg',main_name2)
+        icon_tag = f'<link rel="icon" href="/static/svg/{main_name2}.svg" type="image/svg+xml">'
         
         if '</head>' in content:
             content = content.replace('</head>', f'    {icon_tag}\n</head>', 1)
