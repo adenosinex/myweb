@@ -26,7 +26,7 @@
 <body class="bg-slate-100 text-slate-800 p-4 md:p-6 font-sans">
     <div id="app" class="mx-auto" style="max-width: 1000px;" v-cloak>
         <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <h2 class="text-2xl font-bold flex items-center gap-2">💎 资产与生命周期管理</h2>
+            <h2 class="text-2xl font-bold flex items-center gap-2">损耗-使用-配件-事故模型-资产与生命周期管理</h2>
             <div class="flex gap-2">
                 <button @click="exportCSV" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导出备份</button>
                 <button @click="$refs.fileInput.click()" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导入恢复</button>
@@ -418,15 +418,31 @@
                 };
 
                 // 新增：计算日均成本
-                const getDailyCost = (item) => {
-                    if (!item.purchaseDate) return '-';
-                    const tcoStr = calculateTCO(item);
-                    if (tcoStr === '-') return '-';
-                    
-                    const tco = Number(tcoStr.replace(/,/g, ''));
-                    const days = Math.max(1, Math.ceil((new Date() - new Date(item.purchaseDate)) / 86400000));
-                    return (tco / days).toFixed(2);
-                };
+               const getDailyCost = (item) => {
+    if (!item.purchaseDate) return '-';
+    
+    // 获取所有价格记录中的最新日期
+    const priceRecords = (item.history || []).filter(h => h.type === 'price');
+    let latestDate = new Date(item.purchaseDate); // 默认为购买日期
+    
+    if (priceRecords.length > 0) {
+        // 找到最新的价格记录日期
+        const latestPriceRecord = priceRecords.reduce((latest, current) => {
+            return new Date(current.date) > new Date(latest.date) ? current : latest;
+        });
+        latestDate = new Date(latestPriceRecord.date);
+    } else {
+        // 如果没有价格记录，则使用当前时间
+        latestDate = new Date();
+    }
+    
+    const tcoStr = calculateTCO(item);
+    if (tcoStr === '-') return '-';
+    
+    const tco = Number(tcoStr.replace(/,/g, ''));
+    const days = Math.max(1, Math.ceil((latestDate - new Date(item.purchaseDate)) / 86400000));
+    return (tco / days).toFixed(2);
+};
 
                 // 新增：平台期判断与出手建议
                 const getPlateauStatus = (item) => {
