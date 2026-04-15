@@ -9,7 +9,7 @@
     <script src="/static/cdn/echarts.min.js"></script>
     <script src="/static/cdn/marked.min.js"></script>
     <script src="/static/cdn/compressor.min.js"></script>
-   <style>
+    <style>
         [v-cloak] { display: none; }
         .markdown-body { font-size: 0.875rem; line-height: 1.6; color: #374151; }
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; margin-top: 0.75em; margin-bottom: 0.25em; color: #111827; }
@@ -50,10 +50,10 @@
                     <div v-else class="w-20 h-20 rounded-lg bg-slate-50 border flex items-center justify-center text-3xl shrink-0">{{ guessEmoji(item.name) }}</div>
                     
                     <div class="flex-grow pt-1">
-                        <h3 class="font-bold text-lg mb-1 pr-12 truncate" :title="item.name">{{ item.name }}</h3>
+                        <h3 class="font-bold text-lg mb-1 pr-12 truncate select-text" :title="item.name">{{ item.name }}</h3>
                         <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-slate-500">
-                            <div>买入: <span class="text-slate-800">¥{{ item.purchasePrice || 0 }}</span></div>
-                            <div>日期: <span class="text-slate-800">{{ item.purchaseDate || '-' }}</span></div>
+                            <div class="select-text">买入: <span class="text-slate-800">¥{{ item.purchasePrice || 0 }}</span></div>
+                            <div class="select-text">日期: <span class="text-slate-800">{{ item.purchaseDate || '-' }}</span></div>
                             <div>保修: <span :class="getWarrantyStatus(item).color">{{ getWarrantyStatus(item).text }}</span></div>
                         </div>
                     </div>
@@ -70,64 +70,90 @@
                     <div v-if="editingDesc[item.id]">
                         <textarea v-model="item.description" rows="6" class="w-full p-2 border rounded text-sm font-mono outline-none focus:ring-2 focus:ring-blue-100 bg-white" placeholder="支持 Markdown 格式..."></textarea>
                     </div>
-                    <div v-else class="markdown-body max-h-[160px] overflow-y-auto" v-html="renderMarkdown(item.description) || '<span class=\'text-slate-400 text-xs italic\'>暂无备忘信息...</span>'"></div>
+                    <div v-else class="markdown-body max-h-[160px] overflow-y-auto select-text" v-html="renderMarkdown(item.description) || '<span class=\'text-slate-400 text-xs italic\'>暂无备忘信息...</span>'"></div>
                 </div>
 
                 <div class="border-b border-slate-100">
-                    <button @click="toggleChart(item)" class="w-full px-5 py-3 flex justify-between items-center text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors focus:outline-none">
-                        <span class="flex items-center gap-2">
-                            <span>📈 财务成本分析</span>
-                            <span class="font-normal text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">当前评估: <span class="text-blue-600 font-bold">¥{{ getLatestPrice(item) }}</span></span>
-                        </span>
-                        <span class="text-slate-400">{{ expandedCharts[item.id] ? '▲ 收起' : '▼ 展开面板' }}</span>
-                    </button>
+                    <div class="flex justify-between items-start px-5 py-3 hover:bg-slate-50 transition-colors group">
+                        <div class="flex flex-col gap-1.5 flex-grow">
+                            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1">📈 财务与运行成本分析</span>
+                            <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
+                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-slate-700">评估: ¥{{ getLatestPrice(item) }}</span>
+                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-blue-700 font-medium">TCO: ¥{{ calculateTCO(item) }} (¥{{ getDailyTCO(item) }}/日)</span>
+                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-red-600 font-medium">使用: ¥{{ getUsageCost(item) }} (¥{{ getDailyUsage(item) }}/日)</span>
+                            </div>
+                        </div>
+                        <button @click="toggleChart(item)" class="text-slate-400 hover:text-slate-700 text-xs py-1 px-2 -mr-2 focus:outline-none shrink-0 self-center">
+                            {{ expandedCharts[item.id] ? '▲ 收起' : '▼ 展开' }}
+                        </button>
+                    </div>
                     
                     <div v-if="expandedCharts[item.id]" class="px-5 pb-3 bg-white">
                         <div class="grid grid-cols-4 gap-2 mb-3 text-center border-b border-slate-50 pb-3">
-                            <div class="bg-slate-50 p-1.5 rounded">
-                                <div class="text-[10px] text-slate-400">累计维护投入</div>
-                                <div class="text-xs font-bold text-slate-700">¥{{ getMaintenanceCost(item) }}</div>
+                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help select-text">
+                                <div class="text-[10px] text-slate-400">硬件附加投入</div>
+                                <div class="text-xs font-bold text-slate-700">¥{{ getHardwareCost(item) }}</div>
+                                <div class="hidden group-hover:block absolute z-10 w-32 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
+                                    仅含：损耗维保、配件改装
+                                </div>
                             </div>
-                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help">
+                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help select-text">
                                 <div class="text-[10px] text-slate-400">真实 TCO</div>
                                 <div class="text-xs font-bold text-slate-700">¥{{ calculateTCO(item) }}</div>
                                 <div class="hidden group-hover:block absolute z-10 w-40 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
-                                    总成本 = 买入价 + 累计维护投入 - 当前残值
+                                    买入价 + 硬件附加投入 - 当前评估
                                 </div>
                             </div>
-                            <div class="bg-slate-50 p-1.5 rounded">
-                                <div class="text-[10px] text-slate-400">持有日均成本</div>
-                                <div class="text-xs font-bold text-slate-700">¥{{ getDailyCost(item) }}</div>
+                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help select-text">
+                                <div class="text-[10px] text-slate-400">运行与事故投入</div>
+                                <div class="text-xs font-bold text-slate-700">¥{{ getUsageCost(item) }}</div>
+                                <div class="hidden group-hover:block absolute z-10 w-32 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
+                                    仅含：日常使用、事故维修
+                                </div>
                             </div>
-                            <div class="bg-slate-50 p-1.5 rounded">
+                            <div class="bg-slate-50 p-1.5 rounded select-text">
                                 <div class="text-[10px] text-slate-400">贬值/出手建议</div>
                                 <div class="text-xs font-bold truncate" :class="getPlateauStatus(item).color" :title="getPlateauStatus(item).text">{{ getPlateauStatus(item).text }}</div>
                             </div>
                         </div>
 
+                        <div class="flex justify-center mb-2">
+                            <div class="inline-flex bg-slate-100 rounded p-1 gap-1">
+                                <button @click="switchChartMode(item, 'net')" :class="chartMode[item.id] !== 'tco' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'" class="px-3 py-1 text-xs font-medium rounded transition-colors">净值折线图</button>
+                                <button @click="switchChartMode(item, 'tco')" :class="chartMode[item.id] === 'tco' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'" class="px-3 py-1 text-xs font-medium rounded transition-colors">硬件TCO走势</button>
+                            </div>
+                        </div>
+
                         <div :ref="el => { if (el) chartsRefs[item.id] = el }" style="height: 140px; width: 100%;"></div>
+                        <div v-if="!hasEnoughChartData(item)" class="text-center text-[10px] text-slate-400 -mt-6 relative z-10">数据量不足，继续添加估价记录以生成趋势图</div>
                     </div>
                 </div>
 
                 <div class="px-5 py-4 flex-grow max-h-[160px] overflow-y-auto bg-white">
-                    <div class="text-xs font-semibold text-slate-400 mb-3">历史记录与维护</div>
+                    <div class="text-xs font-semibold text-slate-400 mb-3">历史记录与开销分类</div>
                     <div v-if="getEvents(item).length === 0" class="text-xs text-slate-300">暂无事件记录</div>
                     <div class="relative border-l-2 border-slate-100 ml-2 space-y-4">
-                        <div v-for="event in getEvents(item)" :key="event.id" class="relative pl-4">
+                        <div v-for="event in getEvents(item)" :key="event.id" class="relative pl-4 group">
                             <div class="absolute w-2 h-2 bg-slate-300 rounded-full -left-[5px] top-1.5 border-2 border-white"></div>
-                            <div class="text-[10px] text-slate-400 mb-0.5">{{ formatDate(event.date) }}</div>
-                            <div class="text-sm font-medium text-slate-700">
-                                {{ event.value }} 
-                                <span v-if="event.cost" class="text-red-500 font-bold ml-1 text-xs">(-¥{{ event.cost }})</span>
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="text-[10px] text-slate-400 mb-0.5">{{ formatDate(event.date) }}</div>
+                                    <div class="text-sm font-medium text-slate-700 flex items-center gap-1.5 flex-wrap">
+                                        <span v-if="event.type === 'event'" class="text-[10px] px-1.5 py-0.5 rounded border" :class="getCategoryStyle(event.category).class">{{ getCategoryStyle(event.category).text }}</span>
+                                        <span class="select-text">{{ event.value }}</span>
+                                        <span v-if="event.cost" class="text-red-500 font-bold text-xs select-text">(-¥{{ event.cost }})</span>
+                                    </div>
+                                    <div v-if="event.note" class="text-xs text-slate-500 mt-1 bg-slate-50 p-1.5 rounded inline-block select-text">{{ event.note }}</div>
+                                </div>
+                                <button @click="editRecord(item, event)" class="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-50 px-2 py-1 rounded shrink-0">修改</button>
                             </div>
-                            <div v-if="event.note" class="text-xs text-slate-500 mt-1 bg-slate-50 p-1.5 rounded inline-block">{{ event.note }}</div>
                         </div>
                     </div>
                 </div>
 
                 <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center mt-auto">
                     <div class="flex gap-2">
-                        <button @click="openRecordModal(item, 'event')" class="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-xs font-medium">添加维护开销</button>
+                        <button @click="openRecordModal(item, 'event')" class="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-xs font-medium">添加记录/开销</button>
                         <button @click="openRecordModal(item, 'price')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium">更新估价</button>
                     </div>
                     <div class="flex gap-2">
@@ -217,7 +243,7 @@
         <div v-if="modals.record" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex justify-center items-center z-50 p-4">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
                 <div class="p-5 border-b border-slate-100">
-                    <h3 class="text-lg font-bold">{{ recordForm.type === 'price' ? '💰 更新二手估价' : '🔧 添加记录与开销' }}</h3>
+                    <h3 class="text-lg font-bold">{{ recordForm.id ? '编辑记录' : (recordForm.type === 'price' ? '💰 更新二手估价' : '🔧 添加记录与开销') }}</h3>
                     <p class="text-xs text-slate-500 mt-1">目标: {{ currentTargetItem?.name }}</p>
                 </div>
                 <div class="p-5 space-y-4">
@@ -235,12 +261,21 @@
                     
                     <template v-if="recordForm.type === 'event'">
                         <div>
+                            <label class="block text-sm font-semibold mb-1 text-slate-700">记录类型与分类</label>
+                            <select v-model="recordForm.category" class="w-full p-2 border rounded-lg outline-none bg-white focus:ring-2 focus:ring-emerald-100">
+                                <option value="wear">🔧 损耗维保 (计入TCO)</option>
+                                <option value="usage">🔋 日常使用 (独立计算)</option>
+                                <option value="accessory">✨ 配件改装 (计入TCO)</option>
+                                <option value="accident">💥 事故维修 (独立计算)</option>
+                            </select>
+                        </div>
+                        <div>
                             <label class="block text-sm font-semibold mb-1 text-slate-700">记录内容</label>
                             <input v-model="recordForm.value" type="text" placeholder="如：更换机油、洗车、年检" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-100">
                         </div>
                         <div>
                             <label class="block text-sm font-semibold mb-1 text-slate-700">本次花费金额 (¥)</label>
-                            <input v-model.number="recordForm.cost" type="number" placeholder="纳入 TCO 计算，无花费留空" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-100">
+                            <input v-model.number="recordForm.cost" type="number" placeholder="无花费留空" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-100">
                         </div>
                         <div>
                             <label class="block text-sm font-semibold mb-1 text-slate-700">补充备注 (可选)</label>
@@ -274,11 +309,12 @@
                 
                 const editingDesc = reactive({});
                 const expandedCharts = reactive({});
+                const chartMode = reactive({}); 
                 const chartsRefs = reactive({});
                 const chartInstances = {};
 
                 const itemForm = reactive({ id: '', name: '', purchaseDate: '', purchasePrice: 0, warrantyMonths: 0, status: 'active', description: '', image: '', receiptImage: '' });
-                const recordForm = reactive({ type: 'price', date: '', value: '', note: '', cost: '' });
+                const recordForm = reactive({ id: '', type: 'price', date: '', value: '', note: '', cost: '', category: 'wear' });
 
                 const generateId = (prefix) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
@@ -325,6 +361,11 @@
                     }
                 };
 
+                const switchChartMode = (item, mode) => {
+                    chartMode[item.id] = mode;
+                    renderChart(item);
+                };
+
                 const openItemModal = (item = null) => {
                     if (item) {
                         Object.assign(itemForm, JSON.parse(JSON.stringify(item)));
@@ -365,11 +406,28 @@
                 const openRecordModal = (item, type) => {
                     currentTargetItem.value = item;
                     const localNow = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                    recordForm.id = '';
                     recordForm.type = type;
                     recordForm.date = localNow;
                     recordForm.value = type === 'price' ? getLatestPrice(item, false) : '';
                     recordForm.note = '';
                     recordForm.cost = '';
+                    recordForm.category = 'wear';
+                    modals.record = true;
+                };
+
+                const editRecord = (item, event) => {
+                    currentTargetItem.value = item;
+                    const localDate = new Date(new Date(event.date).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                    Object.assign(recordForm, {
+                        id: event.id,
+                        type: event.type,
+                        date: localDate,
+                        value: event.value,
+                        note: event.note || '',
+                        cost: event.cost || '',
+                        category: event.category || 'wear'
+                    });
                     modals.record = true;
                 };
 
@@ -377,12 +435,22 @@
                     if (recordForm.value === '') return alert("内容不可为空。");
                     if (!currentTargetItem.value.history) currentTargetItem.value.history = [];
                     
-                    currentTargetItem.value.history.push({
-                        id: generateId('h'), type: recordForm.type, date: new Date(recordForm.date).toISOString(),
+                    const recordData = {
+                        id: recordForm.id || generateId('h'), 
+                        type: recordForm.type, 
+                        date: new Date(recordForm.date).toISOString(),
                         value: recordForm.type === 'price' ? Number(recordForm.value) : recordForm.value,
                         note: recordForm.note,
-                        cost: recordForm.type === 'event' && recordForm.cost ? Number(recordForm.cost) : undefined
-                    });
+                        cost: recordForm.type === 'event' && recordForm.cost ? Number(recordForm.cost) : undefined,
+                        category: recordForm.type === 'event' ? recordForm.category : undefined
+                    };
+
+                    if (recordForm.id) {
+                        const idx = currentTargetItem.value.history.findIndex(h => h.id === recordForm.id);
+                        if (idx !== -1) currentTargetItem.value.history[idx] = recordData;
+                    } else {
+                        currentTargetItem.value.history.push(recordData);
+                    }
                     
                     currentTargetItem.value.history.sort((a, b) => new Date(b.date) - new Date(a.date));
                     modals.record = false;
@@ -391,6 +459,16 @@
                     if (expandedCharts[currentTargetItem.value.id]) {
                         nextTick(() => renderChart(currentTargetItem.value));
                     }
+                };
+
+                const getCategoryStyle = (cat) => {
+                    const map = {
+                        wear: { text: '损耗', class: 'bg-orange-50 text-orange-600 border-orange-200' },
+                        usage: { text: '使用', class: 'bg-sky-50 text-sky-600 border-sky-200' },
+                        accessory: { text: '配件', class: 'bg-purple-50 text-purple-600 border-purple-200' },
+                        accident: { text: '事故', class: 'bg-red-50 text-red-600 border-red-200' }
+                    };
+                    return map[cat] || map.wear;
                 };
 
                 const getLatestPrice = (item, formatted = true) => {
@@ -403,48 +481,60 @@
                     return (item.history || []).filter(h => h.type === 'event').sort((a, b) => new Date(b.date) - new Date(a.date));
                 };
 
-                // 新增：累计维护成本计算
-                const getMaintenanceCost = (item) => {
-                    const total = (item.history || []).reduce((sum, h) => h.type === 'event' && h.cost ? sum + Number(h.cost) : sum, 0);
+                // 仅计算硬件相关投入 (损耗维保 + 配件)
+                const getHardwareCost = (item) => {
+                    const total = (item.history || []).reduce((sum, h) => {
+                        const cat = h.category || 'wear'; 
+                        if (h.type === 'event' && h.cost && (cat === 'wear' || cat === 'accessory')) return sum + Number(h.cost);
+                        return sum;
+                    }, 0);
                     return total.toLocaleString();
                 };
 
-                // 修改：真实 TCO = 买入价 + 维护总成本 - 当前价
-                const calculateTCO = (item) => {
-                    const currentVal = getLatestPrice(item, false);
-                    if (typeof currentVal !== 'number' || !item.purchasePrice) return '-';
-                    const maintenance = Number(getMaintenanceCost(item).replace(/,/g, ''));
-                    return (item.purchasePrice + maintenance - currentVal).toLocaleString();
+                // 计算日常与事故成本
+                const getUsageCost = (item) => {
+                    const total = (item.history || []).reduce((sum, h) => {
+                        const cat = h.category || 'wear'; 
+                        if (h.type === 'event' && h.cost && (cat === 'usage' || cat === 'accident')) return sum + Number(h.cost);
+                        return sum;
+                    }, 0);
+                    return total.toLocaleString();
                 };
 
-                // 新增：计算日均成本
-               const getDailyCost = (item) => {
-    if (!item.purchaseDate) return '-';
-    
-    // 获取所有价格记录中的最新日期
-    const priceRecords = (item.history || []).filter(h => h.type === 'price');
-    let latestDate = new Date(item.purchaseDate); // 默认为购买日期
-    
-    if (priceRecords.length > 0) {
-        // 找到最新的价格记录日期
-        const latestPriceRecord = priceRecords.reduce((latest, current) => {
-            return new Date(current.date) > new Date(latest.date) ? current : latest;
-        });
-        latestDate = new Date(latestPriceRecord.date);
-    } else {
-        // 如果没有价格记录，则使用当前时间
-        latestDate = new Date();
-    }
-    
-    const tcoStr = calculateTCO(item);
-    if (tcoStr === '-') return '-';
-    
-    const tco = Number(tcoStr.replace(/,/g, ''));
-    const days = Math.max(1, Math.ceil((latestDate - new Date(item.purchaseDate)) / 86400000));
-    return (tco / days).toFixed(2);
-};
+                // TCO = 买入价 + 硬件相关投入 - 当前残值
+                const calculateTCO = (item, formatted = true) => {
+                    const currentVal = getLatestPrice(item, false);
+                    if (typeof currentVal !== 'number' || !item.purchasePrice) return '-';
+                    const hwCost = Number(getHardwareCost(item).replace(/,/g, ''));
+                    const tco = item.purchasePrice + hwCost - currentVal;
+                    return formatted ? tco.toLocaleString() : tco;
+                };
 
-                // 新增：平台期判断与出手建议
+                const getDaysHeld = (item) => {
+                    if (!item.purchaseDate) return 1;
+                    const priceRecords = (item.history || []).filter(h => h.type === 'price');
+                    let latestDate = new Date(); 
+                    if (priceRecords.length > 0) {
+                        const latestPriceRecord = priceRecords.reduce((latest, current) => new Date(current.date) > new Date(latest.date) ? current : latest);
+                        latestDate = new Date(latestPriceRecord.date);
+                    }
+                    return Math.max(1, Math.ceil((latestDate - new Date(item.purchaseDate)) / 86400000));
+                };
+
+                const getDailyTCO = (item) => {
+                    const tcoStr = calculateTCO(item, false);
+                    if (tcoStr === '-') return '-';
+                    const days = getDaysHeld(item);
+                    return (Number(tcoStr) / days).toFixed(2);
+                };
+
+                const getDailyUsage = (item) => {
+                    if (!item.purchaseDate) return '-';
+                    const usage = Number(getUsageCost(item).replace(/,/g, ''));
+                    const days = getDaysHeld(item);
+                    return (usage / days).toFixed(2);
+                };
+
                 const getPlateauStatus = (item) => {
                     const prices = (item.history || []).filter(h => h.type === 'price').sort((a, b) => new Date(a.date) - new Date(b.date));
                     if (prices.length < 3) return { text: '数据不足', color: 'text-slate-400' };
@@ -460,7 +550,6 @@
                     const recentDropRate = (prev.value - last.value) / recentDays;
 
                     if (recentDropRate <= 0) return { text: '逆势升值/横盘', color: 'text-emerald-500' };
-                    // 近期贬值率不到整体平均的三分之一，判定为平台期
                     if (recentDropRate < totalDropRate * 0.3) return { text: '平台期 (适宜出手)', color: 'text-blue-600' };
                     if (recentDropRate > totalDropRate * 1.5) return { text: '快速跳水期', color: 'text-red-500' };
                     return { text: '平稳贬值中', color: 'text-slate-600' };
@@ -508,7 +597,12 @@
 
                 const zoomImage = (src) => { zoomedImageSrc.value = src; };
 
-                const renderChart = (item) => {
+                const hasEnoughChartData = (item) => {
+                    const count = (item.history || []).filter(h => h.type === 'price').length;
+                    return (count + (item.purchaseDate && item.purchasePrice ? 1 : 0)) >= 2;
+                };
+
+const renderChart = (item) => {
                     const dom = chartsRefs[item.id];
                     if (!dom) return;
 
@@ -518,6 +612,11 @@
                         chartInstances[item.id] = chart;
                     }
 
+                    if (!hasEnoughChartData(item)) {
+                        chart.clear();
+                        return;
+                    }
+
                     let priceData = (item.history || []).filter(h => h.type === 'price').map(h => ({ date: h.date, value: h.value }));
                     if (item.purchaseDate && item.purchasePrice) {
                         const pd = new Date(item.purchaseDate).toISOString().split('T')[0];
@@ -525,16 +624,49 @@
                             priceData.push({ date: new Date(item.purchaseDate).toISOString(), value: item.purchasePrice });
                         }
                     }
-                    
                     priceData.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-                    if (priceData.length === 0) {
-                        chart.clear(); return;
+                    // 修复：补齐最新的事件时间节点，防止滞后开销被过滤
+                    if (priceData.length > 0) {
+                        const lastPriceObj = priceData[priceData.length - 1];
+                        let latestHistoryDate = lastPriceObj.date;
+                        
+                        (item.history || []).forEach(h => {
+                            if (new Date(h.date) > new Date(latestHistoryDate)) {
+                                latestHistoryDate = h.date;
+                            }
+                        });
+
+                        // 如果存在晚于最后一次估价的记录，继承最后估价生成新节点
+                        if (latestHistoryDate !== lastPriceObj.date) {
+                            priceData.push({ date: latestHistoryDate, value: lastPriceObj.value });
+                        }
+                    }
+
+                    const mode = chartMode[item.id] || 'net';
+                    let seriesData = [];
+                    let chartColor = mode === 'net' ? '#3b82f6' : '#ef4444';
+                    let seriesName = mode === 'net' ? '净值' : '硬件TCO';
+
+                    if (mode === 'net') {
+                        seriesData = priceData.map(d => d.value);
+                    } else {
+                        // TCO走势：仅累加 wear 和 accessory
+                        seriesData = priceData.map(p => {
+                            const dt = new Date(p.date);
+                            const cumulativeHwCost = (item.history || [])
+                                .filter(h => {
+                                    const cat = h.category || 'wear';
+                                    return h.type === 'event' && h.cost && (cat === 'wear' || cat === 'accessory') && new Date(h.date) <= dt;
+                                })
+                                .reduce((sum, h) => sum + Number(h.cost), 0);
+                            return (item.purchasePrice || 0) + cumulativeHwCost - p.value;
+                        });
                     }
 
                     chart.setOption({
                         grid: { top: 10, bottom: 20, left: 40, right: 10 },
-                        tooltip: { trigger: 'axis', formatter: '{b}<br/>估值: ¥{c}' },
+                        tooltip: { trigger: 'axis', formatter: `{b}<br/>${seriesName}: ¥{c}` },
                         xAxis: {
                             type: 'category',
                             data: priceData.map(d => {
@@ -550,18 +682,18 @@
                             axisLabel: { color: '#94a3b8', fontSize: 10 }
                         },
                         series: [{
-                            data: priceData.map(d => d.value),
+                            data: seriesData,
                             type: 'line', smooth: true, symbol: 'circle', symbolSize: 6,
-                            itemStyle: { color: '#3b82f6' }, lineStyle: { color: '#3b82f6', width: 2 },
+                            itemStyle: { color: chartColor }, lineStyle: { color: chartColor, width: 2 },
                             areaStyle: {
                                 color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                    { offset: 0, color: 'rgba(59, 130, 246, 0.2)' }, { offset: 1, color: 'rgba(59, 130, 246, 0)' }
+                                    { offset: 0, color: mode === 'net' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(239, 68, 68, 0.2)' }, 
+                                    { offset: 1, color: mode === 'net' ? 'rgba(59, 130, 246, 0)' : 'rgba(239, 68, 68, 0)' }
                                 ])
                             }
                         }]
                     });
                 };
-
                 window.addEventListener('resize', () => {
                     Object.values(chartInstances).forEach(chart => chart.resize());
                 });
@@ -617,10 +749,10 @@
                 onMounted(loadData);
 
                 return {
-                    items, modals, itemForm, recordForm, currentTargetItem, chartsRefs, zoomedImageSrc,
-                    editingDesc, expandedCharts, toggleEditDesc, toggleChart,
-                    openItemModal, saveItem, deleteItem, openRecordModal, saveRecord,
-                    getLatestPrice, getEvents, getMaintenanceCost, calculateTCO, getDailyCost, getPlateauStatus, getWarrantyStatus, renderMarkdown,
+                    items, modals, itemForm, recordForm, currentTargetItem, chartsRefs, zoomedImageSrc, chartMode,
+                    editingDesc, expandedCharts, toggleEditDesc, toggleChart, switchChartMode, hasEnoughChartData,
+                    openItemModal, saveItem, deleteItem, openRecordModal, editRecord, saveRecord,
+                    getLatestPrice, getEvents, getHardwareCost, getUsageCost, calculateTCO, getDailyTCO, getDailyUsage, getPlateauStatus, getWarrantyStatus, renderMarkdown, getCategoryStyle,
                     handleImageUpload, handlePaste, zoomImage,
                     getStatusColor, getStatusText, formatDate, guessEmoji, exportCSV, importJSON
                 };

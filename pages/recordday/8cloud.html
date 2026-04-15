@@ -9,8 +9,9 @@
     <script src="/static/cdn/compressor.min.js"></script>
     <style> 
         [v-cloak] { display: none; } 
-        /* 进度条动画 */
-        .progress-bar { transition: width 0.5s ease-in-out; }
+        /* 自定义滚动条 */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #e5e7eb; border-radius: 4px; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 p-4 md:p-6 font-sans">
@@ -27,106 +28,136 @@
         </div>
         
         <div class="grid gap-5" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
-            <div v-for="item in items" :key="item.id" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
+            <div v-for="item in items" :key="item.id" :class="getCardClass(item)">
                 
                 <div v-if="item.type === 'sub' && item.autoRenew" class="absolute top-0 right-0 bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-bl-lg font-bold">
                     ♻️ 自动续费
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <img v-if="item.image" :src="item.image" class="w-12 h-12 rounded-xl object-cover bg-gray-50 shrink-0 border">
-                    <div v-else class="w-12 h-12 rounded-xl bg-gray-50 border flex items-center justify-center text-2xl shrink-0">{{ guessEmoji(item.name, item.type) }}</div>
-                    <div class="flex-grow min-w-0">
-                        <h3 class="font-bold text-lg truncate">{{ item.name }}</h3>
-                        <span class="text-xs text-gray-400">{{ item.type === 'sub' ? '周期订阅' : '额度消耗' }}</span>
-                    </div>
-                </div>
-
-                <div v-if="item.type === 'sub'" class="bg-gray-50 rounded-xl p-3">
-                    <div class="flex justify-between items-end mb-2">
-                        <div class="text-sm text-gray-500">距离到期还有</div>
-                        <div class="text-2xl font-black" :class="getDaysLeft(item.expireDate) <= 7 ? 'text-red-500' : 'text-gray-800'">
-                            {{ getDaysLeft(item.expireDate) }} <span class="text-xs font-normal">天</span>
+                <div class="flex justify-between items-start gap-2">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <img v-if="item.image" :src="item.image" class="w-12 h-12 rounded-xl object-cover bg-white shrink-0 border">
+                        <div v-else class="w-12 h-12 rounded-xl bg-white border flex items-center justify-center text-2xl shrink-0">{{ guessEmoji(item.name, item.type) }}</div>
+                        <div class="flex-grow min-w-0">
+                            <h3 class="font-bold text-lg truncate">{{ item.name }}</h3>
+                            <span class="text-xs text-gray-500">{{ item.type === 'sub' ? '周期订阅' : '额度消耗' }}</span>
                         </div>
                     </div>
-                    <div class="flex justify-between text-xs border-t border-gray-200 pt-2 mt-2">
-                        <span class="text-gray-500">到期日: {{ formatDateOnly(item.expireDate) }}</span>
-                        <span class="font-bold">¥{{ item.cost }} / {{ item.cycle }}</span>
+                    
+                    <button @click="duplicateItem(item)" class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors shrink-0 mt-1 mr-1" title="以当前模板复制新建">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                    </button>
+                </div>
+
+                <div v-if="item.type === 'sub'" class="bg-white/50 rounded-xl p-3 border border-gray-100 mt-1">
+                    <div class="flex justify-between items-end mb-2">
+                        <div class="text-sm text-gray-500">距离到期还有</div>
+                        <div class="text-2xl font-black" :class="getDaysLeft(item.expireDate) <= (item.reminderDays || 7) ? 'text-red-500' : 'text-gray-800'">
+                            {{ getDaysLeft(item.expireDate) }} <span class="text-xs font-normal text-gray-500">天</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-xs border-t border-gray-200/60 pt-2 mt-2">
+                        <span class="text-gray-500">到期: {{ formatDateOnly(item.expireDate) }}</span>
+                        <span class="font-bold text-gray-700">
+                            <template v-if="item.isFree || item.cost === 0">免费 / {{ item.durationValue }}{{ item.durationUnit }}</template>
+                            <template v-else>¥{{ item.cost }} / {{ item.durationValue }}{{ item.durationUnit }}</template>
+                        </span>
                     </div>
                 </div>
 
-                <div v-if="item.type === 'quota'" class="bg-gray-50 rounded-xl p-3">
-                    <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-500">已用 / 总计</span>
-                        <span class="font-bold">{{ item.usedQuota }} <span class="font-normal text-xs text-gray-400">/ {{ item.totalQuota }} {{ item.unit }}</span></span>
+                <div v-if="item.type === 'quota'" class="bg-white/50 rounded-xl p-3 border border-gray-100 mt-1">
+                    <div class="flex justify-between items-end mb-2">
+                        <div class="text-sm text-gray-500">剩余可用额度</div>
+                        <div class="text-2xl font-black" :class="item.balance <= (item.reminderQuota || item.autoDeductAmount * 2) ? 'text-orange-500' : 'text-gray-800'">
+                            {{ Number(item.balance).toFixed(2).replace(/\.00$/, '') }} <span class="text-xs font-normal text-gray-500">{{ item.unit }}</span>
+                        </div>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2 overflow-hidden">
-                        <div class="h-2.5 rounded-full progress-bar" :class="getQuotaColor(item)" :style="`width: ${getQuotaPercent(item)}%`"></div>
-                    </div>
-                    <div class="text-[11px] text-gray-400 flex justify-between">
-                        <span>占用 {{ getQuotaPercent(item) }}%</span>
-                        <span v-if="item.resetDay">每月 {{ item.resetDay }} 日重置</span>
+                    <div class="flex justify-between text-xs border-t border-gray-200/60 pt-2 mt-2">
+                        <span class="text-gray-500">周期扣减量: {{ item.autoDeductAmount || 0 }} {{ item.unit }}</span>
+                        <span v-if="item.resetDay" class="font-bold text-gray-700">每月 {{ item.resetDay }} 日重置</span>
                     </div>
                 </div>
 
                 <div class="flex-grow">
-                    <div class="text-[11px] text-gray-400 mb-1 border-b pb-1">最近操作记录</div>
+                    <div class="text-[11px] text-gray-400 mb-1 border-b border-gray-100 pb-1">最近操作记录</div>
                     <div v-if="item.history && item.history.length" class="space-y-1 mt-2 max-h-24 overflow-y-auto custom-scrollbar text-xs">
-                        <div v-for="rec in item.history.slice(0, 5)" :key="rec.date" class="flex justify-between text-gray-600">
+                        <div v-for="rec in item.history.slice(0, 5)" :key="rec.date + Math.random()" class="flex justify-between text-gray-600">
                             <span>{{ formatDateOnly(rec.date) }}</span>
-                            <span v-if="item.type === 'sub'" class="text-green-600">续费 ¥{{ rec.cost || item.cost }}</span>
-                            <span v-if="item.type === 'quota'" class="text-blue-600">更新用量: {{ rec.used }} {{ item.unit }}</span>
+                            <span v-if="item.type === 'sub'" class="text-green-600">
+                                {{ item.isFree ? '打卡/续期' : '续费 ¥' + (rec.cost ?? item.cost) }}
+                            </span>
+                            <span v-if="item.type === 'quota'" class="text-blue-600">额度更新为: {{ rec.balance }} {{ item.unit }}</span>
                         </div>
                     </div>
                     <div v-else class="text-xs text-gray-300 py-1">暂无记录</div>
                 </div>
 
-                <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-auto">
-                    <button @click="openRecordModal(item)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded text-xs">
-                        {{ item.type === 'sub' ? '📝 登记续费' : '📊 更新进度' }}
+                <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-auto relative z-10 flex-wrap">
+                    <button @click="openRecordModal(item)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded text-xs flex-grow text-center">
+                        {{ item.type === 'sub' ? '📝 登记续期' : '📊 扣减额度' }}
                     </button>
-                    <button @click="openItemModal(item)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">编辑</button>
+                    <button @click="openItemModal(item)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">编辑配置</button>
                     <button @click="deleteItem(item.id)" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded text-xs">删除</button>
                 </div>
             </div>
         </div>
 
-        <div v-if="modals.item" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-            <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+        <div v-if="modals.item" class="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
                 <h3 class="text-lg font-bold mb-4">{{ itemForm.id ? '编辑资产项目' : '新建资产项目' }}</h3>
                 <div class="space-y-4">
                     <div v-if="!itemForm.id" class="flex gap-2 bg-gray-100 p-1 rounded-lg">
-                        <button @click="itemForm.type = 'sub'" :class="itemForm.type === 'sub' ? 'bg-white shadow' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">📅 周期订阅</button>
-                        <button @click="itemForm.type = 'quota'" :class="itemForm.type === 'quota' ? 'bg-white shadow' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">🗄️ 额度消耗</button>
+                        <button @click="itemForm.type = 'sub'" :class="itemForm.type === 'sub' ? 'bg-white shadow text-black' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">📅 周期订阅</button>
+                        <button @click="itemForm.type = 'quota'" :class="itemForm.type === 'quota' ? 'bg-white shadow text-black' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">🗄️ 额度消耗</button>
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium mb-1">名称</label>
-                        <input v-model="itemForm.name" type="text" placeholder="如: Netflix 会员 / 移动5G套餐" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-200 outline-none">
+                        <input v-model="itemForm.name" type="text" placeholder="如: Netflix 会员 / 每月流量包" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-200 outline-none">
                     </div>
 
                     <template v-if="itemForm.type === 'sub'">
                         <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">到期日期</label>
-                                <input v-model="itemForm.expireDate" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-sm font-medium mb-1 text-blue-600">订阅开始日</label>
+                                <input v-model="itemForm.startDate" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">扣费周期</label>
-                                <select v-model="itemForm.cycle" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
-                                    <option value="月">每月</option>
-                                    <option value="季">每季</option>
-                                    <option value="年">每年</option>
-                                </select>
+                            
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-sm font-medium mb-1 text-blue-600">订阅周期长度</label>
+                                <div class="flex gap-2">
+                                    <input v-model.number="itemForm.durationValue" type="number" min="1" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                    <select v-model="itemForm.durationUnit" class="w-24 p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                        <option value="天">天</option>
+                                        <option value="月">个月</option>
+                                        <option value="年">年</option>
+                                    </select>
+                                </div>
                             </div>
+
+                            <div class="col-span-2 p-3 bg-blue-50/50 rounded-xl text-sm flex justify-between items-center border border-blue-100">
+                                <span class="text-gray-600">预计到期日推算：</span>
+                                <span class="font-bold text-blue-600 text-base">{{ calculateExpireDate(itemForm.startDate, itemForm.durationValue, itemForm.durationUnit) || '-' }}</span>
+                            </div>
+
                             <div>
+                                <label class="block text-sm font-medium mb-1">提醒时间段(剩余天数)</label>
+                                <input v-model.number="itemForm.reminderDays" type="number" placeholder="默认 7 天" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            
+                            <div v-if="!itemForm.isFree">
                                 <label class="block text-sm font-medium mb-1">单次扣费金额 (¥)</label>
                                 <input v-model.number="itemForm.cost" type="number" step="0.1" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
-                            <div class="flex items-center mt-6">
-                                <label class="flex items-center gap-2 cursor-pointer text-sm">
-                                    <input type="checkbox" v-model="itemForm.autoRenew" class="w-4 h-4 text-blue-600 rounded">
-                                    开启自动续费预警
+
+                            <div class="col-span-2 flex items-center gap-4 mt-2">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                                    <input type="checkbox" v-model="itemForm.isFree" class="w-4 h-4 text-blue-600 rounded">
+                                    免费/0扣费类型
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                                    <input type="checkbox" v-model="itemForm.autoRenew" class="w-4 h-4 text-green-600 rounded">
+                                    标记为自动续费
                                 </label>
                             </div>
                         </div>
@@ -134,35 +165,40 @@
 
                     <template v-if="itemForm.type === 'quota'">
                         <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">总额度上限</label>
-                                <input v-model.number="itemForm.totalQuota" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-sm font-medium mb-1 text-blue-600">当前剩余可用额度</label>
+                                <input v-model.number="itemForm.balance" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-lg">
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">当前已使用</label>
-                                <input v-model.number="itemForm.usedQuota" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-sm font-medium mb-1 text-blue-600">每次/周期自动扣减量</label>
+                                <input v-model.number="itemForm.autoDeductAmount" type="number" step="any" placeholder="单次一键扣减数值" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
+
                             <div>
                                 <label class="block text-sm font-medium mb-1">计量单位</label>
-                                <input v-model="itemForm.unit" type="text" placeholder="如: GB, 次, TB" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                <input v-model="itemForm.unit" type="text" placeholder="如: GB, 次, 瓶" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-1">每月重置日(可选)</label>
+                                <label class="block text-sm font-medium mb-1">剩余额度变色预警阈值</label>
+                                <input v-model.number="itemForm.reminderQuota" type="number" step="any" :placeholder="`默认 ${itemForm.autoDeductAmount * 2 || '两个周期'}`" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-sm font-medium mb-1">每月自动重置日(可选)</label>
                                 <input v-model.number="itemForm.resetDay" type="number" min="1" max="31" placeholder="填 1-31" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
                         </div>
                     </template>
                 </div>
-                <div class="flex justify-end gap-3 mt-6">
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                     <button @click="modals.item = false" class="px-4 py-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-600">取消</button>
                     <button @click="saveItem" class="px-4 py-2 bg-black text-white rounded-xl text-sm font-bold">保存配置</button>
                 </div>
             </div>
         </div>
 
-        <div v-if="modals.record" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+        <div v-if="modals.record" class="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
             <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-                <h3 class="text-lg font-bold mb-4">{{ currentTargetItem.type === 'sub' ? '登记续费 - ' : '更新进度 - ' }}{{ currentTargetItem.name }}</h3>
+                <h3 class="text-lg font-bold mb-4">{{ currentTargetItem.type === 'sub' ? '登记续期 - ' : '扣减额度 - ' }}{{ currentTargetItem.name }}</h3>
                 
                 <div class="space-y-4">
                     <div>
@@ -172,24 +208,47 @@
 
                     <template v-if="currentTargetItem.type === 'sub'">
                         <div>
+                            <label class="block text-sm font-medium mb-1 text-blue-600">本次续费时长</label>
+                            <div class="flex gap-2">
+                                <input v-model.number="recordForm.durationValue" type="number" min="1" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                <select v-model="recordForm.durationUnit" class="w-24 p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                    <option value="天">天</option>
+                                    <option value="月">个月</option>
+                                    <option value="年">年</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div v-if="!currentTargetItem.isFree">
                             <label class="block text-sm font-medium mb-1">实际支付金额 (¥)</label>
                             <input v-model.number="recordForm.cost" type="number" step="0.1" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">续期至 (自动推算)</label>
-                            <input v-model="recordForm.newExpireDate" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-blue-600 font-bold">
+
+                        <div class="p-3 bg-blue-50/50 rounded-xl text-sm flex justify-between items-center border border-blue-100 mt-2">
+                            <span class="text-gray-600">续期后到期日：</span>
+                            <span class="font-bold text-blue-600 text-base">{{ calculateExpireDate(currentTargetItem.expireDate, recordForm.durationValue, recordForm.durationUnit) || '-' }}</span>
                         </div>
                     </template>
 
                     <template v-if="currentTargetItem.type === 'quota'">
                         <div>
-                            <label class="block text-sm font-medium mb-1">当前已用额度 ({{ currentTargetItem.unit }})</label>
-                            <input v-model.number="recordForm.used" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            <label class="block text-sm font-medium mb-1 flex justify-between">
+                                <span class="text-blue-600">调整后剩余可用额度 ({{ currentTargetItem.unit }})</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input v-model.number="recordForm.balance" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-lg">
+                                <button v-if="currentTargetItem.autoDeductAmount > 0" 
+                                        @click="applyAutoDeduct"
+                                        class="px-4 bg-orange-100 text-orange-600 hover:bg-orange-200 font-bold rounded-xl whitespace-nowrap">
+                                    一键扣减 {{ currentTargetItem.autoDeductAmount }}
+                                </button>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-2">提示：您可以直接输入校准后的最终额度，或点击一键扣减。</div>
                         </div>
                     </template>
                 </div>
 
-                <div class="flex justify-end gap-3 mt-6">
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                     <button @click="modals.record = false" class="px-4 py-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-600">取消</button>
                     <button @click="saveRecord" class="px-4 py-2 bg-blue-500 text-white rounded-xl text-sm font-bold">确认提交</button>
                 </div>
@@ -203,22 +262,23 @@
 
         createApp({
             setup() {
-                const API_URL ='/tracker_data/sync/daily';// 替换为你的真实接口
+                const API_URL ='/tracker_data/sync/daily';
                 const items = ref([]);
                 const modals = reactive({ item: false, record: false });
                 const currentTargetItem = ref(null);
                 
-                // 表单模型
+                const getTodayStr = () => new Date().toISOString().split('T')[0];
+
                 const itemForm = reactive({ 
                     id: '', name: '', type: 'sub', image: '',
-                    // 订阅相关
-                    expireDate: '', cycle: '月', cost: 0, autoRenew: true,
-                    // 消耗相关
-                    totalQuota: 0, usedQuota: 0, unit: 'GB', resetDay: null
+                    startDate: getTodayStr(), durationValue: 1, durationUnit: '月', expireDate: '', cost: 0, 
+                    autoRenew: true, reminderDays: 7, isFree: false,
+                    balance: 10, unit: '次', resetDay: null, 
+                    reminderQuota: null, autoDeductAmount: 1
                 });
 
                 const recordForm = reactive({
-                    date: '', cost: 0, newExpireDate: '', used: 0
+                    date: '', cost: 0, balance: 0, durationValue: 1, durationUnit: '月'
                 });
 
                 const generateId = (prefix) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -233,9 +293,7 @@
                             throw new Error("加载失败");
                         }
                     } catch (err) {
-                        // 本地测试 fallback
-                        console.warn("API 失败，使用本地空数据", err);
-                        items.value = []; 
+                        console.warn("API 失败，使用本地空数据");
                     }
                 };
 
@@ -247,61 +305,88 @@
                             body: JSON.stringify({ items: items.value })
                         });
                     } catch (e) { 
-                        console.error("同步失败，仅在本地生效", e); 
+                        console.error("同步失败"); 
                     }
                 };
 
-                // --- 业务计算逻辑 ---
-                const getDaysLeft = (dateStr) => {
-                    if (!dateStr) return 0;
-                    const diffTime = new Date(dateStr) - new Date();
-                    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                };
-
-                const getQuotaPercent = (item) => {
-                    if (!item.totalQuota) return 0;
-                    const pct = (item.usedQuota / item.totalQuota) * 100;
-                    return pct > 100 ? 100 : Math.round(pct * 10) / 10;
-                };
-
-                const getQuotaColor = (item) => {
-                    const pct = getQuotaPercent(item);
-                    if (pct >= 90) return 'bg-red-500';
-                    if (pct >= 75) return 'bg-orange-400';
-                    return 'bg-blue-500';
-                };
-
-                const addMonths = (dateStr, num) => {
-                    const d = new Date(dateStr);
-                    d.setMonth(d.getMonth() + num);
+                const calculateExpireDate = (startStr, val, unit) => {
+                    if (!startStr || !val) return '';
+                    const d = new Date(startStr);
+                    if (unit === '年') d.setFullYear(d.getFullYear() + val);
+                    else if (unit === '月') d.setMonth(d.getMonth() + val);
+                    else if (unit === '天') d.setDate(d.getDate() + val);
                     return d.toISOString().split('T')[0];
                 };
 
-                // --- 弹窗逻辑 ---
+                const getDaysLeft = (dateStr) => {
+                    if (!dateStr) return 0;
+                    const target = new Date(dateStr);
+                    target.setHours(0,0,0,0);
+                    const now = new Date();
+                    now.setHours(0,0,0,0);
+                    return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+                };
+
+                const getCardClass = (item) => {
+                    let base = 'rounded-2xl shadow-sm border p-5 flex flex-col gap-4 hover:shadow-md transition-all relative overflow-hidden ';
+                    if (item.type === 'sub') {
+                        const daysLeft = getDaysLeft(item.expireDate);
+                        const reminder = item.reminderDays ?? 7;
+                        if (daysLeft <= reminder) return base + 'bg-red-50 border-red-200';
+                    } else if (item.type === 'quota') {
+                        // 逻辑：如果没设预警阈值，默认按两倍扣减量算
+                        const limit = (item.reminderQuota !== null && item.reminderQuota !== '' && item.reminderQuota !== undefined) 
+                            ? item.reminderQuota 
+                            : (item.autoDeductAmount * 2);
+                        if (item.balance <= limit) return base + 'bg-orange-50 border-orange-200';
+                    }
+                    return base + 'bg-white border-gray-100';
+                };
+
                 const openItemModal = (item = null) => {
                     if (item) {
-                        Object.assign(itemForm, item);
+                        Object.assign(itemForm, {
+                            ...item,
+                            durationValue: item.durationValue || 1,
+                            durationUnit: item.durationUnit || '月'
+                        });
                     } else {
                         Object.assign(itemForm, { 
                             id: '', name: '', type: 'sub', image: '',
-                            expireDate: new Date().toISOString().split('T')[0], cycle: '月', cost: 0, autoRenew: true,
-                            totalQuota: 100, usedQuota: 0, unit: 'GB', resetDay: 1
+                            startDate: getTodayStr(), durationValue: 1, durationUnit: '月', expireDate: '', cost: 0, autoRenew: true, reminderDays: 7, isFree: false,
+                            balance: 10, unit: '次', resetDay: null, reminderQuota: null, autoDeductAmount: 1
                         });
                     }
                     modals.item = true;
                 };
 
+                const duplicateItem = (item) => {
+                    const newItem = JSON.parse(JSON.stringify(item));
+                    newItem.id = ''; // 清除 ID，变为新建
+                    newItem.name = newItem.name + ' (副本)';
+                    newItem.history = []; // 清空历史记录
+                    if (newItem.type === 'sub') {
+                        newItem.startDate = getTodayStr(); // 默认起始日设为今天
+                    } 
+                    openItemModal(newItem);
+                };
+
                 const saveItem = () => {
                     if (!itemForm.name.trim()) return alert("名称不可为空！");
+                    if (itemForm.isFree) itemForm.cost = 0;
                     
-                    const payload = { ...itemForm, history: itemForm.history || [] };
+                    const payload = JSON.parse(JSON.stringify(itemForm));
+                    payload.history = itemForm.history || [];
+                    
+                    if (payload.type === 'sub') {
+                        payload.expireDate = calculateExpireDate(payload.startDate, payload.durationValue, payload.durationUnit);
+                    }
 
                     if (itemForm.id) {
                         const idx = items.value.findIndex(i => i.id === itemForm.id);
                         if(idx > -1) items.value[idx] = payload;
                     } else {
                         payload.id = generateId('asset');
-                        payload.history = [];
                         items.value.push(payload);
                     }
                     modals.item = false;
@@ -315,21 +400,22 @@
                     }
                 };
 
-                // --- 记录录入逻辑 ---
                 const openRecordModal = (item) => {
                     currentTargetItem.value = item;
-                    const today = new Date().toISOString().split('T')[0];
-                    
-                    recordForm.date = today;
+                    recordForm.date = getTodayStr();
                     if (item.type === 'sub') {
-                        recordForm.cost = item.cost;
-                        // 自动推算下一次到期时间
-                        let addM = item.cycle === '年' ? 12 : (item.cycle === '季' ? 3 : 1);
-                        recordForm.newExpireDate = addMonths(item.expireDate || today, addM);
+                        recordForm.cost = item.isFree ? 0 : item.cost;
+                        recordForm.durationValue = item.durationValue || 1;
+                        recordForm.durationUnit = item.durationUnit || '月';
                     } else {
-                        recordForm.used = item.usedQuota;
+                        recordForm.balance = item.balance || 0;
                     }
                     modals.record = true;
+                };
+
+                const applyAutoDeduct = () => {
+                    const amount = currentTargetItem.value.autoDeductAmount || 0;
+                    recordForm.balance = Math.max(0, parseFloat((recordForm.balance - amount).toFixed(4)));
                 };
 
                 const saveRecord = () => {
@@ -340,29 +426,30 @@
 
                     if (target.type === 'sub') {
                         newRecord.cost = recordForm.cost;
-                        target.expireDate = recordForm.newExpireDate; // 更新主表到期日
+                        target.expireDate = calculateExpireDate(target.expireDate, recordForm.durationValue, recordForm.durationUnit);
                     } else {
-                        newRecord.used = recordForm.used;
-                        target.usedQuota = recordForm.used; // 更新主表用量
+                        newRecord.balance = recordForm.balance;
+                        target.balance = recordForm.balance;
                     }
 
                     if (!target.history) target.history = [];
-                    target.history.unshift(newRecord); // 插到最前面
+                    target.history.unshift(newRecord);
                     
                     modals.record = false;
                     syncData();
                 };
 
-                // --- 工具格式化 ---
                 const formatDateOnly = (dateStr) => dateStr ? dateStr.split('T')[0] : '-';
 
                 const guessEmoji = (name, type) => {
                     const n = name.toLowerCase();
-                    if(n.includes('netflix') || n.includes('爱奇艺') || n.includes('影视')) return '🍿';
-                    if(n.includes('流量') || n.includes('宽带')) return '📶';
+                    if(n.includes('netflix') || n.includes('爱奇艺') || n.includes('影视') || n.includes('视频')) return '🍿';
+                    if(n.includes('流量') || n.includes('宽带') || n.includes('话费')) return '📶';
                     if(n.includes('云') || n.includes('网盘') || n.includes('icloud')) return '☁️';
-                    if(n.includes('健身') || n.includes('gym')) return '🏋️';
-                    if(n.includes('杂志') || n.includes('阅读')) return '📖';
+                    if(n.includes('健身') || n.includes('gym') || n.includes('跑')) return '🏋️';
+                    if(n.includes('阅读') || n.includes('书') || n.includes('杂志')) return '📖';
+                    if(n.includes('电') || n.includes('水') || n.includes('燃气')) return '⚡';
+                    if(n.includes('gpt') || n.includes('ai') || n.includes('api')) return '🤖';
                     return type === 'sub' ? '💳' : '📊';
                 };
 
@@ -370,8 +457,8 @@
 
                 return {
                     items, modals, itemForm, recordForm, currentTargetItem,
-                    openItemModal, saveItem, deleteItem, openRecordModal, saveRecord,
-                    getDaysLeft, getQuotaPercent, getQuotaColor, formatDateOnly, guessEmoji
+                    openItemModal, duplicateItem, saveItem, deleteItem, openRecordModal, saveRecord, applyAutoDeduct, calculateExpireDate,
+                    getDaysLeft, getCardClass, formatDateOnly, guessEmoji
                 };
             }
         }).mount('#app');
