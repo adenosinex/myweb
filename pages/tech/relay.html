@@ -103,7 +103,7 @@ async function uploadText() {
     btn.disabled = true;
 
     try {
-        const res = await fetch(`/api/kv/${code}`, {
+        const res = await fetch(`/api2/kv/${code}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -142,7 +142,7 @@ async function uploadText() {
             const code = document.getElementById('receiveCode').value.trim();
             if (!code) return alert("请输入提取码");
 
-            const res = await fetch(`/api/kv/${code}`);
+            const res = await fetch(`/api2/kv/${code}`);
             if (res.ok) {
                 const data = await res.json();
                 document.getElementById('receiveText').value = data.content;

@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DNS Panel</title>
+</head>
+
+<body>
+
+<h2>DNS Control Panel</h2>
+
+<table border="1" cellpadding="6">
+<thead>
+<tr>
+<th>Name</th>
+<th>LAN IP</th>
+<th>IPv4</th>
+<th>IPv6</th>
+<th>Status</th>
+<th>Last Seen</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody id="tb"></tbody>
+</table>
+
+<script>
+
+async function load(){
+
+    const res = await fetch("/dns/api/status")
+    const data = await res.json()
+
+    const tb = document.getElementById("tb")
+    tb.innerHTML = ""
+
+    for(const [name, h] of Object.entries(data)){
+
+        const tr = document.createElement("tr")
+
+        tr.innerHTML = `
+        <td>${name}</td>
+        <td>${h.lan_ipv4}</td>
+
+        <td>${h.ipv4dns}</td>
+        <td>${h.ipv6dns}</td>
+
+        <td>
+            IPv4:${h.ipv4_ok ? "🟢":"🔴"}<br>
+            IPv6:${h.ipv6_ok ? "🟢":"🔴"}<br>
+            DNS:${h.dns_ok ? "🟢":"🔴"}<br>
+            v6DNS:${h.ipv6_dns_ok ? "🟢":"🔴"}
+        </td>
+
+        <td>${h.last_seen ? new Date(h.last_seen*1000).toLocaleTimeString() : "-"}</td>
+
+        <td>
+            <input id="ip_${name}">
+            <button onclick="upd('${h.lan_ipv4}')">update</button>
+        </td>
+        `
+
+        tb.appendChild(tr)
+    }
+}
+
+async function upd(lan){
+
+    const ip = document.querySelector("input").value
+
+    await fetch("/dns/manual_update", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+            lan_ipv4: lan,
+            ipv6: ip
+        })
+    })
+
+    load()
+}
+
+load()
+
+</script>
+
+</body>
+</html>

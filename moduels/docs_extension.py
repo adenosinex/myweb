@@ -3,14 +3,14 @@ import re
 import json
 import markdown
 import requests
-from datetime import datetime
+from datetime import datetime 
 from flask import Blueprint, jsonify, render_template_string
 
 
 # ====================================================
 # [工具类] WeatherService (全量接口恢复 + 内存缓存)
-# ====================================================
-class WeatherService:
+# ============================ ========================
+class WeatherService: 
     def __init__(self):
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",

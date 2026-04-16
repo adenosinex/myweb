@@ -19,28 +19,74 @@
         .markdown-body p { margin-bottom: 0.5em; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 p-4 md:p-6 font-sans">
     <div id="app" class="mx-auto" style="max-width: 1000px;" v-cloak>
-        <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <h2 class="text-2xl font-bold flex items-center gap-2">损耗-使用-配件-事故模型-资产与生命周期管理</h2>
-            <div class="flex gap-2">
-                <button @click="exportCSV" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导出备份</button>
-                <button @click="$refs.fileInput.click()" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导入恢复</button>
+        <header class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+            <h2 class="text-2xl font-bold flex items-center gap-2">资产与生命周期管理中枢</h2>
+            <div class="flex gap-2 flex-wrap justify-end">
+                <button @click="exportCSVView" class="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded shadow-sm text-sm transition-colors">📊 导出 CSV 报表</button>
+                <div class="w-px bg-slate-300 mx-1"></div>
+                <button @click="exportJSONBackup" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导出 JSON 备份</button>
+                <button @click="$refs.fileInput.click()" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-sm">导入 JSON 恢复</button>
                 <input type="file" ref="fileInput" accept=".json" class="hidden" @change="importJSON">
+                <div class="w-px bg-slate-300 mx-1"></div>
                 <button @click="openItemModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded shadow-sm text-sm">+ 录入新资产</button>
             </div>
         </header>
 
-        <div v-if="items.length === 0" class="text-center text-slate-400 py-20 bg-white rounded-xl shadow-sm border border-slate-200">
-            暂无资产记录。点击上方按钮开始录入你的第一件高价值物品。
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div class="text-xs text-slate-500 mb-1">资金总投入 (买入+附加)</div>
+                <div class="text-xl font-bold text-slate-800">¥{{ globalStats.totalInvest }}</div>
+                <div class="text-[10px] text-slate-400 mt-2">共 {{ items.length }} 件追踪中资产</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div class="text-xs text-slate-500 mb-1">当前总净值 (随时变现)</div>
+                <div class="text-xl font-bold text-slate-800">¥{{ globalStats.totalNetValue }}</div>
+                <div class="text-[10px] text-slate-400 mt-2">按最新二手估价计算</div>
+            </div>
+            <div @click="openBreakdownModal('tco')" class="bg-white p-4 rounded-xl border-2 border-transparent hover:border-blue-300 shadow-sm flex flex-col justify-between relative group cursor-pointer transition-colors">
+                <div class="text-xs text-slate-500 mb-1 flex justify-between items-center">
+                    <span>累计真实 TCO</span>
+                    <span class="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">点看明细</span>
+                </div>
+                <div class="text-xl font-bold text-blue-600">¥{{ globalStats.totalTCO }}</div>
+                <div class="text-[10px] text-slate-500 mt-2 border-t pt-1 border-slate-100">
+                    近一年流血: <span class="font-bold text-blue-600">¥{{ globalStats.globalDailyTCO }}</span>/日
+                </div>
+            </div>
+            <div @click="openBreakdownModal('usage')" class="bg-white p-4 rounded-xl border-2 border-transparent hover:border-red-300 shadow-sm flex flex-col justify-between relative group cursor-pointer transition-colors">
+                <div class="text-xs text-slate-500 mb-1 flex justify-between items-center">
+                    <span>累计运行与事故</span>
+                    <span class="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">点看明细</span>
+                </div>
+                <div class="text-xl font-bold text-red-500">¥{{ globalStats.totalUsage }}</div>
+                <div class="text-[10px] text-slate-500 mt-2 border-t pt-1 border-slate-100">
+                    近一年开销: <span class="font-bold text-red-500">¥{{ globalStats.globalDailyUsage }}</span>/日
+                </div>
+            </div>
         </div>
 
-        <div class="grid gap-6 grid-cols-1 md:grid-cols-2">
-            <div v-for="item in items" :key="item.id" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+        <div class="flex gap-2 overflow-x-auto no-scrollbar mb-6 pb-1 border-b border-slate-200">
+            <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+                class="px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap border-b-2"
+                :class="currentTab === tab.id ? 'border-slate-800 text-slate-800' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'">
+                {{ tab.name }} <span class="ml-1 text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{{ getCategoryCount(tab.id) }}</span>
+            </button>
+        </div>
+
+        <div v-if="filteredItems.length === 0" class="text-center text-slate-400 py-20 bg-white rounded-xl shadow-sm border border-slate-200">
+            当前分类下暂无资产记录。
+        </div>
+
+        <div class="grid gap-6 grid-cols-1 md:grid-cols-2 items-start">
+            <div v-for="item in filteredItems" :key="item.id" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
                 
                 <div class="p-5 flex gap-4 relative">
                     <span :class="getStatusColor(item.status)" class="absolute top-4 right-4 text-[10px] px-2 py-0.5 rounded-full font-bold border">
@@ -74,53 +120,49 @@
                 </div>
 
                 <div class="border-b border-slate-100">
-                    <div class="flex justify-between items-start px-5 py-3 hover:bg-slate-50 transition-colors group">
+                    <div class="flex justify-between items-start px-5 py-3 hover:bg-slate-50 transition-colors group cursor-pointer" @click="toggleChart(item)">
                         <div class="flex flex-col gap-1.5 flex-grow">
-                            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1">📈 财务与运行成本分析</span>
-                            <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
-                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-slate-700">评估: ¥{{ getLatestPrice(item) }}</span>
-                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-blue-700 font-medium">TCO: ¥{{ calculateTCO(item) }} (¥{{ getDailyTCO(item) }}/日)</span>
-                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-red-600 font-medium">使用: ¥{{ getUsageCost(item) }} (¥{{ getDailyUsage(item) }}/日)</span>
+                            <span class="text-xs font-semibold text-slate-600 flex items-center gap-1">📈 核心数据与折合日常花费</span>
+                            <div class="flex flex-wrap items-center gap-1.5 text-[10px]" @click.stop>
+                                <span class="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 cursor-text select-text text-slate-700">估价: ¥{{ getLatestPrice(item) }}</span>
+                                <span class="bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 cursor-text select-text text-blue-700 font-medium">近一年TCO: ¥{{ getAssetTtmStats(item).dailyTco.toFixed(2) }}/日</span>
+                                <span class="bg-red-50 px-1.5 py-0.5 rounded border border-red-200 cursor-text select-text text-red-600 font-medium">近一年运行: ¥{{ getAssetTtmStats(item).dailyUsage.toFixed(2) }}/日</span>
                             </div>
                         </div>
-                        <button @click="toggleChart(item)" class="text-slate-400 hover:text-slate-700 text-xs py-1 px-2 -mr-2 focus:outline-none shrink-0 self-center">
+                        <button class="text-slate-400 hover:text-slate-700 text-xs py-1 px-2 -mr-2 focus:outline-none shrink-0 self-center">
                             {{ expandedCharts[item.id] ? '▲ 收起' : '▼ 展开' }}
                         </button>
                     </div>
                     
                     <div v-if="expandedCharts[item.id]" class="px-5 pb-3 bg-white">
-                        <div class="grid grid-cols-4 gap-2 mb-3 text-center border-b border-slate-50 pb-3">
-                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help select-text">
-                                <div class="text-[10px] text-slate-400">硬件附加投入</div>
-                                <div class="text-xs font-bold text-slate-700">¥{{ getHardwareCost(item) }}</div>
-                                <div class="hidden group-hover:block absolute z-10 w-32 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
-                                    仅含：损耗维保、配件改装
-                                </div>
-                            </div>
-                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help select-text">
-                                <div class="text-[10px] text-slate-400">真实 TCO</div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-center border-b border-slate-50 pb-3">
+                            <div class="bg-slate-50 p-1.5 rounded relative group select-text border border-slate-100 flex flex-col justify-center">
+                                <div class="text-[10px] text-slate-500 mb-0.5">终生真实 TCO</div>
                                 <div class="text-xs font-bold text-slate-700">¥{{ calculateTCO(item) }}</div>
-                                <div class="hidden group-hover:block absolute z-10 w-40 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
-                                    买入价 + 硬件附加投入 - 当前评估
-                                </div>
+                                <div class="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-200">均摊: ¥{{ getDailyTCO(item) }}/日</div>
                             </div>
-                            <div class="bg-slate-50 p-1.5 rounded relative group cursor-help select-text">
-                                <div class="text-[10px] text-slate-400">运行与事故投入</div>
+                            <div class="bg-blue-50 p-1.5 rounded relative group select-text border border-blue-100 flex flex-col justify-center">
+                                <div class="text-[10px] text-blue-600 font-bold mb-0.5">🎯 近一年 TCO</div>
+                                <div class="text-xs font-bold text-blue-800">¥{{ getAssetTtmStats(item).tco.toFixed(2) }}</div>
+                                <div class="text-[10px] text-blue-500 mt-1 pt-1 border-t border-blue-200">流血: ¥{{ getAssetTtmStats(item).dailyTco.toFixed(2) }}/日</div>
+                            </div>
+                            <div class="bg-slate-50 p-1.5 rounded relative group select-text border border-slate-100 flex flex-col justify-center">
+                                <div class="text-[10px] text-slate-500 mb-0.5">终生运行与事故</div>
                                 <div class="text-xs font-bold text-slate-700">¥{{ getUsageCost(item) }}</div>
-                                <div class="hidden group-hover:block absolute z-10 w-32 p-2 text-left bg-slate-800 text-white text-[10px] rounded -top-10 left-1/2 -translate-x-1/2">
-                                    仅含：日常使用、事故维修
-                                </div>
+                                <div class="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-200">均摊: ¥{{ getDailyUsage(item) }}/日</div>
                             </div>
-                            <div class="bg-slate-50 p-1.5 rounded select-text">
-                                <div class="text-[10px] text-slate-400">贬值/出手建议</div>
-                                <div class="text-xs font-bold truncate" :class="getPlateauStatus(item).color" :title="getPlateauStatus(item).text">{{ getPlateauStatus(item).text }}</div>
+                            <div class="bg-red-50 p-1.5 rounded relative group select-text border border-red-100 flex flex-col justify-center">
+                                <div class="text-[10px] text-red-600 font-bold mb-0.5">🔥 近一年运行</div>
+                                <div class="text-xs font-bold text-red-800">¥{{ getAssetTtmStats(item).usage.toFixed(2) }}</div>
+                                <div class="text-[10px] text-red-500 mt-1 pt-1 border-t border-red-200">花销: ¥{{ getAssetTtmStats(item).dailyUsage.toFixed(2) }}/日</div>
                             </div>
                         </div>
 
-                        <div class="flex justify-center mb-2">
+                        <div class="flex justify-between items-center mb-2 px-1">
+                            <div class="text-[10px] text-slate-500">平台期预测: <span class="font-bold" :class="getPlateauStatus(item).color">{{ getPlateauStatus(item).text }}</span></div>
                             <div class="inline-flex bg-slate-100 rounded p-1 gap-1">
-                                <button @click="switchChartMode(item, 'net')" :class="chartMode[item.id] !== 'tco' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'" class="px-3 py-1 text-xs font-medium rounded transition-colors">净值折线图</button>
-                                <button @click="switchChartMode(item, 'tco')" :class="chartMode[item.id] === 'tco' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'" class="px-3 py-1 text-xs font-medium rounded transition-colors">硬件TCO走势</button>
+                                <button @click="switchChartMode(item, 'net')" :class="chartMode[item.id] !== 'tco' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'" class="px-2.5 py-0.5 text-[10px] font-medium rounded transition-colors">净值折线图</button>
+                                <button @click="switchChartMode(item, 'tco')" :class="chartMode[item.id] === 'tco' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'" class="px-2.5 py-0.5 text-[10px] font-medium rounded transition-colors">硬件TCO走势</button>
                             </div>
                         </div>
 
@@ -153,8 +195,8 @@
 
                 <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center mt-auto">
                     <div class="flex gap-2">
-                        <button @click="openRecordModal(item, 'event')" class="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-xs font-medium">添加记录/开销</button>
-                        <button @click="openRecordModal(item, 'price')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium">更新估价</button>
+                        <button @click="openRecordModal(item, 'event')" class="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-xs font-medium transition-colors">记开销</button>
+                        <button @click="openRecordModal(item, 'price')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium transition-colors">新估价</button>
                     </div>
                     <div class="flex gap-2">
                         <button v-if="item.receiptImage" @click="zoomImage(item.receiptImage)" class="px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-100 rounded text-xs text-slate-600">发票</button>
@@ -165,13 +207,49 @@
             </div>
         </div>
 
+        <div v-if="modals.breakdown" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex justify-center items-center z-[55] p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 class="text-lg font-bold text-slate-800">{{ breakdownType === 'tco' ? '🩸 近一年 TCO 每日流血榜' : '🔥 近一年使用开销榜' }}</h3>
+                    <button @click="modals.breakdown = false" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+                </div>
+                <div class="overflow-y-auto p-0 relative">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-white text-xs text-slate-500 sticky top-0 border-b border-slate-200 z-10 shadow-sm">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">资产名称</th>
+                                <th class="px-4 py-3 font-medium text-right">近一年总花费</th>
+                                <th class="px-4 py-3 font-medium text-right">折合每日</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="(b, idx) in breakdownList" :key="idx" class="hover:bg-slate-50 transition-colors">
+                                <td class="px-4 py-3 text-slate-800 font-medium truncate max-w-[140px]" :title="b.name">
+                                    <span class="text-xs text-slate-400 mr-1">{{ idx + 1 }}.</span> {{ b.name }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-slate-600">¥{{ breakdownType === 'tco' ? b.tco.toFixed(2) : b.usage.toFixed(2) }}</td>
+                                <td class="px-4 py-3 text-right font-bold" :class="breakdownType === 'tco' ? 'text-blue-600' : 'text-red-600'">
+                                    ¥{{ breakdownType === 'tco' ? b.dailyTco.toFixed(2) : b.dailyUsage.toFixed(2) }}
+                                </td>
+                            </tr>
+                            <tr v-if="breakdownList.length === 0">
+                                <td colspan="3" class="px-4 py-12 text-center text-slate-400 text-sm">过去一年暂无产生此类开销的资产。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-3 border-t border-slate-100 bg-slate-50 text-center text-[10px] text-slate-500">
+                    注：采用 TTM 插值算法动态测算，非满一年的新资产按实际天数折合每日。
+                </div>
+            </div>
+        </div>
+
         <div v-if="modals.item" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex justify-center items-start z-40 p-4 overflow-y-auto" @paste="handlePaste">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8 flex flex-col">
                 <div class="p-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white rounded-t-xl z-10">
                     <h3 class="text-xl font-bold">{{ itemForm.id ? '编辑资产基础属性' : '录入新资产' }}</h3>
                     <button @click="modals.item = false" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
                 </div>
-                
                 <div class="p-6 space-y-5 overflow-y-auto">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div class="space-y-4">
@@ -180,6 +258,12 @@
                                 <input v-model="itemForm.name" type="text" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none">
                             </div>
                             <div class="grid grid-cols-2 gap-3">
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-semibold mb-1 text-slate-700">所属分类</label>
+                                    <select v-model="itemForm.baseCategory" class="w-full p-2 border rounded-lg outline-none bg-white">
+                                        <option v-for="tab in tabs.filter(t=>t.id!=='all')" :value="tab.id">{{ tab.name }}</option>
+                                    </select>
+                                </div>
                                 <div>
                                     <label class="block text-sm font-semibold mb-1 text-slate-700">购入日期</label>
                                     <input v-model="itemForm.purchaseDate" type="date" class="w-full p-2 border rounded-lg outline-none">
@@ -205,7 +289,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold mb-1 text-slate-700">资产主图 <span class="text-xs font-normal text-slate-400 ml-2">(支持直接粘贴)</span></label>
@@ -232,7 +315,6 @@
                         </div>
                     </div>
                 </div>
-                
                 <div class="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 rounded-b-xl">
                     <button @click="modals.item = false" class="px-5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50">取消</button>
                     <button @click="saveItem" class="px-5 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 shadow-sm">保存</button>
@@ -297,23 +379,32 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
 
         createApp({
             setup() {
                 const API_URL = '/tracker_data/sync/assets';
                 const items = ref([]);
-                const modals = reactive({ item: false, record: false });
+                const modals = reactive({ item: false, record: false, breakdown: false });
                 const currentTargetItem = ref(null);
                 const zoomedImageSrc = ref('');
                 
+                const breakdownType = ref('tco');
                 const editingDesc = reactive({});
                 const expandedCharts = reactive({});
                 const chartMode = reactive({}); 
                 const chartsRefs = reactive({});
                 const chartInstances = {};
 
-                const itemForm = reactive({ id: '', name: '', purchaseDate: '', purchasePrice: 0, warrantyMonths: 0, status: 'active', description: '', image: '', receiptImage: '' });
+                const tabs = [
+                    { id: 'all', name: '全部分类' },
+                    { id: 'vehicle', name: '载具及户外' },
+                    { id: 'productivity', name: '生产力设备' },
+                    { id: 'entertainment', name: '生活与娱乐' }
+                ];
+                const currentTab = ref('all');
+
+                const itemForm = reactive({ id: '', name: '', baseCategory: 'productivity', purchaseDate: '', purchasePrice: 0, warrantyMonths: 0, status: 'active', description: '', image: '', receiptImage: '' });
                 const recordForm = reactive({ id: '', type: 'price', date: '', value: '', note: '', cost: '', category: 'wear' });
 
                 const generateId = (prefix) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -323,7 +414,17 @@
                         const res = await fetch(API_URL);
                         if (res.status === 403) return window.location.href = '/login';
                         const data = await res.json();
-                        items.value = data[0]?.items || [];
+                        items.value = (data[0]?.items || []).map(i => {
+                            if (i.history && i.purchaseDate) {
+                                i.history.forEach(h => {
+                                    if (h.type === 'price' && h.note === '购入价格') {
+                                        h.date = new Date(i.purchaseDate).toISOString();
+                                    }
+                                });
+                                i.history.sort((a, b) => new Date(b.date) - new Date(a.date));
+                            }
+                            return { ...i, baseCategory: i.baseCategory || 'productivity' };
+                        });
                     } catch (err) {
                         items.value = [];
                     }
@@ -337,6 +438,148 @@
                             body: JSON.stringify({ items: items.value })
                         });
                     } catch (e) { console.error("同步失败", e); }
+                };
+
+                const getLatestPrice = (item, formatted = true) => {
+                    const prices = (item.history || []).filter(h => h.type === 'price' && h.note !== '购入价格').sort((a, b) => new Date(b.date) - new Date(a.date));
+                    if (prices.length > 0) return formatted ? prices[0].value.toLocaleString() : prices[0].value;
+                    return formatted ? (item.purchasePrice ? item.purchasePrice.toLocaleString() : '-') : (item.purchasePrice || 0);
+                };
+
+                const filteredItems = computed(() => {
+                    let list = currentTab.value === 'all' ? items.value : items.value.filter(i => i.baseCategory === currentTab.value);
+                    return list.slice().sort((a, b) => {
+                        const valA = getLatestPrice(a, false) || 0;
+                        const valB = getLatestPrice(b, false) || 0;
+                        return valB - valA;
+                    });
+                });
+
+                const getCategoryCount = (id) => {
+                    if (id === 'all') return items.value.length;
+                    return items.value.filter(i => i.baseCategory === id).length;
+                };
+
+                const getAssetTtmStats = (item) => {
+                    const now = new Date();
+                    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+
+                    let ttmHwCost = 0, ttmUsgCost = 0;
+                    const allPrices = [];
+
+                    if (item.purchaseDate && item.purchasePrice) {
+                        allPrices.push({ date: new Date(item.purchaseDate).getTime(), value: Number(item.purchasePrice) });
+                    }
+                    (item.history || []).forEach(h => {
+                        if (h.type === 'event' && h.cost && new Date(h.date) >= oneYearAgo) {
+                            const cat = h.category || 'wear';
+                            if (cat === 'wear' || cat === 'accessory') ttmHwCost += Number(h.cost);
+                            if (cat === 'usage' || cat === 'accident') ttmUsgCost += Number(h.cost);
+                        }
+                        if (h.type === 'price' && h.note !== '购入价格') {
+                            allPrices.push({ date: new Date(h.date).getTime(), value: Number(h.value) });
+                        }
+                    });
+
+                    allPrices.sort((a, b) => a.date - b.date);
+
+                    const netVal = getLatestPrice(item, false);
+                    const currentNet = typeof netVal === 'number' ? netVal : 0;
+                    let startPrice = currentNet; 
+
+                    if (allPrices.length > 0) {
+                        const t365 = oneYearAgo.getTime();
+                        if (t365 <= allPrices[0].date) {
+                            startPrice = allPrices[0].value;
+                        } else if (t365 >= allPrices[allPrices.length - 1].date) {
+                            startPrice = allPrices[allPrices.length - 1].value;
+                        } else {
+                            for (let i = 0; i < allPrices.length - 1; i++) {
+                                if (allPrices[i].date <= t365 && allPrices[i+1].date >= t365) {
+                                    const pA = allPrices[i], pB = allPrices[i+1];
+                                    if (pA.date === pB.date) {
+                                        startPrice = pB.value;
+                                    } else {
+                                        const ratio = (t365 - pA.date) / (pB.date - pA.date);
+                                        startPrice = pA.value + (pB.value - pA.value) * ratio;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    const ttmTCO = (startPrice - currentNet) + ttmHwCost;
+                    
+                    let days = 365;
+                    const pDate = item.purchaseDate ? new Date(item.purchaseDate).getTime() : 0;
+                    if (pDate && pDate > oneYearAgo.getTime()) {
+                        days = Math.max(1, Math.ceil((now.getTime() - pDate) / 86400000));
+                    }
+
+                    return {
+                        tco: ttmTCO,
+                        usage: ttmUsgCost,
+                        dailyTco: (ttmTCO / days),
+                        dailyUsage: (ttmUsgCost / days)
+                    };
+                };
+
+                const globalStats = computed(() => {
+                    let totalInvest = 0, totalNetValue = 0, totalTCO = 0, totalUsage = 0;
+                    let globalTtmTCO = 0, globalTtmUsage = 0;
+                    let breakdown = [];
+
+                    items.value.forEach(item => {
+                        const pPrice = item.purchasePrice || 0;
+                        const hwCost = Number(getHardwareCost(item).replace(/,/g, ''));
+                        const usgCost = Number(getUsageCost(item).replace(/,/g, ''));
+                        const netVal = getLatestPrice(item, false);
+                        const currentNet = typeof netVal === 'number' ? netVal : 0;
+                        
+                        totalInvest += (pPrice + hwCost);
+                        totalNetValue += currentNet;
+                        totalTCO += (pPrice + hwCost - currentNet);
+                        totalUsage += usgCost;
+
+                        const ttm = getAssetTtmStats(item);
+                        globalTtmTCO += ttm.tco;
+                        globalTtmUsage += ttm.usage;
+
+                        if (ttm.tco > 0 || ttm.usage > 0) {
+                            breakdown.push({
+                                name: item.name,
+                                tco: ttm.tco,
+                                dailyTco: ttm.dailyTco,
+                                usage: ttm.usage,
+                                dailyUsage: ttm.dailyUsage
+                            });
+                        }
+                    });
+
+                    return {
+                        totalInvest: totalInvest.toLocaleString(),
+                        totalNetValue: totalNetValue.toLocaleString(),
+                        totalTCO: totalTCO.toLocaleString(),
+                        totalUsage: totalUsage.toLocaleString(),
+                        globalDailyTCO: (globalTtmTCO / 365).toFixed(2),
+                        globalDailyUsage: (globalTtmUsage / 365).toFixed(2),
+                        breakdown
+                    };
+                });
+
+                const breakdownList = computed(() => {
+                    let list = [...globalStats.value.breakdown];
+                    if (breakdownType.value === 'tco') {
+                        return list.filter(i => i.tco !== 0).sort((a, b) => b.dailyTco - a.dailyTco);
+                    } else {
+                        return list.filter(i => i.usage !== 0).sort((a, b) => b.dailyUsage - a.dailyUsage);
+                    }
+                });
+
+                const openBreakdownModal = (type) => {
+                    breakdownType.value = type;
+                    modals.breakdown = true;
                 };
 
                 const renderMarkdown = (text) => {
@@ -369,8 +612,9 @@
                 const openItemModal = (item = null) => {
                     if (item) {
                         Object.assign(itemForm, JSON.parse(JSON.stringify(item)));
+                        if (!itemForm.baseCategory) itemForm.baseCategory = 'productivity';
                     } else {
-                        Object.assign(itemForm, { id: '', name: '', purchaseDate: new Date().toISOString().split('T')[0], purchasePrice: '', warrantyMonths: '', status: 'active', description: '', image: '', receiptImage: '' });
+                        Object.assign(itemForm, { id: '', name: '', baseCategory: currentTab.value === 'all' ? 'productivity' : currentTab.value, purchaseDate: new Date().toISOString().split('T')[0], purchasePrice: '', warrantyMonths: '', status: 'active', description: '', image: '', receiptImage: '' });
                     }
                     modals.item = true;
                 };
@@ -381,7 +625,15 @@
                     
                     if (targetData.id) {
                         const idx = items.value.findIndex(i => i.id === targetData.id);
-                        if (idx !== -1) items.value[idx] = { ...items.value[idx], ...targetData };
+                        if (idx !== -1) {
+                            items.value[idx] = { ...items.value[idx], ...targetData };
+                            const pEvent = items.value[idx].history.find(h => h.note === '购入价格' && h.type === 'price');
+                            if (pEvent) {
+                                pEvent.date = new Date(targetData.purchaseDate).toISOString();
+                                pEvent.value = targetData.purchasePrice;
+                                items.value[idx].history.sort((a, b) => new Date(b.date) - new Date(a.date));
+                            }
+                        }
                     } else {
                         items.value.unshift({ ...targetData, id: generateId('asset'), history: [] });
                         if (targetData.purchasePrice > 0 && targetData.purchaseDate) {
@@ -471,17 +723,10 @@
                     return map[cat] || map.wear;
                 };
 
-                const getLatestPrice = (item, formatted = true) => {
-                    const prices = (item.history || []).filter(h => h.type === 'price').sort((a, b) => new Date(b.date) - new Date(a.date));
-                    if (prices.length > 0) return formatted ? prices[0].value.toLocaleString() : prices[0].value;
-                    return formatted ? (item.purchasePrice ? item.purchasePrice.toLocaleString() : '-') : (item.purchasePrice || 0);
-                };
-
                 const getEvents = (item) => {
                     return (item.history || []).filter(h => h.type === 'event').sort((a, b) => new Date(b.date) - new Date(a.date));
                 };
 
-                // 仅计算硬件相关投入 (损耗维保 + 配件)
                 const getHardwareCost = (item) => {
                     const total = (item.history || []).reduce((sum, h) => {
                         const cat = h.category || 'wear'; 
@@ -491,7 +736,6 @@
                     return total.toLocaleString();
                 };
 
-                // 计算日常与事故成本
                 const getUsageCost = (item) => {
                     const total = (item.history || []).reduce((sum, h) => {
                         const cat = h.category || 'wear'; 
@@ -501,7 +745,6 @@
                     return total.toLocaleString();
                 };
 
-                // TCO = 买入价 + 硬件相关投入 - 当前残值
                 const calculateTCO = (item, formatted = true) => {
                     const currentVal = getLatestPrice(item, false);
                     if (typeof currentVal !== 'number' || !item.purchasePrice) return '-';
@@ -512,7 +755,7 @@
 
                 const getDaysHeld = (item) => {
                     if (!item.purchaseDate) return 1;
-                    const priceRecords = (item.history || []).filter(h => h.type === 'price');
+                    const priceRecords = (item.history || []).filter(h => h.type === 'price' && h.note !== '购入价格');
                     let latestDate = new Date(); 
                     if (priceRecords.length > 0) {
                         const latestPriceRecord = priceRecords.reduce((latest, current) => new Date(current.date) > new Date(latest.date) ? current : latest);
@@ -536,7 +779,11 @@
                 };
 
                 const getPlateauStatus = (item) => {
-                    const prices = (item.history || []).filter(h => h.type === 'price').sort((a, b) => new Date(a.date) - new Date(b.date));
+                    const prices = (item.history || []).filter(h => h.type === 'price' && h.note !== '购入价格').sort((a, b) => new Date(a.date) - new Date(b.date));
+                    if (item.purchaseDate && item.purchasePrice) {
+                        prices.push({ date: new Date(item.purchaseDate).toISOString(), value: item.purchasePrice });
+                        prices.sort((a, b) => new Date(a.date) - new Date(b.date));
+                    }
                     if (prices.length < 3) return { text: '数据不足', color: 'text-slate-400' };
                     
                     const last = prices[prices.length - 1];
@@ -598,11 +845,11 @@
                 const zoomImage = (src) => { zoomedImageSrc.value = src; };
 
                 const hasEnoughChartData = (item) => {
-                    const count = (item.history || []).filter(h => h.type === 'price').length;
+                    const count = (item.history || []).filter(h => h.type === 'price' && h.note !== '购入价格').length;
                     return (count + (item.purchaseDate && item.purchasePrice ? 1 : 0)) >= 2;
                 };
 
-const renderChart = (item) => {
+                const renderChart = (item) => {
                     const dom = chartsRefs[item.id];
                     if (!dom) return;
 
@@ -617,29 +864,29 @@ const renderChart = (item) => {
                         return;
                     }
 
-                    let priceData = (item.history || []).filter(h => h.type === 'price').map(h => ({ date: h.date, value: h.value }));
+                    const dateMap = new Map();
                     if (item.purchaseDate && item.purchasePrice) {
-                        const pd = new Date(item.purchaseDate).toISOString().split('T')[0];
-                        if (!priceData.some(p => p.date.startsWith(pd))) {
-                            priceData.push({ date: new Date(item.purchaseDate).toISOString(), value: item.purchasePrice });
-                        }
+                        dateMap.set(new Date(item.purchaseDate).toISOString().split('T')[0], { timestamp: new Date(item.purchaseDate).getTime(), value: item.purchasePrice });
                     }
-                    priceData.sort((a, b) => new Date(a.date) - new Date(b.date));
+                    (item.history || []).filter(h => h.type === 'price' && h.note !== '购入价格').forEach(h => {
+                        const dtStr = new Date(h.date).toISOString().split('T')[0];
+                        const ts = new Date(h.date).getTime();
+                        if (!dateMap.has(dtStr) || ts > dateMap.get(dtStr).timestamp) {
+                            dateMap.set(dtStr, { timestamp: ts, value: h.value });
+                        }
+                    });
+                    
+                    let priceData = Array.from(dateMap.values()).sort((a, b) => a.timestamp - b.timestamp);
 
-                    // 修复：补齐最新的事件时间节点，防止滞后开销被过滤
                     if (priceData.length > 0) {
-                        const lastPriceObj = priceData[priceData.length - 1];
-                        let latestHistoryDate = lastPriceObj.date;
-                        
+                        const lastTs = priceData[priceData.length - 1].timestamp;
+                        let maxEventTs = lastTs;
                         (item.history || []).forEach(h => {
-                            if (new Date(h.date) > new Date(latestHistoryDate)) {
-                                latestHistoryDate = h.date;
-                            }
+                            const hTs = new Date(h.date).getTime();
+                            if (hTs > maxEventTs) maxEventTs = hTs;
                         });
-
-                        // 如果存在晚于最后一次估价的记录，继承最后估价生成新节点
-                        if (latestHistoryDate !== lastPriceObj.date) {
-                            priceData.push({ date: latestHistoryDate, value: lastPriceObj.value });
+                        if (maxEventTs > lastTs + 86400000) { 
+                            priceData.push({ timestamp: maxEventTs, value: priceData[priceData.length - 1].value });
                         }
                     }
 
@@ -649,32 +896,34 @@ const renderChart = (item) => {
                     let seriesName = mode === 'net' ? '净值' : '硬件TCO';
 
                     if (mode === 'net') {
-                        seriesData = priceData.map(d => d.value);
+                        seriesData = priceData.map(d => [d.timestamp, d.value]);
                     } else {
-                        // TCO走势：仅累加 wear 和 accessory
                         seriesData = priceData.map(p => {
-                            const dt = new Date(p.date);
                             const cumulativeHwCost = (item.history || [])
                                 .filter(h => {
                                     const cat = h.category || 'wear';
-                                    return h.type === 'event' && h.cost && (cat === 'wear' || cat === 'accessory') && new Date(h.date) <= dt;
+                                    return h.type === 'event' && h.cost && (cat === 'wear' || cat === 'accessory') && new Date(h.date).getTime() <= p.timestamp;
                                 })
                                 .reduce((sum, h) => sum + Number(h.cost), 0);
-                            return (item.purchasePrice || 0) + cumulativeHwCost - p.value;
+                            return [p.timestamp, (item.purchasePrice || 0) + cumulativeHwCost - p.value];
                         });
                     }
 
                     chart.setOption({
                         grid: { top: 10, bottom: 20, left: 40, right: 10 },
-                        tooltip: { trigger: 'axis', formatter: `{b}<br/>${seriesName}: ¥{c}` },
+                        tooltip: { 
+                            trigger: 'axis',
+                            formatter: function(params) {
+                                const dt = new Date(params[0].value[0]);
+                                const dateStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+                                return `${dateStr}<br/>${seriesName}: ¥${params[0].value[1].toLocaleString()}`;
+                            }
+                        },
                         xAxis: {
-                            type: 'category',
-                            data: priceData.map(d => {
-                                const dt = new Date(d.date);
-                                return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
-                            }),
+                            type: 'time',
                             axisLine: { lineStyle: { color: '#e2e8f0' } },
-                            axisLabel: { color: '#94a3b8', fontSize: 10 }
+                            axisLabel: { color: '#94a3b8', fontSize: 10, formatter: '{yyyy}-{MM}' },
+                            splitLine: { show: false }
                         },
                         yAxis: { 
                             type: 'value', min: 'dataMin', 
@@ -683,7 +932,9 @@ const renderChart = (item) => {
                         },
                         series: [{
                             data: seriesData,
-                            type: 'line', smooth: true, symbol: 'circle', symbolSize: 6,
+                            type: 'line', 
+                            smooth: false, 
+                            symbol: 'circle', symbolSize: 6,
                             itemStyle: { color: chartColor }, lineStyle: { color: chartColor, width: 2 },
                             areaStyle: {
                                 color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -694,6 +945,7 @@ const renderChart = (item) => {
                         }]
                     });
                 };
+
                 window.addEventListener('resize', () => {
                     Object.values(chartInstances).forEach(chart => chart.resize());
                 });
@@ -720,12 +972,34 @@ const renderChart = (item) => {
                     return '📦';
                 };
 
-                const exportCSV = () => {
+                const exportCSVView = () => {
+                    let csvContent = '\uFEFF'; 
+                    csvContent += '资产名称,所属分类,状态,购入日期,买入价格(¥),当前估价(¥),终生TCO(¥),近一年TCO流血(¥),近一年日均TCO(¥),近一年运行开销(¥),近一年日均运行(¥)\n';
+                    
+                    filteredItems.value.forEach(item => {
+                        const name = `"${item.name.replace(/"/g, '""')}"`;
+                        const cat = tabs.find(t => t.id === item.baseCategory)?.name || item.baseCategory;
+                        const status = getStatusText(item.status);
+                        const latestPrice = getLatestPrice(item, false);
+                        const lifetimeTCO = calculateTCO(item, false);
+                        const ttm = getAssetTtmStats(item);
+                        
+                        csvContent += `${name},${cat},${status},${item.purchaseDate || '-'},${item.purchasePrice || 0},${latestPrice || 0},${lifetimeTCO !== '-' ? lifetimeTCO : 0},${ttm.tco.toFixed(2)},${ttm.dailyTco.toFixed(2)},${ttm.usage.toFixed(2)},${ttm.dailyUsage.toFixed(2)}\n`;
+                    });
+
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `资产宏观报表_${new Date().toLocaleDateString()}.csv`;
+                    a.click();
+                };
+
+                const exportJSONBackup = () => {
                     const dataStr = JSON.stringify(items.value, null, 2);
                     const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8;' });
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob); 
-                    a.download = `资产追踪备份_${new Date().toLocaleDateString()}.json`;
+                    a.download = `资产系统备份_${new Date().toLocaleDateString()}.json`;
                     a.click();
                 };
 
@@ -737,7 +1011,17 @@ const renderChart = (item) => {
                         try {
                             const parsed = JSON.parse(event.target.result);
                             if (Array.isArray(parsed) && confirm(`覆盖当前数据，确认导入？`)) {
-                                items.value = parsed;
+                                items.value = parsed.map(i => {
+                                    if (i.history && i.purchaseDate) {
+                                        i.history.forEach(h => {
+                                            if (h.type === 'price' && h.note === '购入价格') {
+                                                h.date = new Date(i.purchaseDate).toISOString();
+                                            }
+                                        });
+                                        i.history.sort((a, b) => new Date(b.date) - new Date(a.date));
+                                    }
+                                    return { ...i, baseCategory: i.baseCategory || 'productivity' };
+                                });
                                 syncData();
                             }
                         } catch (err) { alert("导入失败：文件格式错误。"); }
@@ -750,11 +1034,12 @@ const renderChart = (item) => {
 
                 return {
                     items, modals, itemForm, recordForm, currentTargetItem, chartsRefs, zoomedImageSrc, chartMode,
+                    tabs, currentTab, filteredItems, globalStats, getCategoryCount, breakdownType, breakdownList,
                     editingDesc, expandedCharts, toggleEditDesc, toggleChart, switchChartMode, hasEnoughChartData,
-                    openItemModal, saveItem, deleteItem, openRecordModal, editRecord, saveRecord,
+                    openItemModal, saveItem, deleteItem, openRecordModal, editRecord, saveRecord, openBreakdownModal, getAssetTtmStats,
                     getLatestPrice, getEvents, getHardwareCost, getUsageCost, calculateTCO, getDailyTCO, getDailyUsage, getPlateauStatus, getWarrantyStatus, renderMarkdown, getCategoryStyle,
-                    handleImageUpload, handlePaste, zoomImage,
-                    getStatusColor, getStatusText, formatDate, guessEmoji, exportCSV, importJSON
+                    handleImageUpload, handlePaste, zoomImage, exportCSVView, exportJSONBackup, importJSON,
+                    getStatusColor, getStatusText, formatDate, guessEmoji
                 };
             }
         }).mount('#app');
