@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <title>短视频浏览项目</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="http://192.168.31.197:8100/static/cdn/vant@4index.css">
+    <link rel="stylesheet" href="http://192.168.31.197:8100/static/dy.css">
+    <link rel="icon" type="image/png" href="http://192.168.31.197:8100/static/svg/dy.png">
+</head>
+<body>
+<div id="app">
+    <div class="main-video" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+        <div style="position:absolute;top:18px;left:18px;z-index:10;">
+            <a href="http://one4.zin6.site:5000" target="_blank">
+                <img src="http://192.168.31.197:8100/static/svg/dy.svg" alt="LOGO" style="height:40px;">
+            </a>
+        </div>
+        
+        <div v-show="!isLoading" style="position:absolute;top:18px;right:18px;z-index:10;">
+            <van-button type="info" icon="clipboard" size="small" style="margin-left:8px;" @click="searchFromClipboard">剪贴板搜索</van-button>
+            <van-button type="primary" icon="search" size="small" @click="showSearch = true">搜索</van-button>
+            <van-button type="default" icon="setting" size="small" style="margin-left:8px;" @click="showConfig = true">配置</van-button>
+            <van-button type="default" icon="setting" size="small" style="margin-left:8px;" @click="indexPathq( )">更新文件</van-button>
+        </div>
+
+        <div v-if="isLoading" class="loading-screen">
+            <img src="/static/logo.png" alt="LOGO" style="height:80px;margin-bottom:30px;">
+            <div style="color:#fff;font-size:18px;">加载中...</div>
+        </div>
+        
+        <div class="video-box" v-show="!isLoading && state.videos.length">
+            <div v-if="searchTimeMsg" style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.7);color:#fff;text-align:center;z-index:20;padding:8px;">
+                {{ searchTimeMsg }}
+            </div>
+            <div class="video-title" @click="toggleDetail">{{ videoIndex ? videoIndex + '. ' : '' }}/{{state.totalpage}}  {{ currentVideo.filename }}</div>
+              
+            <div class="video-container">
+                <video
+                    v-for="(video, index) in videoQueue"
+                    :key="video.id"
+                    :ref="'video' + index"
+                    :src="getVideoUrl(video.id)"
+                    :class="[videoClass, { 'active-video': index === activeVideoIndex, 'hidden-video': index !== activeVideoIndex }]"
+                    :muted="index !== activeVideoIndex"
+                    :controls="index === activeVideoIndex"
+                    preload="auto"
+                    playsinline
+                    @ended="nextVideo"
+                    @loadeddata="onVideoLoaded(index)"
+                    @canplaythrough="onVideoReady(index)"
+                ></video>
+            </div>
+            
+            <div class="video-actions">
+                <van-button id="dislike-button" title="不喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
+                    <span v-if="currentVideo.score === 1" style="color:#222;">&#x1F5A4;</span>
+                    <span v-else style="color:#888;">&#x1F5A4;</span>
+                </van-button>
+                <van-button type="primary" size="small" @click="prevVideo">上一个</van-button>
+                <van-button type="primary" size="small" @click="nextVideo">下一个</van-button>
+                <van-button id="like-button" title="喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike" style="font-size:22px;padding:0 18px;">
+                    <span v-if="currentVideo.score === 5" style="color:#ff3b30;">&#x2764;</span>
+                    <span v-else-if="currentVideo.score === 1" style="color:#170201;">&#x2764;</span>
+                    <span v-else style="color:#888;">&#x2764;</span>
+                </van-button>
+               
+                <div style="margin-top:10px;">
+                    <span style="color:#fff;">音量：</span>
+                    <input type="range" min="0" max="1" step="0.01" :value="getActiveVideoVolume()" @input="setActiveVideoVolume($event.target.value)" style="width:80px;vertical-align:middle;">
+                </div>
+                <div @dblclick.stop style="margin-top:10px;">
+                    <van-button @click="previewBackward" type="primary" size="small">快退 </van-button>
+                    <van-button @click="previewForward" type="primary" size="small">快进 </van-button>
+                </div>
+            </div>
+            
+            <van-popup v-model:show="showDetail" position="bottom" round>
+                <div style="padding:20px;">
+                    <h4>视频详情</h4>
+                    <p>文件名: <span v-for="keyword in currentVideo.filename.split(' ')" :key="keyword" @click="searchDouyin(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
+                    <p>文件名local: <span v-for="keyword in currentVideo.filename.split(' ')" :key="keyword" @click="searchDouyin2(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
+                    <p>标签: {{ currentVideo.tags }}</p>
+                    <p>评分: <van-rate v-model="currentVideo.score" @change="updateScore" /></p>
+                    <p>分类: {{ currentVideo.detail }}</p>
+                    <van-button type="primary" block :url="getVideoUrl(currentVideo.id)" download>下载</van-button>
+                </div>
+            </van-popup>
+        </div>
+
+        <div v-show="!isLoading && !state.videos.length" style="color:#fff;margin-top:40px;text-align:center;">
+            <img src="/static/logo.png" alt="LOGO" style="height:60px;margin-bottom:20px;">
+            <div>暂无视频</div>
+        </div>
+
+        <div v-if="showSearch" class="search-modal">
+            <div class="search-modal-content">
+                <h4>搜索与筛选</h4>
+                <input type="text" v-model="searchKeyword" placeholder="输入关键词" class="search-input" @keyup.enter="doSearch" />
+                <a href="/?search=random">random</a>
+                <div style="margin:10px 0;">
+                    <span>评分筛选：</span>
+                    <select v-model="searchScore" class="search-select">
+                        <option value="0">不限</option>
+                        <option value="1">1分</option>
+                        <option value="2">2分</option>
+                        <option value="3">3分</option>
+                        <option value="4">4分</option>
+                        <option value="5">5分</option>
+                    </select>
+                </div>
+                <div style="margin:10px 0;">
+                    <span>文件大小筛选：</span>
+                    <div style="margin-top:5px;">
+                        <select v-model="sizeOperator" class="search-select" style="width:80px;">
+                            <option value="lte">≤</option>
+                            <option value="gte">≥</option>
+                            <option value="eq">=</option>
+                        </select>
+                        <input type="number" v-model="sizeValue" placeholder="MB" class="search-input" style="width:80px;margin-left:5px;" min="1" max="10000" />
+                        <span style="margin-left:5px;">MB</span>
+                    </div>
+                    <div style="margin-top:8px;">
+                        <span style="font-size:12px;color:#666;">快捷筛选：</span>
+                        <div style="margin-top:3px;">
+                            <button @click="setQuickSize('lte', 50)" class="quick-size-btn">≤50MB</button>
+                            <button @click="setQuickSize('lte', 100)" class="quick-size-btn">≤100MB</button>
+                            <button @click="setQuickSize('lte', 200)" class="quick-size-btn">≤200MB</button>
+                            <button @click="setQuickSize('lte', 500)" class="quick-size-btn">≤500MB</button>
+                            <button @click="setQuickSize('gte', 100)" class="quick-size-btn">≥100MB</button>
+                            <button @click="setQuickSize('gte', 500)" class="quick-size-btn">≥500MB</button>
+                            <button @click="setQuickSize('gte', 1000)" class="quick-size-btn">≥1GB</button>
+                            <button @click="clearSizeFilter" class="quick-size-btn clear-btn">清除</button>
+                        </div>
+                    </div>
+                </div>
+                <button class="search-btn-confirm" @click="doSearch">确认搜索</button>
+                <button class="search-btn-cancel" @click="showSearch=false">取消</button>
+            </div>
+        </div>
+
+        <div v-show="showConfig" class="search-modal">
+            <div class="search-modal-content">
+                <h4>视频路径配置</h4>
+                <input type="text" v-model="newPath" placeholder="输入新路径" class="search-input" @keyup.enter="addPath" />
+                <button class="search-btn-confirm" @click="addPath">添加路径</button>
+                <button class="search-btn-cancel" @click="showConfig=false">关闭</button>
+                <div style="margin-top:16px;">
+                    <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px;">
+                        <button @click="indexPath_del(path)" style="margin-left:8px;">删除</button>
+                        <span style="flex:1;">{{ path }}</span>
+                        <button @click="indexPath(path)" style="margin-left:8px;">全索引</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="http://192.168.31.197:8100/static/cdn/vue3.5.global.prod.js"></script>
+<script src="http://192.168.31.197:8100/static/cdn/vue-router4.5.global.js"></script>
+<script src="http://192.168.31.197:8100/static/cdn/vant4.min.js"></script>
+<script src="http://192.168.31.197:8100/static/cdn/axios1.1.min.js"></script>
+
+<script src="http://192.168.31.197:8100/static/dy.js"></script>
+
+<script>
+const { createApp, reactive, onMounted, computed, ref, watch } = Vue
+
+createApp({
+    setup() {
+        const state = reactive({
+            videos: [],
+            page: 1,
+            pageSize: 10,
+            searchKeyword: '',
+            searchScore: 0,
+            searchSize: 0,
+            totalVideos: 0
+        })
+        const currentIndex = ref(0)
+        const showDetail = ref(false)
+        const showSearch = ref(false)
+        const showConfig = ref(false)
+        const searchKeyword = ref('')
+        const searchScore = ref(0)
+        const searchSize = ref(0)
+        const sizeOperator = ref('lte')
+        const sizeValue = ref('')
+        const newPath = ref('')
+        const pathList = ref([])
+        const searchTimeMsg = ref('')
+        const videoQueue = ref([])
+        const activeVideoIndex = ref(1)
+        const videoLoadStates = ref([false, false, false])
+        const isLoading = ref(true)
+        const videoClass = ref('video-portrait')
+        const jumpPercent = ref(0)
+        const urlParamsManager = new UrlParamsManager()
+        
+        const refs = {
+            currentIndex,
+            videoQueue,
+            activeVideoIndex,
+            videoLoadStates,
+            videoClass,
+            showSearch,
+            searchKeyword,
+            searchScore,
+            searchSize,
+            sizeOperator,
+            sizeValue,
+            searchTimeMsg,
+            newPath,
+            pathList
+        }
+        
+        // 实例化外部类的对象
+        const videoPlayer = new VideoPlayer(state, refs)
+        const searchManager = new SearchManager(state, refs)
+        const configManager = new ConfigManager(refs)
+        
+        const currentVideo = computed(() => {
+            if (videoQueue.value.length > 0 && activeVideoIndex.value < videoQueue.value.length) {
+                return videoQueue.value[activeVideoIndex.value] || {}
+            }
+            return state.videos[currentIndex.value] || {}
+        })
+        
+        const videoIndex = computed(() => {
+            if (searchKeyword.value || state.videos.length > 0) {
+                return currentIndex.value + 1;
+            }
+            return null;
+        })
+        
+        const searchFromClipboard = async () => {
+            if (!navigator.clipboard || !window.isSecureContext) {
+                alert('当前环境不支持读取剪贴板，请手动输入');
+                return;
+            }
+            try {
+                const text = await navigator.clipboard.readText();
+                const trimmed = text.trim();
+                if (!trimmed) {
+                    alert('剪贴板为空');
+                    return;
+                }
+                searchKeyword.value = trimmed;
+                showSearch.value = false;
+                await doSearch();
+            } catch (err) {
+                console.error(err);
+                alert('读取失败，请检查权限或使用 HTTPS');
+            }
+        };
+        
+        async function loadVideos(append = false) {
+            const newVideos = await fetchLatestVideos(state)
+            if (append) {
+                state.videos.push(...newVideos)
+            } else {
+                state.videos = newVideos
+                currentIndex.value = 0
+            }
+            videoPlayer.initializeVideoQueue()
+        }
+        
+        videoPlayer.setLoadMoreVideos(async () => {
+            await loadVideos(true)
+        })
+        searchManager.setLoadVideosCallback(loadVideos)
+        
+        async function initialLoad() {
+            try {
+                isLoading.value = true
+                const hasUrlSearch = searchManager.loadFromUrlParams()
+                if (!hasUrlSearch || true) {
+                    const total = await getTotalVideos(state.pageSize, state.searchKeyword, state.searchScore, state.searchSize)
+                    state.totalVideos = total
+                    const totalPages = Math.ceil(total / state.pageSize)
+                    if (totalPages > 0) {
+                        state.totalpage = total   
+                        state.page = 1
+                    } else {
+                        state.page = 1
+                    }
+                }
+                await loadVideos(false)
+                showSearch.value = false
+                showConfig.value = false
+                setTimeout(() => {
+                    isLoading.value = false
+                    setTimeout(() => {
+                        videoPlayer.playActiveVideo()
+                    }, 500)
+                }, 1500)
+            } catch (error) {
+                console.error('Initial load failed:', error)
+                isLoading.value = false
+            }
+        }
+        
+        const prevVideo = () => videoPlayer.prevVideo()
+        const nextVideo = () => videoPlayer.nextVideo()
+        function toggleDetail() { showDetail.value = !showDetail.value }
+        function searchDouyin(keyword) { window.open(`https://www.douyin.com/search/${encodeURIComponent(keyword)}`, '_blank'); }
+        function searchDouyin2(keyword) { window.open(`http://one4.su7.dpdns.org/?search=${encodeURIComponent(keyword)}`, '_blank'); }
+        
+        const handleTouchStart = (e) => videoPlayer.handleTouchStart(e)
+        const handleTouchEnd = (e) => videoPlayer.handleTouchEnd(e)
+        const onVideoLoaded = (index) => videoPlayer.onVideoLoaded(index)
+        const onVideoReady = (index) => videoPlayer.onVideoReady(index)
+        
+        async function updateScoreHandler(newScore) {
+            if (!currentVideo.value.id) return;
+            await updateScore(currentVideo.value.id, newScore)
+            currentVideo.value.score = newScore
+        }
+        
+        const doSearch = () => searchManager.doSearch()
+        const lastLikeType = ref('')
+        
+        async function toggleLike() {
+            if (!currentVideo.value.id) return;
+            if (currentVideo.value.score === 5) {
+                await updateScore(currentVideo.value.id, 0)
+                currentVideo.value.score = 0
+                lastLikeType.value = ''
+            } else {
+                await updateScore(currentVideo.value.id, 5)
+                currentVideo.value.score = 5
+                lastLikeType.value = 'like'
+            }
+            setTimeout(() => { lastLikeType.value = '' }, 600)
+        }
+        
+        async function toggleDislike() {
+            if (!currentVideo.value.id) return;
+            if (currentVideo.value.score === 1) {
+                await updateScore(currentVideo.value.id, 0)
+                currentVideo.value.score = 0
+                lastLikeType.value = ''
+            } else {
+                await updateScore(currentVideo.value.id, 1)
+                currentVideo.value.score = 1
+                lastLikeType.value = 'dislike'
+            }
+            setTimeout(() => { lastLikeType.value = '' }, 600)
+        }
+        
+        const fetchPaths = () => configManager.fetchPaths()
+        const addPath = () => configManager.addPath()
+        const indexPath = (path) => configManager.indexPath(path)
+        const indexPathq = (path) => configManager.indexPathq(path)
+        const indexPath_del = (path) => configManager.indexPath_del(path)
+        
+        const setQuickSize = (operator, size) => {
+            sizeOperator.value = operator
+            sizeValue.value = size
+            updateSizeFilter()
+        }
+        const clearSizeFilter = () => {
+            sizeOperator.value = 'lte'
+            sizeValue.value = ''
+            state.searchSize = 0
+        }
+        const updateSizeFilter = () => {
+            if (sizeValue.value && sizeValue.value > 0) {
+                state.searchSize = `${sizeOperator.value}:${sizeValue.value}`
+            } else {
+                state.searchSize = 0
+            }
+        }
+        
+        function getActiveVideoEl() {
+            if (window.$refs && window.$refs['video' + activeVideoIndex.value]) {
+                return window.$refs['video' + activeVideoIndex.value]
+            }
+            const videos = document.querySelectorAll('.video-box video')
+            return videos[activeVideoIndex?.value ?? 0] || videos[0]
+        }
+        function getActiveVideoVolume() {
+            const v = getActiveVideoEl()
+            return v ? v.volume : 0.7
+        }
+        function setActiveVideoVolume(val) {
+            const v = getActiveVideoEl()
+            if (v) v.volume = Number(val)
+        }
+        function jumpToPercent() {
+            const v = getActiveVideoEl()
+            if (v && v.duration && jumpPercent.value >= 0 && jumpPercent.value <= 100) {
+                v.currentTime = v.duration * (jumpPercent.value / 100)
+            }
+        }
+        function previewForward(e) {
+            const v = getActiveVideoEl()
+            if (v && v.duration) {
+                v.currentTime = Math.min(v.duration, v.currentTime + v.duration * 0.3)
+            }
+        }
+        function previewBackward(e) {
+            const v = getActiveVideoEl()
+            if (v && v.duration) {
+                v.currentTime = Math.max(0, v.currentTime - v.duration * 0.3)
+            }
+        }
+        
+        // 键盘快捷键响应 (最容易改动的部分)
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+                return;
+            }
+            if (e.key === 'ArrowLeft') previewBackward()
+            else if (e.key === 'ArrowRight') previewForward()
+            else if (e.key === 'Z' || e.key === 'z')  
+                document.getElementById('like-button').click();
+            else if (e.key === 'X' || e.key === 'x')  
+                document.getElementById('dislike-button').click();
+            else if (e.key === ' ')  {
+                let video = document.querySelectorAll('video')[activeVideoIndex.value]
+                video.paused ? video.play() : video.pause()
+            }
+        })
+
+        onMounted(() => {
+            initialLoad()
+            fetchPaths()
+            videoPlayer.initEventListeners()
+            searchManager.initPopstateListener()
+            setTimeout(() => videoPlayer.updateVideoClass(), 1000)
+        })
+
+        return {
+            state,
+            currentIndex,
+            currentVideo,
+            videoIndex,
+            showDetail,
+            getVideoUrl,
+            prevVideo,
+            nextVideo,
+            toggleDetail,
+            searchDouyin,
+            searchDouyin2,
+            handleTouchStart,
+            handleTouchEnd,
+            updateScore: updateScoreHandler,
+            showSearch,
+            searchKeyword,
+            searchScore,
+            searchSize,
+            sizeOperator,
+            sizeValue,
+            setQuickSize,
+            clearSizeFilter,
+            updateSizeFilter,
+            doSearch,
+            lastLikeType,
+            toggleLike,
+            toggleDislike,
+            showConfig,
+            newPath,
+            pathList,
+            addPath,
+            indexPath,
+            indexPathq,
+            indexPath_del,
+            searchTimeMsg,
+            videoClass,
+            videoQueue,
+            activeVideoIndex,
+            onVideoLoaded,
+            onVideoReady,
+            isLoading,
+            jumpPercent,
+            getActiveVideoVolume,
+            setActiveVideoVolume,
+            jumpToPercent,
+            previewForward,
+            previewBackward,
+            searchFromClipboard
+        }
+    }
+}).use(vant).mount('#app')
+</script>
+</body>
+</html>

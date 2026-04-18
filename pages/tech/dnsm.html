@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>DNS Panel</title>
+<style>
+    body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background-color: #f5f7fa;
+        color: #333;
+        padding: 20px;
+    }
+    h2 {
+        border-bottom: 2px solid #ddd;
+        padding-bottom: 10px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    th, td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    tr:hover {
+        background-color: #f1f4f8;
+    }
+    .status {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+        vertical-align: middle;
+    }
+    .ok { background-color: #10b981; }
+    .err { background-color: #ef4444; }
+    .action-group {
+        display: flex;
+        gap: 8px;
+    }
+    .action-group input {
+        padding: 6px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        flex-grow: 1;
+        min-width: 120px;
+    }
+    .action-group button {
+        padding: 6px 12px;
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .action-group button:hover {
+        background-color: #2563eb;
+    }
+</style>
+</head>
+
+<body>
+
+<h2>DNS Control Panel</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>LAN IPv4</th>
+            <th>IPv4 Status (Local / DNS)</th>
+            <th>IPv6 Status (Local / DNS)</th>
+            <th>Last Seen</th>
+            <th>Manual Action (IPv6 override)</th>
+        </tr>
+    </thead>
+    <tbody id="tb">
+        <tr><td colspan="6">Loading...</td></tr>
+    </tbody>
+</table>
+
+<script>
+async function load() {
+    try {
+        // 直接请求后端已经多线程优化过的 status 接口
+        const res = await fetch("/dns/api/status");
+        if (!res.ok) throw new Error("Network response was not ok");
+        const data = await res.json();
+        
+        const tb = document.getElementById("tb");
+        tb.innerHTML = "";
+
+        for (const [name, h] of Object.entries(data)) {
+            const tr = document.createElement("tr");
+
+            const v4LocalStatus = `<span class="status ${h.ipv4_ok ? 'ok' : 'err'}" title="Local IPv4"></span>`;
+            const v4DnsStatus = `<span class="status ${h.dns_ok ? 'ok' : 'err'}" title="DNS IPv4"></span>`;
+            const v6LocalStatus = `<span class="status ${h.ipv6_ok ? 'ok' : 'err'}" title="Local IPv6"></span>`;
+            const v6DnsStatus = `<span class="status ${h.ipv6_dns_ok ? 'ok' : 'err'}" title="DNS IPv6"></span>`;
+
+            const timeStr = h.last_seen ? new Date(h.last_seen * 1000).toLocaleTimeString() : "-";
+
+            tr.innerHTML = `
+                <td><strong>${name}</strong></td>
+                <td>${h.lan_ipv4 || '-'}</td>
+                
+                <td>
+                    ${v4LocalStatus} ${v4DnsStatus} 
+                    <span style="color:#666; font-size: 0.9em; margin-left: 8px;">${h.ipv4dns || '-'}</span>
+                </td>
+                
+                <td>
+                    ${v6LocalStatus} ${v6DnsStatus}
+                    <span style="color:#666; font-size: 0.9em; margin-left: 8px;">${h.ipv6dns || '-'}</span>
+                </td>
+
+                <td>${timeStr}</td>
+
+                <td class="action-group">
+                    <input id="ip_${name}" placeholder="Enter new IPv6" value="">
+                    <button onclick="upd('${h.lan_ipv4}', '${name}')">Update</button>
+                </td>
+            `;
+            tb.appendChild(tr);
+        }
+    } catch (error) {
+        document.getElementById("tb").innerHTML = `<tr><td colspan="6" style="color:red;">Error loading data: ${error.message}</td></tr>`;
+    }
+}
+
+async function upd(lan, name) {
+    const inputEl = document.getElementById(`ip_${name}`);
+    if (!inputEl) return;
+    
+    const ip = inputEl.value;
+
+    try {
+        await fetch("/dns/manual_update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                lan_ipv4: lan,
+                ipv6: ip
+            })
+        });
+        // 提交后直接重新拉取全部状态，因为后端已经是多线程，速度很快
+        load();
+    } catch (error) {
+        alert("Update failed: " + error.message);
+    }
+}
+
+load();
+</script>
+
+</body>
+</html>

@@ -120,7 +120,7 @@ def check_access():
     if request.path == '/login' or request.path.startswith('/static/') or request.path == '/favicon.ico':
         return
         
-    if request.cookies.get('access_token') == ACCESS_CODE or 'skip' in request.path:
+    if request.cookies.get('access_token') == ACCESS_CODE or 'static' in request.path or 'skip' in request.path:
         return
         
     if request.method == 'POST':

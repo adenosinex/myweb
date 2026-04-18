@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>运动记录生成器</title>
+  <title>自重训练记录生成器</title>
   <script src="/static/cdn/vue3.5.global.prod.js"></script>
   <style>
     body {
@@ -28,7 +28,6 @@
       margin-bottom: 24px;
     }
 
-    /* 知识胶囊样式重构：标签分类式 */
     .knowledge-card {
       background: white;
       border-radius: 12px;
@@ -63,9 +62,6 @@
       transition: all 0.2s;
       border: 1px solid transparent;
     }
-    .knowledge-tag:hover {
-      background: #e2e8f0;
-    }
     .knowledge-tag.active {
       background: #eff6ff;
       color: #1d4ed8;
@@ -83,7 +79,6 @@
       min-height: 80px;
     }
 
-    /* 计划切换器 */
     .plan-selector {
       display: flex;
       gap: 12px;
@@ -108,19 +103,20 @@
       box-shadow: 0 4px 6px rgba(30, 64, 175, 0.2);
     }
 
-    /* 表单组件样式 */
     .exercise-item {
       margin-bottom: 16px;
       border-radius: 12px;
       padding: 16px;
       background: white;
       box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
     }
+    
     .exercise-label {
       font-size: 16px;
       font-weight: 600;
       color: #1e40af;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -136,13 +132,29 @@
       border-radius: 12px;
       font-size: 12px;
     }
+    
+    .input-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
     .input-group input {
-      padding: 12px 16px;
+      padding: 10px 0;
       font-size: 16px;
+      font-weight: bold;
+      text-align: center;
       border: 1px solid #e2e8f0;
-      border-radius: 12px;
+      border-radius: 10px;
       background: #f8fafc;
-      width: 100%;
+      width: 65px;
       box-sizing: border-box;
       transition: all 0.2s;
     }
@@ -152,6 +164,26 @@
       background: white;
       box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
     }
+    .input-group span {
+      font-size: 18px;
+      color: #64748b;
+      font-weight: bold;
+    }
+
+    .btn-deload {
+      padding: 10px 14px;
+      background: #fef2f2;
+      color: #ef4444;
+      border: 1px solid #fca5a5;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 13px;
+      cursor: pointer;
+      height: 44px;
+      box-sizing: border-box;
+    }
+    .btn-deload:active { background: #fee2e2; }
+
     .rating-container {
       display: flex;
       justify-content: center;
@@ -208,11 +240,21 @@
       font-weight: 600;
       cursor: pointer;
     }
+
+    .form-group input {
+      padding: 12px 16px;
+      font-size: 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #f8fafc;
+      width: 100%;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
   <div class="app-container" id="app">
-    <h1>自重训练记录系统</h1>
+    <h1>自重训练记录生成器</h1>
     
     <div class="knowledge-card">
       <div class="knowledge-header">
@@ -241,23 +283,31 @@
       </div>
     </div>
 
-    <div class="exercise-item">
-      <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 16px; margin-top:0;">目标执行</h2>
-      <div v-for="exercise in currentExercises" :key="exercise.name" class="mb-3" style="margin-bottom: 12px;">
+    <div>
+      <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 16px;">记录数据</h2>
+      
+      <div v-for="exercise in currentExercises" :key="exercise.name" class="exercise-item">
         <div class="exercise-label">
           <div class="exercise-label-left">
             <i style="margin-right:8px;">🎯</i>
             <span>{{ exercise.name }}</span>
           </div>
-          <span class="intensity-badge">强度: {{ exercise.intensity }}</span>
+          <span class="intensity-badge">单次强度: {{ exercise.intensity }}</span>
         </div>
-        <div class="input-group">
-          <input 
-            type="number" 
-            min="0" 
-            v-model.number="inputs[exercise.name]" 
-            placeholder="完成数量/时间"
-          >
+        
+        <div class="input-row" v-if="inputs[exercise.name]">
+          <div class="input-group">
+            <div>
+              <div style="font-size:12px; color:#64748b; text-align:center; margin-bottom:4px;">组数</div>
+              <input type="number" min="0" v-model.number="inputs[exercise.name].sets">
+            </div>
+            <span>×</span>
+            <div>
+              <div style="font-size:12px; color:#64748b; text-align:center; margin-bottom:4px;">次数</div>
+              <input type="number" min="0" v-model.number="inputs[exercise.name].reps">
+            </div>
+          </div>
+          <button @click="deload(exercise)" class="btn-deload">快速降阶</button>
         </div>
       </div>
     </div>
@@ -277,18 +327,18 @@
 
     <div class="exercise-item">
       <div style="display: flex; gap: 12px;">
-        <div style="flex: 1;">
+        <div style="flex: 1;" class="form-group">
           <label style="font-weight: bold; color: #1e40af; display: block; margin-bottom: 8px; font-size:14px;">用时 (分钟)</label>
-          <div class="input-group"><input type="number" v-model.number="duration"></div>
+          <input type="number" v-model.number="duration">
         </div>
-        <div style="flex: 2;">
+        <div style="flex: 2;" class="form-group">
           <label style="font-weight: bold; color: #1e40af; display: block; margin-bottom: 8px; font-size:14px;">环境/状态备注</label>
-          <div class="input-group"><input type="text" v-model="remark" placeholder="气温/不适感等"></div>
+          <input type="text" v-model="remark" placeholder="气温/不适感等">
         </div>
       </div>
     </div>
 
-    <button @click="generateRecord" class="btn-generate">一键生成记录</button>
+    <button @click="generateRecord" class="btn-generate">一键生成复盘记录</button>
 
     <div v-if="generatedRecord" class="record-container">
       <div style="text-align: center; color: #1e40af; font-weight: bold; margin-bottom: 12px;">当前记录已生成</div>
@@ -300,44 +350,26 @@
   <script>
     const { createApp } = Vue;
 
-    // 分类知识库数据提取与优化（新增关节保护与力学代偿原则）
     const knowledgeData = [
-      { 
-        category: "手腕与推力纪律", 
-        content: "【伪俄挺纪律】：绝对禁止手指正朝前方做深度前倾！手腕韧带适应周期极长，不能硬磨。\n必须将手指朝外（外八字）或使用支架。判定标准是：胸肩力竭推不起来，而不是手腕痛迫使停止。" 
-      },
-      { 
-        category: "短板效应与核心", 
-        content: "【雨刮器转移】：前水平和引体后，握力和背阔肌已严重疲劳。此时上杠做核心，往往是手先抓不住。\n转移到固定长椅（或地面）仰卧执行，能完美锚定上半身，剥离背部短板，彻底榨干腹斜肌抗旋能力。" 
-      },
-      { 
-        category: "预疲劳与真实容量", 
-        content: "【接受退步假象】：高难度动作（如前水平）会引发极大的背部预疲劳，导致随后的常规引体次数断崖式下跌。\n应顺应疲劳重置目标（如单组8个），严格保留2次余力即可，切勿为了凑原本的极限总数导致动作变形。" 
-      },
-      { 
-        category: "减载与身体监测", 
-        content: "每连续训练4-5周必须安排减载周（容量减半）。\n【预警信号】：晨间静息心率连高两天、单臂悬挂握力下降、爆发拉起速度减慢，均代表中枢神经透支。需立刻降阶或休息。" 
-      },
-      { 
-        category: "环境与热身", 
-        content: "气温高度影响关节黏滞性。低于15度时，首组必须降阶。\n每次推力训练前，必须单独加入手腕承重转移（手指朝外/朝后微压）等预康复热身，促使滑液分泌。" 
-      }
+      { category: "手腕与推力纪律", content: "【伪俄挺纪律】：绝对禁止手指正朝前方做深度前倾！手腕韧带适应周期极长，不能硬磨。\n必须将手指朝外（外八字）或使用支架。判定标准是：胸肩力竭推不起来，而不是手腕痛迫使停止。" },
+      { category: "短板效应与核心", content: "【雨刮器转移】：前水平和引体后，握力和背阔肌已严重疲劳。此时上杠做核心，往往是手先抓不住。\n转移到固定长椅（或地面）仰卧执行，能完美锚定上半身，剥离背部短板，彻底榨干腹斜肌抗旋能力。" },
+      { category: "预疲劳与真实容量", content: "【接受退步假象】：高难度动作（如前水平）会引发极大的背部预疲劳，导致随后的常规引体次数断崖式下跌。\n应顺应疲劳重置目标（如单组8个），严格保留2次余力即可，切勿为了凑原本的极限总数导致动作变形。" },
+      { category: "减载与身体监测", content: "每连续训练4-5周必须安排减载周（容量减半）。\n【预警信号】：晨间静息心率连高两天、单臂悬挂握力下降、爆发拉起速度减慢，均代表中枢神经透支。需立刻降阶或休息。" },
+      { category: "环境与热身", content: "气温高度影响关节黏滞性。低于15度时，首组必须降阶。\n每次推力训练前，必须单独加入手腕承重转移（手指朝外/朝后微压）等预康复热身，促使滑液分泌。" }
     ];
 
-    // 计划配置
     const planA = [
-      { name: "双力臂", intensity: 6, defaultVal: 12 }, 
-      { name: "双杠臂屈伸(要求慢下)", intensity: 4, defaultVal: 40 },
-      { name: "悬垂举腿碰杆(悬停3s)", intensity: 4, defaultVal: 20 },
-      { name: "单臂悬挂(单侧10s为1次)", intensity: 3, defaultVal: 4 }
+      { name: "双力臂", intensity: 6, sets: 4, reps: 3 }, 
+      { name: "双杠臂屈伸(最后2个慢下)", intensity: 4, sets: 4, reps: 12 },
+      { name: "悬垂举腿碰杆(悬停3s)", intensity: 4, sets: 4, reps: 5 },
+      { name: "单臂悬挂(单侧10s为1次)", intensity: 3, sets: 4, reps: 1 }
     ];
 
-    // 修正后的计划 B
     const planB = [
-      { name: "伪俄挺(手指外旋45度7)", intensity: 4, defaultVal: 21 },
-      { name: "进阶团身前水平(7秒)", intensity: 5, defaultVal: 3 },
-      { name: "标准引体(降容量,预留2次余力)", intensity: 2, defaultVal: 24 },
-      { name: "单杠抗旋雨刷器", intensity: 2, defaultVal: 15 }
+      { name: "伪俄挺", intensity: 4, sets: 4, reps: 5 },
+      { name: "进阶团身前水平(7秒)", intensity: 5, sets: 3, reps: 1 },
+      { name: "标准引体(预留2次余力)", intensity: 2, sets: 4, reps: 6 },
+      { name: "单杠抗旋雨刷器", intensity: 2, sets: 3, reps: 5 }
     ];
 
     createApp({
@@ -374,11 +406,18 @@
         applyDefaults() {
           this.inputs = {};
           this.currentExercises.forEach(ex => {
-            this.inputs[ex.name] = ex.defaultVal;
+            this.inputs[ex.name] = {
+              sets: ex.sets,
+              reps: ex.reps
+            };
           });
           this.duration = this.currentPlan === 'A' ? 35 : 45;
           this.rating = 4;
-          this.remark = '气温适中，未力竭';
+          this.remark = '';
+        },
+        deload(ex) {
+          const data = this.inputs[ex.name];
+          data.reps = Math.max(1, Math.floor(data.reps * 0.7));
         },
         generateRecord() {
           const today = new Date();
@@ -388,24 +427,35 @@
           const hh = today.getHours().toString().padStart(2, '0');
           const min = today.getMinutes().toString().padStart(2, '0');
           
-          let record = `[计划${this.currentPlan}] ${yy}.${mm}.${dd} ${hh}:${min}\n`;
           let totalIntensity = 0;
           let itemsText = [];
 
           for (const ex of this.currentExercises) {
-            const count = this.inputs[ex.name] || 0;
-            if (count > 0) {
-              itemsText.push(`${ex.name}${count}`);
-              totalIntensity += count * ex.intensity;
+            const val = this.inputs[ex.name];
+            if (val && val.sets > 0 && val.reps > 0) {
+              const total = val.sets * val.reps;
+              totalIntensity += total * ex.intensity;
+              itemsText.push(`${ex.name}${val.sets}x${val.reps}`);
             }
           }
 
-          if (itemsText.length > 0) record += itemsText.join(' ') + '\n';
-          if (totalIntensity > 0) record += `综合强度${Math.round(totalIntensity)}\n`;
+          let tag = "神经/恢复";
+          if (totalIntensity > 300) tag = "高容量日";
+          else if (totalIntensity > 200) tag = "中等强度";
 
-          record += `体感评分${'★'.repeat(this.rating)}\n`;
-          if (this.duration) record += `用时${this.duration}分钟\n`;
-          if (this.remark.trim()) record += `备注 ${this.remark}`;
+          let record = `[计划${this.currentPlan} | ${tag}] ${yy}.${mm}.${dd} ${hh}:${min}\n`;
+
+          if (itemsText.length > 0) record += itemsText.join('  ') + '\n';
+          if (totalIntensity > 0) record += `综合强度: ${Math.round(totalIntensity)}\n`;
+
+          record += `体感评分: ${'★'.repeat(this.rating)}\n`;
+          
+          if (this.rating >= 5 && totalIntensity < 200) {
+            record += "⚠️ 神经疲劳偏高（高评分低容量）\n";
+          }
+
+          if (this.duration) record += `用时: ${this.duration}分钟\n`;
+          if (this.remark.trim()) record += `备注: ${this.remark}`;
 
           this.generatedRecord = record.trim();
         },
