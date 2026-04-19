@@ -3,25 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <title>短视频浏览项目</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" href="http://192.168.31.197:8100/static/cdn/vant@4index.css">
     <link rel="stylesheet" href="http://192.168.31.197:8100/static/dy.css">
-    <link rel="icon" type="image/png" href="http://192.168.31.197:8100/static/svg/dy.png">
+    <link rel="icon" type="image/svg" href="http://192.168.31.197:8100/static/svg/dy.svg">
+    <style>
+        .step-input::-webkit-outer-spin-button,
+        .step-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .step-input {
+            -moz-appearance: textfield;
+        }
+    </style>
 </head>
 <body>
 <div id="app">
     <div class="main-video" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
         <div style="position:absolute;top:18px;left:18px;z-index:10;">
             <a href="http://one4.zin6.site:5000" target="_blank">
-                <img src="http://192.168.31.197:8100/static/svg/dy.svg" alt="LOGO" style="height:40px;">
+                <img src="/static/logo.png" alt="LOGO" style="height:40px;">
             </a>
         </div>
         
         <div v-show="!isLoading" style="position:absolute;top:18px;right:18px;z-index:10;">
-            <van-button type="info" icon="clipboard" size="small" style="margin-left:8px;" @click="searchFromClipboard">剪贴板搜索</van-button>
-            <van-button type="primary" icon="search" size="small" @click="showSearch = true">搜索</van-button>
+            <van-button type="info" icon="clipboard" size="small" style="margin-left:8px;" @click="searchFromClipboard">剪贴板</van-button>
+            <van-button type="primary" icon="search" size="small" style="margin-left:8px;" @click="showSearch = true">搜索</van-button>
             <van-button type="default" icon="setting" size="small" style="margin-left:8px;" @click="showConfig = true">配置</van-button>
-            <van-button type="default" icon="setting" size="small" style="margin-left:8px;" @click="indexPathq( )">更新文件</van-button>
+            <van-button type="default" icon="replay" size="small" style="margin-left:8px;" @click="indexPathq( )">更新</van-button>
         </div>
 
         <div v-if="isLoading" class="loading-screen">
@@ -53,25 +63,48 @@
             </div>
             
             <div class="video-actions">
-                <van-button id="dislike-button" title="不喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
-                    <span v-if="currentVideo.score === 1" style="color:#222;">&#x1F5A4;</span>
-                    <span v-else style="color:#888;">&#x1F5A4;</span>
-                </van-button>
-                <van-button type="primary" size="small" @click="prevVideo">上一个</van-button>
-                <van-button type="primary" size="small" @click="nextVideo">下一个</van-button>
-                <van-button id="like-button" title="喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike" style="font-size:22px;padding:0 18px;">
-                    <span v-if="currentVideo.score === 5" style="color:#ff3b30;">&#x2764;</span>
-                    <span v-else-if="currentVideo.score === 1" style="color:#170201;">&#x2764;</span>
-                    <span v-else style="color:#888;">&#x2764;</span>
-                </van-button>
-               
-                <div style="margin-top:10px;">
-                    <span style="color:#fff;">音量：</span>
-                    <input type="range" min="0" max="1" step="0.01" :value="getActiveVideoVolume()" @input="setActiveVideoVolume($event.target.value)" style="width:80px;vertical-align:middle;">
+                <div style="display:flex; justify-content:center; gap:8px; margin-bottom:12px;">
+                    <van-button id="dislike-button" title="不喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
+                        <span v-if="currentVideo.score === 1" style="color:#222;">&#x1F5A4;</span>
+                        <span v-else style="color:#888;">&#x1F5A4;</span>
+                    </van-button>
+                    <van-button type="primary" size="small" @click="prevVideo">上一个</van-button>
+                    <van-button type="primary" size="small" @click="nextVideo">下一个</van-button>
+                    <van-button id="like-button" title="喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike" style="font-size:22px;padding:0 18px;">
+                        <span v-if="currentVideo.score === 5" style="color:#ff3b30;">&#x2764;</span>
+                        <span v-else-if="currentVideo.score === 1" style="color:#170201;">&#x2764;</span>
+                        <span v-else style="color:#888;">&#x2764;</span>
+                    </van-button>
                 </div>
-                <div @dblclick.stop style="margin-top:10px;">
-                    <van-button @click="previewBackward" type="primary" size="small">快退 </van-button>
-                    <van-button @click="previewForward" type="primary" size="small">快进 </van-button>
+               
+                <div style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; background:rgba(0,0,0,0.6); padding:6px 12px; border-radius:8px;">
+                        <span style="color:#fff;font-size:15px;margin-right:8px;">跳过:</span>
+                        <button @click="skipStep = Math.max(1, skipStep - 1)" style="width:36px;height:36px;font-size:22px;font-weight:bold;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;line-height:1;">-</button>
+                        <input type="number" v-model.number="skipStep" class="step-input" style="width:50px;height:36px;text-align:center;background:transparent;color:#fff;border:none;font-size:20px;font-weight:bold;margin:0 4px;" min="1">
+                        <button @click="skipStep++" style="width:36px;height:36px;font-size:22px;font-weight:bold;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:12px;line-height:1;">+</button>
+                        <van-button type="success" size="normal" @click="executeSkip" style="height:36px;padding:0 16px;font-size:16px;">GO ❯</van-button>
+                    </div>
+                    
+                    <div style="display:flex; gap:10px;" v-if="recentSkipSteps.length > 0">
+                        <van-button 
+                            v-for="num in recentSkipSteps" 
+                            :key="num" 
+                            size="small" 
+                            plain 
+                            type="primary" 
+                            @click="skipStep = num"
+                            style="min-width:44px; height:28px; background:rgba(0,0,0,0.4); color:#4fc08d; border-color:#4fc08d;"
+                        >{{ num }}</van-button>
+                    </div>
+                </div>
+                
+                <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:8px; background:rgba(0,0,0,0.4); padding:8px; border-radius:8px;">
+                    <van-button @click="previewBackward" type="primary" size="small" plain>快退</van-button>
+                    <van-button @click="seekTo(0.3)" type="primary" size="small" plain>30%</van-button>
+                    <van-button @click="seekTo(0.5)" type="primary" size="small" plain>50% (·)</van-button>
+                    <van-button @click="seekTo(0.8)" type="primary" size="small" plain>80%</van-button>
+                    <van-button @click="previewForward" type="primary" size="small" plain>快进</van-button>
                 </div>
             </div>
             
@@ -79,10 +112,9 @@
                 <div style="padding:20px;">
                     <h4>视频详情</h4>
                     <p>文件名: <span v-for="keyword in currentVideo.filename.split(' ')" :key="keyword" @click="searchDouyin(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
-                    <p>文件名local: <span v-for="keyword in currentVideo.filename.split(' ')" :key="keyword" @click="searchDouyin2(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
+                    <p>文件路径: <span style="font-size:12px;color:#666;word-break:break-all;">{{ currentVideo.detail }}</span></p>
                     <p>标签: {{ currentVideo.tags }}</p>
                     <p>评分: <van-rate v-model="currentVideo.score" @change="updateScore" /></p>
-                    <p>分类: {{ currentVideo.detail }}</p>
                     <van-button type="primary" block :url="getVideoUrl(currentVideo.id)" download>下载</van-button>
                 </div>
             </van-popup>
@@ -90,19 +122,32 @@
 
         <div v-show="!isLoading && !state.videos.length" style="color:#fff;margin-top:40px;text-align:center;">
             <img src="/static/logo.png" alt="LOGO" style="height:60px;margin-bottom:20px;">
-            <div>暂无视频</div>
+            <div>暂无满足条件的视频</div>
         </div>
 
         <div v-if="showSearch" class="search-modal">
             <div class="search-modal-content">
                 <h4>搜索与筛选</h4>
-                <input type="text" v-model="searchKeyword" placeholder="输入关键词" class="search-input" @keyup.enter="doSearch" />
-                <a href="/?search=random">random</a>
+                <div style="margin-bottom:12px;">
+                    <input type="text" v-model="searchKeyword" placeholder="包含关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" />
+                    <input type="text" v-model="excludeKeyword" placeholder="排除关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" style="margin-top:8px;" />
+                    <div style="text-align:right; margin-top:4px;"><a href="/?search=random" style="font-size:12px;color:#007bff;">使用 random 随机打乱</a></div>
+                </div>
+                
+                <div style="margin:10px 0;">
+                    <span>排序方式：</span>
+                    <select v-model="sortBy" class="search-select">
+                        <option value="">默认 (入库倒序)</option>
+                        <option value="filename">纯文件名正序 (A-Z)</option>
+                        <option value="path">文件路径正序 (按目录结构)</option>
+                    </select>
+                </div>
+
                 <div style="margin:10px 0;">
                     <span>评分筛选：</span>
                     <select v-model="searchScore" class="search-select">
-                        <option value="0">不限</option>
-                        <option value="1">1分</option>
+                        <option value="0">不限 (自动过滤1星)</option>
+                        <option value="1">只看1星 (不喜欢)</option>
                         <option value="2">2分</option>
                         <option value="3">3分</option>
                         <option value="4">4分</option>
@@ -120,21 +165,8 @@
                         <input type="number" v-model="sizeValue" placeholder="MB" class="search-input" style="width:80px;margin-left:5px;" min="1" max="10000" />
                         <span style="margin-left:5px;">MB</span>
                     </div>
-                    <div style="margin-top:8px;">
-                        <span style="font-size:12px;color:#666;">快捷筛选：</span>
-                        <div style="margin-top:3px;">
-                            <button @click="setQuickSize('lte', 50)" class="quick-size-btn">≤50MB</button>
-                            <button @click="setQuickSize('lte', 100)" class="quick-size-btn">≤100MB</button>
-                            <button @click="setQuickSize('lte', 200)" class="quick-size-btn">≤200MB</button>
-                            <button @click="setQuickSize('lte', 500)" class="quick-size-btn">≤500MB</button>
-                            <button @click="setQuickSize('gte', 100)" class="quick-size-btn">≥100MB</button>
-                            <button @click="setQuickSize('gte', 500)" class="quick-size-btn">≥500MB</button>
-                            <button @click="setQuickSize('gte', 1000)" class="quick-size-btn">≥1GB</button>
-                            <button @click="clearSizeFilter" class="quick-size-btn clear-btn">清除</button>
-                        </div>
-                    </div>
                 </div>
-                <button class="search-btn-confirm" @click="doSearch">确认搜索</button>
+                <button class="search-btn-confirm" @click="doSearch">确认查询</button>
                 <button class="search-btn-cancel" @click="showSearch=false">取消</button>
             </div>
         </div>
@@ -142,14 +174,14 @@
         <div v-show="showConfig" class="search-modal">
             <div class="search-modal-content">
                 <h4>视频路径配置</h4>
-                <input type="text" v-model="newPath" placeholder="输入新路径" class="search-input" @keyup.enter="addPath" />
-                <button class="search-btn-confirm" @click="addPath">添加路径</button>
+                <input type="text" v-model="newPath" placeholder="输入绝对路径如 D:/videos" class="search-input" @keyup.enter="addPath" />
+                <button class="search-btn-confirm" @click="addPath">添加目录</button>
                 <button class="search-btn-cancel" @click="showConfig=false">关闭</button>
                 <div style="margin-top:16px;">
                     <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px;">
                         <button @click="indexPath_del(path)" style="margin-left:8px;">删除</button>
-                        <span style="flex:1;">{{ path }}</span>
-                        <button @click="indexPath(path)" style="margin-left:8px;">全索引</button>
+                        <span style="flex:1;font-size:12px;word-break:break-all;margin:0 8px;">{{ path }}</span>
+                        <button @click="indexPath(path)" style="margin-right:8px;">全索引</button>
                     </div>
                 </div>
             </div>
@@ -162,325 +194,487 @@
 <script src="http://192.168.31.197:8100/static/cdn/vant4.min.js"></script>
 <script src="http://192.168.31.197:8100/static/cdn/axios1.1.min.js"></script>
 
-<script src="http://192.168.31.197:8100/static/dy.js"></script>
-
 <script>
+async function fetchLatestVideos(state) {
+    const params = { 
+        latest: state.pageSize, page: state.page, 
+        page_size: state.pageSize, search: state.searchKeyword,
+        score: state.searchScore
+    }
+    if (state.excludeKeyword) params.exclude = state.excludeKeyword
+    if (state.searchSize && state.searchSize !== 0) params.size = state.searchSize
+    if (state.sortBy) params.sort_by = state.sortBy
+    const res = await axios.get('/dy/videos', { params })
+    return res.data
+}
+function getVideoUrl(id) { return `/dy/videos/${id}/stream` }
+async function updateScore(videoId, score) {
+    await axios.post('/dy/videos/update_score', { id: videoId, score: score })
+}
+
+class VideoPlayer {
+    constructor(state, refs) {
+        this.state = state; this.refs = refs;
+        this.touchStartY = 0; this.touchActive = false;
+        this.lastRatios = []; this.isSwitching = false;
+    }
+    initializeVideoQueue() { this.refreshQueue(); }
+    forceStopOthers(activeIndex) {
+        const videos = document.querySelectorAll('video');
+        videos.forEach((video, index) => {
+            if (index !== activeIndex) {
+                video.pause(); video.muted = true;
+                video.removeAttribute('src'); video.load();
+                video.removeAttribute('data-class-updated');
+            }
+        });
+    }
+    updateVideoClass(videoEl = null) {
+        if (!videoEl) {
+            const videos = document.querySelectorAll('video');
+            const domIndex = this.refs.activeVideoIndex.value;
+            if (!videos.length || !videos[domIndex]) return;
+            videoEl = videos[domIndex];
+        }
+        if (!videoEl) return;
+        const width = videoEl.videoWidth, height = videoEl.videoHeight;
+        if (width && height) {
+            const isLandscape = (height / width) <= 1.1;
+            this.lastRatios.push(isLandscape);
+            if (this.lastRatios.length > 3) this.lastRatios.shift();
+            if (this.lastRatios.length === 3 && this.lastRatios.every(v => v)) {
+                this.refs.videoClass.value = 'video-landscape';
+            } else if (!isLandscape) {
+                this.refs.videoClass.value = 'video-portrait';
+            } else {
+                this.refs.videoClass.value = 'video-landscape';
+            }
+        }
+    }
+    refreshQueue() {
+        if (!this.state.videos || this.state.videos.length === 0) return;
+        const totalVideos = this.state.videos.length;
+        const currentGlobalIndex = this.refs.currentIndex.value;
+        this.refs.videoQueue.value = [];
+        this.refs.activeVideoIndex.value = 1; 
+        this.refs.videoLoadStates.value = [false, false, false];
+        for (let i = -1; i <= 1; i++) {
+            let targetIndex = (currentGlobalIndex + i + totalVideos) % totalVideos;
+            if (this.state.videos[targetIndex]) this.refs.videoQueue.value.push(this.state.videos[targetIndex]);
+        }
+        document.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
+    }
+    updateVideoQueue(direction = 'next') {
+        if (this.state.videos.length === 0) return;
+        const totalVideos = this.state.videos.length;
+        if (direction === 'next') {
+            this.refs.videoQueue.value.shift();
+            let nextVideoIndex = (this.refs.currentIndex.value + 1) % totalVideos;
+            this.refs.videoQueue.value.push(this.state.videos[nextVideoIndex]);
+        } else {
+            this.refs.videoQueue.value.pop();
+            let prevVideoIndex = (this.refs.currentIndex.value - 1 + totalVideos) % totalVideos;
+            this.refs.videoQueue.value.unshift(this.state.videos[prevVideoIndex]);
+        }
+        this.refs.videoLoadStates.value = [false, false, false];
+    }
+    prevVideo() {
+        if (this.isSwitching || this.state.videos.length === 0) return;
+        this.isSwitching = true;
+        document.querySelectorAll('video').forEach(v => v.pause());
+        this.refs.currentIndex.value--;
+        if (this.refs.currentIndex.value < 0) this.refs.currentIndex.value = this.state.videos.length - 1;
+        this.updateVideoQueue('prev');
+        setTimeout(() => { this.playActiveVideo(); this.isSwitching = false; }, 200);
+    }
+    async nextVideo() {
+        if (this.isSwitching || this.state.videos.length === 0) return;
+        this.isSwitching = true;
+        try {
+            document.querySelectorAll('video').forEach(v => v.pause());
+            this.exitFullscreen();
+            let nextIndex = this.refs.currentIndex.value + 1;
+            let isPageChange = false;
+            if (nextIndex >= this.state.videos.length) {
+                if (this.state.page * this.state.pageSize < this.state.totalVideos && typeof this.loadMoreVideos === 'function') {
+                    this.state.page++; await this.loadMoreVideos(); isPageChange = true;
+                }
+                nextIndex = nextIndex % this.state.videos.length;
+            }
+            this.refs.currentIndex.value = nextIndex;
+            if (isPageChange) this.refreshQueue(); else this.updateVideoQueue('next');
+            setTimeout(() => { this.playActiveVideo(); this.isSwitching = false; }, 250);
+        } catch (e) { console.error(e); this.isSwitching = false; }
+    }
+    playActiveVideo() {
+        const domIndex = this.refs.activeVideoIndex.value;
+        const videos = document.querySelectorAll('video');
+        if (!videos.length || !videos[domIndex]) return;
+        videos.forEach((v, i) => {
+            if (i !== domIndex) { v.pause(); v.muted = true; v.currentTime = 0; }
+        });
+        const activeVideo = videos[domIndex];
+        activeVideo.muted = false;
+        if (activeVideo.ended) activeVideo.currentTime = 0;
+        const playPromise = activeVideo.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {}).catch(() => {
+                activeVideo.muted = true; activeVideo.play().catch(() => {});
+            });
+        }
+        this.checkAndSetVideoClass(activeVideo);
+    }
+    checkAndSetVideoClass(video) {
+        if (!video.hasAttribute('data-class-updated')) {
+            const updateClass = () => { this.updateVideoClass(video); video.setAttribute('data-class-updated', 'true'); };
+            if (video.readyState >= 1) updateClass();
+            else video.addEventListener('loadedmetadata', updateClass, { once: true });
+        }
+    }
+    onVideoReady(index) {
+        this.refs.videoLoadStates.value[index] = true;
+        const video = document.querySelectorAll('video')[index];
+        if (!video) return;
+        if (index === this.refs.activeVideoIndex.value) {
+            if (video.paused) video.play().catch(() => {});
+        } else {
+            video.pause(); video.muted = true;
+        }
+    }
+    onVideoLoaded(index) { this.refs.videoLoadStates.value[index] = true; }
+    handleTouchStart(e) {
+        if (this.isSwitching) return;
+        this.touchActive = true; this.touchStartY = e.touches[0].clientY;
+    }
+    handleTouchEnd(e) {
+        if (!this.touchActive) return;
+        const deltaY = e.changedTouches[0].clientY - this.touchStartY;
+        if (Math.abs(deltaY) > 60) { if (deltaY < 0) this.nextVideo(); else this.prevVideo(); }
+        this.touchActive = false;
+    }
+    getCurrentlyPlayingVideo() {
+        const videos = document.querySelectorAll('video');
+        return videos[this.refs.activeVideoIndex.value] || null;
+    }
+    setLoadMoreVideos(callback) { this.loadMoreVideos = callback; }
+    exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+    
+    previewForward() { 
+        const v = this.getCurrentlyPlayingVideo(); 
+        if (v && v.duration) {
+            const step = Math.max(5, v.duration * 0.05);
+            v.currentTime = Math.min(v.duration, v.currentTime + step); 
+        }
+    }
+    previewBackward() { 
+        const v = this.getCurrentlyPlayingVideo(); 
+        if (v && v.duration) {
+            const step = Math.max(5, v.duration * 0.05);
+            v.currentTime = Math.max(0, v.currentTime - step); 
+        }
+    }
+    seekTo(ratio) {
+        const v = this.getCurrentlyPlayingVideo();
+        if (v && v.duration) v.currentTime = v.duration * ratio;
+    }
+
+    initEventListeners() {
+        window.addEventListener('wheel', (e) => {
+            if (this.isSwitching || Math.abs(e.deltaY) < 30) return;
+            if (e.deltaY > 0) this.nextVideo(); else if (e.deltaY < 0) this.prevVideo();
+        });
+        window.addEventListener('keydown', (e) => {
+            if (this.isSwitching) return;
+            if (e.key === 'ArrowDown') this.nextVideo(); else if (e.key === 'ArrowUp') this.prevVideo();
+        });
+        window.addEventListener('dblclick', (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+            const v = this.getCurrentlyPlayingVideo();
+            if (!document.fullscreenElement && v) {
+                if (v.requestFullscreen) v.requestFullscreen().catch(() => {});
+            } else if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+        });
+    }
+}
+
+class SearchManager {
+    constructor(state, refs) { this.state = state; this.refs = refs; }
+    async doSearch() {
+        const start = performance.now()
+        this.state.searchKeyword = this.refs.searchKeyword.value.trim()
+        this.state.excludeKeyword = this.refs.excludeKeyword.value.trim()
+        this.state.searchScore = this.refs.searchScore.value
+        this.state.sortBy = this.refs.sortBy.value
+        this.state.searchSize = (this.refs.sizeValue.value && this.refs.sizeValue.value > 0) 
+            ? `${this.refs.sizeOperator.value}:${this.refs.sizeValue.value}` : 0
+        this.state.page = 1; this.refs.currentIndex.value = 0; this.refs.showSearch.value = false;
+        
+        const params = []
+        if (this.state.searchKeyword) params.push(`search=${encodeURIComponent(this.state.searchKeyword)}`)
+        if (this.state.excludeKeyword) params.push(`exclude=${encodeURIComponent(this.state.excludeKeyword)}`)
+        if (this.state.searchScore > 0) params.push(`score=${this.state.searchScore}`)
+        if (this.state.searchSize !== 0) params.push(`size=${this.state.searchSize}`)
+        
+        const resp = await axios.get(`/dy/videos/count${params.length ? '?' + params.join('&') : ''}`)
+        this.state.totalVideos = resp.data.total || 0; this.state.totalpage = this.state.totalVideos;
+        
+        this.updateUrlParams(); this.showSearchHint();
+        await this.loadVideosCallback(false);
+        this.refs.searchTimeMsg.value = '筛选完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒'
+        setTimeout(() => { this.refs.searchTimeMsg.value = '' }, 3000)
+    }
+    showSearchHint() {
+        const conditions = []
+        if (this.state.searchKeyword) conditions.push(`包含: "${this.state.searchKeyword}"`)
+        if (this.state.excludeKeyword) conditions.push(`排除: "${this.state.excludeKeyword}"`)
+        if (this.state.sortBy === 'filename') conditions.push(`纯文件名排序`)
+        if (this.state.sortBy === 'path') conditions.push(`绝对路径排序`)
+        if (this.state.searchScore > 0) conditions.push(`评分: ${this.state.searchScore}分`)
+        if (this.state.searchSize !== 0) {
+            const [op, val] = this.state.searchSize.split(':');
+            conditions.push(`大小: ${op === 'lte' ? '≤' : op === 'gte' ? '≥' : '='}${val}MB`)
+        }
+        if (conditions.length > 0) this.refs.searchTimeMsg.value = `当前条件: ${conditions.join(', ')}`
+    }
+    updateUrlParams() {
+        const url = new URL(window.location);
+        const mapping = {
+            'search': 'searchKeyword',
+            'exclude': 'excludeKeyword',
+            'score': 'searchScore',
+            'size': 'searchSize',
+            'sort_by': 'sortBy'
+        };
+        for (let [k, stateKey] of Object.entries(mapping)) {
+            if (this.state[stateKey] && this.state[stateKey] !== 0) {
+                url.searchParams.set(k, this.state[stateKey]);
+            } else {
+                url.searchParams.delete(k);
+            }
+        }
+        window.history.pushState({}, '', url);
+    }
+    loadFromUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let hasParams = false;
+        if (urlParams.get('search')) { this.refs.searchKeyword.value = this.state.searchKeyword = urlParams.get('search'); hasParams = true; }
+        if (urlParams.get('exclude')) { this.refs.excludeKeyword.value = this.state.excludeKeyword = urlParams.get('exclude'); hasParams = true; }
+        if (urlParams.get('score')) { this.refs.searchScore.value = this.state.searchScore = parseInt(urlParams.get('score')); hasParams = true; }
+        if (urlParams.get('sort_by')) { this.refs.sortBy.value = this.state.sortBy = urlParams.get('sort_by'); hasParams = true; }
+        if (urlParams.get('size')) {
+            const sizeParam = urlParams.get('size');
+            if (sizeParam.includes(':')) {
+                const [op, val] = sizeParam.split(':');
+                this.refs.sizeOperator.value = op; this.refs.sizeValue.value = parseInt(val);
+                this.state.searchSize = sizeParam;
+            } else {
+                this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = parseInt(sizeParam);
+                this.state.searchSize = `lte:${sizeParam}`;
+            }
+            hasParams = true;
+        }
+        return hasParams;
+    }
+    clearSearch() {
+        this.refs.searchKeyword.value = this.state.searchKeyword = '';
+        this.refs.excludeKeyword.value = this.state.excludeKeyword = '';
+        this.refs.searchScore.value = this.state.searchScore = 0;
+        this.refs.sortBy.value = this.state.sortBy = '';
+        this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = '';
+        this.state.searchSize = 0; this.state.page = 1; this.refs.currentIndex.value = 0;
+        const url = new URL(window.location);
+        ['search', 'exclude', 'score', 'size', 'sort_by'].forEach(k => url.searchParams.delete(k));
+        window.history.pushState({}, '', url);
+    }
+    setLoadVideosCallback(cb) { this.loadVideosCallback = cb; }
+    initPopstateListener() {
+        window.addEventListener('popstate', () => {
+            if (this.loadFromUrlParams()) this.doSearch();
+            else { this.clearSearch(); this.loadVideosCallback(false); }
+        })
+    }
+}
+
+class ConfigManager {
+    constructor(refs) { this.refs = refs; }
+    async fetchPaths() { const resp = await axios.get('/dy/video-paths'); this.refs.pathList.value = resp.data.paths || []; }
+    async addPath() {
+        if (!this.refs.newPath.value.trim()) return;
+        await axios.post('/dy/video-paths', { path: this.refs.newPath.value.trim() });
+        this.refs.newPath.value = ''; this.fetchPaths();
+    }
+    async indexPath(path) {
+        const start = performance.now(); await axios.post('/dy/video-paths/index?all=1', { path });
+        alert('索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+    }
+    async indexPathq() {
+        const start = performance.now(); await axios.get('/dy/video-paths/updatefile');
+        alert('更新完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+    }
+    async indexPath_del(path) {
+        const start = performance.now(); await axios.post('/dy/video-paths/index?del=1', { path });
+        alert('删除并清理索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+    }
+}
+
+class UrlParamsManager {
+    constructor() { this.params = new URLSearchParams(window.location.search); }
+    updateUrl() { const url = new URL(window.location); url.search = this.params.toString(); window.history.pushState({}, '', url); }
+}
+
 const { createApp, reactive, onMounted, computed, ref, watch } = Vue
 
 createApp({
     setup() {
-        const state = reactive({
-            videos: [],
-            page: 1,
-            pageSize: 10,
-            searchKeyword: '',
-            searchScore: 0,
-            searchSize: 0,
-            totalVideos: 0
-        })
-        const currentIndex = ref(0)
-        const showDetail = ref(false)
-        const showSearch = ref(false)
-        const showConfig = ref(false)
-        const searchKeyword = ref('')
-        const searchScore = ref(0)
-        const searchSize = ref(0)
-        const sizeOperator = ref('lte')
-        const sizeValue = ref('')
-        const newPath = ref('')
-        const pathList = ref([])
-        const searchTimeMsg = ref('')
-        const videoQueue = ref([])
-        const activeVideoIndex = ref(1)
-        const videoLoadStates = ref([false, false, false])
-        const isLoading = ref(true)
+        const state = reactive({ videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', totalVideos: 0 })
+        const currentIndex = ref(0), showDetail = ref(false), showSearch = ref(false), showConfig = ref(false)
+        const searchKeyword = ref(''), excludeKeyword = ref(''), searchScore = ref(0), sortBy = ref(''), searchSize = ref(0), sizeOperator = ref('lte'), sizeValue = ref('')
+        const newPath = ref(''), pathList = ref([]), searchTimeMsg = ref(''), videoQueue = ref([])
+        const activeVideoIndex = ref(1), videoLoadStates = ref([false, false, false]), isLoading = ref(true)
         const videoClass = ref('video-portrait')
-        const jumpPercent = ref(0)
-        const urlParamsManager = new UrlParamsManager()
         
-        const refs = {
-            currentIndex,
-            videoQueue,
-            activeVideoIndex,
-            videoLoadStates,
-            videoClass,
-            showSearch,
-            searchKeyword,
-            searchScore,
-            searchSize,
-            sizeOperator,
-            sizeValue,
-            searchTimeMsg,
-            newPath,
-            pathList
+        const skipStep = ref(parseInt(localStorage.getItem('dy_skipStep')) || 5)
+        const recentSkipSteps = ref(JSON.parse(localStorage.getItem('dy_recentSkips')) || [5, 10, 20])
+
+        watch(skipStep, (newVal) => {
+            if (newVal > 0) localStorage.setItem('dy_skipStep', newVal)
+        })
+
+        function saveRecentSkip(step) {
+            let history = recentSkipSteps.value.filter(n => n !== step)
+            history.unshift(step)
+            if(history.length > 3) history = history.slice(0, 3)
+            recentSkipSteps.value = history
+            localStorage.setItem('dy_recentSkips', JSON.stringify(history))
         }
+
+        const refs = { currentIndex, videoQueue, activeVideoIndex, videoLoadStates, videoClass, showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, searchTimeMsg, newPath, pathList }
+        const videoPlayer = new VideoPlayer(state, refs), searchManager = new SearchManager(state, refs), configManager = new ConfigManager(refs)
         
-        // 实例化外部类的对象
-        const videoPlayer = new VideoPlayer(state, refs)
-        const searchManager = new SearchManager(state, refs)
-        const configManager = new ConfigManager(refs)
-        
-        const currentVideo = computed(() => {
-            if (videoQueue.value.length > 0 && activeVideoIndex.value < videoQueue.value.length) {
-                return videoQueue.value[activeVideoIndex.value] || {}
-            }
-            return state.videos[currentIndex.value] || {}
-        })
-        
-        const videoIndex = computed(() => {
-            if (searchKeyword.value || state.videos.length > 0) {
-                return currentIndex.value + 1;
-            }
-            return null;
-        })
+        const currentVideo = computed(() => (videoQueue.value.length > 0 && activeVideoIndex.value < videoQueue.value.length) ? videoQueue.value[activeVideoIndex.value] || {} : state.videos[currentIndex.value] || {})
+        const videoIndex = computed(() => (searchKeyword.value || state.videos.length > 0) ? currentIndex.value + 1 : null)
         
         const searchFromClipboard = async () => {
-            if (!navigator.clipboard || !window.isSecureContext) {
-                alert('当前环境不支持读取剪贴板，请手动输入');
-                return;
-            }
+            if (!navigator.clipboard || !window.isSecureContext) { alert('当前环境不支持或未授权 HTTPS'); return; }
             try {
                 const text = await navigator.clipboard.readText();
-                const trimmed = text.trim();
-                if (!trimmed) {
-                    alert('剪贴板为空');
-                    return;
-                }
-                searchKeyword.value = trimmed;
-                showSearch.value = false;
-                await doSearch();
-            } catch (err) {
-                console.error(err);
-                alert('读取失败，请检查权限或使用 HTTPS');
-            }
+                if (!text.trim()) { alert('剪贴板为空'); return; }
+                searchKeyword.value = text.trim(); showSearch.value = false; await doSearch();
+            } catch (err) { alert('读取失败，检查权限'); }
         };
         
         async function loadVideos(append = false) {
-            const newVideos = await fetchLatestVideos(state)
-            if (append) {
-                state.videos.push(...newVideos)
-            } else {
-                state.videos = newVideos
-                currentIndex.value = 0
-            }
-            videoPlayer.initializeVideoQueue()
+            const newVideos = await fetchLatestVideos(state);
+            if (append) state.videos.push(...newVideos); else { state.videos = newVideos; currentIndex.value = 0; }
+            videoPlayer.initializeVideoQueue();
         }
-        
-        videoPlayer.setLoadMoreVideos(async () => {
-            await loadVideos(true)
-        })
+        videoPlayer.setLoadMoreVideos(async () => { await loadVideos(true); })
         searchManager.setLoadVideosCallback(loadVideos)
         
         async function initialLoad() {
             try {
-                isLoading.value = true
-                const hasUrlSearch = searchManager.loadFromUrlParams()
-                if (!hasUrlSearch || true) {
-                    const total = await getTotalVideos(state.pageSize, state.searchKeyword, state.searchScore, state.searchSize)
-                    state.totalVideos = total
-                    const totalPages = Math.ceil(total / state.pageSize)
-                    if (totalPages > 0) {
-                        state.totalpage = total   
-                        state.page = 1
-                    } else {
-                        state.page = 1
-                    }
+                isLoading.value = true;
+                if (!searchManager.loadFromUrlParams() || true) {
+                    const params = [];
+                    if (state.searchKeyword) params.push(`search=${encodeURIComponent(state.searchKeyword)}`);
+                    if (state.excludeKeyword) params.push(`exclude=${encodeURIComponent(state.excludeKeyword)}`);
+                    if (state.searchScore > 0) params.push(`score=${state.searchScore}`);
+                    if (state.searchSize !== 0) params.push(`size=${state.searchSize}`);
+                    const resp = await axios.get(`/dy/videos/count${params.length ? '?' + params.join('&') : ''}`);
+                    state.totalVideos = resp.data.total || 0;
+                    state.totalpage = state.totalVideos; state.page = 1;
                 }
-                await loadVideos(false)
-                showSearch.value = false
-                showConfig.value = false
-                setTimeout(() => {
-                    isLoading.value = false
-                    setTimeout(() => {
-                        videoPlayer.playActiveVideo()
-                    }, 500)
-                }, 1500)
-            } catch (error) {
-                console.error('Initial load failed:', error)
-                isLoading.value = false
-            }
+                await loadVideos(false);
+                showSearch.value = false; showConfig.value = false;
+                setTimeout(() => { isLoading.value = false; setTimeout(() => { videoPlayer.playActiveVideo(); }, 500); }, 1500);
+            } catch (error) { isLoading.value = false; }
         }
         
-        const prevVideo = () => videoPlayer.prevVideo()
-        const nextVideo = () => videoPlayer.nextVideo()
+        const prevVideo = () => videoPlayer.prevVideo(), nextVideo = () => videoPlayer.nextVideo()
         function toggleDetail() { showDetail.value = !showDetail.value }
-        function searchDouyin(keyword) { window.open(`https://www.douyin.com/search/${encodeURIComponent(keyword)}`, '_blank'); }
-        function searchDouyin2(keyword) { window.open(`http://one4.su7.dpdns.org/?search=${encodeURIComponent(keyword)}`, '_blank'); }
+        function searchDouyin(kw) { window.open(`https://www.douyin.com/search/${encodeURIComponent(kw)}`, '_blank'); }
+        function searchDouyin2(kw) { window.open(`http://one4.zin6.site/?search=${encodeURIComponent(kw)}`, '_blank'); }
         
-        const handleTouchStart = (e) => videoPlayer.handleTouchStart(e)
-        const handleTouchEnd = (e) => videoPlayer.handleTouchEnd(e)
-        const onVideoLoaded = (index) => videoPlayer.onVideoLoaded(index)
-        const onVideoReady = (index) => videoPlayer.onVideoReady(index)
+        const handleTouchStart = (e) => videoPlayer.handleTouchStart(e), handleTouchEnd = (e) => videoPlayer.handleTouchEnd(e)
+        const onVideoLoaded = (index) => videoPlayer.onVideoLoaded(index), onVideoReady = (index) => videoPlayer.onVideoReady(index)
         
-        async function updateScoreHandler(newScore) {
-            if (!currentVideo.value.id) return;
-            await updateScore(currentVideo.value.id, newScore)
-            currentVideo.value.score = newScore
-        }
+        async function updateScoreHandler(newScore) { if (currentVideo.value.id) { await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; } }
         
-        const doSearch = () => searchManager.doSearch()
-        const lastLikeType = ref('')
-        
+        const doSearch = () => searchManager.doSearch(), lastLikeType = ref('')
         async function toggleLike() {
             if (!currentVideo.value.id) return;
-            if (currentVideo.value.score === 5) {
-                await updateScore(currentVideo.value.id, 0)
-                currentVideo.value.score = 0
-                lastLikeType.value = ''
-            } else {
-                await updateScore(currentVideo.value.id, 5)
-                currentVideo.value.score = 5
-                lastLikeType.value = 'like'
-            }
-            setTimeout(() => { lastLikeType.value = '' }, 600)
+            const newScore = currentVideo.value.score === 5 ? 0 : 5;
+            await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore;
+            lastLikeType.value = newScore === 5 ? 'like' : ''; setTimeout(() => lastLikeType.value = '', 600);
         }
-        
         async function toggleDislike() {
             if (!currentVideo.value.id) return;
-            if (currentVideo.value.score === 1) {
-                await updateScore(currentVideo.value.id, 0)
-                currentVideo.value.score = 0
-                lastLikeType.value = ''
-            } else {
-                await updateScore(currentVideo.value.id, 1)
-                currentVideo.value.score = 1
-                lastLikeType.value = 'dislike'
-            }
-            setTimeout(() => { lastLikeType.value = '' }, 600)
+            const newScore = currentVideo.value.score === 1 ? 0 : 1;
+            await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore;
+            lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600);
         }
         
-        const fetchPaths = () => configManager.fetchPaths()
-        const addPath = () => configManager.addPath()
-        const indexPath = (path) => configManager.indexPath(path)
-        const indexPathq = (path) => configManager.indexPathq(path)
-        const indexPath_del = (path) => configManager.indexPath_del(path)
-        
-        const setQuickSize = (operator, size) => {
-            sizeOperator.value = operator
-            sizeValue.value = size
-            updateSizeFilter()
-        }
-        const clearSizeFilter = () => {
-            sizeOperator.value = 'lte'
-            sizeValue.value = ''
-            state.searchSize = 0
-        }
-        const updateSizeFilter = () => {
-            if (sizeValue.value && sizeValue.value > 0) {
-                state.searchSize = `${sizeOperator.value}:${sizeValue.value}`
-            } else {
-                state.searchSize = 0
-            }
+        async function executeSkip() {
+            const step = skipStep.value;
+            if(step < 1) return;
+            saveRecentSkip(step);
+            await skipVideos(step);
         }
         
-        function getActiveVideoEl() {
-            if (window.$refs && window.$refs['video' + activeVideoIndex.value]) {
-                return window.$refs['video' + activeVideoIndex.value]
+        async function skipVideos(step) {
+            if (videoPlayer.isSwitching || state.videos.length === 0) return;
+            videoPlayer.isSwitching = true;
+            document.querySelectorAll('video').forEach(v => v.pause());
+            videoPlayer.exitFullscreen();
+
+            let targetIndex = currentIndex.value + step;
+            while (targetIndex >= state.videos.length && (state.page * state.pageSize) < state.totalVideos) {
+                state.page++;
+                const newVids = await fetchLatestVideos(state);
+                state.videos.push(...newVids);
             }
-            const videos = document.querySelectorAll('.video-box video')
-            return videos[activeVideoIndex?.value ?? 0] || videos[0]
-        }
-        function getActiveVideoVolume() {
-            const v = getActiveVideoEl()
-            return v ? v.volume : 0.7
-        }
-        function setActiveVideoVolume(val) {
-            const v = getActiveVideoEl()
-            if (v) v.volume = Number(val)
-        }
-        function jumpToPercent() {
-            const v = getActiveVideoEl()
-            if (v && v.duration && jumpPercent.value >= 0 && jumpPercent.value <= 100) {
-                v.currentTime = v.duration * (jumpPercent.value / 100)
-            }
-        }
-        function previewForward(e) {
-            const v = getActiveVideoEl()
-            if (v && v.duration) {
-                v.currentTime = Math.min(v.duration, v.currentTime + v.duration * 0.3)
-            }
-        }
-        function previewBackward(e) {
-            const v = getActiveVideoEl()
-            if (v && v.duration) {
-                v.currentTime = Math.max(0, v.currentTime - v.duration * 0.3)
-            }
+            targetIndex = targetIndex % state.videos.length;
+            currentIndex.value = targetIndex;
+            videoPlayer.refreshQueue();
+            
+            setTimeout(() => {
+                videoPlayer.playActiveVideo();
+                videoPlayer.isSwitching = false;
+            }, 250);
         }
         
-        // 键盘快捷键响应 (最容易改动的部分)
+        const fetchPaths = () => configManager.fetchPaths(), addPath = () => configManager.addPath()
+        const indexPath = (path) => configManager.indexPath(path), indexPathq = () => configManager.indexPathq(), indexPath_del = (path) => configManager.indexPath_del(path)
+        
+        function previewForward() { videoPlayer.previewForward(); }
+        function previewBackward() { videoPlayer.previewBackward(); }
+        function seekTo(ratio) { videoPlayer.seekTo(ratio); }
+        
         window.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-                return;
-            }
-            if (e.key === 'ArrowLeft') previewBackward()
-            else if (e.key === 'ArrowRight') previewForward()
-            else if (e.key === 'Z' || e.key === 'z')  
-                document.getElementById('like-button').click();
-            else if (e.key === 'X' || e.key === 'x')  
-                document.getElementById('dislike-button').click();
-            else if (e.key === ' ')  {
-                let video = document.querySelectorAll('video')[activeVideoIndex.value]
-                video.paused ? video.play() : video.pause()
-            }
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+            
+            if (e.key === 'ArrowLeft') previewBackward(); 
+            else if (e.key === 'ArrowRight') previewForward();
+            else if (e.key === 'Z' || e.key === 'z') document.getElementById('like-button').click();
+            else if (e.key === 'X' || e.key === 'x') document.getElementById('dislike-button').click();
+            else if (e.key === ' ') { const v = document.querySelectorAll('video')[activeVideoIndex.value]; v.paused ? v.play() : v.pause(); }
+            else if (e.key === '`' || e.key === '·') seekTo(0.5);
         })
 
         onMounted(() => {
-            initialLoad()
-            fetchPaths()
-            videoPlayer.initEventListeners()
-            searchManager.initPopstateListener()
-            setTimeout(() => videoPlayer.updateVideoClass(), 1000)
+            initialLoad(); fetchPaths(); videoPlayer.initEventListeners(); searchManager.initPopstateListener();
+            setTimeout(() => videoPlayer.updateVideoClass(), 1000);
         })
 
-        return {
-            state,
-            currentIndex,
-            currentVideo,
-            videoIndex,
-            showDetail,
-            getVideoUrl,
-            prevVideo,
-            nextVideo,
-            toggleDetail,
-            searchDouyin,
-            searchDouyin2,
-            handleTouchStart,
-            handleTouchEnd,
-            updateScore: updateScoreHandler,
-            showSearch,
-            searchKeyword,
-            searchScore,
-            searchSize,
-            sizeOperator,
-            sizeValue,
-            setQuickSize,
-            clearSizeFilter,
-            updateSizeFilter,
-            doSearch,
-            lastLikeType,
-            toggleLike,
-            toggleDislike,
-            showConfig,
-            newPath,
-            pathList,
-            addPath,
-            indexPath,
-            indexPathq,
-            indexPath_del,
-            searchTimeMsg,
-            videoClass,
-            videoQueue,
-            activeVideoIndex,
-            onVideoLoaded,
-            onVideoReady,
-            isLoading,
-            jumpPercent,
-            getActiveVideoVolume,
-            setActiveVideoVolume,
-            jumpToPercent,
-            previewForward,
-            previewBackward,
-            searchFromClipboard
+        return { 
+            state, currentIndex, currentVideo, videoIndex, showDetail, getVideoUrl, prevVideo, nextVideo, toggleDetail, 
+            searchDouyin, searchDouyin2, handleTouchStart, handleTouchEnd, updateScore: updateScoreHandler, 
+            showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, 
+            doSearch, lastLikeType, toggleLike, toggleDislike, showConfig, newPath, pathList, addPath, indexPath, indexPathq, indexPath_del, 
+            searchTimeMsg, videoClass, videoQueue, activeVideoIndex, onVideoLoaded, onVideoReady, isLoading, 
+            previewForward, previewBackward, seekTo, searchFromClipboard, skipStep, executeSkip, recentSkipSteps
         }
     }
 }).use(vant).mount('#app')

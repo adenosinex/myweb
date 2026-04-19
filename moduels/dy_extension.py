@@ -8,15 +8,10 @@ from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateT
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # ================= 本地扁平化路径配置 =================
-# 无论是在云端叫 dy_extension.py 还是在本地叫 app.py，它都只在当前同级目录寻址
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# 数据库文件放置在当前目录的 db/ 下
 DB_DIR = os.path.join(CURRENT_DIR, 'db')
 DB_PATH = f"sqlite:///{os.path.join(DB_DIR, 'videos.db')}"
 PATHS_FILE = os.path.join(DB_DIR, 'video_paths.json')
-
-# 前端 HTML 文件严格绑定为同目录下的 index.html
 INDEX_FILE = os.path.join(CURRENT_DIR, 'index.html')
 # ====================================================
 
@@ -53,30 +48,54 @@ def extract_tags(filename):
     return tags
 
 def scan_directory_for_videos(path, session, existing_videos):
+    from tqdm import tqdm
     valid_exts = {'.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.ts', '.wmv', '.m4v'}
     added_count = 0
-    for root, dirs, files in os.walk(path):
-        for file in files:
-            ext = os.path.splitext(file)[1].lower()
-            if ext in valid_exts:
-                full_path = os.path.abspath(os.path.join(root, file))
-                if full_path not in existing_videos:
-                    try:
-                        size = os.path.getsize(full_path)
-                    except OSError:
-                        size = 0
+    
+    print(f"\n[*] 开始扫描目录: {path}")
+    
+    # 第一阶段：动态计数进度条（由于无法预知总数，只显示当前找到的数量和速度）
+    target_files = []
+    with tqdm(desc="阶段 1: 文件扫描中", unit="个") as pbar_scan:
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if os.path.splitext(file)[1].lower() in valid_exts:
+                    target_files.append(os.path.abspath(os.path.join(root, file)))
+                    pbar_scan.update(1)  # 每找到一个符合条件的文件，计数加1
                     
-                    tags = extract_tags(file)
-                    session.add(Video(
-                        filename=file,
-                        detail=full_path,
-                        tags=','.join(tags),
-                        score=0,
-                        file_size=size
-                    ))
-                    existing_videos.add(full_path)
-                    added_count += 1
+    if not target_files:
+        print(f"[*] 该目录下未发现支持的视频文件。")
+        return 0
+        
+    print(f"[*] 阶段 1 完毕。共发现 {len(target_files)} 个视频文件，准备入库。")
+
+    # 第二阶段：百分比进度条（此时已经知道了总数，可以显示完整进度和预估时间）
+    with tqdm(total=len(target_files), desc="阶段 2: 数据库对比/入库", unit="个") as pbar_insert:
+        for full_path in target_files:
+            if full_path not in existing_videos:
+                try:
+                    size = os.path.getsize(full_path)
+                except OSError:
+                    size = 0
+                
+                file_name = os.path.basename(full_path)
+                tags = extract_tags(file_name)
+                
+                session.add(Video(
+                    filename=file_name,
+                    detail=full_path,
+                    tags=','.join(tags),
+                    score=0,
+                    file_size=size
+                ))
+                existing_videos.add(full_path)
+                added_count += 1
+                
+            pbar_insert.update(1)
+            
+    print(f"[*] 目录 {path} 索引完成，本次实际新增入库: {added_count} 个。")
     return added_count
+
 
 dy_bp = Blueprint('dy', __name__, url_prefix='/dy')
 
@@ -171,6 +190,7 @@ def apply_size_filter(query, size_param):
 def apply_video_filters(query, request_args, session=None):
     score = request_args.get('score')
     search = request_args.get('search')
+    exclude = request_args.get('exclude')  # 新增：接收排除关键词
     tags = request_args.get('tags')
     size = request_args.get('size')
     use_random = False
@@ -181,17 +201,31 @@ def apply_video_filters(query, request_args, session=None):
         
     if score and int(score) > 0:
         query = query.filter(Video.score == int(score))
+    else:
+        # 默认剔除 1星(不喜欢) 的视频，除非明确指定查询 1星
+        query = query.filter(Video.score != 1)
+
     if tags:
         for tag in tags.split(','):
             query = query.filter(Video.tags.like(f"%{tag}%"))
+            
+    # 处理包含关键词
     if search:
         for kw in search.strip().split():
             query = query.filter(Video.detail.like(f"%{kw}%"))
+            
+    # ====== 处理排除关键词 ======
+    if exclude:
+        for kw in exclude.strip().split():
+            # 使用 ~ 符号实现 NOT LIKE 过滤，剔除包含该关键词的路径或文件名
+            query = query.filter(~Video.detail.like(f"%{kw}%"))
+    # ============================
+
     if size:
         query = apply_size_filter(query, size)
         
     return query, use_random
-
+    
 @dy_bp.route('/videos', methods=['GET'])
 def get_videos():
     session = Session()
@@ -200,6 +234,7 @@ def get_videos():
     page_size = int(request.args.get('page_size', 5))
     latest = int(request.args.get('latest', 0))
     stream = request.args.get('stream', 'false').lower() == 'true'
+    sort_by = request.args.get('sort_by', '')
     
     query, use_random = apply_video_filters(query, request.args, session)
     
@@ -224,7 +259,14 @@ def get_videos():
         )
         videos = ordered_query.offset((page - 1) * page_size).limit(page_size).all()
     else:
-        query = query.order_by(Video.id.desc())
+        # 【修改点】: 引入自定义排序逻辑
+        if sort_by == 'filename':
+            query = query.order_by(Video.filename.asc())
+        elif sort_by == 'path':
+            query = query.order_by(Video.detail.asc())
+        else:
+            query = query.order_by(Video.id.desc())
+
         if page_size:
             videos = query.offset((page-1)*page_size).limit(page_size).all()
         elif latest:
@@ -286,11 +328,7 @@ def index():
         return f"找不到首页文件：{INDEX_FILE}。请确认已成功下载 HTML 文件。", 404
     return send_file(INDEX_FILE)
 
-# 该接口供云端机器调用，本地运行时不受影响
-FILES_TO_SEND = [
-    "moduels/dy_extension.py",
-    "pages/media/9dy.html"
-]
+FILES_TO_SEND = ["moduels/dy_extension.py", "pages/media/9dy.html"]
 @dy_bp.route('/skip/api/get_latest_code', methods=['GET'])
 def get_latest_code():
     files_data = {}
@@ -307,7 +345,6 @@ def get_latest_code():
 
     return jsonify({"status": "success", "files": files_data})
 
-# ================= 本地启动入口 =================
 if __name__ == "__main__":
     app = Flask(__name__)
     app.register_blueprint(dy_bp)

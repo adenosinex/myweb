@@ -17,6 +17,34 @@ headers = {
     "Content-Type": "application/json"
 }
 
+# 懒加载机制：避免在 Flask 导入蓝图时因网络阻塞或报错直接导致应用崩溃
+_CF_ZONE_ID = None
+
+def get_zone_id():
+    global _CF_ZONE_ID
+    if _CF_ZONE_ID:
+        return _CF_ZONE_ID
+        
+    domain = "su7.dpdns.org"
+    parts = domain.split(".")
+    for i in range(len(parts) - 1):
+        root = ".".join(parts[i:])
+        try:
+            r = requests.get(
+                f"{CF_API}/zones",
+                headers=headers,
+                params={"name": root},
+                timeout=5
+            ).json()
+            if r.get("result"):
+                _CF_ZONE_ID = r["result"][0]["id"]
+                return _CF_ZONE_ID
+        except Exception as e:
+            print(f"❌ 获取 Zone ID 失败: {str(e)}")
+            
+    print("❌ 无法获取Cloudflare Zone ID，请检查域名配置和API权限")
+    return None
+
 # ================= Host =================
 # 配置所有需要管理的主机
 HOSTS = {
@@ -71,30 +99,14 @@ HOSTS = {
     }
 }
 
-# ================= Zone =================
-def get_zone_id(domain):
-    parts = domain.split(".")
-    for i in range(len(parts) - 1):
-        root = ".".join(parts[i:])
-        r = requests.get(
-            f"{CF_API}/zones",
-            headers=headers,
-            params={"name": root}
-        ).json()
-        if r.get("result"):
-            return r["result"][0]["id"]
-    return None
-
-CF_ZONE_ID = get_zone_id("su7.dpdns.org")
-if not CF_ZONE_ID:
-    print("❌ 无法获取Cloudflare Zone ID，请检查域名配置和API权限")
-    exit(1)
-
 # ================= DNS =================
 def cf_get(name, rtype="AAAA"):
+    zone_id = get_zone_id()
+    if not zone_id: return None
+    
     try:
-        url = f"{CF_API}/zones/{CF_ZONE_ID}/dns_records?type={rtype}&name={name}"
-        response = requests.get(url, headers=headers)
+        url = f"{CF_API}/zones/{zone_id}/dns_records?type={rtype}&name={name}"
+        response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             result = response.json()
             if result.get('success') and result.get('result'):
@@ -105,9 +117,11 @@ def cf_get(name, rtype="AAAA"):
         return None
 
 def cf_upsert(name, ip, rtype="AAAA"):
+    zone_id = get_zone_id()
+    if not zone_id: return False
+    
     try:
         rec = cf_get(name, rtype)
-        
         data = {
             "type": rtype,
             "name": name,
@@ -118,18 +132,18 @@ def cf_upsert(name, ip, rtype="AAAA"):
         
         if rec:
             current_content = rec.get("content")
-            is_placeholder = (current_content == "192.0.2.1" or current_content == "2001:db8::1")
+            is_placeholder = (current_content in ["192.0.2.1", "2001:db8::1"])
             
             if current_content == ip and not is_placeholder:
                 print(f"ℹ️  记录 {name} 已存在且IP相同，无需更新")
                 return True
             
-            url = f"{CF_API}/zones/{CF_ZONE_ID}/dns_records/{rec['id']}"
-            response = requests.put(url, headers=headers, json=data)
+            url = f"{CF_API}/zones/{zone_id}/dns_records/{rec['id']}"
+            response = requests.put(url, headers=headers, json=data, timeout=5)
             action = "更新"
         else:
-            url = f"{CF_API}/zones/{CF_ZONE_ID}/dns_records"
-            response = requests.post(url, headers=headers, json=data)
+            url = f"{CF_API}/zones/{zone_id}/dns_records"
+            response = requests.post(url, headers=headers, json=data, timeout=5)
             action = "创建"
         
         if response.status_code in [200, 201]:
@@ -149,53 +163,12 @@ def cf_upsert(name, ip, rtype="AAAA"):
                     if error.get('code') == 81058:
                         print(f"ℹ️  记录 {name} 已存在（Cloudflare重复记录错误），跳过创建")
                         return True
-            
             print(f"❌ HTTP请求失败: 状态码 {response.status_code}")
             return False
             
     except Exception as e:
         print(f"❌ 操作 {name} 时发生错误: {str(e)}")
         return False
-
-def should_register_domain(domain, rtype, current_ip=None):
-    try:
-        if rtype == "A":
-            try:
-                resolved_ip = socket.gethostbyname(domain)
-                print(f"🔍 IPv4域名 {domain} 当前解析到: {resolved_ip}")
-                
-                if resolved_ip in ["192.0.2.1", "192.0.2.2", "192.0.2.3"]:
-                    return True
-                
-                if current_ip and resolved_ip != current_ip:
-                    return True
-                
-                if ping(resolved_ip):
-                    return False
-                else:
-                    return True
-            except socket.gaierror:
-                return True
-                
-        elif rtype == "AAAA":
-            try:
-                addr_info = socket.getaddrinfo(domain, None, socket.AF_INET6)
-                resolved_ipv6 = addr_info[0][4][0]
-                print(f"🔍 IPv6域名 {domain} 当前解析到: {resolved_ipv6}")
-                
-                if resolved_ipv6 in ["2001:db8::1", "2001:db8::2"]:
-                    return True
-                
-                if ping6(domain):
-                    return False
-                else:
-                    return True
-            except (socket.gaierror, OSError):
-                return True
-                
-        return True
-    except Exception:
-        return True
 
 def get_current_lan_ip():
     try:
@@ -204,7 +177,7 @@ def get_current_lan_ip():
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except:
+    except Exception:
         return None
 
 def auto_register_all_domains():
@@ -223,6 +196,7 @@ def auto_register_all_domains():
     for name, host in HOSTS.items():
         print(f"\n🔧 处理主机: {name} ({host['lan_ipv4']})")
         
+        # 处理 IPv4
         total_count += 1
         current_record = cf_get(host['ipv4dns'], 'A')
         if current_record:
@@ -236,6 +210,7 @@ def auto_register_all_domains():
             if cf_upsert(host["ipv4dns"], host['lan_ipv4'], "A"):
                 success_count += 1
         
+        # 处理 IPv6
         total_count += 1
         current_v6_record = cf_get(host['ipv6dns'], 'AAAA')
         if current_v6_record:
@@ -261,18 +236,20 @@ def ping(ip):
     try:
         return subprocess.run(
             ["ping", "-c", "1", "-W", "1", ip],
-            stdout=subprocess.DEVNULL
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         ).returncode == 0
-    except:
+    except Exception:
         return False
 
 def ping6(host):
     try:
         return subprocess.run(
             ["ping6", "-c", "1", "-W", "1", host],
-            stdout=subprocess.DEVNULL
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         ).returncode == 0
-    except:
+    except Exception:
         return False
 
 def verify_single_host(name, h):
@@ -282,14 +259,15 @@ def verify_single_host(name, h):
         resolved_ipv4 = socket.gethostbyname(h["ipv4dns"])
         dns_ok = True
         ipv4_resolved_correctly = (resolved_ipv4 == h["lan_ipv4"])
-    except:
+    except Exception:
         dns_ok = False
         ipv4_resolved_correctly = False
 
     try:
-        socket.getaddrinfo(h["ipv6dns"], None)
+        # 强制指定协议族为 socket.AF_INET6，否则只要存在 IPv4 A 记录也会不报错通过
+        socket.getaddrinfo(h["ipv6dns"], None, socket.AF_INET6)
         ipv6_dns_ok = True
-    except:
+    except Exception:
         ipv6_dns_ok = False
 
     return name, {
@@ -304,14 +282,22 @@ def verify_single_host(name, h):
 @dns_bp.route("/register", methods=["POST"])
 def register():
     d = request.json
+    if not d or "lan_ipv4" not in d:
+        return jsonify({"error": "Missing required field: lan_ipv4"}), 400
+        
     name = d.get("name")
     ipv4 = d["lan_ipv4"]
     
+    # 未传 name 时，根据 IP 反查对应的主机
     if not name:
         for existing_name, host_info in HOSTS.items():
             if host_info["lan_ipv4"] == ipv4:
                 name = existing_name
                 break
+                
+    # 防止 name 为 None 导致空键写入
+    if not name:
+        return jsonify({"error": "Unknown host IP and name not provided"}), 400
     
     if name in HOSTS:
         host = HOSTS[name]
@@ -334,22 +320,26 @@ def register():
         host["last_seen"] = time.time()
         return jsonify({"status": "updated"})
     
+    # 动态注册新的主机
     HOSTS[name] = {
         "lan_ipv4": d["lan_ipv4"],
-        "ipv4dns": d["ipv4_domain"],
-        "ipv6dns": d["ipv6_domain"],
+        "ipv4dns": d.get("ipv4_domain", f"{name}4.su7.dpdns.org"),
+        "ipv6dns": d.get("ipv6_domain", f"{name}.su7.dpdns.org"),
         "last_ipv6": d.get("ipv6"),
         "last_seen": time.time()
     }
     
-    cf_upsert(d["ipv4_domain"], d["lan_ipv4"], "A")
+    cf_upsert(HOSTS[name]["ipv4dns"], d["lan_ipv4"], "A")
     if "ipv6" in d:
-        cf_upsert(d["ipv6_domain"], d["ipv6"], "AAAA")
+        cf_upsert(HOSTS[name]["ipv6dns"], d["ipv6"], "AAAA")
 
     return jsonify({"status": "registered"})
 
 @dns_bp.route("/update", methods=["POST"])
 def update():
+    if not request.json:
+        return jsonify({"error": "Invalid JSON"}), 400
+        
     ipv6 = request.json.get("ipv6")
     lan_ip = request.remote_addr
 
@@ -361,18 +351,20 @@ def update():
         host["last_seen"] = time.time()
         return jsonify({"status": "no change"})
 
-    cf_upsert(host["ipv6dns"], ipv6, "AAAA")
-
-    host["last_ipv6"] = ipv6
+    if ipv6:
+        cf_upsert(host["ipv6dns"], ipv6, "AAAA")
+        host["last_ipv6"] = ipv6
+        
     host["last_seen"] = time.time()
-
     return jsonify({"status": "updated"})
 
 @dns_bp.route("/manual_update", methods=["POST"])
 def manual_update():
     d = request.json
+    if not d or "lan_ipv4" not in d:
+        return jsonify({"error": "Missing required field: lan_ipv4"}), 400
+        
     name, host = find_host(d["lan_ipv4"])
-
     if not host:
         return jsonify({"error": "not found"}), 404
 
@@ -382,14 +374,14 @@ def manual_update():
         host["last_ipv6"] = d["ipv6"]
 
     host["last_seen"] = time.time()
-
     return jsonify({"status": "ok"})
 
 @dns_bp.route("/api/status")
 def api_status():
     result = {}
+    workers_count = min(30, max(1, len(HOSTS)))
     
-    with ThreadPoolExecutor(max_workers=30) as executor:
+    with ThreadPoolExecutor(max_workers=workers_count) as executor:
         futures = [executor.submit(verify_single_host, name, h) for name, h in HOSTS.items()]
         
         for future in futures:
@@ -400,11 +392,11 @@ def api_status():
 
 # ================= 初始化 =================
 def init_dns_service():
-    """初始化DNS服务"""
-    if CF_ZONE_ID:
-        print(f"✅ Cloudflare Zone ID 获取成功: {CF_ZONE_ID[:8]}...")
+    """初始化DNS服务，可在Flask主程序启动完成后显式调用"""
+    if get_zone_id():
+        print(f"✅ Cloudflare Zone ID 获取成功: {_CF_ZONE_ID[:8]}...")
         auto_register_all_domains()
     else:
-        print("❌ 无法获取Cloudflare Zone ID，请检查配置")
+        print("❌ 初始化失败：无法获取 Cloudflare Zone ID")
 
-# init_dns_service()
+# 此处不自动执行 init_dns_service()，建议在 app.py 的 __main__ 或 app.before_first_request 中执行，以防止阻塞

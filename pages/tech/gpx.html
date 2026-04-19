@@ -2,446 +2,415 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>轨迹遥测与事件分析引擎</title>
-  <script src="/static/cdn/vue3.5.global.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多模态轨迹遥测分析引擎 终极版</title>
+  <script src="/static/cdn/vue3.5.global.prod.js"></script>
   <script src="/static/cdn/axios1.1.min.js"></script>
   <script src="/static/cdn/echarts.min.js"></script>
   <link href="/static/cdn/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/static/cdn/leaflet.css" />
   <script src="/static/cdn/leaflet.js"></script>
-  <!-- <script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"></script>
-  <link href="https://unpkg.com/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> -->
   <style>
     body { background-color: #f0f4f8; min-height: 100vh; padding: 16px 0; }
-    .app-container { max-width: 900px; margin: 0 auto; padding: 0 16px; }
+    .app-container { max-width: 100%; margin: 0 auto; padding: 0 24px; }
     .panel-card { margin-bottom: 16px; border-radius: 12px; padding: 20px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     #map { height: 450px; border-radius: 8px; margin-top: 16px; z-index: 1; }
-    .chart-box { height: 300px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #e2e8f0; background: #fff; }
+    .chart-box { height: 400px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #e2e8f0; background: #fff; }
+    .large-chart-box { height: 500px; }
+    .file-list-box { max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #fafafa; }
+    .section-title { font-size: 1.1rem; font-weight: 700; border-left: 4px solid #1e40af; padding-left: 10px; margin-bottom: 16px; color: #1e293b;}
     .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; height: 100%; transition: all 0.2s; cursor: pointer; }
-    .stat-box:hover { border-color: #3b82f6; background: #eff6ff; transform: translateY(-2px); }
+    .stat-box:hover { border-color: #3b82f6; background: #eff6ff; }
     .stat-box.active { border-color: #1e40af; background: #dbeafe; box-shadow: 0 0 0 2px rgba(30,64,175,0.2); }
     .stat-value { font-size: 20px; font-weight: 700; color: #1e40af; }
     .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
-    .section-title { font-size: 1.1rem; font-weight: 700; border-left: 4px solid #1e40af; padding-left: 10px; margin-bottom: 16px; color: #1e293b;}
+    .export-panel { background: #fffbeb; border: 1px dashed #fbbf24; border-radius: 8px; padding: 12px; margin-top:12px; }
     .event-list { max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; margin-top: 12px;}
     .event-item { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; display: flex; align-items: center; }
     .event-item:hover { background: #f8fafc; }
-    .event-item:last-child { border-bottom: none; }
-    .event-time { font-weight: 600; color: #3b82f6; width: 95px; flex-shrink: 0; line-height: 1.4; font-size: 12px; display: flex; flex-direction: column;}
     .idx-badge { background-color: #e2e8f0; color: #475569; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-bottom: 2px; display: inline-block; width: fit-content; }
-    .filter-panel { background: #f8fafc; border-radius: 8px; padding: 16px; border: 1px dashed #cbd5e1; }
   </style>
 </head>
 <body>
   <div class="app-container" id="app">
-    <h2 class="text-center font-bold mb-4" style="color:#0f172a;">⚙️ 轨迹遥测数据中枢</h2>
+    <h2 class="text-center font-bold mb-4" style="color:#0f172a;">⚙️ 轨迹交叉与全域重构引擎</h2>
     
     <div class="panel-card">
-      <input type="file" ref="fileInput" accept=".gpx" class="form-control mb-3">
-      <div class="filter-panel mb-3">
-        <div class="d-flex justify-content-between align-items-center mb-2" style="cursor: pointer;" @click="showFilters = !showFilters">
-          <span class="fw-bold" style="color:#334155; font-size: 14px;">🛠️ 二次筛选引擎 (前端本地记忆)</span>
-          <span class="text-muted" style="font-size: 12px;">{{ showFilters ? '收起 ▲' : '配置参数 ▼' }}</span>
+      <div class="row g-2 mb-3">
+        <div class="col-12 col-md-4">
+          <label class="text-muted" style="font-size: 12px;">载具/运动模式</label>
+          <select v-model="sportType" class="form-select fw-bold">
+            <option value="motor">🏍️ 机动车 (剔除无效起停漂移)</option>
+            <option value="cycle">🚴 骑行 (剔除慢速推车段)</option>
+            <option value="hike">🥾 徒步 (自动切除坐车位移)</option>
+          </select>
         </div>
-        <div v-show="showFilters" class="row g-2 mt-2">
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">休整(> 分钟)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minStopTime" step="1" min="1"></div>
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">弯角(> 度)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minTurnAngle" step="5" min="15"></div>
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">重刹(< m/s²)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.maxHardBrake" step="0.5" max="-1"></div>
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">异常a (> m/s²)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minAbnormalAccel" step="0.5" min="1"></div>
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">危险坡点(%)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.minSteepCurveSlope" step="1" min="1"></div>
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">较陡分界(%)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.steepSlopeThreshold" step="1" min="1"></div>
-          <div class="col-4 col-md-3"><label class="text-muted" style="font-size: 12px;">极限分界(%)</label><input type="number" class="form-control form-control-sm" v-model.number="filters.extremeSlopeThreshold" step="1" min="5"></div>
+        <div class="col-12 col-md-8">
+          <label class="text-muted" style="font-size: 12px;">从库中选择轨迹 (支持多选以对齐对比)</label>
+          <div class="file-list-box">
+             <div v-for="f in fileList" :key="f" class="form-check">
+                <input class="form-check-input" type="checkbox" :value="f" v-model="selectedFiles" :id="'chk_'+f">
+                <label class="form-check-label" :for="'chk_'+f">{{ f }}</label>
+             </div>
+          </div>
         </div>
       </div>
-      <button @click="uploadGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
-        {{ loading ? '数据解算与拓扑映射中...' : '启动分析引擎' }}
+      <div class="text-muted mb-3" style="font-size: 12px;" v-if="selectedFiles.length === 0">如库中无文件，可通过下方直接上传处理：<input type="file" ref="fileInput" accept=".gpx" class="form-control form-control-sm mt-1" multiple></div>
+
+      <button @click="processGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
+        {{ loading ? '数据解算与滑动重采样中...' : '启动并发分析与重构对齐' }}
       </button>
-     <a href="/export_csv">📥 导出分析规律报告 (CSV)</a>
-      <div v-if="lastRecordTime" class="text-center text-success mt-2" style="font-size: 12px;">已自动加载上次分析缓存 ({{ lastRecordTime }})</div>
+      
+      <div v-if="processedTracks.length > 0" class="export-panel row g-2 align-items-center">
+         <div class="col-md-3 text-muted" style="font-size:13px; font-weight:bold;">📥 导出主控轨 (前端直出)：</div>
+         <div class="col-md-3">
+            <select v-model="exportMode" class="form-select form-select-sm">
+               <option value="raw">原始底层切片</option>
+               <option value="time">按固定时间聚合</option>
+               <option value="distance">按固定里程聚合</option>
+            </select>
+         </div>
+         <div class="col-md-3" v-if="exportMode !== 'raw'">
+            <input type="number" v-model="exportInterval" class="form-control form-control-sm" :placeholder="exportMode === 'time' ? '秒(≥5)' : '米(≥10)'">
+         </div>
+         <div class="col-md-3">
+            <button @click="exportCSV" class="btn btn-outline-warning btn-sm w-100">无延迟导出</button>
+         </div>
+      </div>
+
       <div v-if="error" class="text-danger text-center mt-3">{{ error }}</div>
     </div>
 
-    <div v-show="stats">
-      <div class="panel-card">
-        <div class="section-title">动态事件侦测 (点击面板查阅详情)</div>
-        <div class="row g-2">
-          <div class="col-6 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'hard_brakes'}" @click="setActiveEvent('hard_brakes')"><div class="stat-value text-danger">{{ stats?.counts?.hard_brakes }}</div><div class="stat-label">重刹(<{{ filters.maxHardBrake }})</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'abnormal_speeds'}" @click="setActiveEvent('abnormal_speeds')"><div class="stat-value text-secondary">{{ stats?.counts?.abnormal_speeds }}</div><div class="stat-label">突变(a>{{ filters.minAbnormalAccel }})</div></div></div>
-          <div class="col-6 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')"><div class="stat-value text-success">{{ stats?.counts?.sharp_curves }}</div><div class="stat-label">发卡弯(>{{ filters.minTurnAngle }}°)</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'steep_curves'}" @click="setActiveEvent('steep_curves')"><div class="stat-value text-danger" style="font-size:22px;">{{ stats?.counts?.steep_curves }}</div><div class="stat-label fw-bold">危险弯(坡>{{ filters.minSteepCurveSlope }}%)</div></div></div>
-          <div class="col-12 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')"><div class="stat-value text-warning">{{ stats?.counts?.stop_points }}</div><div class="stat-label">休整(>{{ filters.minStopTime }}min)</div></div></div>
-        </div>
-
-        <div v-if="['hard_brakes', 'abnormal_speeds', 'sharp_curves', 'steep_curves', 'stop_points'].includes(activeEvent)" class="event-list">
-          <div v-if="eventData[activeEvent] && eventData[activeEvent].length > 0">
-            <div class="event-item" v-for="(ev, idx) in eventData[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
-              <div class="event-time">
-                <span class="idx-badge">#{{ idx + 1 }}</span>
-                <span v-if="['hard_brakes', 'abnormal_speeds', 'stop_points'].includes(activeEvent)">{{ ev.offset_min.toFixed(1) }} 分钟</span>
-                <span class="text-secondary">{{ ev.cum_dist_km.toFixed(1) }} km</span>
-              </div>
-              <div class="event-desc text-muted ms-2">{{ ev.desc }}</div>
-              <div class="ms-auto text-primary" style="font-size: 12px;">定位 📍</div>
-            </div>
-          </div>
-          <div v-else class="text-center text-muted py-3" style="font-size: 13px;">该类型无符合筛选条件的节点</div>
-        </div>
+    <div v-show="processedTracks.length > 0">
+      
+      <div class="panel-card" v-if="comparisonData">
+        <div class="section-title">⏱️ 地理空间用时差值分析 (主控参考轨: {{ baselineTrackName }})</div>
+        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐，直观展示赛段中时间差的拉开位置。点击图例可【单独显示/隐藏】。</div>
+        <div id="compareChart" class="chart-box"></div>
       </div>
 
       <div class="panel-card">
-        <div class="section-title">宏观路况与地形评估</div>
+        <div class="section-title">📊 宏观轨迹与动力学画像 (主控参考轨: {{ baselineTrackName }})</div>
         <div class="row g-2 mb-3">
-          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.score }}</div><div class="stat-label">综合得分</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.terrain?.total_distance }}</div><div class="stat-label">总里程(km)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.avg_speed_kmh }}</div><div class="stat-label">运动均速(km/h)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ stats?.terrain?.total_climb }}</div><div class="stat-label">累计爬升(m)</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value text-danger">{{ stats?.terrain?.max_uphill }}%</div><div class="stat-label">最大上坡</div></div></div>
-          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value text-success">{{ stats?.terrain?.max_downhill }}%</div><div class="stat-label">最大下坡</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ mainTrackOverall?.terrain?.total_distance }}</div><div class="stat-label">真实里程(km)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ mainTrackOverall?.terrain?.avg_speed }}</div><div class="stat-label">移动均速(km/h)</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ mainTrackOverall?.terrain?.total_climb }}</div><div class="stat-label">有效爬升(m)</div></div></div>
+          <div class="col-4 col-md-2" v-if="sportType !== 'hike'"><div class="stat-box" :class="{active: activeEvent === 'hard_brakes'}" @click="setActiveEvent('hard_brakes')"><div class="stat-value text-danger">{{ mainTrackOverall?.counts?.hard_brakes }}</div><div class="stat-label">重刹</div></div></div>
+          <div class="col-4 col-md-2" v-if="sportType !== 'hike'"><div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')"><div class="stat-value text-success">{{ mainTrackOverall?.counts?.sharp_curves }}</div><div class="stat-label">急弯</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')"><div class="stat-value text-warning">{{ mainTrackOverall?.counts?.stop_points }}</div><div class="stat-label">驻点</div></div></div>
         </div>
-
+        
         <div class="row g-2">
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_steep'}" @click="setActiveEvent('up_steep')"><div class="stat-value text-warning" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_steep }} 段</div><div class="stat-label">较陡上坡 ({{ filters.steepSlopeThreshold }}~{{ filters.extremeSlopeThreshold }}%)</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_extreme'}" @click="setActiveEvent('up_extreme')"><div class="stat-value text-danger" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.up_extreme }} 段</div><div class="stat-label fw-bold">极限上坡 (≥{{ filters.extremeSlopeThreshold }}%)</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_steep'}" @click="setActiveEvent('down_steep')"><div class="stat-value text-info" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_steep }} 段</div><div class="stat-label">较陡下坡 (-{{ filters.steepSlopeThreshold }}~-{{ filters.extremeSlopeThreshold }}%)</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_extreme'}" @click="setActiveEvent('down_extreme')"><div class="stat-value text-primary" style="font-size:16px;">{{ stats?.terrain?.slope_stats?.down_extreme }} 段</div><div class="stat-label fw-bold">极限下坡 (≤-{{ filters.extremeSlopeThreshold }}%)</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_steep'}" @click="setActiveEvent('up_steep')"><div class="stat-value text-warning">{{ mainTrackOverall?.terrain?.slope_stats?.up_steep }}</div><div class="stat-label">较陡上坡</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_extreme'}" @click="setActiveEvent('up_extreme')"><div class="stat-value text-danger">{{ mainTrackOverall?.terrain?.slope_stats?.up_extreme }}</div><div class="stat-label">极限上坡</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_steep'}" @click="setActiveEvent('down_steep')"><div class="stat-value text-info">{{ mainTrackOverall?.terrain?.slope_stats?.down_steep }}</div><div class="stat-label">较陡下坡</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_extreme'}" @click="setActiveEvent('down_extreme')"><div class="stat-value text-primary">{{ mainTrackOverall?.terrain?.slope_stats?.down_extreme }}</div><div class="stat-label">极限下坡</div></div></div>
         </div>
 
-        <div v-if="['up_steep', 'up_extreme', 'down_steep', 'down_extreme'].includes(activeEvent)" class="event-list">
-          <div v-if="eventData[activeEvent] && eventData[activeEvent].length > 0">
-            <div class="event-item" v-for="(ev, idx) in eventData[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
-              <div class="event-time">
-                <span class="idx-badge">#{{ idx + 1 }}</span>
-                <span class="text-secondary">{{ ev.cum_dist_km.toFixed(1) }} km</span>
-              </div>
-              <div class="event-desc text-muted ms-2">{{ ev.desc }}</div>
-              <div class="ms-auto text-primary" style="font-size: 12px;">定位 📍</div>
-            </div>
-          </div>
-          <div v-else class="text-center text-muted py-3" style="font-size: 13px;">该路段无此级别陡坡</div>
+        <div v-if="activeEvent && mainTrackEvents[activeEvent] && mainTrackEvents[activeEvent].length > 0" class="event-list">
+           <div class="event-item" v-for="(ev, idx) in mainTrackEvents[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
+             <div class="me-2" style="width: 80px;">
+               <span class="idx-badge">#{{ idx + 1 }}</span><br>
+               <span class="text-secondary fw-bold">{{ ev.cum_dist_km.toFixed(1) }} km</span>
+             </div>
+             <div class="text-muted">{{ ev.desc }}</div>
+             <div class="ms-auto text-primary" style="font-size: 12px;">定位 📍</div>
+           </div>
         </div>
       </div>
 
-      <div class="panel-card" v-show="rawData">
-        <div class="section-title">多维数据重构视图 (支持滚轮放大/平移)</div>
-        <div id="topologyChart" class="chart-box mb-4"></div>
+      <div class="panel-card">
+        <div class="section-title">📉 时间负荷域与里程海拔域 (主控参考轨)</div>
+        <div class="text-muted mb-2" style="font-size: 13px;">连续坐标系，点击上方图例名称可【单独隐藏/显示】，鼠标滑过显示精确度量。</div>
+        <div id="loadChart" class="chart-box large-chart-box mb-4"></div>
         <div id="sequenceChart" class="chart-box"></div>
       </div>
 
       <div class="panel-card">
-        <div class="section-title">二维空间真实映射</div>
+        <div class="section-title">🗺️ 空间同态轨迹地图</div>
         <div id="map"></div>
       </div>
+      
     </div>
   </div>
 
   <script>
     const { createApp } = Vue;
-    
     createApp({
       data() {
         return { 
+          sportType: 'motor', fileList: [], selectedFiles: [],
           loading: false, error: '', 
-          stats: null, eventData: null, activeEvent: null,
+          processedTracks: [], comparisonData: null,
+          exportMode: 'raw', exportInterval: 10, activeEvent: null,
           map: null, trackLayer: null, markerLayer: null,
-          showFilters: false,
-          rawData: null,
-          lastRecordTime: '', 
-          topoChart: null,
-          seqChart: null,
-          filters: {
-            minStopTime: 1, minTurnAngle: 30, maxHardBrake: -3.5, 
-            minAbnormalAccel: 2.0, minSteepCurveSlope: 8, steepSlopeThreshold: 8, extremeSlopeThreshold: 15 
-          }
+          seqChart: null, loadChart: null, compareChart: null,
+          colors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
         }
+      },
+      computed: {
+         baselineTrackName() { return this.processedTracks.length > 0 ? this.processedTracks[0].filename : ''; },
+         mainTrackOverall() { return this.processedTracks.length > 0 ? this.processedTracks[0].overall : null; },
+         mainTrackEvents() { return this.processedTracks.length > 0 ? this.processedTracks[0].events : null; }
       },
       mounted() { 
-        const savedFilters = localStorage.getItem('gpx_filters_v2');
-        if (savedFilters) { try { this.filters = { ...this.filters, ...JSON.parse(savedFilters) }; } catch(e) {} }
-
-        const savedData = localStorage.getItem('last_gpx_data');
-        const savedTime = localStorage.getItem('last_gpx_time');
-        if (savedData && savedTime) {
-          try {
-            this.rawData = JSON.parse(savedData);
-            this.lastRecordTime = savedTime;
-            this.$nextTick(() => {
-              this.applyFilters();
-              if (this.rawData.segments) this.drawMap(this.rawData.segments);
-            });
-          } catch(e) { console.error("缓存恢复失败", e); }
-        }
-        
+        this.fetchFileList();
         this.initMap(); 
-        window.addEventListener('resize', () => {
-          if (this.topoChart) this.topoChart.resize();
-          if (this.seqChart) this.seqChart.resize();
+        window.addEventListener('resize', () => { 
+            if (this.seqChart) this.seqChart.resize(); 
+            if (this.loadChart) this.loadChart.resize();
+            if (this.compareChart) this.compareChart.resize();
         });
       },
-      watch: {
-        filters: { deep: true, handler(newVal) { localStorage.setItem('gpx_filters_v2', JSON.stringify(newVal)); this.applyFilters(); } }
-      },
       methods: {
+        async fetchFileList() {
+          try { const res = await axios.get('/gpx/list_files'); this.fileList = res.data.files; } catch(e) {}
+        },
         initMap() {
           this.map = L.map('map', { preferCanvas: true }).setView([30.0, 110.0], 5);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(this.map);
+          L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+             subdomains: ['1', '2', '3', '4'],
+             maxZoom: 18, attribution: '© Amap'
+          }).addTo(this.map);
         },
-        getColor(speed) {
-          if (speed > 80) return '#ef4444'; 
-          if (speed > 50) return '#f59e0b'; 
-          if (speed > 20) return '#10b981'; 
-          return '#3b82f6';                
-        },
-        setActiveEvent(type) {
-          this.activeEvent = this.activeEvent === type ? null : type;
-          this.$nextTick(() => { this.renderCharts(); });
-        },
+        setActiveEvent(type) { this.activeEvent = this.activeEvent === type ? null : type; },
         focusMapOnEvent(ev) {
           if (!this.map) return;
-          if (this.markerLayer) { this.map.removeLayer(this.markerLayer); }
+          if (this.markerLayer) this.map.removeLayer(this.markerLayer);
           this.map.flyTo([ev.lat, ev.lon], 16, { animate: true, duration: 1 });
-          let popupText = `<b>里程点: ${ev.cum_dist_km.toFixed(1)} km</b>`;
-          if (['hard_brakes', 'abnormal_speeds', 'stop_points'].includes(this.activeEvent)) {
-              popupText += `<br><b>时间点: ${ev.offset_min.toFixed(1)} 分钟</b>`;
-          }
-          popupText += `<br>${ev.desc}`;
-          this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, opacity: 1, fillOpacity: 0.8 }).addTo(this.map).bindPopup(popupText).openPopup();
+          this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, fillOpacity: 0.8 })
+            .addTo(this.map).bindPopup(`<b>里程: ${ev.cum_dist_km} km</b><br>${ev.desc}`).openPopup();
         },
-        
-        // 【核心优化】严谨的距离计算算法，抑制 GPS 微小漂移带来的里程发散
-        calcDist(lat1, lon1, lat2, lon2) {
-          const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
-          const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-          const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-          // 容差过滤：消除 < 1m 的静态噪点位移
-          return dist < 0.001 ? 0 : dist; 
-        },
-
-        // 统一渲染双视角图表，增加 MarkPoint 与序号体系
         renderCharts() {
-          const topoDom = document.getElementById('topologyChart');
-          const seqDom = document.getElementById('sequenceChart');
-          if (!topoDom || !seqDom) return;
+          if (!this.processedTracks.length) return;
+          const mainTrack = this.processedTracks[0].segments;
 
-          if (!this.topoChart) this.topoChart = echarts.init(topoDom);
-          if (!this.seqChart) this.seqChart = echarts.init(seqDom);
+          // 构造连续坐标系需要的值矩阵 [[x,y], [x,y]]
+          const loadData = mainTrack.map(s => [s.offset_min, s.load_score]);
+          const vVertData = mainTrack.map(s => [s.offset_min, s.v_vert_m_h]);
+          const speedData = mainTrack.map(s => [s.offset_min, s.speed_kmh]);
 
-          const events = (this.activeEvent && this.eventData[this.activeEvent]) ? this.eventData[this.activeEvent] : [];
-          
-          const trackData = [];
-          const eleData = [];
-          let curDist = 0;
-
-          if (this.rawData && this.rawData.segments) {
-            this.rawData.segments.forEach(seg => {
-              trackData.push([seg.lon1, seg.lat1]);
-              const stepDist = this.calcDist(seg.lat1, seg.lon1, seg.lat2, seg.lon2);
-              curDist += stepDist;
-              const distX = seg.cum_dist_km !== undefined ? seg.cum_dist_km : curDist;
-              const ele = seg.ele2 ?? seg.elevation ?? seg.ele ?? seg.alt ?? 0;
-              eleData.push([parseFloat(distX.toFixed(3)), ele]);
-            });
-            const lastSeg = this.rawData.segments[this.rawData.segments.length - 1];
-            if (lastSeg) trackData.push([lastSeg.lon2, lastSeg.lat2]);
-          }
-
-          let yName = '事件数值';
-          let seriesColor = '#3b82f6';
-          let extType = 'max'; // 用于标记最大或最小值
-
-          const scatterTopo = [];
-          const scatterSeq = [];
-
-          events.forEach((ev, idx) => {
-            let val = 0;
-            const desc = ev.desc;
-            
-            if (this.activeEvent === 'hard_brakes') { yName = '减速度 (m/s²)'; seriesColor = '#ef4444'; val = parseFloat(desc.match(/减速度:\s*([-.\d]+)/)?.[1] || 0); extType = 'min'; }
-            else if (this.activeEvent === 'abnormal_speeds') { yName = '突变加速度 (m/s²)'; seriesColor = '#64748b'; val = parseFloat(desc.match(/a=([-.\d]+)/)?.[1] || 0); extType = 'max'; }
-            else if (this.activeEvent === 'sharp_curves') { yName = '偏航角度 (°)'; seriesColor = '#10b981'; val = parseFloat(desc.match(/偏航角变化:\s*([\d.]+)/)?.[1] || 0); extType = 'max'; }
-            else if (this.activeEvent === 'stop_points') { yName = '休整时长 (min)'; seriesColor = '#f59e0b'; val = parseFloat(desc.match(/停留时长:\s*([\d.]+)/)?.[1] || 0); extType = 'max'; }
-            else if (this.activeEvent?.includes('steep') || this.activeEvent?.includes('extreme')) { 
-              yName = '坡度 (%)'; seriesColor = desc.includes('-') ? '#3b82f6' : '#ef4444'; 
-              val = parseFloat(desc.match(/坡度[:\s]*\+?([-.\d]+)/)?.[1] || 0); 
-              extType = this.activeEvent.includes('down') ? 'min' : 'max';
-            }
-
-            // 构建统一的带序号 NodeName
-            const nodeName = `#${idx + 1}`; 
-            
-            scatterTopo.push({ name: nodeName, value: [ev.lon, ev.lat], rawEvent: ev, desc: desc });
-            scatterSeq.push({ name: nodeName, value: [ev.cum_dist_km, val], rawEvent: ev, desc: desc });
-          });
-
-          // 1. 同态拓扑 Option
-          const topoOption = {
-            title: { text: '同态拓扑图 (空间几何映射)', left: 10, top: 10, textStyle: { fontSize: 13, color: '#475569' } },
-            tooltip: { trigger: 'item', formatter: p => p.seriesType === 'scatter' ? `里程: ${p.data.rawEvent.cum_dist_km.toFixed(2)} km<br/>${p.data.name} - ${p.data.desc}` : '' },
-            grid: { left: '3%', right: '3%', bottom: '15%', top: '15%', containLabel: false },
-            dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'inside', yAxisIndex: 0 }, { type: 'slider', xAxisIndex: 0, bottom: 5, height: 12 }],
-            xAxis: { type: 'value', scale: true, show: false }, 
-            yAxis: { type: 'value', scale: true, show: false },
-            series: [
-              { type: 'line', name: '线路轨迹', data: trackData, smooth: true, lineStyle: { color: '#cbd5e1', width: 2 }, symbol: 'none', silent: true, zlevel: 0 },
-              { 
-                type: 'scatter', name: '事件节点', data: scatterTopo, symbolSize: 12, 
-                itemStyle: { color: seriesColor, shadowBlur: 4, shadowColor: 'rgba(0,0,0,0.3)' }, 
-                label: { show: true, formatter: '{b}', position: 'top', fontSize: 10, color: '#1e293b' }, // 图形上方显示 #1, #2 序号
-                emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 2 }, symbolSize: 16 }, zlevel: 1 
-              }
-            ]
-          };
-
-          // 2. 序列与海拔剖面 Option
-          const seqOption = {
-            title: { text: '事件序列与海拔剖面图', left: 10, top: 10, textStyle: { fontSize: 13, color: '#475569' } },
-            tooltip: { trigger: 'item' },
-            grid: { left: '8%', right: '8%', bottom: '15%', top: '25%', containLabel: true },
-            dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', xAxisIndex: 0, bottom: 5, height: 12 }],
-            xAxis: { type: 'value', name: '里程 (km)', nameLocation: 'middle', nameGap: 25, splitLine: { show: false } },
+          if (!this.loadChart) this.loadChart = echarts.init(document.getElementById('loadChart'));
+          this.loadChart.setOption({
+            tooltip: { 
+                trigger: 'axis',
+                axisPointer: { type: 'cross' },
+                formatter: function(params) {
+                    if (!params.length) return '';
+                    let xVal = params[0].value[0].toFixed(1);
+                    let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">时间: ${xVal} min</div>`;
+                    params.forEach(p => {
+                        let unit = p.seriesName.includes('速度') ? ' km/h' : p.seriesName.includes('爬降速') ? ' m/h' : '';
+                        let colorHex = p.color;
+                        if(typeof colorHex === 'object' && colorHex.colorStops) colorHex = colorHex.colorStops[0].color;
+                        let colorDot = `<span style="display:inline-block;margin-right:8px;border-radius:50%;width:10px;height:10px;background-color:${colorHex};"></span>`;
+                        let yVal = (p.value && p.value[1] !== undefined) ? p.value[1].toFixed(1) : '0.0';
+                        html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                                    <span>${colorDot}${p.seriesName}</span>
+                                    <span style="font-weight:bold;margin-left:15px;">${yVal}${unit}</span>
+                                 </div>`;
+                    });
+                    return html;
+                }
+            },
+            legend: { 
+                data: ['综合负荷指数', '水平速度(km/h)', '爬降速(m/h)'],
+                selectedMode: 'multiple',
+                selector: ['all', 'inverse'],
+                selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
+            },
+            grid: { left: '3%', right: '3%', bottom: '12%', top: '15%', containLabel: true },
+            dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
+            xAxis: { type: 'value', name: '时间(min)', min: 'dataMin', max: 'dataMax', splitLine: { show: false } },
             yAxis: [
-              { type: 'value', name: '海拔 (m)', position: 'left', splitLine: { show: false }, scale: true, axisLabel: { color: '#64748b' } },
-              { type: 'value', name: this.activeEvent ? yName : '', position: 'right', splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } }, scale: true, axisLabel: { color: seriesColor } }
-            ],
-            series: [
-              { 
-                type: 'line', name: '海拔', data: eleData, yAxisIndex: 0, 
-                smooth: true, symbol: 'none', lineStyle: { color: '#94a3b8', width: 1 },
-                areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(148, 163, 184, 0.5)'}, {offset: 1, color: 'rgba(148, 163, 184, 0.1)'}]) },
-                tooltip: { formatter: p => `<b>海拔剖面</b><br/>里程: ${p.value[0]} km<br/>高度: ${p.value[1]} m` }
-              },
-              { 
-                type: 'scatter', name: '事件节点', data: scatterSeq, yAxisIndex: 1, 
-                symbolSize: 10, itemStyle: { color: seriesColor },
-                label: { show: true, formatter: '{b}', position: 'top', fontSize: 10, color: '#1e293b' }, // 序号直接打在点上
-                markPoint: {
-                  data: [ { type: extType, name: '极值点' } ], // 自动计算最大值/最小值
-                  symbolSize: 35,
-                  label: { color: '#fff', fontSize: 10 }
-                },
-                tooltip: { formatter: p => `<b>${p.data.name} 节点</b><br/>里程: ${p.value[0].toFixed(2)} km<br/>${p.data.desc}` }
+              { type: 'value', name: '负荷/速度', scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } },
+              { type: 'value', name: '垂直爬降极值', scale: true, splitLine: {show: false},
+                max: function(v) { return Math.max(v.max, 500); },
+                min: function(v) { return Math.min(v.min, -500); }
               }
+            ],
+            visualMap: {
+               show: false,
+               seriesIndex: 2, 
+               pieces: [ { gt: 0, color: '#ef4444' }, { lte: 0, color: '#10b981' } ]
+            },
+            series: [
+              { name: '综合负荷指数', type: 'line', data: loadData, smooth: true, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1}, symbol: 'none' },
+              { name: '水平速度(km/h)', type: 'line', data: speedData, smooth: true, itemStyle: { color: '#3b82f6' }, symbol: 'none' },
+              { name: '爬降速(m/h)', type: 'line', yAxisIndex: 1, data: vVertData, smooth: true, symbol: 'none' }
             ]
-          };
+          }, true);
 
-          this.topoChart.setOption(topoOption, true);
-          this.seqChart.setOption(seqOption, true);
+          const eleData = mainTrack.map(s => [s.cum_dist_km, s.ele]);
+          if (!this.seqChart) this.seqChart = echarts.init(document.getElementById('sequenceChart'));
+          this.seqChart.setOption({
+            tooltip: { 
+                trigger: 'axis',
+                formatter: function(params) {
+                    if (!params.length) return '';
+                    let p = params[0];
+                    let dot = `<span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${p.color};"></span>`;
+                    return `<div style="font-size:12px;">里程: ${p.value[0].toFixed(2)} km<br/>${dot}海拔: <b>${p.value[1].toFixed(1)}</b> m</div>`;
+                }
+            },
+            grid: { left: '3%', right: '3%', bottom: '12%', top: '15%', containLabel: true },
+            dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
+            xAxis: { type: 'value', name: '里程(km)', min: 'dataMin', max: 'dataMax' },
+            yAxis: [ { type: 'value', name: '海拔(m)', scale: true } ],
+            series: [ { name: '海拔', type: 'line', data: eleData, smooth: true, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#94a3b8' }, symbol: 'none' } ]
+          }, true);
 
-          const clickHandler = (params) => {
-            if (params.seriesType === 'scatter' && params.data && params.data.rawEvent) {
-              this.focusMapOnEvent(params.data.rawEvent);
-            }
-          };
-          this.topoChart.off('click'); this.seqChart.off('click');
-          this.topoChart.on('click', clickHandler); this.seqChart.on('click', clickHandler);
+          if (this.comparisonData) {
+             setTimeout(() => {
+                const dom = document.getElementById('compareChart');
+                if (dom) {
+                    if (!this.compareChart) this.compareChart = echarts.init(dom);
+                    const seriesData = [];
+                    for (let fname in this.comparisonData.time_diff_vs_baseline) {
+                        let xyData = this.comparisonData.bins_km.map((dist, idx) => [dist, this.comparisonData.time_diff_vs_baseline[fname][idx]]);
+                        seriesData.push({ name: fname, type: 'line', smooth: true, symbol: 'none', data: xyData });
+                    }
+                    this.compareChart.setOption({
+                        tooltip: { 
+                            trigger: 'axis', 
+                            axisPointer: { type: 'cross' },
+                            formatter: function(params) {
+                               if(!params.length) return '';
+                               let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">对齐里程点: ${params[0].value[0].toFixed(2)} km</div>`;
+                               params.forEach(p => {
+                                  html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                                              <span>${p.marker} ${p.seriesName}</span>
+                                              <span style="font-weight:bold;margin-left:15px;">相差 ${p.value[1].toFixed(1)} 秒</span>
+                                           </div>`;
+                               });
+                               return html;
+                            }
+                        },
+                        legend: { 
+                            data: Object.keys(this.comparisonData.time_diff_vs_baseline),
+                            type: 'scroll',
+                            selector: ['all', 'inverse'], 
+                            selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
+                        },
+                        grid: { left: '3%', right: '3%', bottom: '12%', top: '15%', containLabel: true },
+                        dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
+                        xAxis: { type: 'value', name: '对齐里程(km)', min: 'dataMin', max: 'dataMax' },
+                        yAxis: { type: 'value', name: '相差秒数(正为慢)', splitLine: { lineStyle: { type: 'dashed' } } },
+                        series: seriesData
+                    }, true);
+                }
+             }, 100);
+          }
         },
-
-        applyFilters() {
-          if (!this.rawData) return;
-          let filtered = JSON.parse(JSON.stringify(this.rawData));
-          
-          if (filtered.events.stop_points) {
-            filtered.events.stop_points = filtered.events.stop_points.filter(ev => {
-              const match = ev.desc.match(/停留时长:\s*([\d.]+)/);
-              return match ? parseFloat(match[1]) >= this.filters.minStopTime : true;
-            });
-          }
-          if (filtered.events.sharp_curves) {
-            filtered.events.sharp_curves = filtered.events.sharp_curves.filter(ev => {
-              const match = ev.desc.match(/偏航角变化:\s*([\d.]+)/);
-              return match ? parseFloat(match[1]) >= this.filters.minTurnAngle : true;
-            });
-          }
-          if (filtered.events.hard_brakes) {
-            filtered.events.hard_brakes = filtered.events.hard_brakes.filter(ev => {
-              const match = ev.desc.match(/减速度:\s*([-\d.]+)/);
-              return match ? parseFloat(match[1]) <= this.filters.maxHardBrake : true;
-            });
-          }
-          if (filtered.events.abnormal_speeds) {
-            filtered.events.abnormal_speeds = filtered.events.abnormal_speeds.filter(ev => {
-              const match = ev.desc.match(/a=([-\d.]+)/);
-              return match ? Math.abs(parseFloat(match[1])) >= this.filters.minAbnormalAccel : true;
-            });
-          }
-          if (filtered.events.steep_curves) {
-            filtered.events.steep_curves = filtered.events.steep_curves.filter(ev => {
-              const match = ev.desc.match(/坡度\s*([-\d.]+)%/);
-              return match ? Math.abs(parseFloat(match[1])) >= this.filters.minSteepCurveSlope : true;
-            });
-          }
-
-          const allSlopes = [...(this.rawData.events.up_steep || []), ...(this.rawData.events.up_extreme || []), ...(this.rawData.events.down_steep || []), ...(this.rawData.events.down_extreme || [])];
-          filtered.events.up_steep = []; filtered.events.up_extreme = []; filtered.events.down_steep = []; filtered.events.down_extreme = [];
-
-          allSlopes.forEach(ev => {
-            const match = ev.desc.match(/坡度:\s*\+?([-\d.]+)/);
-            if (match) {
-              const val = parseFloat(match[1]);
-              if (val >= this.filters.extremeSlopeThreshold) filtered.events.up_extreme.push(ev);
-              else if (val >= this.filters.steepSlopeThreshold) filtered.events.up_steep.push(ev);
-              else if (val <= -this.filters.extremeSlopeThreshold) filtered.events.down_extreme.push(ev);
-              else if (val <= -this.filters.steepSlopeThreshold) filtered.events.down_steep.push(ev);
-            }
-          });
-
-          filtered.overall.counts.stop_points = filtered.events.stop_points.length;
-          filtered.overall.counts.sharp_curves = filtered.events.sharp_curves.length;
-          filtered.overall.counts.hard_brakes = filtered.events.hard_brakes.length;
-          filtered.overall.counts.abnormal_speeds = filtered.events.abnormal_speeds.length;
-          filtered.overall.counts.steep_curves = filtered.events.steep_curves.length;
-          filtered.overall.terrain.slope_stats.up_steep = filtered.events.up_steep.length;
-          filtered.overall.terrain.slope_stats.up_extreme = filtered.events.up_extreme.length;
-          filtered.overall.terrain.slope_stats.down_steep = filtered.events.down_steep.length;
-          filtered.overall.terrain.slope_stats.down_extreme = filtered.events.down_extreme.length;
-
-          this.stats = filtered.overall;
-          this.eventData = filtered.events;
-          
-          this.$nextTick(() => { this.renderCharts(); });
-        },
-
-        async uploadGPX() {
-          const file = this.$refs.fileInput.files[0];
-          if (!file) return this.error = '请选择文件';
+        async processGPX() {
           this.loading = true; this.error = ''; this.activeEvent = null;
           const formData = new FormData();
-          formData.append('file', file);
-
-          try {
-            const res = await axios.post('/analyze_gpx', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            this.rawData = res.data;
-            this.lastRecordTime = new Date().toLocaleString();
-            try {
-              localStorage.setItem('last_gpx_data', JSON.stringify(this.rawData));
-              localStorage.setItem('last_gpx_time', this.lastRecordTime);
-            } catch (storageErr) { console.warn("缓存溢出防范生效"); }
-            
-            this.applyFilters();
-            this.drawMap(res.data.segments);
-          } catch (err) {
-            this.error = err.response?.data?.error || '网络解析异常';
-          } finally {
-            this.loading = false;
+          
+          if (this.selectedFiles.length > 0) {
+             this.selectedFiles.forEach(f => formData.append('filenames[]', f));
+          } else {
+             const files = this.$refs.fileInput.files;
+             if (files.length === 0) { this.error = '请选择文件'; this.loading = false; return; }
+             Array.from(files).forEach(f => formData.append('files[]', f));
           }
+          
+          try {
+            const res = await axios.post(`/gpx/analyze/${this.sportType}`, formData);
+            this.processedTracks = res.data.tracks;
+            this.comparisonData = res.data.comparison;
+            
+            this.$nextTick(() => { 
+                this.renderCharts(); 
+                setTimeout(() => { if(this.map) this.map.invalidateSize(); }, 200);
+                this.drawMap(res.data.tracks);
+            });
+            if (this.selectedFiles.length === 0) this.fetchFileList();
+          } catch (err) {
+            this.error = err.response?.data?.error || '极值点无法平滑，强制熔断退出';
+          } finally { this.loading = false; }
         },
-        
-        drawMap(segments) {
+        exportCSV() {
+          if (!this.processedTracks.length) return;
+          if (this.exportMode === 'time' && this.exportInterval < 5) { alert("为防止过度失真，时间聚合不可小于5秒"); return; }
+          if (this.exportMode === 'distance' && this.exportInterval < 10) { alert("距离聚合不可小于10米"); return; }
+
+          const segments = this.processedTracks[0].segments;
+          let resampledData = [];
+          let fieldnames = [];
+
+          if (this.exportMode === 'raw') {
+              resampledData = segments;
+              fieldnames = ['time_str', 'offset_min', 'cum_dist_km', 'lat2', 'lon2', 'ele', 'speed_kmh', 'v_vert_m_h', 'load_score', 'accel', 'jerk', 'slope', 'bearing', 'dt', 'dist'];
+          } else {
+              let currentBin = [];
+              let binAcc = 0.0;
+              const interval = parseFloat(this.exportInterval);
+
+              segments.forEach(seg => {
+                  currentBin.push(seg);
+                  binAcc += (this.exportMode === 'time' ? seg.dt : seg.dist);
+
+                  if (binAcc >= interval) {
+                      let aggDt = currentBin.reduce((sum, s) => sum + s.dt, 0);
+                      let aggDist = currentBin.reduce((sum, s) => sum + s.dist, 0);
+                      let vKmh = aggDt > 0 ? (aggDist / aggDt * 3.6) : 0;
+                      let eleDiff = currentBin.reduce((sum, s) => sum + s.ele_diff, 0);
+                      let lastSeg = currentBin[currentBin.length - 1];
+
+                      resampledData.push({
+                          time_str: lastSeg.time_str,
+                          offset_min: lastSeg.offset_min,
+                          cum_dist_km: lastSeg.cum_dist_km,
+                          lat: lastSeg.lat2,
+                          lon: lastSeg.lon2,
+                          ele: lastSeg.ele,
+                          agg_dt_s: aggDt.toFixed(1),
+                          agg_dist_m: aggDist.toFixed(1),
+                          ele_diff: eleDiff.toFixed(1),
+                          avg_speed_kmh: vKmh.toFixed(1)
+                      });
+                      currentBin = [];
+                      binAcc = 0.0;
+                  }
+              });
+              fieldnames = ['time_str', 'offset_min', 'cum_dist_km', 'lat', 'lon', 'ele', 'agg_dt_s', 'agg_dist_m', 'ele_diff', 'avg_speed_kmh'];
+          }
+
+          let csvContent = '\uFEFF'; 
+          csvContent += fieldnames.join(',') + '\n';
+          resampledData.forEach(row => {
+              let rowValues = fieldnames.map(k => `"${row[k] !== undefined ? row[k] : ''}"`);
+              csvContent += rowValues.join(',') + '\n';
+          });
+
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.setAttribute("href", url);
+          link.setAttribute("download", `gpx_${this.exportMode}_${this.exportInterval}_${Date.now()}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        },
+        drawMap(tracks) {
+          if (!this.map) return;
           if (this.trackLayer) this.map.removeLayer(this.trackLayer);
           if (this.markerLayer) this.map.removeLayer(this.markerLayer);
           this.trackLayer = L.featureGroup().addTo(this.map);
           const bounds = L.latLngBounds();
-
-          segments.forEach(seg => {
-            const latlngs = [[seg.lat1, seg.lon1], [seg.lat2, seg.lon2]];
-            bounds.extend(latlngs);
-            L.polyline(latlngs, { color: this.getColor(seg.speed_kmh), weight: 4, opacity: 0.8 }).addTo(this.trackLayer);
+          
+          tracks.forEach((tr, index) => {
+              const color = this.colors[index % this.colors.length];
+              const latlngs = tr.segments.map(s => [s.lat2, s.lon2]);
+              if (latlngs.length > 0) {
+                  bounds.extend(latlngs);
+                  L.polyline(latlngs, { color: color, weight: index === 0 ? 5 : 3, opacity: 0.8 }).addTo(this.trackLayer)
+                   .bindPopup(`<b>${tr.filename}</b><br>均速: ${tr.overall.terrain.avg_speed} km/h`);
+              }
           });
-
-          if (segments.length > 0) {
-            setTimeout(() => { this.map.invalidateSize(); this.map.fitBounds(bounds, { padding: [20, 20] }); }, 100);
+          
+          if (tracks.length > 0 && bounds.isValid()) {
+             this.map.fitBounds(bounds, { padding: [20, 20] });
           }
         }
       }
