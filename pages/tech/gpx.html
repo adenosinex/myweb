@@ -184,33 +184,41 @@
           this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, fillOpacity: 0.8 })
             .addTo(this.map).bindPopup(`<b>里程: ${ev.cum_dist_km} km</b><br>${ev.desc}`).openPopup();
         },
-        renderCharts() {
+renderCharts() {
           if (!this.processedTracks.length) return;
           const mainTrack = this.processedTracks[0].segments;
 
-          // 使用连续 Value 轴所需的数据结构 [X, Y, 额外参数]
-          const loadData = mainTrack.map(s => [s.offset_min, s.load_score, s.time_str]);
-          const speedData = mainTrack.map(s => [s.offset_min, s.speed_kmh, s.time_str]);
-          const vVertData = mainTrack.map(s => [s.offset_min, s.v_vert_m_h, s.time_str]);
+          // 核心修复1：必须使用标准的对象包裹结构 {value: [x,y], attr}，绝不能把字符串混入数组
+          const loadData = mainTrack.map(s => ({ value: [s.offset_min, s.load_score], time_str: s.time_str }));
+          const speedData = mainTrack.map(s => ({ value: [s.offset_min, s.speed_kmh], time_str: s.time_str }));
+          const vVertData = mainTrack.map(s => ({ value: [s.offset_min, s.v_vert_m_h], time_str: s.time_str }));
 
           if (!this.loadChart) this.loadChart = echarts.init(document.getElementById('loadChart'));
           this.loadChart.setOption({
             tooltip: { 
                 trigger: 'axis',
-                // 核心修复1：使用 'line' 类型，取消十字准星产生的坐标轴标签遮挡
-                axisPointer: { type: 'line', animation: false, lineStyle: {color: '#94a3b8', type: 'dashed'}},
+                axisPointer: { type: 'line', snap: true, animation: false, lineStyle: {color: '#94a3b8', type: 'dashed'}},
                 formatter: function(params) {
-                    if (!params.length) return '';
-                    let xVal = params[0].value[0].toFixed(2);
-                    let timeStr = params[0].value[2] || '';
-                    let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">经过时间: ${xVal} min <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(${timeStr})</span></div>`;
+                    if (!params || !params.length) return '';
+                    // 安全寻找包含时间属性的数据节点
+                    let validParam = params.find(p => p.data && p.data.time_str);
+                    if (!validParam) return '';
+                    
+                    let xVal = parseFloat(validParam.value[0]).toFixed(2);
+                    let timeStr = validParam.data.time_str;
+                    
+                    let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">绝对时间: ${timeStr} <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(第 ${xVal} min)</span></div>`;
                     
                     params.forEach(p => {
+                        // 过滤掉缺失数据
+                        if (!p.data || p.data.value[1] === undefined || p.data.value[1] === null || isNaN(p.data.value[1])) return;
+                        
                         let unit = p.seriesName.includes('速度') ? ' km/h' : p.seriesName.includes('爬降速') ? ' m/h' : '';
                         let colorHex = p.color;
+                        if(typeof colorHex === 'object' && colorHex.colorStops) colorHex = colorHex.colorStops[0].color;
                         let colorDot = `<span style="display:inline-block;margin-right:8px;border-radius:50%;width:10px;height:10px;background-color:${colorHex};"></span>`;
-                        // 提取当前绑定数据点的纯净 Y 值
-                        let yVal = (p.value !== undefined && p.value !== null) ? parseFloat(p.value[1]).toFixed(1) : '0.0';
+                        
+                        let yVal = parseFloat(p.data.value[1]).toFixed(1);
                         html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
                                     <span>${colorDot}${p.seriesName}</span>
                                     <span style="font-weight:bold;margin-left:15px;">${yVal}${unit}</span>
@@ -226,9 +234,9 @@
             },
             axisPointer: { link: {xAxisIndex: 'all'} },
             grid: [
-                { left: '6%', right: '5%', top: '8%', height: '23%' },   // 负荷网格
-                { left: '6%', right: '5%', top: '36%', height: '23%' },  // 速度网格
-                { left: '6%', right: '5%', top: '64%', height: '23%' }   // 爬降网格
+                { left: '6%', right: '5%', top: '8%', height: '23%' },   
+                { left: '6%', right: '5%', top: '36%', height: '23%' },  
+                { left: '6%', right: '5%', top: '64%', height: '23%' }   
             ],
             xAxis: [
                 { type: 'value', gridIndex: 0, min: 'dataMin', max: 'dataMax', axisLabel: {show: false}, axisTick: {show: false}, splitLine: { show: false } },
@@ -238,37 +246,51 @@
             yAxis: [
                 { type: 'value', gridIndex: 0, name: '负荷', nameTextStyle: {color: '#8b5cf6'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } },
                 { type: 'value', gridIndex: 1, name: '速度', nameTextStyle: {color: '#3b82f6'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } },
-                // 核心修复2：撤销人为设定的 Min/Max 函数限制，让 ECharts 根据数据完全自适应，不吞任何数据
-                { type: 'value', gridIndex: 2, name: '爬降(m/h)', nameTextStyle: {color: '#10b981'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } }
+                { type: 'value', gridIndex: 2, name: '爬降(m/h)', nameTextStyle: {color: '#10b981'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } },
+                  max: function(v) { return Math.max(Math.min(v.max, 2000), 200); },
+                  min: function(v) { return Math.min(Math.max(v.min, -2000), -200); }
+                }
             ],
+            // 核心修复2：彻底移除了引发 ECharts 崩溃的 visualMap
             series: [
-              { name: '综合负荷指数', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: loadData, smooth: true, showSymbol: false, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1} },
-              { name: '水平速度(km/h)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: speedData, smooth: true, showSymbol: false, itemStyle: { color: '#3b82f6' } },
-              // 统一爬升颜色为醒目的橙色，保证渲染无 Bug
-              { name: '爬降速(m/h)', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: vVertData, smooth: true, showSymbol: false, itemStyle: { color: '#f59e0b' },
+              { name: '综合负荷指数', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: loadData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1} },
+              { name: '水平速度(km/h)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: speedData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#3b82f6' } },
+              // 采用安全的纯橙色渲染爬降速，规避多维数组引发的透明 Bug
+              { name: '爬降速(m/h)', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: vVertData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#f59e0b' },
                 markLine: { data: [{yAxis: 0}], symbol: 'none', lineStyle: { color: '#64748b', type: 'dashed', width: 1.5 } }
               }
             ]
           }, true);
 
-          const eleData = mainTrack.map(s => [s.cum_dist_km, s.ele]);
+          // 海拔剖面图同样启用安全的 Object 结构
+          const eleData = mainTrack.map(s => ({ value: [s.cum_dist_km, s.ele], time_str: s.time_str }));
           if (!this.seqChart) this.seqChart = echarts.init(document.getElementById('sequenceChart'));
           this.seqChart.setOption({
             tooltip: { 
                 trigger: 'axis',
-                axisPointer: { type: 'line', lineStyle: {color: '#94a3b8', type: 'dashed'} },
+                axisPointer: { type: 'line', snap: true, lineStyle: {color: '#94a3b8', type: 'dashed'} },
                 formatter: function(params) {
-                    if (!params.length) return '';
-                    let p = params[0];
-                    let dot = `<span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${p.color};"></span>`;
-                    return `<div style="font-size:12px;">里程: ${p.value[0].toFixed(3)} km<br/>${dot}海拔: <b>${p.value[1].toFixed(1)}</b> m</div>`;
+                    if (!params || !params.length) return '';
+                    let validParam = params.find(p => p.data && p.data.time_str);
+                    if (!validParam) return '';
+                    
+                    let timeStr = validParam.data.time_str;
+                    let distKm = parseFloat(validParam.value[0]).toFixed(3);
+                    let eleVal = parseFloat(validParam.value[1]).toFixed(1);
+                    
+                    let dot = `<span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${validParam.color};"></span>`;
+                    return `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">绝对时间: ${timeStr} <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(里程: ${distKm} km)</span></div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                                <span>${dot}海拔</span>
+                                <span style="font-weight:bold;margin-left:15px;">${eleVal} m</span>
+                            </div>`;
                 }
             },
             grid: { left: '6%', right: '5%', bottom: '15%', top: '10%', containLabel: true },
             dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
             xAxis: { type: 'value', name: '里程(km)', min: 'dataMin', max: 'dataMax' },
             yAxis: [ { type: 'value', name: '海拔(m)', scale: true } ],
-            series: [ { name: '海拔', type: 'line', data: eleData, smooth: true, showSymbol: false, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#94a3b8' } } ]
+            series: [ { name: '海拔', type: 'line', data: eleData, connectNulls: true, smooth: true, showSymbol: false, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#94a3b8' } } ]
           }, true);
 
           if (this.comparisonData) {
@@ -279,19 +301,21 @@
                     const seriesData = [];
                     for (let fname in this.comparisonData.time_diff_vs_baseline) {
                         let xyData = this.comparisonData.bins_km.map((dist, idx) => [dist, this.comparisonData.time_diff_vs_baseline[fname][idx]]);
-                        seriesData.push({ name: fname, type: 'line', smooth: true, showSymbol: false, data: xyData });
+                        seriesData.push({ name: fname, type: 'line', connectNulls: true, smooth: true, showSymbol: false, data: xyData });
                     }
                     this.compareChart.setOption({
                         tooltip: { 
                             trigger: 'axis', 
-                            axisPointer: { type: 'line' },
+                            axisPointer: { type: 'line', snap: true },
                             formatter: function(params) {
-                               if(!params.length) return '';
-                               let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">对齐里程点: ${params[0].value[0].toFixed(2)} km</div>`;
+                               if(!params || !params.length) return '';
+                               let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">对齐里程点: ${parseFloat(params[0].value[0]).toFixed(2)} km</div>`;
                                params.forEach(p => {
+                                  // 安全过滤：如果没有数据数组或Y轴值无效，不渲染
+                                  if (!p.data || p.data[1] === undefined || p.data[1] === null || isNaN(p.data[1])) return;
                                   html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
                                               <span>${p.marker} ${p.seriesName}</span>
-                                              <span style="font-weight:bold;margin-left:15px;">相差 ${p.value[1].toFixed(1)} 秒</span>
+                                              <span style="font-weight:bold;margin-left:15px;">相差 ${parseFloat(p.data[1]).toFixed(1)} 秒</span>
                                            </div>`;
                                });
                                return html;
@@ -300,7 +324,7 @@
                         legend: { 
                             data: Object.keys(this.comparisonData.time_diff_vs_baseline),
                             type: 'scroll',
-                            selectedMode: 'single', // 单选聚焦模式
+                            selectedMode: 'single', 
                             selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
                         },
                         grid: { left: '6%', right: '5%', bottom: '15%', top: '15%', containLabel: true },
@@ -312,7 +336,9 @@
                 }
              }, 100);
           }
-        },
+        }
+        
+        ,
         async processGPX() {
           this.loading = true; this.error = ''; this.activeEvent = null;
           const formData = new FormData();

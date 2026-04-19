@@ -48,11 +48,6 @@ def extract_raw_data(gpx_obj):
         
     return raw_points
 def calculate_kinematics(raw_points, config):
-    """
-    【管道阶段 1：初级动力学计算与极端孤岛飞点剔除】
-    负责计算点对点速度，如果速度超出物理极限（例如徒步遇到 >12km/h的飞点），
-    直接拦截并丢弃该记录，但强制更新锚点，防止后续正常数据被连环误杀。
-    """
     base_table = []
     if not raw_points: return base_table
     
@@ -60,12 +55,13 @@ def calculate_kinematics(raw_points, config):
     max_v = config['max_valid_speed_kmh']
     min_dist = config['min_segment_dist']
     min_dt = config['min_segment_dt']
+    max_vert = config.get('max_vert_speed_mh', 4000) # 读取当前运动模式的爬升极限
     
     for i in range(1, len(raw_points)):
         curr = raw_points[i]
         dt = (curr['time'] - last_pt['time']).total_seconds()
         
-        # 过滤时间间隔与位移过小的原地抖动点
+        # 1. 过滤高频原地抖动
         if dt < min_dt: continue
         dist = haversine(last_pt['lat'], last_pt['lon'], curr['lat'], curr['lon'])
         if dist < min_dist: continue
@@ -73,28 +69,33 @@ def calculate_kinematics(raw_points, config):
         v_ms = dist / dt
         v_kmh = v_ms * 3.6
         
-        # 核心防线：绝对物理极限过滤。直接丢弃，不进入 base_table。
+        # 2. 水平极端漂移剔除 (必须同步更新锚点)
         if v_kmh > max_v or v_kmh < 0:
-            last_pt = curr
+            if dt > 60: last_pt = curr
             continue
             
         ele_diff = curr['ele_smooth'] - last_pt['ele_smooth']
+        v_vert_m_h = (ele_diff / dt) * 3600
+        
+        # 3. 【核心修复】：垂直爬升极端值直接剔除！绝不让它进入数据图表
+        if abs(v_vert_m_h) > max_vert:
+            if dt > 60: last_pt = curr
+            continue
+
         slope = (ele_diff / dist * 100) if dist > 0 else 0
-        # 垂直爬升强制熔断保护，防止Y轴被极个别噪点撑爆
-        v_vert_m_h = max(-3000.0, min(3000.0, (ele_diff / dt) * 3600))
+        load_score = v_kmh + (v_vert_m_h / 120.0 if v_vert_m_h > 0 else 0)
 
         base_table.append({
             'time_obj': curr['time'], 
             'lat1': last_pt['lat'], 'lon1': last_pt['lon'], 'lat2': curr['lat'], 'lon2': curr['lon'],
             'dt': dt, 'dist': dist, 'ele_diff': safe_float(ele_diff), 'ele': safe_float(curr['ele_smooth']),
             'speed_ms': safe_float(v_ms), 'speed_kmh': safe_float(v_kmh),
-            'v_vert_m_h': safe_float(v_vert_m_h),
+            'v_vert_m_h': safe_float(v_vert_m_h), 'load_score': safe_float(load_score),
             'slope': safe_float(slope), 'bearing': safe_float(calculate_bearing(last_pt['lat'], last_pt['lon'], curr['lat'], curr['lon']))
         })
         last_pt = curr
         
     return base_table
-
 
 def trim_and_rezero(base_table, config):
     """
@@ -156,7 +157,7 @@ def calculate_dynamics(base_table):
         curr['jerk'] = safe_float((curr['accel'] - prev['accel']) / curr['dt'])
         total_jerk += abs(curr['jerk'])
     return base_table, safe_float(total_jerk / (len(base_table) - 1) if len(base_table) > 1 else 0)
-    
+
 def analyze_events(base_table, config):
     events = { 'hard_brakes': [], 'sharp_curves': [], 'stop_points': [], 'abnormal_speeds': [], 'steep_curves': [], 'up_steep': [], 'up_extreme': [], 'down_steep': [], 'down_extreme': [] }
     current_stop_duration, stop_start_offset = 0, 0
@@ -256,11 +257,12 @@ def compare_tracks(track_results):
         comparison_data['time_diff_vs_baseline'][fname] = [safe_float((times[i] - baseline_times[i]) * 60) for i in range(num_bins)]
     return comparison_data
 
-# 新增精准的上下限控制
+
+# 增加各运动模式的爬降极限 (max_vert_speed_mh)
 SPORT_PROFILES = {
-    'motor': { 'min_segment_dist': 10, 'min_segment_dt': 1.5, 'trim_min_speed_kmh': 5.0, 'trim_max_speed_kmh': 200.0, 'max_valid_speed_kmh': 200.0, 'moving_speed_threshold': 3.0, 'stop_speed_threshold': 3.0, 'stop_duration_sec': 60, 'enable_dynamics': True, 'hard_brake_threshold': -3.5, 'abnormal_accel_threshold': 2.5, 'sharp_curve_angle': 30, 'sharp_curve_speed': 25, 'steep_slope_threshold': 8, 'extreme_slope_threshold': 15 },
-    'cycle': { 'min_segment_dist': 5,  'min_segment_dt': 1.5, 'trim_min_speed_kmh': 3.0, 'trim_max_speed_kmh': 80.0,  'max_valid_speed_kmh': 80.0,  'moving_speed_threshold': 2.0, 'stop_speed_threshold': 1.5, 'stop_duration_sec': 30, 'enable_dynamics': True, 'hard_brake_threshold': -2.0, 'abnormal_accel_threshold': 1.5, 'sharp_curve_angle': 45, 'sharp_curve_speed': 15, 'steep_slope_threshold': 6, 'extreme_slope_threshold': 12 },
-    'hike':  { 'min_segment_dist': 3,  'min_segment_dt': 2.0, 'trim_min_speed_kmh': 0.5, 'trim_max_speed_kmh': 10.0,  'max_valid_speed_kmh': 12.0,  'moving_speed_threshold': 0.5, 'stop_speed_threshold': 0.5, 'stop_duration_sec': 120, 'enable_dynamics': False, 'hard_brake_threshold': -99, 'abnormal_accel_threshold': 99, 'sharp_curve_angle': 180, 'sharp_curve_speed': 99, 'steep_slope_threshold': 12, 'extreme_slope_threshold': 25 }
+    'motor': { 'max_vert_speed_mh': 8000, 'min_segment_dist': 10, 'min_segment_dt': 1.5, 'trim_min_speed_kmh': 5.0, 'trim_max_speed_kmh': 200.0, 'max_valid_speed_kmh': 200.0, 'moving_speed_threshold': 3.0, 'stop_speed_threshold': 3.0, 'stop_duration_sec': 60, 'enable_dynamics': True, 'hard_brake_threshold': -3.5, 'abnormal_accel_threshold': 2.5, 'sharp_curve_angle': 30, 'sharp_curve_speed': 25, 'steep_slope_threshold': 8, 'extreme_slope_threshold': 15 },
+    'cycle': { 'max_vert_speed_mh': 4000, 'min_segment_dist': 5,  'min_segment_dt': 1.5, 'trim_min_speed_kmh': 3.0, 'trim_max_speed_kmh': 80.0,  'max_valid_speed_kmh': 80.0,  'moving_speed_threshold': 2.0, 'stop_speed_threshold': 1.5, 'stop_duration_sec': 30, 'enable_dynamics': True, 'hard_brake_threshold': -2.0, 'abnormal_accel_threshold': 1.5, 'sharp_curve_angle': 45, 'sharp_curve_speed': 15, 'steep_slope_threshold': 6, 'extreme_slope_threshold': 12 },
+    'hike':  { 'max_vert_speed_mh': 2500, 'min_segment_dist': 3,  'min_segment_dt': 2.0, 'trim_min_speed_kmh': 0.5, 'trim_max_speed_kmh': 10.0,  'max_valid_speed_kmh': 12.0,  'moving_speed_threshold': 0.5, 'stop_speed_threshold': 0.5, 'stop_duration_sec': 120, 'enable_dynamics': False, 'hard_brake_threshold': -99, 'abnormal_accel_threshold': 99, 'sharp_curve_angle': 180, 'sharp_curve_speed': 99, 'steep_slope_threshold': 12, 'extreme_slope_threshold': 25 }
 }
 SPORT_PROFILES['motor']['score_evaluator'] = lambda dist, b, j: max(0, min(100, round(100 - (b/dist*100*1.5) - (j*30), 1))) if dist > 0 else 100
 SPORT_PROFILES['cycle']['score_evaluator'] = lambda dist, b, j: max(0, min(100, round(100 - (b/dist*100*2.0) - (j*20), 1))) if dist > 0 else 100
