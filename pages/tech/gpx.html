@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>多模态轨迹遥测分析引擎 终极版</title>
+  <title>多模态轨迹遥测分析引擎 极净版</title>
   <script src="/static/cdn/vue3.5.global.prod.js"></script>
   <script src="/static/cdn/axios1.1.min.js"></script>
   <script src="/static/cdn/echarts.min.js"></script>
@@ -16,7 +16,7 @@
     .panel-card { margin-bottom: 16px; border-radius: 12px; padding: 20px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     #map { height: 450px; border-radius: 8px; margin-top: 16px; z-index: 1; }
     .chart-box { height: 400px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #e2e8f0; background: #fff; }
-    .large-chart-box { height: 500px; }
+    .large-chart-box { height: 650px; }
     .file-list-box { max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #fafafa; }
     .section-title { font-size: 1.1rem; font-weight: 700; border-left: 4px solid #1e40af; padding-left: 10px; margin-bottom: 16px; color: #1e293b;}
     .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; height: 100%; transition: all 0.2s; cursor: pointer; }
@@ -38,11 +38,11 @@
     <div class="panel-card">
       <div class="row g-2 mb-3">
         <div class="col-12 col-md-4">
-          <label class="text-muted" style="font-size: 12px;">载具/运动模式</label>
+          <label class="text-muted" style="font-size: 12px;">载具/运动模式 (核心防抖切换)</label>
           <select v-model="sportType" class="form-select fw-bold">
             <option value="motor">🏍️ 机动车 (剔除无效起停漂移)</option>
-            <option value="cycle">🚴 骑行 (剔除慢速推车段)</option>
-            <option value="hike">🥾 徒步 (自动切除坐车位移)</option>
+            <option value="cycle">🚴 骑行 (剔除慢速推车与高频跳点)</option>
+            <option value="hike">🥾 徒步 (自动切除坐车位移，严格拦截 >10km/h)</option>
           </select>
         </div>
         <div class="col-12 col-md-8">
@@ -58,16 +58,16 @@
       <div class="text-muted mb-3" style="font-size: 12px;" v-if="selectedFiles.length === 0">如库中无文件，可通过下方直接上传处理：<input type="file" ref="fileInput" accept=".gpx" class="form-control form-control-sm mt-1" multiple></div>
 
       <button @click="processGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
-        {{ loading ? '数据解算与滑动重采样中...' : '启动并发分析与重构对齐' }}
+        {{ loading ? '数据解算与漂移熔断剔除中...' : '启动并发分析与重构对齐' }}
       </button>
       
       <div v-if="processedTracks.length > 0" class="export-panel row g-2 align-items-center">
-         <div class="col-md-3 text-muted" style="font-size:13px; font-weight:bold;">📥 导出主控轨 (前端直出)：</div>
+         <div class="col-md-3 text-muted" style="font-size:13px; font-weight:bold;">📥 导出主控轨 (均分网格对齐)：</div>
          <div class="col-md-3">
             <select v-model="exportMode" class="form-select form-select-sm">
                <option value="raw">原始底层切片</option>
-               <option value="time">按固定时间聚合</option>
-               <option value="distance">按固定里程聚合</option>
+               <option value="time">按绝对时间网格聚合</option>
+               <option value="distance">按绝对里程网格聚合</option>
             </select>
          </div>
          <div class="col-md-3" v-if="exportMode !== 'raw'">
@@ -85,7 +85,7 @@
       
       <div class="panel-card" v-if="comparisonData">
         <div class="section-title">⏱️ 地理空间用时差值分析 (主控参考轨: {{ baselineTrackName }})</div>
-        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐，直观展示赛段中时间差的拉开位置。点击图例可【单独显示/隐藏】。</div>
+        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐，直观展示赛段中时间差的拉开位置。<span class="text-primary fw-bold">点击图例即可进入“单轨聚焦”模式，排除干扰。</span></div>
         <div id="compareChart" class="chart-box"></div>
       </div>
 
@@ -99,29 +99,11 @@
           <div class="col-4 col-md-2" v-if="sportType !== 'hike'"><div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')"><div class="stat-value text-success">{{ mainTrackOverall?.counts?.sharp_curves }}</div><div class="stat-label">急弯</div></div></div>
           <div class="col-4 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')"><div class="stat-value text-warning">{{ mainTrackOverall?.counts?.stop_points }}</div><div class="stat-label">驻点</div></div></div>
         </div>
-        
-        <div class="row g-2">
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_steep'}" @click="setActiveEvent('up_steep')"><div class="stat-value text-warning">{{ mainTrackOverall?.terrain?.slope_stats?.up_steep }}</div><div class="stat-label">较陡上坡</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_extreme'}" @click="setActiveEvent('up_extreme')"><div class="stat-value text-danger">{{ mainTrackOverall?.terrain?.slope_stats?.up_extreme }}</div><div class="stat-label">极限上坡</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_steep'}" @click="setActiveEvent('down_steep')"><div class="stat-value text-info">{{ mainTrackOverall?.terrain?.slope_stats?.down_steep }}</div><div class="stat-label">较陡下坡</div></div></div>
-          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_extreme'}" @click="setActiveEvent('down_extreme')"><div class="stat-value text-primary">{{ mainTrackOverall?.terrain?.slope_stats?.down_extreme }}</div><div class="stat-label">极限下坡</div></div></div>
-        </div>
-
-        <div v-if="activeEvent && mainTrackEvents[activeEvent] && mainTrackEvents[activeEvent].length > 0" class="event-list">
-           <div class="event-item" v-for="(ev, idx) in mainTrackEvents[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
-             <div class="me-2" style="width: 80px;">
-               <span class="idx-badge">#{{ idx + 1 }}</span><br>
-               <span class="text-secondary fw-bold">{{ ev.cum_dist_km.toFixed(1) }} km</span>
-             </div>
-             <div class="text-muted">{{ ev.desc }}</div>
-             <div class="ms-auto text-primary" style="font-size: 12px;">定位 📍</div>
-           </div>
-        </div>
       </div>
 
       <div class="panel-card">
-        <div class="section-title">📉 时间负荷域与里程海拔域 (主控参考轨)</div>
-        <div class="text-muted mb-2" style="font-size: 13px;">连续坐标系，点击上方图例名称可【单独隐藏/显示】，鼠标滑过显示精确度量。</div>
+        <div class="section-title">📉 多网格遥测堆叠域 (主控参考轨)</div>
+        <div class="text-muted mb-2" style="font-size: 13px;">连续坐标系，各指标自适应伸缩，互不压扁。鼠标悬停展示当前时刻精确定位。</div>
         <div id="loadChart" class="chart-box large-chart-box mb-4"></div>
         <div id="sequenceChart" class="chart-box"></div>
       </div>
@@ -142,7 +124,7 @@
           sportType: 'motor', fileList: [], selectedFiles: [],
           loading: false, error: '', 
           processedTracks: [], comparisonData: null,
-          exportMode: 'raw', exportInterval: 10, activeEvent: null,
+          exportMode: 'raw', exportInterval: 30, activeEvent: null,
           map: null, trackLayer: null, markerLayer: null,
           seqChart: null, loadChart: null, compareChart: null,
           colors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
@@ -153,9 +135,27 @@
          mainTrackOverall() { return this.processedTracks.length > 0 ? this.processedTracks[0].overall : null; },
          mainTrackEvents() { return this.processedTracks.length > 0 ? this.processedTracks[0].events : null; }
       },
-      mounted() { 
-        this.fetchFileList();
+      watch: {
+        sportType(val) { localStorage.setItem('gpx_sportType', val); },
+        selectedFiles(val) { localStorage.setItem('gpx_selectedFiles', JSON.stringify(val)); }
+      },
+      async mounted() { 
+        const savedSport = localStorage.getItem('gpx_sportType');
+        if (savedSport) this.sportType = savedSport;
+
+        const savedFiles = localStorage.getItem('gpx_selectedFiles');
+        if (savedFiles) {
+            try { this.selectedFiles = JSON.parse(savedFiles); } catch(e) {}
+        }
+
+        await this.fetchFileList();
+        this.selectedFiles = this.selectedFiles.filter(f => this.fileList.includes(f));
         this.initMap(); 
+
+        if (this.selectedFiles.length > 0) {
+            this.processGPX();
+        }
+
         window.addEventListener('resize', () => { 
             if (this.seqChart) this.seqChart.resize(); 
             if (this.loadChart) this.loadChart.resize();
@@ -164,7 +164,10 @@
       },
       methods: {
         async fetchFileList() {
-          try { const res = await axios.get('/gpx/list_files'); this.fileList = res.data.files; } catch(e) {}
+          try { 
+              const res = await axios.get('/gpx/list_files'); 
+              this.fileList = res.data.files; 
+          } catch(e) {}
         },
         initMap() {
           this.map = L.map('map', { preferCanvas: true }).setView([30.0, 110.0], 5);
@@ -185,26 +188,29 @@
           if (!this.processedTracks.length) return;
           const mainTrack = this.processedTracks[0].segments;
 
-          // 构造连续坐标系需要的值矩阵 [[x,y], [x,y]]
-          const loadData = mainTrack.map(s => [s.offset_min, s.load_score]);
-          const vVertData = mainTrack.map(s => [s.offset_min, s.v_vert_m_h]);
-          const speedData = mainTrack.map(s => [s.offset_min, s.speed_kmh]);
+          // 使用连续 Value 轴所需的数据结构 [X, Y, 额外参数]
+          const loadData = mainTrack.map(s => [s.offset_min, s.load_score, s.time_str]);
+          const speedData = mainTrack.map(s => [s.offset_min, s.speed_kmh, s.time_str]);
+          const vVertData = mainTrack.map(s => [s.offset_min, s.v_vert_m_h, s.time_str]);
 
           if (!this.loadChart) this.loadChart = echarts.init(document.getElementById('loadChart'));
           this.loadChart.setOption({
             tooltip: { 
                 trigger: 'axis',
-                axisPointer: { type: 'cross' },
+                // 核心修复1：使用 'line' 类型，取消十字准星产生的坐标轴标签遮挡
+                axisPointer: { type: 'line', animation: false, lineStyle: {color: '#94a3b8', type: 'dashed'}},
                 formatter: function(params) {
                     if (!params.length) return '';
-                    let xVal = params[0].value[0].toFixed(1);
-                    let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">时间: ${xVal} min</div>`;
+                    let xVal = params[0].value[0].toFixed(2);
+                    let timeStr = params[0].value[2] || '';
+                    let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">经过时间: ${xVal} min <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(${timeStr})</span></div>`;
+                    
                     params.forEach(p => {
                         let unit = p.seriesName.includes('速度') ? ' km/h' : p.seriesName.includes('爬降速') ? ' m/h' : '';
                         let colorHex = p.color;
-                        if(typeof colorHex === 'object' && colorHex.colorStops) colorHex = colorHex.colorStops[0].color;
                         let colorDot = `<span style="display:inline-block;margin-right:8px;border-radius:50%;width:10px;height:10px;background-color:${colorHex};"></span>`;
-                        let yVal = (p.value && p.value[1] !== undefined) ? p.value[1].toFixed(1) : '0.0';
+                        // 提取当前绑定数据点的纯净 Y 值
+                        let yVal = (p.value !== undefined && p.value !== null) ? parseFloat(p.value[1]).toFixed(1) : '0.0';
                         html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
                                     <span>${colorDot}${p.seriesName}</span>
                                     <span style="font-weight:bold;margin-left:15px;">${yVal}${unit}</span>
@@ -215,29 +221,33 @@
             },
             legend: { 
                 data: ['综合负荷指数', '水平速度(km/h)', '爬降速(m/h)'],
-                selectedMode: 'multiple',
-                selector: ['all', 'inverse'],
-                selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
+                selectedMode: 'multiple', 
+                top: 0
             },
-            grid: { left: '3%', right: '3%', bottom: '12%', top: '15%', containLabel: true },
-            dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
-            xAxis: { type: 'value', name: '时间(min)', min: 'dataMin', max: 'dataMax', splitLine: { show: false } },
-            yAxis: [
-              { type: 'value', name: '负荷/速度', scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } },
-              { type: 'value', name: '垂直爬降极值', scale: true, splitLine: {show: false},
-                max: function(v) { return Math.max(v.max, 500); },
-                min: function(v) { return Math.min(v.min, -500); }
-              }
+            axisPointer: { link: {xAxisIndex: 'all'} },
+            grid: [
+                { left: '6%', right: '5%', top: '8%', height: '23%' },   // 负荷网格
+                { left: '6%', right: '5%', top: '36%', height: '23%' },  // 速度网格
+                { left: '6%', right: '5%', top: '64%', height: '23%' }   // 爬降网格
             ],
-            visualMap: {
-               show: false,
-               seriesIndex: 2, 
-               pieces: [ { gt: 0, color: '#ef4444' }, { lte: 0, color: '#10b981' } ]
-            },
+            xAxis: [
+                { type: 'value', gridIndex: 0, min: 'dataMin', max: 'dataMax', axisLabel: {show: false}, axisTick: {show: false}, splitLine: { show: false } },
+                { type: 'value', gridIndex: 1, min: 'dataMin', max: 'dataMax', axisLabel: {show: false}, axisTick: {show: false}, splitLine: { show: false } },
+                { type: 'value', gridIndex: 2, min: 'dataMin', max: 'dataMax', name: '时间(min)', nameLocation: 'middle', nameGap: 25, splitLine: { show: false } }
+            ],
+            yAxis: [
+                { type: 'value', gridIndex: 0, name: '负荷', nameTextStyle: {color: '#8b5cf6'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } },
+                { type: 'value', gridIndex: 1, name: '速度', nameTextStyle: {color: '#3b82f6'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } },
+                // 核心修复2：撤销人为设定的 Min/Max 函数限制，让 ECharts 根据数据完全自适应，不吞任何数据
+                { type: 'value', gridIndex: 2, name: '爬降(m/h)', nameTextStyle: {color: '#10b981'}, scale: true, splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } } }
+            ],
             series: [
-              { name: '综合负荷指数', type: 'line', data: loadData, smooth: true, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1}, symbol: 'none' },
-              { name: '水平速度(km/h)', type: 'line', data: speedData, smooth: true, itemStyle: { color: '#3b82f6' }, symbol: 'none' },
-              { name: '爬降速(m/h)', type: 'line', yAxisIndex: 1, data: vVertData, smooth: true, symbol: 'none' }
+              { name: '综合负荷指数', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: loadData, smooth: true, showSymbol: false, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1} },
+              { name: '水平速度(km/h)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: speedData, smooth: true, showSymbol: false, itemStyle: { color: '#3b82f6' } },
+              // 统一爬升颜色为醒目的橙色，保证渲染无 Bug
+              { name: '爬降速(m/h)', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: vVertData, smooth: true, showSymbol: false, itemStyle: { color: '#f59e0b' },
+                markLine: { data: [{yAxis: 0}], symbol: 'none', lineStyle: { color: '#64748b', type: 'dashed', width: 1.5 } }
+              }
             ]
           }, true);
 
@@ -246,18 +256,19 @@
           this.seqChart.setOption({
             tooltip: { 
                 trigger: 'axis',
+                axisPointer: { type: 'line', lineStyle: {color: '#94a3b8', type: 'dashed'} },
                 formatter: function(params) {
                     if (!params.length) return '';
                     let p = params[0];
                     let dot = `<span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${p.color};"></span>`;
-                    return `<div style="font-size:12px;">里程: ${p.value[0].toFixed(2)} km<br/>${dot}海拔: <b>${p.value[1].toFixed(1)}</b> m</div>`;
+                    return `<div style="font-size:12px;">里程: ${p.value[0].toFixed(3)} km<br/>${dot}海拔: <b>${p.value[1].toFixed(1)}</b> m</div>`;
                 }
             },
-            grid: { left: '3%', right: '3%', bottom: '12%', top: '15%', containLabel: true },
+            grid: { left: '6%', right: '5%', bottom: '15%', top: '10%', containLabel: true },
             dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
             xAxis: { type: 'value', name: '里程(km)', min: 'dataMin', max: 'dataMax' },
             yAxis: [ { type: 'value', name: '海拔(m)', scale: true } ],
-            series: [ { name: '海拔', type: 'line', data: eleData, smooth: true, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#94a3b8' }, symbol: 'none' } ]
+            series: [ { name: '海拔', type: 'line', data: eleData, smooth: true, showSymbol: false, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#94a3b8' } } ]
           }, true);
 
           if (this.comparisonData) {
@@ -268,12 +279,12 @@
                     const seriesData = [];
                     for (let fname in this.comparisonData.time_diff_vs_baseline) {
                         let xyData = this.comparisonData.bins_km.map((dist, idx) => [dist, this.comparisonData.time_diff_vs_baseline[fname][idx]]);
-                        seriesData.push({ name: fname, type: 'line', smooth: true, symbol: 'none', data: xyData });
+                        seriesData.push({ name: fname, type: 'line', smooth: true, showSymbol: false, data: xyData });
                     }
                     this.compareChart.setOption({
                         tooltip: { 
                             trigger: 'axis', 
-                            axisPointer: { type: 'cross' },
+                            axisPointer: { type: 'line' },
                             formatter: function(params) {
                                if(!params.length) return '';
                                let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">对齐里程点: ${params[0].value[0].toFixed(2)} km</div>`;
@@ -289,10 +300,10 @@
                         legend: { 
                             data: Object.keys(this.comparisonData.time_diff_vs_baseline),
                             type: 'scroll',
-                            selector: ['all', 'inverse'], 
+                            selectedMode: 'single', // 单选聚焦模式
                             selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
                         },
-                        grid: { left: '3%', right: '3%', bottom: '12%', top: '15%', containLabel: true },
+                        grid: { left: '6%', right: '5%', bottom: '15%', top: '15%', containLabel: true },
                         dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
                         xAxis: { type: 'value', name: '对齐里程(km)', min: 'dataMin', max: 'dataMax' },
                         yAxis: { type: 'value', name: '相差秒数(正为慢)', splitLine: { lineStyle: { type: 'dashed' } } },
@@ -310,7 +321,7 @@
              this.selectedFiles.forEach(f => formData.append('filenames[]', f));
           } else {
              const files = this.$refs.fileInput.files;
-             if (files.length === 0) { this.error = '请选择文件'; this.loading = false; return; }
+             if (files.length === 0) { this.error = '请选择文件或从上方列表勾选'; this.loading = false; return; }
              Array.from(files).forEach(f => formData.append('files[]', f));
           }
           
@@ -324,9 +335,9 @@
                 setTimeout(() => { if(this.map) this.map.invalidateSize(); }, 200);
                 this.drawMap(res.data.tracks);
             });
-            if (this.selectedFiles.length === 0) this.fetchFileList();
+            if (this.selectedFiles.length === 0) await this.fetchFileList();
           } catch (err) {
-            this.error = err.response?.data?.error || '极值点无法平滑，强制熔断退出';
+            this.error = err.response?.data?.error || '解析异常，可能是GPS坐标跳动过大被系统切断。';
           } finally { this.loading = false; }
         },
         exportCSV() {
@@ -342,38 +353,50 @@
               resampledData = segments;
               fieldnames = ['time_str', 'offset_min', 'cum_dist_km', 'lat2', 'lon2', 'ele', 'speed_kmh', 'v_vert_m_h', 'load_score', 'accel', 'jerk', 'slope', 'bearing', 'dt', 'dist'];
           } else {
-              let currentBin = [];
-              let binAcc = 0.0;
+              // 核心修复3：哈希分箱算法，保证严格均分时间和距离的栅格输出
               const interval = parseFloat(this.exportInterval);
+              let buckets = {};
 
               segments.forEach(seg => {
-                  currentBin.push(seg);
-                  binAcc += (this.exportMode === 'time' ? seg.dt : seg.dist);
-
-                  if (binAcc >= interval) {
-                      let aggDt = currentBin.reduce((sum, s) => sum + s.dt, 0);
-                      let aggDist = currentBin.reduce((sum, s) => sum + s.dist, 0);
-                      let vKmh = aggDt > 0 ? (aggDist / aggDt * 3.6) : 0;
-                      let eleDiff = currentBin.reduce((sum, s) => sum + s.ele_diff, 0);
-                      let lastSeg = currentBin[currentBin.length - 1];
-
-                      resampledData.push({
-                          time_str: lastSeg.time_str,
-                          offset_min: lastSeg.offset_min,
-                          cum_dist_km: lastSeg.cum_dist_km,
-                          lat: lastSeg.lat2,
-                          lon: lastSeg.lon2,
-                          ele: lastSeg.ele,
-                          agg_dt_s: aggDt.toFixed(1),
-                          agg_dist_m: aggDist.toFixed(1),
-                          ele_diff: eleDiff.toFixed(1),
-                          avg_speed_kmh: vKmh.toFixed(1)
-                      });
-                      currentBin = [];
-                      binAcc = 0.0;
-                  }
+                  let bucketVal = this.exportMode === 'time' ? (seg.offset_min * 60) : (seg.cum_dist_km * 1000);
+                  let bIdx = Math.floor(bucketVal / interval);
+                  if (!buckets[bIdx]) buckets[bIdx] = [];
+                  buckets[bIdx].push(seg);
               });
-              fieldnames = ['time_str', 'offset_min', 'cum_dist_km', 'lat', 'lon', 'ele', 'agg_dt_s', 'agg_dist_m', 'ele_diff', 'avg_speed_kmh'];
+
+              // 按顺序提取合并好的网格
+              let sortedKeys = Object.keys(buckets).map(Number).sort((a, b) => a - b);
+              
+              sortedKeys.forEach(bIdx => {
+                  let bin = buckets[bIdx];
+                  let aggDt = bin.reduce((sum, s) => sum + s.dt, 0);
+                  let aggDist = bin.reduce((sum, s) => sum + s.dist, 0);
+                  let vKmh = aggDt > 0 ? (aggDist / aggDt * 3.6) : 0;
+                  let eleDiff = bin.reduce((sum, s) => sum + s.ele_diff, 0);
+                  let vVert = aggDt > 0 ? (eleDiff / aggDt * 3600) : 0;
+                  let avgEle = bin.reduce((sum, s) => sum + s.ele, 0) / bin.length;
+                  let lastSeg = bin[bin.length - 1];
+
+                  // 赋予绝对均分坐标，例如正好输出在第 30s、60s 这种整数位
+                  let exactVal = bIdx * interval;
+                  let exactMin = this.exportMode === 'time' ? (exactVal / 60) : lastSeg.offset_min;
+                  let exactDist = this.exportMode === 'distance' ? (exactVal / 1000) : lastSeg.cum_dist_km;
+
+                  resampledData.push({
+                      time_str: lastSeg.time_str, 
+                      offset_min: exactMin.toFixed(2),
+                      cum_dist_km: exactDist.toFixed(3),
+                      lat: lastSeg.lat2,
+                      lon: lastSeg.lon2,
+                      ele: avgEle.toFixed(1),
+                      agg_dt_s: aggDt.toFixed(1),
+                      agg_dist_m: aggDist.toFixed(1),
+                      ele_diff: eleDiff.toFixed(1),
+                      avg_speed_kmh: vKmh.toFixed(1),
+                      v_vert_m_h: vVert.toFixed(1)
+                  });
+              });
+              fieldnames = ['time_str', 'offset_min', 'cum_dist_km', 'lat', 'lon', 'ele', 'agg_dt_s', 'agg_dist_m', 'ele_diff', 'avg_speed_kmh', 'v_vert_m_h'];
           }
 
           let csvContent = '\uFEFF'; 

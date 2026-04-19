@@ -47,8 +47,12 @@ def extract_raw_data(gpx_obj):
         raw_points[i]['ele_smooth'] = sum(p['ele'] for p in window) / len(window)
         
     return raw_points
-
 def calculate_kinematics(raw_points, config):
+    """
+    【管道阶段 1：初级动力学计算与极端孤岛飞点剔除】
+    负责计算点对点速度，如果速度超出物理极限（例如徒步遇到 >12km/h的飞点），
+    直接拦截并丢弃该记录，但强制更新锚点，防止后续正常数据被连环误杀。
+    """
     base_table = []
     if not raw_points: return base_table
     
@@ -60,72 +64,88 @@ def calculate_kinematics(raw_points, config):
     for i in range(1, len(raw_points)):
         curr = raw_points[i]
         dt = (curr['time'] - last_pt['time']).total_seconds()
+        
+        # 过滤时间间隔与位移过小的原地抖动点
         if dt < min_dt: continue
-            
         dist = haversine(last_pt['lat'], last_pt['lon'], curr['lat'], curr['lon'])
         if dist < min_dist: continue
             
         v_ms = dist / dt
         v_kmh = v_ms * 3.6
         
-        # 核心防抖与毒锚点拦截：
-        # 如果超出物理极限(漂移)且间隔<60秒，丢弃该点，且绝不更新 last_pt！避免连环失效。
-        # 只有在间隔>60秒时，才认定为坐车接驳，允许更新锚点。
+        # 核心防线：绝对物理极限过滤。直接丢弃，不进入 base_table。
         if v_kmh > max_v or v_kmh < 0:
-            if dt > 60: last_pt = curr
+            last_pt = curr
             continue
             
         ele_diff = curr['ele_smooth'] - last_pt['ele_smooth']
         slope = (ele_diff / dist * 100) if dist > 0 else 0
+        # 垂直爬升强制熔断保护，防止Y轴被极个别噪点撑爆
         v_vert_m_h = max(-3000.0, min(3000.0, (ele_diff / dt) * 3600))
-        load_score = v_kmh + (v_vert_m_h / 120.0 if v_vert_m_h > 0 else 0)
 
         base_table.append({
             'time_obj': curr['time'], 
             'lat1': last_pt['lat'], 'lon1': last_pt['lon'], 'lat2': curr['lat'], 'lon2': curr['lon'],
             'dt': dt, 'dist': dist, 'ele_diff': safe_float(ele_diff), 'ele': safe_float(curr['ele_smooth']),
             'speed_ms': safe_float(v_ms), 'speed_kmh': safe_float(v_kmh),
-            'v_vert_m_h': safe_float(v_vert_m_h), 'load_score': safe_float(load_score),
+            'v_vert_m_h': safe_float(v_vert_m_h),
             'slope': safe_float(slope), 'bearing': safe_float(calculate_bearing(last_pt['lat'], last_pt['lon'], curr['lat'], curr['lon']))
         })
         last_pt = curr
         
     return base_table
 
+
 def trim_and_rezero(base_table, config):
+    """
+    【管道阶段 2 & 3：首尾异常漂移波段一刀切 & 坐标轴强制归零】
+    """
     if len(base_table) < 5: return base_table
     min_s = config.get('trim_min_speed_kmh', 0)
-    max_s = config.get('trim_max_speed_kmh', 200)
+    max_s = config.get('trim_max_speed_kmh', 200) # 徒步模式下这里会强制为 10.0
     
-    start_idx, end_idx = 0, len(base_table) - 1
-    window = 5
+    start_idx = 0
+    end_idx = len(base_table) - 1
     
-    # 核心修剪：第一刀切下去的基准点必须严格合法，再向后看密度
-    for i in range(len(base_table) - window + 1):
-        if not (min_s <= base_table[i]['speed_kmh'] <= max_s): continue
-        if sum(1 for r in base_table[i:i+window] if min_s <= r['speed_kmh'] <= max_s) >= 3:
-            start_idx = i; break
+    # 找寻真实起步：连续 3 个采样点严格落在合法速度区间 [min_s, max_s] 内
+    for i in range(len(base_table) - 2):
+        if all(min_s <= r['speed_kmh'] <= max_s for r in base_table[i:i+3]):
+            start_idx = i
+            break
             
-    for i in range(len(base_table) - 1, window - 2, -1):
-        if not (min_s <= base_table[i]['speed_kmh'] <= max_s): continue
-        if sum(1 for r in base_table[i-window+1:i+1] if min_s <= r['speed_kmh'] <= max_s) >= 3:
-            end_idx = i; break
+    # 找寻真实结束：倒序连续 3 个点严格合法
+    for i in range(len(base_table) - 1, 1, -1):
+        if all(min_s <= r['speed_kmh'] <= max_s for r in base_table[i-2:i+1]):
+            end_idx = i
+            break
 
-    trimmed = base_table[start_idx:end_idx + 1] if start_idx < end_idx else base_table
+    # 数组强行切断，彻底丢弃废点数据
+    if start_idx < end_idx:
+        trimmed = base_table[start_idx:end_idx + 1]
+    else:
+        trimmed = []
+
     if not trimmed: return []
 
+    # 数据归零：一切从有效起点重新累加，并在此时结算综合负荷
     true_start_time = trimmed[0]['time_obj']
     total_dist_m = 0
     for row in trimmed:
         total_dist_m += row['dist']
         row['offset_min'] = safe_float((row['time_obj'] - true_start_time).total_seconds() / 60.0)
-        row['cum_dist_km'] = safe_float(total_dist_m / 1000.0)
+        row['cum_dist_km'] = round(total_dist_m / 1000.0, 3)
         row['time_str'] = row['time_obj'].strftime('%H:%M:%S')
-        del row['time_obj'] 
+        row['load_score'] = safe_float(row['speed_kmh'] + (row['v_vert_m_h'] / 120.0 if row['v_vert_m_h'] > 0 else 0))
+        if 'time_obj' in row: del row['time_obj'] 
 
     return trimmed
 
+
 def calculate_dynamics(base_table):
+    """
+    【管道阶段 4：高阶动力学派生】
+    仅对已经深度清洗并归零的干净底包执行二次派生。
+    """
     total_jerk = 0.0
     for i in range(len(base_table)):
         if i == 0:
@@ -136,7 +156,7 @@ def calculate_dynamics(base_table):
         curr['jerk'] = safe_float((curr['accel'] - prev['accel']) / curr['dt'])
         total_jerk += abs(curr['jerk'])
     return base_table, safe_float(total_jerk / (len(base_table) - 1) if len(base_table) > 1 else 0)
-
+    
 def analyze_events(base_table, config):
     events = { 'hard_brakes': [], 'sharp_curves': [], 'stop_points': [], 'abnormal_speeds': [], 'steep_curves': [], 'up_steep': [], 'up_extreme': [], 'down_steep': [], 'down_extreme': [] }
     current_stop_duration, stop_start_offset = 0, 0
