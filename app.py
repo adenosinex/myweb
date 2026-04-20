@@ -271,7 +271,7 @@ def serve_html_with_icon(filename):
     # 2. 提取用于查找 SVG 的基础名（处理路径剥离与子网页 '-' 分割逻辑）
     # 示例: subfolder/main-sub.html -> base_name: main-sub -> main_name: main
     base_name = os.path.basename(html_path).replace('.html', '')
-    main_name = base_name.split('-')[0] if '-' in base_name else base_name
+    main_name = base_name.split('-')[0].lower() if '-' in base_name else base_name.lower()
     main_name2 = re.sub(r'^\d+', '', main_name)
     svg_path = os.path.join('static', 'svg', f'{main_name2}.svg')
     print('--------',svg_path)
@@ -280,7 +280,7 @@ def serve_html_with_icon(filename):
         with open(html_path, 'r', encoding='utf-8') as f:
             content = f.read()
         print('svg',main_name2)
-        icon_tag = f'<link rel="icon" href="/static/svg/{main_name2}.svg" type="image/svg+xml">'
+        icon_tag = f'<link rel="icon" href="/static/svg/{main_name2 }.svg" type="image/svg+xml">'
         
         if '</head>' in content:
             content = content.replace('</head>', f'    {icon_tag}\n</head>', 1)

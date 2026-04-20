@@ -34,13 +34,21 @@ def calculate_click_pos(base_x, base_y, task_conf):
     offset = task_conf.get('click_offset', [0, 0])
     return int(tx + offset[0]), int(ty + offset[1])
 
+import time # 确保顶部导入了 time
+
 def find_and_act(server_url, task_conf, is_preview=False):
     screenshot_path = "temp_screen.png"
     task_id = task_conf.get('id')
     
-    with mss.mss() as sct:
-        sct.shot(mon=1, output=screenshot_path)
-    
+    # 1. 确保截图完成并释放句柄
+    try:
+        with mss.mss() as sct:
+            sct.shot(mon=1, output=screenshot_path)
+    except Exception as e:
+        print(f"    [错误] 截图失败: {e}")
+        return False
+
+    # 2. 准备文件上传
     files = {'screenshot': open(screenshot_path, 'rb')}
     data = {'client_id': CLIENT_ID, 'task_id': task_id}
     
@@ -73,9 +81,24 @@ def find_and_act(server_url, task_conf, is_preview=False):
         print(f"    [错误] 网络请求失败: {e}")
         return False
     finally:
-        for f in files.values(): f.close()
-        if os.path.exists(screenshot_path): os.remove(screenshot_path)
+        # 3. 安全关闭文件句柄
+        for f in files.values():
+            try:
+                f.close()
+            except:
+                pass
+        
+        # 4. 安全删除临时文件 (带重试机制)
+        # Windows 下经常因为文件句柄未释放导致删除失败，重试通常能解决
+        if os.path.exists(screenshot_path):
+            for attempt in range(5): # 尝试删除 5 次
+                try:
+                    os.remove(screenshot_path)
+                    break # 删除成功则跳出循环
+                except PermissionError:
+                    time.sleep(0.1) # 等待 0.1 秒后重试
 
+                    
 def generate_default_yaml():
     default_config = {
         "system": {

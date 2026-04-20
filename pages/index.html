@@ -162,7 +162,7 @@ function sortPagesByFileName(pages) {
                                 ${catPages.map(page => {
                                     // 提取最终的文件名用于显示
                                     const fileName = page.split('/').pop().split('\\').pop().toUpperCase();
-                                    const fn2=removeLeadingNumber(fileName)
+                                    const fn2=removeLeadingNumber(fileName).toLowerCase()
                                     return `
                                         <a href="/${page}" class="card" target="_blank">
                                             <img src="/static/svg/${fn2}.svg" 
