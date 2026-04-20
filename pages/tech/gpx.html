@@ -84,8 +84,13 @@
     <div v-show="processedTracks.length > 0">
       
       <div class="panel-card" v-if="comparisonData">
-        <div class="section-title">⏱️ 地理空间用时差值分析 (主控参考轨: {{ baselineTrackName }})</div>
-        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐，直观展示赛段中时间差的拉开位置。<span class="text-primary fw-bold">点击图例即可进入“单轨聚焦”模式，排除干扰。</span></div>
+        <div class="section-title d-flex align-items-center">
+           ⏱️ 地理空间用时差值分析
+           <select v-model="baselineIndex" @change="renderCharts" class="form-select form-select-sm ms-3" style="width: auto; font-weight: normal; font-size: 13px;">
+              <option v-for="(tr, idx) in processedTracks" :value="idx" :key="idx">设置基准轨: {{ tr.filename }}</option>
+           </select>
+        </div>
+        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐。<span class="text-danger fw-bold">正数表示比基准轨慢</span>，<span class="text-success fw-bold">负数表示比基准轨快</span>。点击图例即可进入“单轨聚焦”模式。</div>
         <div id="compareChart" class="chart-box"></div>
       </div>
 
@@ -99,10 +104,28 @@
           <div class="col-4 col-md-2" v-if="sportType !== 'hike'"><div class="stat-box" :class="{active: activeEvent === 'sharp_curves'}" @click="setActiveEvent('sharp_curves')"><div class="stat-value text-success">{{ mainTrackOverall?.counts?.sharp_curves }}</div><div class="stat-label">急弯</div></div></div>
           <div class="col-4 col-md-2"><div class="stat-box" :class="{active: activeEvent === 'stop_points'}" @click="setActiveEvent('stop_points')"><div class="stat-value text-warning">{{ mainTrackOverall?.counts?.stop_points }}</div><div class="stat-label">驻点</div></div></div>
         </div>
+        
+        <div class="row g-2">
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_steep'}" @click="setActiveEvent('up_steep')"><div class="stat-value text-warning">{{ mainTrackOverall?.terrain?.slope_stats?.up_steep }}</div><div class="stat-label">较陡上坡</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'up_extreme'}" @click="setActiveEvent('up_extreme')"><div class="stat-value text-danger">{{ mainTrackOverall?.terrain?.slope_stats?.up_extreme }}</div><div class="stat-label">极限上坡</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_steep'}" @click="setActiveEvent('down_steep')"><div class="stat-value text-info">{{ mainTrackOverall?.terrain?.slope_stats?.down_steep }}</div><div class="stat-label">较陡下坡</div></div></div>
+          <div class="col-6 col-md-3"><div class="stat-box" :class="{active: activeEvent === 'down_extreme'}" @click="setActiveEvent('down_extreme')"><div class="stat-value text-primary">{{ mainTrackOverall?.terrain?.slope_stats?.down_extreme }}</div><div class="stat-label">极限下坡</div></div></div>
+        </div>
+
+        <div v-if="activeEvent && mainTrackEvents[activeEvent] && mainTrackEvents[activeEvent].length > 0" class="event-list">
+           <div class="event-item" v-for="(ev, idx) in mainTrackEvents[activeEvent]" :key="idx" @click="focusMapOnEvent(ev)">
+             <div class="me-2" style="width: 80px;">
+               <span class="idx-badge">#{{ idx + 1 }}</span><br>
+               <span class="text-secondary fw-bold">{{ ev.cum_dist_km.toFixed(1) }} km</span>
+             </div>
+             <div class="text-muted">{{ ev.desc }}</div>
+             <div class="ms-auto text-primary" style="font-size: 12px;">定位 📍</div>
+           </div>
+        </div>
       </div>
 
       <div class="panel-card">
-        <div class="section-title">📉 多网格遥测堆叠域 (主控参考轨)</div>
+        <div class="section-title">📉 多网格遥测堆叠域 (主控参考轨: {{ baselineTrackName }})</div>
         <div class="text-muted mb-2" style="font-size: 13px;">连续坐标系，各指标自适应伸缩，互不压扁。鼠标悬停展示当前时刻精确定位。</div>
         <div id="loadChart" class="chart-box large-chart-box mb-4"></div>
         <div id="sequenceChart" class="chart-box"></div>
@@ -125,15 +148,16 @@
           loading: false, error: '', 
           processedTracks: [], comparisonData: null,
           exportMode: 'raw', exportInterval: 30, activeEvent: null,
+          baselineIndex: 0, 
           map: null, trackLayer: null, markerLayer: null,
           seqChart: null, loadChart: null, compareChart: null,
           colors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
         }
       },
       computed: {
-         baselineTrackName() { return this.processedTracks.length > 0 ? this.processedTracks[0].filename : ''; },
-         mainTrackOverall() { return this.processedTracks.length > 0 ? this.processedTracks[0].overall : null; },
-         mainTrackEvents() { return this.processedTracks.length > 0 ? this.processedTracks[0].events : null; }
+         baselineTrackName() { return this.processedTracks.length > 0 ? this.processedTracks[this.baselineIndex].filename : ''; },
+         mainTrackOverall() { return this.processedTracks.length > 0 ? this.processedTracks[this.baselineIndex].overall : null; },
+         mainTrackEvents() { return this.processedTracks.length > 0 ? this.processedTracks[this.baselineIndex].events : null; }
       },
       watch: {
         sportType(val) { localStorage.setItem('gpx_sportType', val); },
@@ -184,11 +208,11 @@
           this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, fillOpacity: 0.8 })
             .addTo(this.map).bindPopup(`<b>里程: ${ev.cum_dist_km} km</b><br>${ev.desc}`).openPopup();
         },
-renderCharts() {
+        renderCharts() {
           if (!this.processedTracks.length) return;
-          const mainTrack = this.processedTracks[0].segments;
+          const mainTrack = this.processedTracks[this.baselineIndex].segments;
 
-          // 核心修复1：必须使用标准的对象包裹结构 {value: [x,y], attr}，绝不能把字符串混入数组
+          // 封装包含独立 time_str 的对象结构，确保 ECharts 底层渲染矩阵不崩溃
           const loadData = mainTrack.map(s => ({ value: [s.offset_min, s.load_score], time_str: s.time_str }));
           const speedData = mainTrack.map(s => ({ value: [s.offset_min, s.speed_kmh], time_str: s.time_str }));
           const vVertData = mainTrack.map(s => ({ value: [s.offset_min, s.v_vert_m_h], time_str: s.time_str }));
@@ -200,7 +224,6 @@ renderCharts() {
                 axisPointer: { type: 'line', snap: true, animation: false, lineStyle: {color: '#94a3b8', type: 'dashed'}},
                 formatter: function(params) {
                     if (!params || !params.length) return '';
-                    // 安全寻找包含时间属性的数据节点
                     let validParam = params.find(p => p.data && p.data.time_str);
                     if (!validParam) return '';
                     
@@ -210,15 +233,15 @@ renderCharts() {
                     let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">绝对时间: ${timeStr} <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(第 ${xVal} min)</span></div>`;
                     
                     params.forEach(p => {
-                        // 过滤掉缺失数据
-                        if (!p.data || p.data.value[1] === undefined || p.data.value[1] === null || isNaN(p.data.value[1])) return;
+                        // 拦截处理失效空值
+                        if (!p.data || p.value === undefined || p.value === null || isNaN(p.value[1])) return;
                         
                         let unit = p.seriesName.includes('速度') ? ' km/h' : p.seriesName.includes('爬降速') ? ' m/h' : '';
                         let colorHex = p.color;
                         if(typeof colorHex === 'object' && colorHex.colorStops) colorHex = colorHex.colorStops[0].color;
                         let colorDot = `<span style="display:inline-block;margin-right:8px;border-radius:50%;width:10px;height:10px;background-color:${colorHex};"></span>`;
                         
-                        let yVal = parseFloat(p.data.value[1]).toFixed(1);
+                        let yVal = parseFloat(p.value[1]).toFixed(1);
                         html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
                                     <span>${colorDot}${p.seriesName}</span>
                                     <span style="font-weight:bold;margin-left:15px;">${yVal}${unit}</span>
@@ -251,18 +274,16 @@ renderCharts() {
                   min: function(v) { return Math.min(Math.max(v.min, -2000), -200); }
                 }
             ],
-            // 核心修复2：彻底移除了引发 ECharts 崩溃的 visualMap
+            // 彻底拔除引发 ECharts 崩溃的 visualMap
             series: [
               { name: '综合负荷指数', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: loadData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1} },
               { name: '水平速度(km/h)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: speedData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#3b82f6' } },
-              // 采用安全的纯橙色渲染爬降速，规避多维数组引发的透明 Bug
               { name: '爬降速(m/h)', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: vVertData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#f59e0b' },
                 markLine: { data: [{yAxis: 0}], symbol: 'none', lineStyle: { color: '#64748b', type: 'dashed', width: 1.5 } }
               }
             ]
           }, true);
 
-          // 海拔剖面图同样启用安全的 Object 结构
           const eleData = mainTrack.map(s => ({ value: [s.cum_dist_km, s.ele], time_str: s.time_str }));
           if (!this.seqChart) this.seqChart = echarts.init(document.getElementById('sequenceChart'));
           this.seqChart.setOption({
@@ -299,8 +320,16 @@ renderCharts() {
                 if (dom) {
                     if (!this.compareChart) this.compareChart = echarts.init(dom);
                     const seriesData = [];
-                    for (let fname in this.comparisonData.time_diff_vs_baseline) {
-                        let xyData = this.comparisonData.bins_km.map((dist, idx) => [dist, this.comparisonData.time_diff_vs_baseline[fname][idx]]);
+                    
+                    let baseName = this.processedTracks[this.baselineIndex].filename;
+                    let baseTimes = this.comparisonData.cum_time_matrix[baseName];
+                    let trackNames = Object.keys(this.comparisonData.cum_time_matrix);
+                    
+                    for (let fname of trackNames) {
+                        let xyData = this.comparisonData.bins_km.map((dist, idx) => {
+                            let diffMinutes = this.comparisonData.cum_time_matrix[fname][idx] - baseTimes[idx];
+                            return [dist, parseFloat(diffMinutes.toFixed(2))];
+                        });
                         seriesData.push({ name: fname, type: 'line', connectNulls: true, smooth: true, showSymbol: false, data: xyData });
                     }
                     this.compareChart.setOption({
@@ -311,18 +340,19 @@ renderCharts() {
                                if(!params || !params.length) return '';
                                let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">对齐里程点: ${parseFloat(params[0].value[0]).toFixed(2)} km</div>`;
                                params.forEach(p => {
-                                  // 安全过滤：如果没有数据数组或Y轴值无效，不渲染
-                                  if (!p.data || p.data[1] === undefined || p.data[1] === null || isNaN(p.data[1])) return;
+                                  if (p.value === undefined || p.value === null || isNaN(p.value[1])) return;
+                                  let diffVal = parseFloat(p.value[1]);
+                                  let stateStr = diffVal > 0 ? '<span style="color:#ef4444">慢</span>' : (diffVal < 0 ? '<span style="color:#10b981">快</span>' : '<span style="color:#94a3b8">齐平</span>');
                                   html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;">
                                               <span>${p.marker} ${p.seriesName}</span>
-                                              <span style="font-weight:bold;margin-left:15px;">相差 ${parseFloat(p.data[1]).toFixed(1)} 秒</span>
+                                              <span style="font-weight:bold;margin-left:15px;">相差 ${Math.abs(diffVal).toFixed(2)} 分钟 (${stateStr})</span>
                                            </div>`;
                                });
                                return html;
                             }
                         },
                         legend: { 
-                            data: Object.keys(this.comparisonData.time_diff_vs_baseline),
+                            data: trackNames,
                             type: 'scroll',
                             selectedMode: 'single', 
                             selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
@@ -330,17 +360,15 @@ renderCharts() {
                         grid: { left: '6%', right: '5%', bottom: '15%', top: '15%', containLabel: true },
                         dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
                         xAxis: { type: 'value', name: '对齐里程(km)', min: 'dataMin', max: 'dataMax' },
-                        yAxis: { type: 'value', name: '相差秒数(正为慢)', splitLine: { lineStyle: { type: 'dashed' } } },
+                        yAxis: { type: 'value', name: '相差分钟(正为慢)', splitLine: { lineStyle: { type: 'dashed' } } },
                         series: seriesData
                     }, true);
                 }
              }, 100);
           }
-        }
-        
-        ,
+        },
         async processGPX() {
-          this.loading = true; this.error = ''; this.activeEvent = null;
+          this.loading = true; this.error = ''; this.activeEvent = null; this.baselineIndex = 0;
           const formData = new FormData();
           
           if (this.selectedFiles.length > 0) {
@@ -371,7 +399,7 @@ renderCharts() {
           if (this.exportMode === 'time' && this.exportInterval < 5) { alert("为防止过度失真，时间聚合不可小于5秒"); return; }
           if (this.exportMode === 'distance' && this.exportInterval < 10) { alert("距离聚合不可小于10米"); return; }
 
-          const segments = this.processedTracks[0].segments;
+          const segments = this.processedTracks[this.baselineIndex].segments;
           let resampledData = [];
           let fieldnames = [];
 
@@ -379,7 +407,6 @@ renderCharts() {
               resampledData = segments;
               fieldnames = ['time_str', 'offset_min', 'cum_dist_km', 'lat2', 'lon2', 'ele', 'speed_kmh', 'v_vert_m_h', 'load_score', 'accel', 'jerk', 'slope', 'bearing', 'dt', 'dist'];
           } else {
-              // 核心修复3：哈希分箱算法，保证严格均分时间和距离的栅格输出
               const interval = parseFloat(this.exportInterval);
               let buckets = {};
 
@@ -390,7 +417,6 @@ renderCharts() {
                   buckets[bIdx].push(seg);
               });
 
-              // 按顺序提取合并好的网格
               let sortedKeys = Object.keys(buckets).map(Number).sort((a, b) => a - b);
               
               sortedKeys.forEach(bIdx => {
@@ -403,7 +429,6 @@ renderCharts() {
                   let avgEle = bin.reduce((sum, s) => sum + s.ele, 0) / bin.length;
                   let lastSeg = bin[bin.length - 1];
 
-                  // 赋予绝对均分坐标，例如正好输出在第 30s、60s 这种整数位
                   let exactVal = bIdx * interval;
                   let exactMin = this.exportMode === 'time' ? (exactVal / 60) : lastSeg.offset_min;
                   let exactDist = this.exportMode === 'distance' ? (exactVal / 1000) : lastSeg.cum_dist_km;

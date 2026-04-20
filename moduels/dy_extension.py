@@ -127,6 +127,31 @@ def handle_video_paths():
         paths.append(path)
         save_paths(paths)
     return jsonify({'success': True})
+def clean_invalid_videos(session, path=None):
+    """清理数据库中物理文件已丢失的记录"""
+    query = session.query(Video)
+    if path:
+        # 如果指定了路径，仅匹配该路径下的文件
+        query = query.filter(Video.detail.like(f"{os.path.abspath(path)}%"))
+    
+    # 1. 纯读取阶段：找出所有失效的视频 ID
+    invalid_ids = []
+    for video in query.all():
+        if not os.path.isfile(video.detail):
+            invalid_ids.append(video.id)
+            
+    removed_count = len(invalid_ids)
+    
+    # 2. 写入阶段：统一执行批量删除，避免读写锁冲突
+    if invalid_ids:
+        # 分批处理，防止单次清理数量超出 SQLite 的变量限制 (通常为 999)
+        chunk_size = 500
+        for i in range(0, removed_count, chunk_size):
+            chunk_ids = invalid_ids[i:i+chunk_size]
+            session.query(VideoRandomOrder).filter(VideoRandomOrder.video_id.in_(chunk_ids)).delete(synchronize_session=False)
+            session.query(Video).filter(Video.id.in_(chunk_ids)).delete(synchronize_session=False)
+            
+    return removed_count
 
 @dy_bp.route('/video-paths/index', methods=['POST'])
 def index_video_path():
@@ -145,11 +170,14 @@ def index_video_path():
         
     if request.args.get('all') == '1':
         session = Session()
+        # 扫描前：先清理该目录下已在物理磁盘消失的文件记录
+        removed = clean_invalid_videos(session, path)
+        
         existing_videos = {os.path.abspath(v.detail) for v in session.query(Video.detail).all()}
         added = scan_directory_for_videos(path, session, existing_videos)
         session.commit()
         session.close()
-        return jsonify({'success': True, 'added': added})
+        return jsonify({'success': True, 'added': added, 'removed': removed})
         
     return jsonify({'success': True})
 
@@ -157,15 +185,20 @@ def index_video_path():
 def index_video_path_update():
     paths = load_paths()
     session = Session()
+    
+    # 扫描更新前：全局清理数据库中所有已失效的视频记录
+    total_removed = clean_invalid_videos(session)
+    
     existing_videos = {os.path.abspath(v.detail) for v in session.query(Video.detail).all()}
     total_added = 0
     for p in paths:
         if os.path.isdir(p):
             total_added += scan_directory_for_videos(p, session, existing_videos)
+            
     session.commit()
     session.close()
-    return jsonify({'success': True, 'added': total_added})
-
+    return jsonify({'success': True, 'added': total_added, 'removed': total_removed})
+    
 @dy_bp.route('/config', methods=['GET'])
 def get_config():
     return jsonify({"status": "ok"})

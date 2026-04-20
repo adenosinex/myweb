@@ -131,7 +131,8 @@ def process_blacklist(db_path, blacklist_dir, size_tolerance=10240):
                                 cache_updated = True
                         
                         if bl['hash'] and db_hash == bl['hash']:
-                            matched_ids.append((1, datetime.datetime.now(), db_id))
+                            # 【改动点】：增加一个 1 (代表 cp=1)，使其自动标记为已处理
+                            matched_ids.append((1, 1, datetime.datetime.now(), db_id))
                             is_duplicate = True
                             break  
 
@@ -149,7 +150,8 @@ def process_blacklist(db_path, blacklist_dir, size_tolerance=10240):
                                 kept['hash'] = get_partial_hash(kept['path'])
                             
                             if kept['hash'] and db_hash == kept['hash']:
-                                matched_ids.append((1, datetime.datetime.now(), db_id))
+                                # 【改动点】：增加一个 1 (代表 cp=1)，使其自动标记为已处理
+                                matched_ids.append((1, 1, datetime.datetime.now(), db_id))
                                 is_duplicate = True
                                 break
 
@@ -165,7 +167,8 @@ def process_blacklist(db_path, blacklist_dir, size_tolerance=10240):
 
         # 批量更新数据库状态
         if matched_ids:
-            cursor.executemany("UPDATE videos SET score = ?, updatetime = ? WHERE id = ?", matched_ids)
+            # 【改动点】：SQL语句增加 cp = ? 的更新，同步将自动打回的视频标记为跳过复制
+            cursor.executemany("UPDATE videos SET score = ?, cp = ?, updatetime = ? WHERE id = ?", matched_ids)
             conn.commit()
             print(f"\n处理完成：共自动清理(打1星) {len(matched_ids)} 个视频 (含外部黑名单与库内重复项)。")
         else:
@@ -186,12 +189,14 @@ def process_blacklist(db_path, blacklist_dir, size_tolerance=10240):
                 json.dump(cache, f, ensure_ascii=False, indent=2)
             print(f"黑名单缓存已同步至: {cache_file}")
         except Exception as e:
-            print(f"保存缓存文件失败: {e}")
-            
+            print(f"保存缓存文件失败: {e}") 
+
+
 def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
     """
     通用底层函数：直接使用原生 sqlite3 读取数据库。
     将指定分数的记录，保持相对路径复制/硬链接到 dst_dir。
+    遇到同名文件时，通过大小和哈希比对，不同则重命名复制。
     """
     if not all([db_path, dst_dir, src_base_dir]):
         print("缺少必要参数：需同时指定数据库路径(db_path)、目标文件夹(dst_dir)和源基础文件夹(src_base_dir)。")
@@ -209,9 +214,14 @@ def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT detail FROM videos WHERE score = ? ORDER BY updatetime", (target_score,))
+        # 仅查询未被标记为已复制 (cp = 0 或 NULL) 的文件
+        cursor.execute("SELECT detail FROM videos WHERE score = ? AND (cp = 0 OR cp IS NULL) ORDER BY updatetime", (target_score,))
         rows = cursor.fetchall()
         
+        if not rows:
+            print(f"[*] 数据库中没有发现需要新处理的 {target_score} 星视频。")
+            return
+
         tasks = []
         for row in rows:
             src_path_str = row[0]
@@ -220,24 +230,51 @@ def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
             
             src_path = Path(src_path_str)
             if not src_path.exists():
+                print(f"[跳过] 源文件在硬盘上已不存在: {src_path}")
                 continue
                 
             try:
                 rel_path = src_path.relative_to(src_base_dir)
             except ValueError:
+                print(f"[跳过] 路径不匹配，无法计算相对路径。\n  -> 源文件: {src_path}\n  -> 基础目录: {src_base_dir}")
                 continue 
 
             dst_path = dst_dir.joinpath(rel_path)
             tasks.append((src_path, dst_path, src_path_str))
+
+        if not tasks:
+            print(f"[*] 解析后有效的 {target_score} 星文件路径数量为 0。请检查上方是否有 [跳过] 提示。")
+            return
 
         cnt = 0
         success_records = []
         
         with tqdm(total=len(tasks), desc=f"复制 {target_score} 星进度") as pbar:
             for src_path, dst_path, original_detail_str in tasks:
+                # ===== 冲突检测与 Hash 校验逻辑 =====
                 if dst_path.exists():
-                    pbar.update(1)
-                    continue
+                    try:
+                        src_size = src_path.stat().st_size
+                        dst_size = dst_path.stat().st_size
+                        
+                        # 1. 先对比大小，大小一致再计算 Hash (复用脚本头部的 get_partial_hash 函数)
+                        if src_size == dst_size:
+                            src_hash = get_partial_hash(src_path)
+                            dst_hash = get_partial_hash(dst_path)
+                            
+                            # 2. Hash 一致，确认为同一文件，直接跳过并标记为已复制
+                            if src_hash and src_hash == dst_hash:
+                                success_records.append((1, original_detail_str))
+                                pbar.update(1)
+                                continue
+                    except Exception as e:
+                        pass # 遇到权限等不可读异常，默认按冲突处理
+
+                    # 3. 大小或 Hash 不同，判定为同名不同内容文件，重命名目标路径以免覆盖
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                    dst_path = dst_path.with_name(f"{dst_path.stem}_{timestamp}{dst_path.suffix}")
+                    print(f"\n[重命名] 目标已存在同名不同内容文件，新路径: {dst_path.name}")
+                # ====================================
 
                 dst_path.parent.mkdir(parents=True, exist_ok=True)
                 
@@ -250,7 +287,7 @@ def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
                         shutil.copy2(src_path, dst_path)
                         success = True
                     except Exception as e:
-                        print(f"\n操作失败 [{src_path}]: {e}")
+                        print(f"\n[失败] 复制异常 [{src_path}]: {e}")
                 
                 if success:
                     success_records.append((1, original_detail_str))
@@ -262,7 +299,7 @@ def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
             cursor.executemany("UPDATE videos SET cp = ? WHERE detail = ?", success_records)
             conn.commit()
             
-        print(f"共成功处理分数为 {target_score} 的视频文件：{cnt} 个")
+        print(f"[*] 共成功复制分数为 {target_score} 的视频文件：{cnt} 个")
 
     except sqlite3.Error as e:
         conn.rollback()
@@ -272,6 +309,7 @@ def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
     finally:
         conn.close()
 
+ 
 def copy_5score(db_path, dst_dir, src_base_dir):
     """复制分数为 5 的记录"""
     _copy_by_score(db_path, dst_dir, src_base_dir, 5)
@@ -317,4 +355,4 @@ if __name__ == "__main__":
         else:
             print("输入无效。")
             
-        input("\n按回车键继续执行下一轮...")
+       
