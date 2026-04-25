@@ -33,8 +33,8 @@ def upload_ips(server_url, ipv4, ipv6):
     if ipv6:
         payload["ipv6"] = ipv6
         payload["last_ipv6"] = ipv6  # 保留你原代码的结构以防后端需要
-
-    print(f"📤 正在上报 -> IPv4: {ipv4}, IPv6: {ipv6}")
+    
+    print(f"📤{time.strftime('%H:%M:%S')} 正在上报 -> IPv4: {ipv4}, IPv6: {ipv6}")
     
     try:
         # 增加 timeout 防止网络阻塞导致脚本卡死
@@ -53,13 +53,14 @@ def monitor_and_update(server_url, check_interval=300):
 
     # 2. 循环定时检查
     while True:
-        time.sleep(check_interval)
         
+      
+        time.sleep(check_interval)
         current_ipv6 = get_ipv6()
         
         # 判断 IPv6 是否发生变化
         if current_ipv6 != last_ipv6:
-            print(f"\n🔄 检测到 IPv6 发生变化: {last_ipv6} -> {current_ipv6}")
+           
             current_ipv4 = get_ipv4()  # IP发生变化时，顺便重新获取最新 IPv4
             
             upload_ips(server_url, current_ipv4, current_ipv6)

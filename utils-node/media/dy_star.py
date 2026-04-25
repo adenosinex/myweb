@@ -313,10 +313,147 @@ def _copy_by_score(db_path, dst_dir, src_base_dir, target_score):
 def copy_5score(db_path, dst_dir, src_base_dir):
     """复制分数为 5 的记录"""
     _copy_by_score(db_path, dst_dir, src_base_dir, 5)
+def copy_1score(db_path, dst_dir, cluster_threshold=20, window_seconds=60):
+    """
+    复制分数为 1 的记录，扁平化复制到目标目录，不校验源路径：
+    1. 不考虑 cp 字段。
+    2. 按 updatetime 排序，如果 window_seconds 内更新数量 > cluster_threshold，视为自动化并跳过。
+    """
+    if not all([db_path, dst_dir]):
+        print("缺少必要参数：需同时指定数据库路径和目标文件夹。")
+        return
 
-def copy_1score(db_path, dst_dir, src_base_dir):
-    """复制分数为 1 的记录"""
-    _copy_by_score(db_path, dst_dir, src_base_dir, 1)
+    db_path = Path(db_path)
+    dst_dir = Path(dst_dir)
+
+    if not db_path.exists():
+        print(f"数据库文件不存在: {db_path}")
+        return
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT id, detail, updatetime FROM videos WHERE score = 1")
+        rows = cursor.fetchall()
+        
+        if not rows:
+            print("[*] 数据库中没有发现任何 1 星视频记录。")
+            return
+
+        print(f"\n[*] 开始诊断：共提取到 {len(rows)} 条 1 星记录，正在进行时间聚类分析...")
+
+        valid_records = []
+        null_records = []
+
+        for row in rows:
+            r_id, detail, utime = row
+            if not detail:
+                continue
+                
+            if not utime:
+                null_records.append(detail)
+                continue
+                
+            try:
+                utime_str = utime.split('.')[0] if isinstance(utime, str) else str(utime)
+                dt = datetime.datetime.strptime(utime_str, "%Y-%m-%d %H:%M:%S")
+                valid_records.append({'detail': detail, 'time': dt, 'raw_time': utime})
+            except Exception as e:
+                print(f"  [警告] 无法解析时间格式 '{utime}'，已归入保留队列。错误: {e}")
+                null_records.append(detail)
+
+        valid_records.sort(key=lambda x: x['time'])
+        
+        manual_tasks = []
+        auto_ignored_count = 0
+        
+        i = 0
+        n = len(valid_records)
+        while i < n:
+            j = i + 1
+            while j < n and (valid_records[j]['time'] - valid_records[i]['time']).total_seconds() <= window_seconds:
+                j += 1
+                
+            cluster_size = j - i
+            if cluster_size > cluster_threshold:
+                print(f"  -> [拦截] 命中批量自动化：时间 [{valid_records[i]['raw_time']}] 附近产生 {cluster_size} 条记录。")
+                auto_ignored_count += cluster_size
+            else:
+                for k in range(i, j):
+                    manual_tasks.append(valid_records[k]['detail'])
+            
+            i = j 
+
+        tasks = null_records + manual_tasks
+        print(f"[*] 诊断完成：拦截自动化 {auto_ignored_count} 个，保留手动判定 {len(tasks)} 个。\n")
+
+        if not tasks:
+            print("[*] 解析后需要复制的文件数量为 0。")
+            return
+
+        print(f"[*] 开始处理保留的 {len(tasks)} 个文件...")
+        
+        final_tasks = []
+        for src_path_str in tasks:
+            src_path = Path(src_path_str)
+            if not src_path.exists():
+                print(f"  [跳过] 源文件在硬盘上已不存在: {src_path}")
+                continue
+            
+            # 直接丢进 dst_dir 根目录，舍弃原有的相对路径计算
+            dst_path = dst_dir / src_path.name
+            final_tasks.append((src_path, dst_path))
+
+        cnt = 0
+        if final_tasks:
+            with tqdm(total=len(final_tasks), desc="复制 1 星进度") as pbar:
+                for src_path, dst_path in final_tasks:
+                    if dst_path.exists():
+                        try:
+                            src_size = src_path.stat().st_size
+                            dst_size = dst_path.stat().st_size
+                            
+                            if src_size == dst_size:
+                                src_hash = get_partial_hash(src_path)
+                                dst_hash = get_partial_hash(dst_path)
+                                if src_hash and src_hash == dst_hash:
+                                    print(f"\n  [跳过] 目标已存在且Hash相同: {dst_path.name}")
+                                    pbar.update(1)
+                                    continue
+                        except Exception:
+                            pass 
+
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                        dst_path = dst_path.with_name(f"{dst_path.stem}_{timestamp}{dst_path.suffix}")
+                        print(f"\n  [重命名] 目标已存在同名不同内容文件，新路径: {dst_path.name}")
+
+                    dst_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    success = False
+                    try:
+                        os.link(src_path, dst_path)
+                        success = True
+                    except OSError:
+                        try:
+                            shutil.copy2(src_path, dst_path)
+                            success = True
+                        except Exception as e:
+                            print(f"\n  [失败] 复制异常 [{src_path}]: {e}")
+                    
+                    if success:
+                        cnt += 1
+                    
+                    pbar.update(1)
+
+        print(f"\n[*] 共成功复制真实的 1 星视频文件：{cnt} 个")
+
+    except sqlite3.Error as e:
+        print(f"数据库操作异常: {e}")
+    except Exception as e:
+        print(f"操作发生异常: {e}")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
@@ -337,10 +474,11 @@ if __name__ == "__main__":
                 src_base_dir=r"\\One\d\downloadD"
             )
         elif choice == '2':
+            # 移除了 src_base_dir 参数
             copy_1score(
                 db_path=db_path_val,
-                dst_dir=r"\\One\d\move video\trash",
-                src_base_dir=r"\\One\d\downloadD"
+                dst_dir=r"\\One\d\move video\bad",
+                cluster_threshold=5
             )
         elif choice == '3':
             bl_dir = r'\\One\d\move video\bad'
@@ -354,5 +492,3 @@ if __name__ == "__main__":
             break
         else:
             print("输入无效。")
-            
-       

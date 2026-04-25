@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <title>短视频浏览项目</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <link rel="stylesheet" href="http://192.168.31.197:8100/static/cdn/vant@4index.css">
+    <link rel="stylesheet" href="http://192.168.31.197:8100/static/dy.css">
+    <link rel="icon" type="image/svg" href="http://192.168.31.197:8100/static/svg/dy.svg">
+    <style>
+        .rename-card {
+            background: rgba(20, 20, 20, 0.85);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 15px;
+            border: 1px solid #333;
+        }
+        .rename-preview {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #000;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+        .preview-text {
+            flex: 1;
+            color: #4fc08d;
+            font-weight: bold;
+            word-break: break-all;
+            font-size: 14px;
+        }
+        .group-title {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .token-chip, .quick-tag-chip {
+            display: inline-flex;
+            align-items: center;
+            margin: 4px;
+            border-radius: 4px;
+            font-size: 13px;
+            user-select: none;
+            transition: all 0.2s;
+            overflow: hidden;
+        }
+        .token-chip {
+            background: #1989fa;
+            color: #fff;
+            border: 1px solid #1989fa;
+        }
+        .token-chip.token-off {
+            background: #111;
+            color: #555;
+            text-decoration: line-through;
+            border: 1px solid #333;
+        }
+        .quick-tag-chip {
+            background: #333;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 14px;
+        }
+        .quick-tag-chip.tag-on {
+            background: #e6a23c;
+            color: #fff;
+            border-color: #e6a23c;
+        }
+        .chip-text {
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+        .chip-action {
+            padding: 4px 6px;
+            background: rgba(0,0,0,0.2);
+            color: #ffeb3b;
+            font-size: 11px;
+            cursor: pointer;
+            border-left: 1px solid rgba(255,255,255,0.2);
+        }
+        .chip-action:active {
+            background: rgba(0,0,0,0.4);
+        }
+        .token-chip.token-off .chip-action {
+            color: #888;
+            border-color: #444;
+        }
+        .chip-del {
+            color: #ff4d4f;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-left: 1px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+            background: rgba(0,0,0,0.2);
+        }
+        .chip-del:active {
+            background: rgba(255,0,0,0.3);
+        }
+        .quick-tag-chip.tag-on .chip-del {
+            border-left-color: rgba(255,255,255,0.4);
+        }
+        .tag-input-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .tag-input-row input {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #555;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+        }
+        .tag-input-row input:focus {
+            border-color: #1989fa;
+        }
+        .empty-hint {
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+        }
+        /* 成功的渐显动画 */
+        .fade-in-out {
+            animation: fadeInOut 2s forwards;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: scale(0.8); }
+            15% { opacity: 1; transform: scale(1.1); }
+            30% { opacity: 1; transform: scale(1); }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="main-video" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+        <div style="position:absolute;top:18px;left:18px;z-index:10;">
+            <a href="http://one4.zin6.site:5000" target="_blank">
+                <img src="/static/logo.png" alt="LOGO" style="height:40px;">
+            </a>
+        </div>
+        
+        <div v-show="!isLoading" style="position:absolute;top:18px;right:18px;z-index:10;">
+            <van-button type="info" icon="clipboard" size="small" style="margin-left:8px;" @click="searchFromClipboard">剪贴板</van-button>
+            <van-button type="primary" icon="search" size="small" style="margin-left:8px;" @click="showSearch = true">搜索</van-button>
+            <van-button type="default" icon="setting" size="small" style="margin-left:8px;" @click="openConfig">配置</van-button>
+            <van-button type="default" icon="replay" size="small" style="margin-left:8px;" @click="indexPathq( )">更新</van-button>
+        </div>
+
+        <div v-if="isLoading" class="loading-screen">
+            <img src="/static/logo.png" alt="LOGO" style="height:80px;margin-bottom:30px;">
+            <div style="color:#fff;font-size:18px;">加载中...</div>
+        </div>
+        
+        <div class="video-box" v-show="!isLoading && state.videos.length">
+            <div v-if="searchTimeMsg" style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.7);color:#fff;text-align:center;z-index:20;padding:8px;">
+                {{ searchTimeMsg }}
+            </div>
+            <div class="video-title" @click="toggleDetail">{{ videoIndex ? videoIndex + '. ' : '' }}/{{state.totalpage}}  {{ currentVideo.filename }}</div>
+              
+            <div class="video-container">
+                <video
+                    v-for="(video, index) in videoQueue"
+                    :key="video.id"
+                    :ref="'video' + index"
+                    :src="getVideoUrl(video.id)"
+                    :class="[videoClass, { 'active-video': index === activeVideoIndex, 'hidden-video': index !== activeVideoIndex }]"
+                    :muted="index !== activeVideoIndex"
+                    :controls="index === activeVideoIndex"
+                    preload="auto"
+                    playsinline
+                    @ended="nextVideo"
+                    @loadeddata="onVideoLoaded(index)"
+                    @canplaythrough="onVideoReady(index)"
+                ></video>
+            </div>
+            
+            <div class="video-actions">
+                <div style="display:flex; justify-content:center; gap:8px;">
+                    <van-button id="dislike-button" title="不喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
+                        <span v-if="currentVideo.score === 1" style="color:#222;">&#x1F5A4;</span>
+                        <span v-else style="color:#888;">&#x1F5A4;</span>
+                    </van-button>
+                    <van-button type="primary" size="small" @click="prevVideo" style="padding:0 20px;">上一个</van-button>
+                    <van-button type="primary" size="small" @click="nextVideo" style="padding:0 20px;">下一个</van-button>
+                    <van-button id="like-button" title="喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike" style="font-size:22px;padding:0 18px;">
+                        <span v-if="currentVideo.score === 5" style="color:#ff3b30;">&#x2764;</span>
+                        <span v-else-if="currentVideo.score === 1" style="color:#170201;">&#x2764;</span>
+                        <span v-else style="color:#888;">&#x2764;</span>
+                    </van-button>
+                </div>
+               
+                <div class="rename-card">
+                    <div class="rename-preview">
+                        <span style="font-size: 12px; color: #aaa;">预览:</span>
+                        <span class="preview-text">{{ generatedFilename }}</span>
+                        <div style="display: flex; align-items: center; position: relative;">
+                            <van-button type="success" size="small" @click="submitRename">保存队列</van-button>
+                            <span v-if="saveSuccess" class="fade-in-out" style="position: absolute; right: -25px; color:#4fc08d; font-size:18px; font-weight:bold;">✔</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <div class="group-title">1. 文件名构成 (点击词汇剔除标黑，点击[全]设为整名)</div>
+                        <div style="min-height: 30px;">
+                            <span v-if="filenameTokens.length === 0" class="empty-hint">分词中或无核心词...</span>
+                            <span v-for="t in filenameTokens" :key="t.text" 
+                                  class="token-chip" :class="{'token-off': !t.active}">
+                                <span class="chip-text" @click="t.active = !t.active">{{ t.text }}</span>
+                                <span class="chip-action" @click.stop="setAsOnlyToken(t.text)" title="设为唯一文件名">[全]</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="group-title">2. 附加 Tag (自动补充 # 号)</div>
+                        <div class="tag-input-row">
+                            <input type="text" v-model="newTagInput" placeholder="输入自定义 Tag (无需输入#)..." @keyup.enter="addCustomTag" />
+                            <van-button type="primary" size="small" @click="addCustomTag">添加 Tag</van-button>
+                        </div>
+                        <div style="min-height: 30px; margin-top: 6px;">
+                            <span v-if="savedQuickTags.length === 0" class="empty-hint">本地暂无快捷 Tag</span>
+                            <span v-for="tag in savedQuickTags" :key="tag"
+                                  class="quick-tag-chip" :class="{'tag-on': currentCustomTags.includes(tag)}">
+                                <span class="chip-text" @click="toggleQuickTag(tag)">#{{ tag }}</span>
+                                <span class="chip-del" @click.stop="removeSavedTag(tag)" title="从本地记录彻底删除">×</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <van-popup v-model:show="showDetail" position="bottom" round>
+                <div style="padding:20px;">
+                    <h4>视频详情</h4>
+                    <p>文件名: <span v-for="keyword in currentVideo.filename.split(' ')" :key="keyword" @click="searchDouyin(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
+                    <p>文件路径: <span style="font-size:12px;color:#666;word-break:break-all;">{{ currentVideo.detail }}</span></p>
+                    <p>标签: {{ currentVideo.tags }}</p>
+                    <p>评分: <van-rate v-model="currentVideo.score" @change="updateScore" /></p>
+                    <div style="display:flex; gap: 10px; margin-top: 15px;">
+                        <van-button type="success" style="flex:1;" block :url="getVideoUrl(currentVideo.id)" download>下载到本地</van-button>
+                    </div>
+                </div>
+            </van-popup>
+        </div>
+
+        <div v-show="!isLoading && !state.videos.length" style="color:#fff;margin-top:40px;text-align:center;">
+            <img src="/static/logo.png" alt="LOGO" style="height:60px;margin-bottom:20px;">
+            <div>暂无满足条件的视频</div>
+        </div>
+
+        <div v-if="showSearch" class="search-modal">
+            <div class="search-modal-content">
+                <h4>搜索与筛选</h4>
+                <div style="margin-bottom:12px;">
+                    <input type="text" v-model="searchKeyword" placeholder="包含关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" />
+                    <input type="text" v-model="excludeKeyword" placeholder="排除关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" style="margin-top:8px;" />
+                    <div style="text-align:right; margin-top:4px;"><a href="/?search=random" style="font-size:12px;color:#007bff;">使用 random 随机打乱</a></div>
+                </div>
+                
+                <div style="margin:10px 0;">
+                    <span>排序方式：</span>
+                    <select v-model="sortBy" class="search-select">
+                        <option value="">默认 (入库倒序)</option>
+                        <option value="filename">纯文件名正序 (A-Z)</option>
+                        <option value="path">文件路径正序 (按目录结构)</option>
+                    </select>
+                </div>
+
+                <div style="margin:10px 0;">
+                    <span>评分筛选：</span>
+                    <select v-model="searchScore" class="search-select">
+                        <option value="0">不限 (自动过滤1星)</option>
+                        <option value="1">只看1星 (不喜欢)</option>
+                        <option value="2">2分</option>
+                        <option value="3">3分</option>
+                        <option value="4">4分</option>
+                        <option value="5">5分</option>
+                    </select>
+                </div>
+                <div style="margin:10px 0;">
+                    <span>文件大小筛选：</span>
+                    <div style="margin-top:5px;">
+                        <select v-model="sizeOperator" class="search-select" style="width:80px;">
+                            <option value="lte">≤</option>
+                            <option value="gte">≥</option>
+                            <option value="eq">=</option>
+                        </select>
+                        <input type="number" v-model="sizeValue" placeholder="MB" class="search-input" style="width:80px;margin-left:5px;" min="1" max="10000" />
+                        <span style="margin-left:5px;">MB</span>
+                    </div>
+                </div>
+                <button class="search-btn-confirm" @click="doSearch">确认查询</button>
+                <button class="search-btn-cancel" @click="showSearch=false">取消</button>
+            </div>
+        </div>
+
+        <div v-show="showConfig" class="search-modal" style="overflow-y: auto;">
+            <div class="search-modal-content">
+                <h4>视频路径配置</h4>
+                <input type="text" v-model="newPath" placeholder="输入绝对路径如 D:/videos" class="search-input" @keyup.enter="addPath" />
+                <button class="search-btn-confirm" @click="addPath">添加目录</button>
+                
+                <div style="margin-top:16px;">
+                    <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px;">
+                        <button @click="indexPath_del(path)" style="margin-left:8px;">删除</button>
+                        <span style="flex:1;font-size:12px;word-break:break-all;margin:0 8px;">{{ path }}</span>
+                        <button @click="indexPath(path)" style="margin-right:8px;">全索引</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                    <h4>全局自动黑名单</h4>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 8px;">分词与扫描时会自动过滤以下词汇。两者逻辑隔离，不会混杂到 Tag 面板中。</p>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 10px;">
+                        <span v-for="(word, idx) in blacklist" :key="idx" 
+                              style="background:#f44336; color:#fff; font-size:12px; padding:2px 8px; border-radius:12px; cursor:pointer;"
+                              @click="removeBlacklistWord(idx)"
+                              title="点击移除">
+                            {{ word }} ×
+                        </span>
+                        <span v-if="blacklist.length===0" style="font-size:12px; color:#999;">当前无全局黑名单词汇</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" v-model="newBlacklistWord" placeholder="输入需屏蔽的全局词汇" class="search-input" style="flex:1;" @keyup.enter="addBlacklistWord" />
+                        <button class="search-btn-confirm" style="width: auto; padding: 0 10px; margin: 0;" @click="addBlacklistWord">添加黑名单</button>
+                    </div>
+                    
+                    <button class="search-btn-confirm" style="margin-top:25px; background: #e6a23c; border-color: #e6a23c;" @click="executeRenameQueue">
+                        ▶ 批量执行延时改名队列
+                    </button>
+                </div>
+                
+                <button class="search-btn-cancel" style="margin-top: 20px;" @click="showConfig=false">关闭面板</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="http://192.168.31.197:8100/static/cdn/vue3.5.global.prod.js"></script>
+<script src="http://192.168.31.197:8100/static/cdn/vue-router4.5.global.js"></script>
+<script src="http://192.168.31.197:8100/static/cdn/vant4.min.js"></script>
+<script src="http://192.168.31.197:8100/static/cdn/axios1.1.min.js"></script>
+
+<script>
+async function fetchLatestVideos(state) {
+    const params = { 
+        latest: state.pageSize, page: state.page, 
+        page_size: state.pageSize, search: state.searchKeyword,
+        score: state.searchScore
+    }
+    if (state.excludeKeyword) params.exclude = state.excludeKeyword
+    if (state.searchSize && state.searchSize !== 0) params.size = state.searchSize
+    if (state.sortBy) params.sort_by = state.sortBy
+    const res = await axios.get('/dyfn/videos', { params })
+    return res.data
+}
+function getVideoUrl(id) { return `/dyfn/videos/${id}/stream` }
+async function updateScore(videoId, score) {
+    await axios.post('/dyfn/videos/update_score', { id: videoId, score: score })
+}
+
+class VideoPlayer {
+    constructor(state, refs) {
+        this.state = state; this.refs = refs;
+        this.touchStartY = 0; this.touchActive = false;
+        this.lastRatios = []; this.isSwitching = false;
+    }
+    initializeVideoQueue() { this.refreshQueue(); }
+    updateVideoClass(videoEl = null) {
+        if (!videoEl) {
+            const videos = document.querySelectorAll('video');
+            const domIndex = this.refs.activeVideoIndex.value;
+            if (!videos.length || !videos[domIndex]) return;
+            videoEl = videos[domIndex];
+        }
+        if (!videoEl) return;
+        const width = videoEl.videoWidth, height = videoEl.videoHeight;
+        if (width && height) {
+            const isLandscape = (height / width) <= 1.1;
+            this.lastRatios.push(isLandscape);
+            if (this.lastRatios.length > 3) this.lastRatios.shift();
+            if (this.lastRatios.length === 3 && this.lastRatios.every(v => v)) {
+                this.refs.videoClass.value = 'video-landscape';
+            } else if (!isLandscape) {
+                this.refs.videoClass.value = 'video-portrait';
+            } else {
+                this.refs.videoClass.value = 'video-landscape';
+            }
+        }
+    }
+    refreshQueue() {
+        if (!this.state.videos || this.state.videos.length === 0) return;
+        const totalVideos = this.state.videos.length;
+        const currentGlobalIndex = this.refs.currentIndex.value;
+        this.refs.videoQueue.value = [];
+        this.refs.activeVideoIndex.value = 1; 
+        this.refs.videoLoadStates.value = [false, false, false];
+        for (let i = -1; i <= 1; i++) {
+            let targetIndex = (currentGlobalIndex + i + totalVideos) % totalVideos;
+            if (this.state.videos[targetIndex]) this.refs.videoQueue.value.push(this.state.videos[targetIndex]);
+        }
+        document.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
+    }
+    updateVideoQueue(direction = 'next') {
+        if (this.state.videos.length === 0) return;
+        const totalVideos = this.state.videos.length;
+        if (direction === 'next') {
+            this.refs.videoQueue.value.shift();
+            let nextVideoIndex = (this.refs.currentIndex.value + 1) % totalVideos;
+            this.refs.videoQueue.value.push(this.state.videos[nextVideoIndex]);
+        } else {
+            this.refs.videoQueue.value.pop();
+            let prevVideoIndex = (this.refs.currentIndex.value - 1 + totalVideos) % totalVideos;
+            this.refs.videoQueue.value.unshift(this.state.videos[prevVideoIndex]);
+        }
+        this.refs.videoLoadStates.value = [false, false, false];
+    }
+    prevVideo() {
+        if (this.isSwitching || this.state.videos.length === 0) return;
+        this.isSwitching = true;
+        document.querySelectorAll('video').forEach(v => v.pause());
+        this.refs.currentIndex.value--;
+        if (this.refs.currentIndex.value < 0) this.refs.currentIndex.value = this.state.videos.length - 1;
+        this.updateVideoQueue('prev');
+        setTimeout(() => { this.playActiveVideo(); this.isSwitching = false; }, 200);
+    }
+    async nextVideo() {
+        if (this.isSwitching || this.state.videos.length === 0) return;
+        this.isSwitching = true;
+        try {
+            document.querySelectorAll('video').forEach(v => v.pause());
+            this.exitFullscreen();
+            let nextIndex = this.refs.currentIndex.value + 1;
+            let isPageChange = false;
+            if (nextIndex >= this.state.videos.length) {
+                if (this.state.page * this.state.pageSize < this.state.totalVideos && typeof this.loadMoreVideos === 'function') {
+                    this.state.page++; await this.loadMoreVideos(); isPageChange = true;
+                }
+                nextIndex = nextIndex % this.state.videos.length;
+            }
+            this.refs.currentIndex.value = nextIndex;
+            if (isPageChange) this.refreshQueue(); else this.updateVideoQueue('next');
+            setTimeout(() => { this.playActiveVideo(); this.isSwitching = false; }, 250);
+        } catch (e) { console.error(e); this.isSwitching = false; }
+    }
+    playActiveVideo() {
+        const domIndex = this.refs.activeVideoIndex.value;
+        const videos = document.querySelectorAll('video');
+        if (!videos.length || !videos[domIndex]) return;
+        videos.forEach((v, i) => {
+            if (i !== domIndex) { v.pause(); v.muted = true; v.currentTime = 0; }
+        });
+        const activeVideo = videos[domIndex];
+        activeVideo.muted = false;
+        if (activeVideo.ended) activeVideo.currentTime = 0;
+        const playPromise = activeVideo.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {}).catch(() => {
+                activeVideo.muted = true; activeVideo.play().catch(() => {});
+            });
+        }
+        this.checkAndSetVideoClass(activeVideo);
+    }
+    checkAndSetVideoClass(video) {
+        if (!video.hasAttribute('data-class-updated')) {
+            const updateClass = () => { this.updateVideoClass(video); video.setAttribute('data-class-updated', 'true'); };
+            if (video.readyState >= 1) updateClass();
+            else video.addEventListener('loadedmetadata', updateClass, { once: true });
+        }
+    }
+    onVideoReady(index) {
+        this.refs.videoLoadStates.value[index] = true;
+        const video = document.querySelectorAll('video')[index];
+        if (!video) return;
+        if (index === this.refs.activeVideoIndex.value) {
+            if (video.paused) video.play().catch(() => {});
+        } else {
+            video.pause(); video.muted = true;
+        }
+    }
+    onVideoLoaded(index) { this.refs.videoLoadStates.value[index] = true; }
+    handleTouchStart(e) {
+        if (this.isSwitching) return;
+        this.touchActive = true; this.touchStartY = e.touches[0].clientY;
+    }
+    handleTouchEnd(e) {
+        if (!this.touchActive) return;
+        const deltaY = e.changedTouches[0].clientY - this.touchStartY;
+        if (Math.abs(deltaY) > 60) { if (deltaY < 0) this.nextVideo(); else this.prevVideo(); }
+        this.touchActive = false;
+    }
+    getCurrentlyPlayingVideo() {
+        const videos = document.querySelectorAll('video');
+        return videos[this.refs.activeVideoIndex.value] || null;
+    }
+    setLoadMoreVideos(callback) { this.loadMoreVideos = callback; }
+    exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+    
+    previewForward() { 
+        const v = this.getCurrentlyPlayingVideo(); 
+        if (v && v.duration) {
+            const step = Math.max(5, v.duration * 0.05);
+            v.currentTime = Math.min(v.duration, v.currentTime + step); 
+        }
+    }
+    previewBackward() { 
+        const v = this.getCurrentlyPlayingVideo(); 
+        if (v && v.duration) {
+            const step = Math.max(5, v.duration * 0.05);
+            v.currentTime = Math.max(0, v.currentTime - step); 
+        }
+    }
+    seekTo(ratio) {
+        const v = this.getCurrentlyPlayingVideo();
+        if (v && v.duration) v.currentTime = v.duration * ratio;
+    }
+
+    initEventListeners() {
+        window.addEventListener('wheel', (e) => {
+            if (this.isSwitching || Math.abs(e.deltaY) < 30) return;
+            if (e.deltaY > 0) this.nextVideo(); else if (e.deltaY < 0) this.prevVideo();
+        });
+        window.addEventListener('keydown', (e) => {
+            if (this.isSwitching) return;
+            if (e.key === 'ArrowDown') this.nextVideo(); else if (e.key === 'ArrowUp') this.prevVideo();
+        });
+        window.addEventListener('dblclick', (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+            const v = this.getCurrentlyPlayingVideo();
+            if (!document.fullscreenElement && v) {
+                if (v.requestFullscreen) v.requestFullscreen().catch(() => {});
+            } else if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+        });
+    }
+}
+
+class SearchManager {
+    constructor(state, refs) { this.state = state; this.refs = refs; }
+    async doSearch() {
+        const start = performance.now()
+        this.state.searchKeyword = this.refs.searchKeyword.value.trim()
+        this.state.excludeKeyword = this.refs.excludeKeyword.value.trim()
+        this.state.searchScore = this.refs.searchScore.value
+        this.state.sortBy = this.refs.sortBy.value
+        this.state.searchSize = (this.refs.sizeValue.value && this.refs.sizeValue.value > 0) 
+            ? `${this.refs.sizeOperator.value}:${this.refs.sizeValue.value}` : 0
+        this.state.page = 1; this.refs.currentIndex.value = 0; this.refs.showSearch.value = false;
+        
+        const params = []
+        if (this.state.searchKeyword) params.push(`search=${encodeURIComponent(this.state.searchKeyword)}`)
+        if (this.state.excludeKeyword) params.push(`exclude=${encodeURIComponent(this.state.excludeKeyword)}`)
+        if (this.state.searchScore > 0) params.push(`score=${this.state.searchScore}`)
+        if (this.state.searchSize !== 0) params.push(`size=${this.state.searchSize}`)
+        
+        const resp = await axios.get(`/dyfn/videos/count${params.length ? '?' + params.join('&') : ''}`)
+        this.state.totalVideos = resp.data.total || 0; this.state.totalpage = this.state.totalVideos;
+        
+        this.updateUrlParams(); this.showSearchHint();
+        await this.loadVideosCallback(false);
+        this.refs.searchTimeMsg.value = '筛选完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒'
+        setTimeout(() => { this.refs.searchTimeMsg.value = '' }, 3000)
+    }
+    showSearchHint() {
+        const conditions = []
+        if (this.state.searchKeyword) conditions.push(`包含: "${this.state.searchKeyword}"`)
+        if (this.state.excludeKeyword) conditions.push(`排除: "${this.state.excludeKeyword}"`)
+        if (this.state.sortBy === 'filename') conditions.push(`纯文件名排序`)
+        if (this.state.sortBy === 'path') conditions.push(`绝对路径排序`)
+        if (this.state.searchScore > 0) conditions.push(`评分: ${this.state.searchScore}分`)
+        if (this.state.searchSize !== 0) {
+            const [op, val] = this.state.searchSize.split(':');
+            conditions.push(`大小: ${op === 'lte' ? '≤' : op === 'gte' ? '≥' : '='}${val}MB`)
+        }
+        if (conditions.length > 0) this.refs.searchTimeMsg.value = `当前条件: ${conditions.join(', ')}`
+    }
+    updateUrlParams() {
+        const url = new URL(window.location);
+        const mapping = {
+            'search': 'searchKeyword',
+            'exclude': 'excludeKeyword',
+            'score': 'searchScore',
+            'size': 'searchSize',
+            'sort_by': 'sortBy'
+        };
+        for (let [k, stateKey] of Object.entries(mapping)) {
+            if (this.state[stateKey] && this.state[stateKey] !== 0) {
+                url.searchParams.set(k, this.state[stateKey]);
+            } else {
+                url.searchParams.delete(k);
+            }
+        }
+        window.history.pushState({}, '', url);
+    }
+    loadFromUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let hasParams = false;
+        if (urlParams.get('search')) { this.refs.searchKeyword.value = this.state.searchKeyword = urlParams.get('search'); hasParams = true; }
+        if (urlParams.get('exclude')) { this.refs.excludeKeyword.value = this.state.excludeKeyword = urlParams.get('exclude'); hasParams = true; }
+        if (urlParams.get('score')) { this.refs.searchScore.value = this.state.searchScore = parseInt(urlParams.get('score')); hasParams = true; }
+        if (urlParams.get('sort_by')) { this.refs.sortBy.value = this.state.sortBy = urlParams.get('sort_by'); hasParams = true; }
+        if (urlParams.get('size')) {
+            const sizeParam = urlParams.get('size');
+            if (sizeParam.includes(':')) {
+                const [op, val] = sizeParam.split(':');
+                this.refs.sizeOperator.value = op; this.refs.sizeValue.value = parseInt(val);
+                this.state.searchSize = sizeParam;
+            } else {
+                this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = parseInt(sizeParam);
+                this.state.searchSize = `lte:${sizeParam}`;
+            }
+            hasParams = true;
+        }
+        return hasParams;
+    }
+    clearSearch() {
+        this.refs.searchKeyword.value = this.state.searchKeyword = '';
+        this.refs.excludeKeyword.value = this.state.excludeKeyword = '';
+        this.refs.searchScore.value = this.state.searchScore = 0;
+        this.refs.sortBy.value = this.state.sortBy = '';
+        this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = '';
+        this.state.searchSize = 0; this.state.page = 1; this.refs.currentIndex.value = 0;
+        const url = new URL(window.location);
+        ['search', 'exclude', 'score', 'size', 'sort_by'].forEach(k => url.searchParams.delete(k));
+        window.history.pushState({}, '', url);
+    }
+    setLoadVideosCallback(cb) { this.loadVideosCallback = cb; }
+    initPopstateListener() {
+        window.addEventListener('popstate', () => {
+            if (this.loadFromUrlParams()) this.doSearch();
+            else { this.clearSearch(); this.loadVideosCallback(false); }
+        })
+    }
+}
+
+class ConfigManager {
+    constructor(refs) { this.refs = refs; }
+    async fetchPaths() { const resp = await axios.get('/dyfn/video-paths'); this.refs.pathList.value = resp.data.paths || []; }
+    async addPath() {
+        if (!this.refs.newPath.value.trim()) return;
+        await axios.post('/dyfn/video-paths', { path: this.refs.newPath.value.trim() });
+        this.refs.newPath.value = ''; this.fetchPaths();
+    }
+    async indexPath(path) {
+        const start = performance.now(); await axios.post('/dyfn/video-paths/index?all=1', { path });
+        alert('索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+    }
+    async indexPathq() {
+        const start = performance.now(); await axios.get('/dyfn/video-paths/updatefile');
+        alert('更新完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+    }
+    async indexPath_del(path) {
+        const start = performance.now(); await axios.post('/dyfn/video-paths/index?del=1', { path });
+        alert('删除并清理索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+    }
+}
+
+const { createApp, reactive, onMounted, computed, ref, watch } = Vue
+
+createApp({
+    setup() {
+        const state = reactive({ videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', totalVideos: 0 })
+        const currentIndex = ref(0), showDetail = ref(false), showSearch = ref(false), showConfig = ref(false)
+        const searchKeyword = ref(''), excludeKeyword = ref(''), searchScore = ref(0), sortBy = ref(''), searchSize = ref(0), sizeOperator = ref('lte'), sizeValue = ref('')
+        const newPath = ref(''), pathList = ref([]), searchTimeMsg = ref(''), videoQueue = ref([])
+        const activeVideoIndex = ref(1), videoLoadStates = ref([false, false, false]), isLoading = ref(true)
+        const videoClass = ref('video-portrait')
+        
+        // 全局配置：黑名单
+        const blacklist = ref([])
+        const newBlacklistWord = ref('')
+
+        // 单文件修改与本地 Tag
+        const filenameTokens = ref([]) 
+        const savedQuickTags = ref(JSON.parse(localStorage.getItem('dy_quick_tags') || '[]'))
+        const currentCustomTags = ref([])
+        const newTagInput = ref('')
+        
+        // 保存成功状态控制
+        const saveSuccess = ref(false)
+
+        const refs = { currentIndex, videoQueue, activeVideoIndex, videoLoadStates, videoClass, showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, searchTimeMsg, newPath, pathList }
+        const videoPlayer = new VideoPlayer(state, refs), searchManager = new SearchManager(state, refs), configManager = new ConfigManager(refs)
+        
+        const currentVideo = computed(() => (videoQueue.value.length > 0 && activeVideoIndex.value < videoQueue.value.length) ? videoQueue.value[activeVideoIndex.value] || {} : state.videos[currentIndex.value] || {})
+        const videoIndex = computed(() => (searchKeyword.value || state.videos.length > 0) ? currentIndex.value + 1 : null)
+        
+        const searchFromClipboard = async () => {
+            if (!navigator.clipboard || !window.isSecureContext) { alert('当前环境不支持或未授权 HTTPS'); return; }
+            try {
+                const text = await navigator.clipboard.readText();
+                if (!text.trim()) { alert('剪贴板为空'); return; }
+                searchKeyword.value = text.trim(); showSearch.value = false; await doSearch();
+            } catch (err) { alert('读取失败，检查权限'); }
+        };
+        
+        async function loadVideos(append = false) {
+            const newVideos = await fetchLatestVideos(state);
+            if (append) state.videos.push(...newVideos); else { state.videos = newVideos; currentIndex.value = 0; }
+            videoPlayer.initializeVideoQueue();
+        }
+        videoPlayer.setLoadMoreVideos(async () => { await loadVideos(true); })
+        searchManager.setLoadVideosCallback(loadVideos)
+        
+        async function initialLoad() {
+            try {
+                isLoading.value = true;
+                if (!searchManager.loadFromUrlParams() || true) {
+                    const params = [];
+                    if (state.searchKeyword) params.push(`search=${encodeURIComponent(state.searchKeyword)}`);
+                    if (state.excludeKeyword) params.push(`exclude=${encodeURIComponent(state.excludeKeyword)}`);
+                    if (state.searchScore > 0) params.push(`score=${state.searchScore}`);
+                    if (state.searchSize !== 0) params.push(`size=${state.searchSize}`);
+                    const resp = await axios.get(`/dyfn/videos/count${params.length ? '?' + params.join('&') : ''}`);
+                    state.totalVideos = resp.data.total || 0;
+                    state.totalpage = state.totalVideos; state.page = 1;
+                }
+                await loadVideos(false);
+                showSearch.value = false; showConfig.value = false;
+                setTimeout(() => { isLoading.value = false; setTimeout(() => { videoPlayer.playActiveVideo(); }, 500); }, 1500);
+            } catch (error) { isLoading.value = false; }
+        }
+        
+        const prevVideo = () => videoPlayer.prevVideo(), nextVideo = () => videoPlayer.nextVideo()
+        function toggleDetail() { showDetail.value = !showDetail.value }
+        function searchDouyin(kw) { window.open(`https://www.douyin.com/search/${encodeURIComponent(kw)}`, '_blank'); }
+        
+        const handleTouchStart = (e) => videoPlayer.handleTouchStart(e), handleTouchEnd = (e) => videoPlayer.handleTouchEnd(e)
+        const onVideoLoaded = (index) => videoPlayer.onVideoLoaded(index), onVideoReady = (index) => videoPlayer.onVideoReady(index)
+        
+        async function updateScoreHandler(newScore) { if (currentVideo.value.id) { await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; } }
+        
+        const doSearch = () => searchManager.doSearch(), lastLikeType = ref('')
+        async function toggleLike() {
+            if (!currentVideo.value.id) return;
+            const newScore = currentVideo.value.score === 5 ? 0 : 5;
+            await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore;
+            lastLikeType.value = newScore === 5 ? 'like' : ''; setTimeout(() => lastLikeType.value = '', 600);
+        }
+        async function toggleDislike() {
+            if (!currentVideo.value.id) return;
+            const newScore = currentVideo.value.score === 1 ? 0 : 1;
+            await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore;
+            lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600);
+        }
+        
+        const fetchPaths = () => configManager.fetchPaths(), addPath = () => configManager.addPath()
+        const indexPath = (path) => configManager.indexPath(path), indexPathq = () => configManager.indexPathq(), indexPath_del = (path) => configManager.indexPath_del(path)
+        
+        function previewForward() { videoPlayer.previewForward(); }
+        function previewBackward() { videoPlayer.previewBackward(); }
+        function seekTo(ratio) { videoPlayer.seekTo(ratio); }
+
+        // ================= 全局配置：黑名单功能 =================
+        async function loadBlacklist() {
+            try {
+                const res = await axios.get('/dyfn/sys_tags/blacklist');
+                blacklist.value = res.data.blacklist || [];
+            } catch(e) {}
+        }
+
+        async function addBlacklistWord() {
+            const kw = newBlacklistWord.value.trim();
+            if(!kw || blacklist.value.includes(kw)) return;
+            blacklist.value.push(kw);
+            await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value });
+            newBlacklistWord.value = '';
+            vant.showToast('全局黑名单已更新');
+        }
+
+        async function removeBlacklistWord(idx) {
+            blacklist.value.splice(idx, 1);
+            await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value });
+        }
+
+        async function openConfig() {
+            showConfig.value = true;
+            await loadBlacklist();
+        }
+
+        // ================= 单文件：改名与 Tag 逻辑 =================
+        
+        watch(() => currentVideo.value.id, async (newId) => {
+            if(newId) {
+                currentCustomTags.value = [];
+                filenameTokens.value = [];
+                saveSuccess.value = false;
+                
+                if (currentVideo.value.filename) {
+                    try {
+                        const res = await axios.post('/dyfn/sys_tags/tokenize', { filename: currentVideo.value.filename });
+                        if(res.data.success) {
+                            const validWords = res.data.words.filter(w => !blacklist.value.includes(w));
+                            filenameTokens.value = validWords.map(w => ({ text: w, active: true }));
+                        }
+                    } catch(e) {}
+                }
+            }
+        });
+
+        function setAsOnlyToken(word) {
+            filenameTokens.value.forEach(t => t.active = (t.text === word));
+            currentCustomTags.value = [];
+        }
+
+        const generatedFilename = computed(() => {
+            if (!currentVideo.value || !currentVideo.value.detail) return '';
+            
+            let ext = '';
+            const match = currentVideo.value.detail.match(/\.[^.]+$/);
+            if (match) ext = match[0];
+
+            const activeBase = filenameTokens.value
+                .filter(t => t.active)
+                .map(t => t.text)
+                .join(' ');
+
+            const activeTagsStr = currentCustomTags.value.map(tag => '#' + tag).join(' ');
+            
+            let finalBody = (activeBase + (activeBase && activeTagsStr ? ' ' : '') + activeTagsStr).trim();
+            if (!finalBody) return currentVideo.value.filename; 
+            
+            return finalBody + ext;
+        });
+
+        function addCustomTag() {
+            const tag = newTagInput.value.replace(/#/g, '').trim(); 
+            if (!tag) return;
+            
+            if (!currentCustomTags.value.includes(tag)) {
+                currentCustomTags.value.push(tag);
+            }
+            
+            if (!savedQuickTags.value.includes(tag)) {
+                savedQuickTags.value.push(tag);
+                localStorage.setItem('dy_quick_tags', JSON.stringify(savedQuickTags.value));
+            }
+            newTagInput.value = '';
+        }
+
+        function toggleQuickTag(tag) {
+            const idx = currentCustomTags.value.indexOf(tag);
+            if (idx > -1) {
+                currentCustomTags.value.splice(idx, 1);
+            } else {
+                currentCustomTags.value.push(tag);
+            }
+        }
+        
+        function removeSavedTag(tag) {
+            // 删除本地缓存
+            const idx = savedQuickTags.value.indexOf(tag);
+            if (idx > -1) {
+                savedQuickTags.value.splice(idx, 1);
+                localStorage.setItem('dy_quick_tags', JSON.stringify(savedQuickTags.value));
+            }
+            // 同步从当前的选用状态中踢出
+            const cIdx = currentCustomTags.value.indexOf(tag);
+            if (cIdx > -1) {
+                currentCustomTags.value.splice(cIdx, 1);
+            }
+        }
+
+        async function submitRename() {
+            if (!currentVideo.value.id) return;
+            const submitName = generatedFilename.value;
+            
+            if (submitName === currentVideo.value.filename) return;
+
+            try {
+                const res = await axios.post('/dyfn/sys_tags/queue_rename', {
+                    video_id: currentVideo.value.id,
+                    new_filename: submitName
+                });
+                if (res.data.success) {
+                    currentVideo.value.filename = submitName;
+                    
+                    // 无弹窗交互，绿勾淡入淡出提示
+                    saveSuccess.value = false;
+                    setTimeout(() => {
+                        saveSuccess.value = true;
+                        setTimeout(() => { saveSuccess.value = false; }, 2000);
+                    }, 50);
+                    
+                } else {
+                    vant.showFailToast(res.data.msg); // 仅在失败时弹窗报错
+                }
+            } catch (e) {
+                vant.showFailToast('请求提交失败');
+            }
+        }
+
+        async function executeRenameQueue() {
+            try {
+                vant.showLoadingToast({ message: '正在批量执行...', forbidClick: true, duration: 0 });
+                const res = await axios.post('/dyfn/sys_tags/execute_renames');
+                vant.closeToast();
+                if (res.data.success) {
+                    vant.showSuccessToast(res.data.msg);
+                } else {
+                    vant.showFailToast('执行异常');
+                }
+            } catch (e) {
+                vant.closeToast();
+                vant.showFailToast('网络异常');
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            
+            if (e.key === 'ArrowLeft') previewBackward(); 
+            else if (e.key === 'ArrowRight') previewForward();
+            else if (e.key === 'Z' || e.key === 'z') document.getElementById('like-button').click();
+            else if (e.key === 'X' || e.key === 'x') document.getElementById('dislike-button').click();
+            else if (e.key === ' ') { const v = document.querySelectorAll('video')[activeVideoIndex.value]; v.paused ? v.play() : v.pause(); }
+            else if (e.key === '`' || e.key === '·') seekTo(0.5);
+        })
+
+        onMounted(() => {
+            loadBlacklist();
+            initialLoad(); fetchPaths(); videoPlayer.initEventListeners(); searchManager.initPopstateListener();
+            setTimeout(() => videoPlayer.updateVideoClass(), 1000);
+        })
+
+        return { 
+            state, currentIndex, currentVideo, videoIndex, showDetail, getVideoUrl, prevVideo, nextVideo, toggleDetail, 
+            searchDouyin, handleTouchStart, handleTouchEnd, updateScore: updateScoreHandler, 
+            showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, 
+            doSearch, lastLikeType, toggleLike, toggleDislike, showConfig, openConfig, newPath, pathList, addPath, indexPath, indexPathq, indexPath_del, 
+            searchTimeMsg, videoClass, videoQueue, activeVideoIndex, onVideoLoaded, onVideoReady, isLoading, 
+            previewForward, previewBackward, seekTo, searchFromClipboard,
+            
+            // 全局黑名单
+            blacklist, newBlacklistWord, addBlacklistWord, removeBlacklistWord,
+            
+            // 改名与快捷 Tag
+            filenameTokens, savedQuickTags, currentCustomTags, newTagInput,
+            generatedFilename, addCustomTag, toggleQuickTag, removeSavedTag, submitRename, executeRenameQueue, setAsOnlyToken, saveSuccess
+        }
+    }
+}).use(vant).mount('#app')
+</script>
+</body>
+</html>

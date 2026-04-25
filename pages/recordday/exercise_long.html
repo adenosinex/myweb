@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>长线负荷与恢复评估模型</title>
+  <script src="/static/cdn/vue3.5.global.prod.js"></script>
+  <style>
+    body {
+      background-color: #f0f4f8;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .app-container {
+      max-width: 600px;
+      margin: 0 auto;
+      box-sizing: border-box;
+      padding-bottom: 40px;
+    }
+    h1 {
+      text-align: center;
+      color: #0f172a;
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 24px;
+      letter-spacing: 0.5px;
+    }
+
+    /* 模块标题通用样式 */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1e40af;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* 知识库卡片样式 */
+    .knowledge-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      border-top: 4px solid #3b82f6;
+    }
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .knowledge-tag {
+      background: #f1f5f9;
+      color: #475569;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .knowledge-tag:hover {
+      background: #e2e8f0;
+    }
+    .knowledge-tag.active {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #bfdbfe;
+    }
+    .knowledge-content {
+      font-size: 14.5px;
+      color: #334155;
+      line-height: 1.6;
+      background: #f8fafc;
+      padding: 14px;
+      border-radius: 8px;
+    }
+
+    /* 训练计划卡片样式 */
+    .plan-card {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+    .plan-header {
+      background: #1e293b;
+      color: white;
+      padding: 12px 16px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .plan-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .plan-body {
+      padding: 16px;
+    }
+    .plan-detail-row {
+      display: flex;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 8px;
+      align-items: center;
+    }
+    .plan-detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .plan-label {
+      flex: 0 0 100px;
+      font-weight: 600;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .plan-value {
+      flex: 1;
+      color: #0f172a;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .plan-highlight {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    /* 执行纪律警示框 */
+    .alert-box {
+      background: #fff1f2;
+      border-left: 4px solid #f43f5e;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    .alert-title {
+      color: #e11d48;
+      font-weight: 700;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    .alert-text {
+      color: #881337;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* 表单输入样式 (针对计算器) */
+    .input-group {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .input-group label {
+      flex: 0 0 110px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .input-control {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-control:focus {
+      border-color: #3b82f6;
+    }
+    select.input-control {
+      background-color: white;
+    }
+    .result-box {
+      margin-top: 16px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .result-score {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1d4ed8;
+      margin: 8px 0;
+    }
+    .result-desc {
+      font-size: 14px;
+      color: #1e40af;
+      font-weight: 600;
+    }
+
+    /* 表格样式 */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .data-table th, .data-table td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 12px;
+      text-align: center;
+      font-size: 13px;
+    }
+    .data-table th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container" id="app">
+    <h1>长线负荷与恢复评估模型</h1>
+
+    <div class="alert-box">
+      <div class="alert-title">核心结论</div>
+      <p class="alert-text">
+        你近期的状态下滑不是“状态不好”，而是前次线路的实际负荷（LS ≈ 127）对应 10-14 天的恢复周期。将间隔强行压至 7 天，必然导致中枢驱动下降。
+      </p>
+    </div>
+
+    <div class="knowledge-card">
+      <div class="section-title">功能面板</div>
+      <div class="tags-container">
+        <div 
+          v-for="tab in tabs" 
+          :key="tab.id"
+          class="knowledge-tag" 
+          :class="{ active: currentTab === tab.id }"
+          @click="currentTab = tab.id"
+        >
+          {{ tab.name }}
+        </div>
+      </div>
+
+      <div v-if="currentTab === 'theory'" class="knowledge-content">
+        <strong>核心公式：</strong><br>
+        总负荷 (LS) = [(时间 × 强度) + 爬升负荷 + 热负荷 + 末端刺激] × 中枢状态修正<br><br>
+        <strong>1. 基础耐力：</strong>时长(h) × 强度系数(Z2:1.0, Z3:1.3, Z4:1.6) × 10<br>
+        <strong>2. 爬升负荷：</strong>爬升米数 ÷ 100 × 1.2<br>
+        <strong>3. 热负荷：</strong>&lt;25°C(+0) | 25-28°C(+5) | 28-30°C(+10) | 30-32°C(+15) | &gt;32°C(+20)<br>
+        <strong>4. 末端刺激：</strong>冲刺/硬顶 (+5~10)<br>
+        <strong>5. 中枢修正：</strong>恢复未完全时，总负荷 × 1.1~1.3
+      </div>
+
+      <div v-if="currentTab === 'mapping'" class="knowledge-content" style="padding: 0; background: none;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Load Score (LS)</th>
+              <th>建议恢复时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>&lt; 60</td><td>2 - 3 天</td></tr>
+            <tr><td>60 - 80</td><td>3 - 5 天</td></tr>
+            <tr><td>80 - 100</td><td>5 - 7 天 (7天循环线)</td></tr>
+            <tr><td>100 - 120</td><td>7 - 10 天</td></tr>
+            <tr style="background: #fee2e2; font-weight: bold;"><td>120 - 140</td><td>10 - 14 天 (你当前状态)</td></tr>
+            <tr><td>&gt; 140</td><td>14 天以上</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="currentTab === 'optimize'" class="knowledge-content">
+        <strong>目标：将 LS 压制在 100 以内（进入 7 天恢复区）</strong><br><br>
+        针对同等路线的执行调整方案：<br>
+        1. <strong>不冲刺：</strong>取消末端硬顶 (-8分)<br>
+        2. <strong>控制热量：</strong>选择低温时段或加强物理降温 (-10分)<br>
+        3. <strong>降低强度：</strong>将整体心率区间从 Z3 降至 Z2 (-10分)<br><br>
+        通过以上调整，可将原本 127 的负荷降至 100 左右，实现安全的 7 天周期循环。
+      </div>
+    </div>
+
+    <div class="plan-card">
+      <div class="plan-header">
+        <span>动态负荷计算器 (Load Score)</span>
+        <span class="plan-badge">实时预判</span>
+      </div>
+      <div class="plan-body">
+        <div class="input-group">
+          <label>运动时长 (h)</label>
+          <input type="number" v-model.number="calc.time" class="input-control" step="0.5" min="0">
+        </div>
+        <div class="input-group">
+          <label>心率强度</label>
+          <select v-model.number="calc.intensity" class="input-control">
+            <option value="1.0">Z2 轻松 (系数 1.0)</option>
+            <option value="1.3">Z3 稳定 (系数 1.3)</option>
+            <option value="1.6">Z4 阈值 (系数 1.6)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>爬升高度 (m)</label>
+          <input type="number" v-model.number="calc.climb" class="input-control" step="100" min="0">
+        </div>
+        <div class="input-group">
+          <label>环境温度 (°C)</label>
+          <input type="number" v-model.number="calc.temp" class="input-control" step="1">
+        </div>
+        <div class="input-group">
+          <label>末端刺激</label>
+          <select v-model.number="calc.stimulus" class="input-control">
+            <option value="0">无 (0)</option>
+            <option value="5">中等冲刺 (+5)</option>
+            <option value="8">强拉/硬顶 (+8)</option>
+            <option value="10">极限硬顶 (+10)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>中枢恢复状态</label>
+          <select v-model.number="calc.cnsFactor" class="input-control">
+            <option value="1.0">完全恢复 (x1.0)</option>
+            <option value="1.1">略感疲劳 (x1.1)</option>
+            <option value="1.2">未完全恢复 (x1.2)</option>
+            <option value="1.3">严重疲劳 (x1.3)</option>
+          </select>
+        </div>
+
+        <div class="result-box">
+          <div style="font-size: 13px; color: #64748b;">综合计算结果 (Load Score)</div>
+          <div class="result-score">{{ finalScore }}</div>
+          <div class="result-desc">对应完全恢复时间：<span style="color: #ef4444;">{{ estimatedRecovery }}</span></div>
+        </div>
+
+        <div style="margin-top: 16px; font-size: 13px; color: #64748b; text-align: center;">
+          明细: 基础 {{ baseLoad.toFixed(1) }} + 爬升 {{ climbLoad.toFixed(1) }} + 热量 {{ heatLoad }} + 刺激 {{ calc.stimulus }} = {{ (baseLoad + climbLoad + heatLoad + calc.stimulus).toFixed(1) }} (乘数: x{{ calc.cnsFactor }})
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          currentTab: 'theory',
+          tabs: [
+            { id: 'theory', name: '模型原理' },
+            { id: 'mapping', name: '恢复周期表' },
+            { id: 'optimize', name: '优化策略' }
+          ],
+          // 默认填入你本次的实战数据
+          calc: {
+            time: 5,
+            intensity: 1.3,
+            climb: 1500,
+            temp: 31,
+            stimulus: 8,
+            cnsFactor: 1.2
+          }
+        }
+      },
+      computed: {
+        baseLoad() {
+          return (this.calc.time || 0) * this.calc.intensity * 10;
+        },
+        climbLoad() {
+          return ((this.calc.climb || 0) / 100) * 1.2;
+        },
+        heatLoad() {
+          const t = this.calc.temp || 0;
+          if (t < 25) return 0;
+          if (t <= 28) return 5;
+          if (t <= 30) return 10;
+          if (t <= 32) return 15;
+          return 20;
+        },
+        finalScore() {
+          const rawTotal = this.baseLoad + this.climbLoad + this.heatLoad + this.calc.stimulus;
+          return Math.round(rawTotal * this.calc.cnsFactor);
+        },
+        estimatedRecovery() {
+          const ls = this.finalScore;
+          if (ls < 60) return "2-3 天";
+          if (ls <= 80) return "3-5 天";
+          if (ls <= 100) return "5-7 天";
+          if (ls <= 120) return "7-10 天";
+          if (ls <= 140) return "10-14 天";
+          return "14 天以上";
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
