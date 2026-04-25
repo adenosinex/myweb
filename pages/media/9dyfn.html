@@ -126,7 +126,7 @@
         }
         /* 成功的渐显动画 */
         .fade-in-out {
-            animation: fadeInOut 2s forwards;
+            animation: fadeInOut 2.5s forwards;
         }
         @keyframes fadeInOut {
             0% { opacity: 0; transform: scale(0.8); }
@@ -183,20 +183,21 @@
             
             <div class="video-actions">
                 <div style="display:flex; justify-content:center; gap:8px;">
-                    <van-button id="dislike-button" title="不喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
+                    <van-button id="dislike-button" title="不喜欢 (快捷键 X)" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
                         <span v-if="currentVideo.score === 1" style="color:#222;">&#x1F5A4;</span>
                         <span v-else style="color:#888;">&#x1F5A4;</span>
                     </van-button>
                     <van-button type="primary" size="small" @click="prevVideo" style="padding:0 20px;">上一个</van-button>
                     <van-button type="primary" size="small" @click="nextVideo" style="padding:0 20px;">下一个</van-button>
-                    <van-button id="like-button" title="喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike" style="font-size:22px;padding:0 18px;">
+                    <van-button id="like-button" title="喜欢 (快捷键 Z)" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike" style="font-size:22px;padding:0 18px;">
                         <span v-if="currentVideo.score === 5" style="color:#ff3b30;">&#x2764;</span>
                         <span v-else-if="currentVideo.score === 1" style="color:#170201;">&#x2764;</span>
                         <span v-else style="color:#888;">&#x2764;</span>
                     </van-button>
+                    <van-button icon="edit" title="修改名/Tag (快捷键 E)" :type="showRenamePanel ? 'primary' : 'default'" size="small" @click="toggleRenamePanel" style="font-size:18px;padding:0 15px;"></van-button>
                 </div>
                
-                <div class="rename-card">
+                <div class="rename-card" v-show="showRenamePanel">
                     <div class="rename-preview">
                         <span style="font-size: 12px; color: #aaa;">预览:</span>
                         <span class="preview-text">{{ generatedFilename }}</span>
@@ -333,9 +334,15 @@
                         <button class="search-btn-confirm" style="width: auto; padding: 0 10px; margin: 0;" @click="addBlacklistWord">添加黑名单</button>
                     </div>
                     
-                    <button class="search-btn-confirm" style="margin-top:25px; background: #e6a23c; border-color: #e6a23c;" @click="executeRenameQueue">
-                        ▶ 批量执行延时改名队列
-                    </button>
+                    <div style="display: flex; align-items: center; margin-top:25px;">
+                        <button class="search-btn-confirm" style="margin: 0; background: #e6a23c; border-color: #e6a23c;" @click="executeRenameQueue" :disabled="isExecuting">
+                            ▶ 批量执行延时改名队列
+                        </button>
+                        <span v-if="isExecuting" style="margin-left: 10px; font-size: 13px; color: #e6a23c;">执行中...</span>
+                        <span v-if="executeSuccess" class="fade-in-out" style="margin-left: 10px; color:#4fc08d; font-size:13px; font-weight:bold;">
+                            ✔ {{ executeMsg }}
+                        </span>
+                    </div>
                 </div>
                 
                 <button class="search-btn-cancel" style="margin-top: 20px;" @click="showConfig=false">关闭面板</button>
@@ -529,6 +536,8 @@ class VideoPlayer {
             if (e.deltaY > 0) this.nextVideo(); else if (e.deltaY < 0) this.prevVideo();
         });
         window.addEventListener('keydown', (e) => {
+            // Ignore input fields
+            if (e.target.tagName === 'INPUT') return;
             if (this.isSwitching) return;
             if (e.key === 'ArrowDown') this.nextVideo(); else if (e.key === 'ArrowUp') this.prevVideo();
         });
@@ -645,23 +654,6 @@ class SearchManager {
 class ConfigManager {
     constructor(refs) { this.refs = refs; }
     async fetchPaths() { const resp = await axios.get('/dyfn/video-paths'); this.refs.pathList.value = resp.data.paths || []; }
-    async addPath() {
-        if (!this.refs.newPath.value.trim()) return;
-        await axios.post('/dyfn/video-paths', { path: this.refs.newPath.value.trim() });
-        this.refs.newPath.value = ''; this.fetchPaths();
-    }
-    async indexPath(path) {
-        const start = performance.now(); await axios.post('/dyfn/video-paths/index?all=1', { path });
-        alert('索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
-    }
-    async indexPathq() {
-        const start = performance.now(); await axios.get('/dyfn/video-paths/updatefile');
-        alert('更新完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
-    }
-    async indexPath_del(path) {
-        const start = performance.now(); await axios.post('/dyfn/video-paths/index?del=1', { path });
-        alert('删除并清理索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
-    }
 }
 
 const { createApp, reactive, onMounted, computed, ref, watch } = Vue
@@ -678,6 +670,11 @@ createApp({
         // 全局配置：黑名单
         const blacklist = ref([])
         const newBlacklistWord = ref('')
+        
+        // 批量执行队列状态
+        const isExecuting = ref(false)
+        const executeSuccess = ref(false)
+        const executeMsg = ref('')
 
         // 单文件修改与本地 Tag
         const filenameTokens = ref([]) 
@@ -687,6 +684,13 @@ createApp({
         
         // 保存成功状态控制
         const saveSuccess = ref(false)
+        
+        // 改名面板显隐控制 (本地记忆)
+        const showRenamePanel = ref(localStorage.getItem('dy_show_rename') === 'true')
+        function toggleRenamePanel() {
+            showRenamePanel.value = !showRenamePanel.value;
+            localStorage.setItem('dy_show_rename', showRenamePanel.value);
+        }
 
         const refs = { currentIndex, videoQueue, activeVideoIndex, videoLoadStates, videoClass, showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, searchTimeMsg, newPath, pathList }
         const videoPlayer = new VideoPlayer(state, refs), searchManager = new SearchManager(state, refs), configManager = new ConfigManager(refs)
@@ -753,8 +757,52 @@ createApp({
             lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600);
         }
         
-        const fetchPaths = () => configManager.fetchPaths(), addPath = () => configManager.addPath()
-        const indexPath = (path) => configManager.indexPath(path), indexPathq = () => configManager.indexPathq(), indexPath_del = (path) => configManager.indexPath_del(path)
+        const fetchPaths = () => configManager.fetchPaths();
+        
+        // ================= 路径配置与自动扫描核心修改 =================
+        async function addPath() {
+            const targetPath = newPath.value.trim();
+            if (!targetPath) return;
+            
+            vant.showLoadingToast({ message: '正在添加并自动扫描...', forbidClick: true, duration: 0 });
+            try {
+                await axios.post('/dyfn/video-paths', { path: targetPath });
+                newPath.value = ''; 
+                await fetchPaths();
+                
+                const start = performance.now(); 
+                await axios.post('/dyfn/video-paths/index?all=1', { path: targetPath });
+                
+                vant.closeToast();
+                vant.showSuccessToast('自动扫描完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+                await loadVideos(false);
+            } catch(e) {
+                vant.closeToast();
+                vant.showFailToast('添加或扫描路径失败');
+            }
+        }
+        
+        async function indexPath(path) {
+            const start = performance.now(); 
+            await axios.post('/dyfn/video-paths/index?all=1', { path });
+            vant.showSuccessToast('索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+            await loadVideos(false);
+        }
+        
+        async function indexPathq() {
+            const start = performance.now(); 
+            await axios.get('/dyfn/video-paths/updatefile');
+            vant.showSuccessToast('全局更新完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+            await loadVideos(false);
+        }
+        
+        async function indexPath_del(path) {
+            const start = performance.now(); 
+            await axios.post('/dyfn/video-paths/index?del=1', { path });
+            vant.showSuccessToast('删除并清理索引完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒');
+            await fetchPaths();
+            await loadVideos(false); 
+        }
         
         function previewForward() { videoPlayer.previewForward(); }
         function previewBackward() { videoPlayer.previewBackward(); }
@@ -857,13 +905,11 @@ createApp({
         }
         
         function removeSavedTag(tag) {
-            // 删除本地缓存
             const idx = savedQuickTags.value.indexOf(tag);
             if (idx > -1) {
                 savedQuickTags.value.splice(idx, 1);
                 localStorage.setItem('dy_quick_tags', JSON.stringify(savedQuickTags.value));
             }
-            // 同步从当前的选用状态中踢出
             const cIdx = currentCustomTags.value.indexOf(tag);
             if (cIdx > -1) {
                 currentCustomTags.value.splice(cIdx, 1);
@@ -884,7 +930,6 @@ createApp({
                 if (res.data.success) {
                     currentVideo.value.filename = submitName;
                     
-                    // 无弹窗交互，绿勾淡入淡出提示
                     saveSuccess.value = false;
                     setTimeout(() => {
                         saveSuccess.value = true;
@@ -892,7 +937,7 @@ createApp({
                     }, 50);
                     
                 } else {
-                    vant.showFailToast(res.data.msg); // 仅在失败时弹窗报错
+                    vant.showFailToast(res.data.msg); 
                 }
             } catch (e) {
                 vant.showFailToast('请求提交失败');
@@ -900,17 +945,23 @@ createApp({
         }
 
         async function executeRenameQueue() {
+            if (isExecuting.value) return;
             try {
-                vant.showLoadingToast({ message: '正在批量执行...', forbidClick: true, duration: 0 });
+                isExecuting.value = true;
+                executeSuccess.value = false;
+                
                 const res = await axios.post('/dyfn/sys_tags/execute_renames');
-                vant.closeToast();
+                
+                isExecuting.value = false;
                 if (res.data.success) {
-                    vant.showSuccessToast(res.data.msg);
+                    executeMsg.value = res.data.msg;
+                    executeSuccess.value = true;
+                    setTimeout(() => { executeSuccess.value = false; }, 3000);
                 } else {
                     vant.showFailToast('执行异常');
                 }
             } catch (e) {
-                vant.closeToast();
+                isExecuting.value = false;
                 vant.showFailToast('网络异常');
             }
         }
@@ -924,6 +975,7 @@ createApp({
             else if (e.key === 'X' || e.key === 'x') document.getElementById('dislike-button').click();
             else if (e.key === ' ') { const v = document.querySelectorAll('video')[activeVideoIndex.value]; v.paused ? v.play() : v.pause(); }
             else if (e.key === '`' || e.key === '·') seekTo(0.5);
+            else if (e.key === 'E' || e.key === 'e') toggleRenamePanel(); // 快捷键控制收纳/展开
         })
 
         onMounted(() => {
@@ -943,9 +995,13 @@ createApp({
             // 全局黑名单
             blacklist, newBlacklistWord, addBlacklistWord, removeBlacklistWord,
             
+            // 批量执行队列状态
+            isExecuting, executeSuccess, executeMsg,
+            
             // 改名与快捷 Tag
             filenameTokens, savedQuickTags, currentCustomTags, newTagInput,
-            generatedFilename, addCustomTag, toggleQuickTag, removeSavedTag, submitRename, executeRenameQueue, setAsOnlyToken, saveSuccess
+            generatedFilename, addCustomTag, toggleQuickTag, removeSavedTag, submitRename, executeRenameQueue, setAsOnlyToken, saveSuccess,
+            showRenamePanel, toggleRenamePanel
         }
     }
 }).use(vant).mount('#app')
