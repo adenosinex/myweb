@@ -205,6 +205,107 @@ def clean_invalid_videos(session, path=None):
             
     return removed_count
 
+import os
+import re
+
+@dy_bp.route('/sys_tags/execute_renames', methods=['POST'])
+def execute_renames():
+    session = Session()
+    # 查询待执行和被手动捞回要求重试的任务
+    logs = session.query(RenameLog).filter(RenameLog.status.in_(['pending', 'retry'])).all()
+    
+    # 提取全局黑名单词汇列表 (表名请根据你实际情况调整)
+    blacklist_records = session.query(SysTag).filter(SysTag.type == 'blacklist').all()
+    blacklist_words = [r.tag_name for r in blacklist_records]
+    
+    success_count = 0
+    failed_count = 0
+    
+    for log in logs:
+        video = session.query(Video).filter(Video.id == log.video_id).first()
+        if not video:
+            log.status = 'failed'
+            log.error_msg = '视频记录丢失'
+            failed_count += 1
+            continue
+            
+        old_path = video.detail
+        dir_name = os.path.dirname(old_path)
+        ext = os.path.splitext(old_path)[1]
+        new_path = os.path.join(dir_name, log.new_filename + ext)
+        
+        # 1. 如果目标文件已经就绪（可能由于防抖等原因已经修改过了）
+        if os.path.exists(new_path):
+            video.filename = log.new_filename
+            video.detail = new_path
+            log.status = 'success'
+            success_count += 1
+            continue
+            
+        current_physical_path = old_path
+        
+        # 2. 核心修复：原文件不存在，使用黑名单规则推导真实的物理路径
+        if not os.path.exists(current_physical_path):
+            guessed_filename = video.filename
+            for bw in blacklist_words:
+                if bw.strip():
+                    guessed_filename = guessed_filename.replace(bw.strip(), '')
+            
+            # 模拟前端分词和正则的清理逻辑
+            guessed_filename = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', guessed_filename)
+            guessed_filename = re.sub(r'\.{2,}', '.', guessed_filename)
+            guessed_filename = re.sub(r'\s{2,}', ' ', guessed_filename).strip(' .-_')
+            
+            guessed_path = os.path.join(dir_name, guessed_filename + ext)
+            
+            if os.path.exists(guessed_path):
+                current_physical_path = guessed_path
+            else:
+                log.status = 'failed'
+                log.error_msg = '物理文件彻底丢失无法匹配'
+                failed_count += 1
+                continue
+        
+        # 3. 物理更名并同步数据库
+        try:
+            os.rename(current_physical_path, new_path)
+            video.filename = log.new_filename
+            video.detail = new_path
+            log.status = 'success'
+            success_count += 1
+        except Exception as e:
+            log.status = 'failed'
+            log.error_msg = str(e)
+            failed_count += 1
+            
+    session.commit()
+    session.close()
+    
+    msg = f'成功执行 {success_count} 个'
+    if failed_count > 0:
+        msg += f'，失败 {failed_count} 个'
+        
+    return jsonify({'success': True, 'msg': msg})
+
+
+@dy_bp.route('/sys_tags/retry_failed', methods=['POST'])
+def retry_failed():
+    """捞回失败任务等待再次执行"""
+    session = Session()
+    failed_logs = session.query(RenameLog).filter(RenameLog.status == 'failed').all()
+    count = len(failed_logs)
+    
+    if count == 0:
+        session.close()
+        return jsonify({'success': True, 'msg': '当前没有失败的记录'})
+        
+    for log in failed_logs:
+        log.status = 'retry' # 标记为待重试状态
+        
+    session.commit()
+    session.close()
+    return jsonify({'success': True, 'msg': f'已重置 {count} 个失败任务，请再次点击批量执行'})
+
 @dy_bp.route('/video-paths/index', methods=['POST'])
 def index_video_path():
     data = request.get_json()
@@ -250,7 +351,7 @@ def index_video_path():
         return jsonify({'success': True, 'added': added, 'removed': removed})
         
     return jsonify({'success': True})
-    
+
 @dy_bp.route('/video-paths/updatefile')
 def index_video_path_update():
     paths = load_paths()
@@ -487,64 +588,7 @@ def queue_rename():
     
     return jsonify({'success': True, 'msg': '已加入延时改名队列'})
 
-@dy_bp.route('/sys_tags/execute_renames', methods=['POST'])
-def execute_renames():
-    """批量执行重命名队列，并同步更新数据库的路径和名称"""
-    session = Session()
-    pending_logs = session.query(RenameLog).filter(RenameLog.status == 'pending').all()
-    
-    success_count = 0
-    failed_count = 0
-    
-    for log in pending_logs:
-        video = session.query(Video).filter(Video.id == log.video_id).first()
-        
-        # 物理操作前检查
-        if not video:
-            log.status = 'failed'
-            log.error_msg = '数据库记录已丢失'
-            failed_count += 1
-            continue
-            
-        if not os.path.exists(log.original_path):
-            log.status = 'failed'
-            log.error_msg = '原物理文件不存在'
-            failed_count += 1
-            continue
-            
-        if os.path.exists(log.target_path) and log.original_path != log.target_path:
-            log.status = 'failed'
-            log.error_msg = '目标文件名已存在'
-            failed_count += 1
-            continue
-            
-        try:
-            # 延时执行真实的物理改名
-            os.rename(log.original_path, log.target_path)
-            
-            # 物理操作成功，更新 Video 数据库数据
-            new_file_name = os.path.basename(log.target_path)
-            video.filename = new_file_name
-            video.detail = log.target_path
-            video.tags = ','.join(extract_tags(new_file_name))
-            
-            log.status = 'success'
-            success_count += 1
-            
-        except OSError as e:
-            # 遭遇占用或其他错误，只记录日志不中断，等待下次执行
-            log.status = 'failed'
-            log.error_msg = str(e)
-            failed_count += 1
-            
-    session.commit()
-    session.close()
-    
-    return jsonify({
-        'success': True, 
-        'msg': f'改名队列执行完毕，成功 {success_count} 个，失败/占用 {failed_count} 个。'
-    })
-
+ 
 @dy_bp.route('/sys_tags/restore_rename', methods=['POST'])
 def restore_rename():
     """根据日志溯源，将改错的文件恢复回原文件名"""
