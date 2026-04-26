@@ -31,14 +31,23 @@
         .main-action-btns .van-button { flex: 1; font-size: 16px; }
         .main-action-btns .icon-btn { flex: 0 0 60px; font-size: 22px; padding: 0; }
 
+        /* 面板模块与拖拽 */
         .dynamic-sections { padding-top: 5px; }
-        .drag-section { position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s; }
+        .drag-section {
+            position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s;
+        }
         .drag-section:hover { border-color: #333; }
         .drag-section.is-dragging { opacity: 0.3; border-color: #1989fa; }
-        .drag-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; color: #555; cursor: grab; font-size: 14px; font-weight: bold; }
+        .drag-handle {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; color: #555; cursor: grab; font-size: 14px; font-weight: bold;
+        }
         .drag-handle:active { cursor: grabbing; color: #fff; }
 
-        .tag-group-card { background: rgba(0,0,0,0.3); border: 1px dashed #444; border-radius: 6px; padding: 10px; margin-bottom: 10px; min-height: 45px; transition: all 0.2s; }
+        /* Tag分区交互状态 */
+        .tag-group-card { 
+            background: rgba(0,0,0,0.3); border: 1px dashed #444; border-radius: 6px; 
+            padding: 10px; margin-bottom: 10px; min-height: 45px; transition: all 0.2s; 
+        }
         .tag-group-card.drag-over-group { border-color: #e6a23c; background: rgba(230, 162, 60, 0.1); }
         .tag-group-card.drag-over-empty { border-color: #1989fa; background: rgba(25, 137, 250, 0.1); }
         .tag-group-card.is-dragging-group { opacity: 0.3; border-color: #e6a23c; }
@@ -76,7 +85,7 @@
         .tag-input-row input:focus { border-color: #1989fa; }
         .empty-hint { font-size: 12px; color: #666; font-style: italic; }
         
-        .fade-in-out { animation: fadeInOut 2s forwards; }
+        .fade-in-out { animation: fadeInOut 2.5s forwards; }
         @keyframes fadeInOut { 0% { opacity: 0; transform: scale(0.8); } 15% { opacity: 1; transform: scale(1.1); } 30% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
 
         @media (max-width: 850px) {
@@ -220,13 +229,12 @@
                                      @drop.prevent.stop="onGroupDrop($event, gIdx)">
                                      
                                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                                        <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag" title="拖拽整个分区上下排序">⋮⋮ 分区</div>
+                                        <div class="drag-handle-group" @mousedown="dragGroupEnabledId = group.id" @mouseup="dragGroupEnabledId = null" @mouseleave="dragGroupEnabledId = null" title="拖拽整个分区上下排序">⋮⋮ 分区</div>
                                         <span style="color:#ff4d4f; font-size:11px; cursor:pointer;" @click="removeTagGroup(gIdx)">删区</span>
                                     </div>
                                     
                                     <div style="min-height: 35px; padding-bottom: 5px;">
                                         <span v-if="group.tags.length === 0" class="empty-hint" style="pointer-events: none;">拖拽 Tag 到此收纳...</span>
-                                        
                                         <span v-for="(tag, tIdx) in group.tags" :key="tag"
                                               class="quick-tag-chip" 
                                               :class="{
@@ -263,12 +271,12 @@
         <van-popup v-model:show="showDetail" position="bottom" round>
             <div style="padding:20px;">
                 <h4>视频详情</h4>
-                <p>文件名: <span v-for="keyword in currentVideo.filename?.split(' ')" :key="keyword" @click="searchDouyin(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
-                <p>文件路径: <span style="font-size:12px;color:#666;word-break:break-all;">{{ currentVideo.detail }}</span></p>
-                <p>标签: {{ currentVideo.tags }}</p>
+                <p>文件名: <span v-for="keyword in currentVideo?.filename?.split(' ')" :key="keyword" @click="searchDouyin(keyword)" style="cursor:pointer;color:blue;margin-right:5px;">{{ keyword }}</span></p>
+                <p>文件路径: <span style="font-size:12px;color:#666;word-break:break-all;">{{ currentVideo?.detail }}</span></p>
+                <p>标签: {{ currentVideo?.tags }}</p>
                 <p>评分: <van-rate v-model="currentVideo.score" @change="updateScore" /></p>
                 <div style="display:flex; gap: 10px; margin-top: 15px;">
-                    <van-button type="success" style="flex:1;" block :url="getVideoUrl(currentVideo.id)" download>下载到本地</van-button>
+                    <van-button type="success" style="flex:1;" block :url="getVideoUrl(currentVideo?.id)" download>下载到本地</van-button>
                 </div>
             </div>
         </van-popup>
@@ -393,12 +401,10 @@ createApp({
         const executeSuccess = ref(false)
         const executeMsg = ref('')
 
-        // 面板大块拖拽
         const panelOrder = ref(JSON.parse(localStorage.getItem('dy_panel_order')) || ['preview', 'tokens', 'tags', 'blacklist']);
         const dragEnabledId = ref(null);
         let dragIndex = null;
 
-        // Tag 分区拖拽系统
         const dragType = ref(null); 
         const draggedGroupIdx = ref(null);
         const dragOverGroupIdx = ref(null);
@@ -486,7 +492,7 @@ createApp({
         function onTagDragEnter(gIdx) { dragOverGroupIdx.value = gIdx; }
         function onTagDragLeave(gIdx) { if(dragOverGroupIdx.value === gIdx) dragOverGroupIdx.value = null; }
         
-        // 修正了方法名：统一叫做 onGroupDrop 以匹配模板
+        // 🌟 核心修复点：将事件统一命名为 onGroupDrop 🌟
         function onGroupDrop(e, targetGIdx) {
             dragOverGroupIdx.value = null;
             if (dragType.value === 'group' && draggedGroupIdx.value !== null) {
@@ -502,7 +508,7 @@ createApp({
                     tagGroups.value[targetGIdx].tags.push(tag);
                 }
             }
-            dragType.value = null; 
+            dragType.value = null;
         }
         
         function onTagDrop(e, targetGIdx, targetTIdx) {
@@ -667,7 +673,9 @@ createApp({
                 const res = await axios.post('/dyfn/sys_tags/execute_renames');
                 isExecuting.value = false;
                 if (res.data.success) {
-                    executeMsg.value = res.data.msg; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 3000);
+                    executeMsg.value = res.data.msg; executeSuccess.value = true; 
+                    setTimeout(() => { executeSuccess.value = false; }, 4000);
+                    await loadVideos(false, currentIndex.value); 
                 } else {
                     executeMsg.value = '执行异常'; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 3000);
                 }
@@ -751,8 +759,6 @@ createApp({
             renameTimeoutId = setTimeout(() => { executePendingRename(); }, 2000);
         });
 
-        async function submitRename() { if (!currentVideo.value?.id) return; if (pendingRenameData) { await executePendingRename(); } }
-
         window.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT') return;
             if (e.key === 'ArrowLeft') previewBackward(); 
@@ -768,7 +774,7 @@ createApp({
             setTimeout(() => videoPlayer.updateVideoClass(), 1000);
         })
 
-        // ⭐ 必须在这里向外暴露所有的模板方法，这是最关键的收尾步骤 ⭐
+        // 🌟 核心修复点：将所有被模板依赖的方法和对象，完整暴露出去 🌟
         return { 
             state, currentIndex, currentVideo, videoIndex, showDetail, getVideoUrl, prevVideo, nextVideo, toggleDetail, 
             searchDouyin, handleTouchStart, handleTouchEnd, updateScore: updateScoreHandler, 
@@ -786,7 +792,7 @@ createApp({
             onTagDragStart, onTagDragEnd, onTagDragEnter, onTagDragLeave, onTagDrop,
             
             addEmptyGroup, removeTagGroup, globalTagInput, addGlobalTag, removeSavedTagFromGroup,
-            filenameTokens, currentCustomTags, toggleQuickTag, submitRename, executeRenameQueue, setAsOnlyToken, toggleToken, autoSaveStatus 
+            filenameTokens, currentCustomTags, toggleQuickTag, executeRenameQueue, setAsOnlyToken, toggleToken, autoSaveStatus 
         }
     }
 }).use(vant).mount('#app')

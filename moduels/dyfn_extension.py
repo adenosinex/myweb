@@ -208,16 +208,26 @@ def clean_invalid_videos(session, path=None):
 import os
 import re
 
+import os
+import re
+
+import os
+import re
+
 @dy_bp.route('/sys_tags/execute_renames', methods=['POST'])
 def execute_renames():
     session = Session()
     # 查询待执行和被手动捞回要求重试的任务
     logs = session.query(RenameLog).filter(RenameLog.status.in_(['pending', 'retry'])).all()
     
-    # 提取全局黑名单词汇列表 (表名请根据你实际情况调整)
-    blacklist_records = session.query(SysTag).filter(SysTag.type == 'blacklist').all()
-    blacklist_words = [r.tag_name for r in blacklist_records]
-    
+    try:
+        # 如果 SysTag 依然报错，请确保已在文件顶部导入该类
+        blacklist_records = session.query(SysTag).filter(SysTag.type == 'blacklist').all()
+        blacklist_words = [r.tag_name for r in blacklist_records]
+    except NameError:
+        blacklist_words = [] 
+        print("警告：缺少 SysTag 定义，已跳过黑名单规则推导")
+        
     success_count = 0
     failed_count = 0
     
@@ -232,11 +242,20 @@ def execute_renames():
         old_path = video.detail
         dir_name = os.path.dirname(old_path)
         ext = os.path.splitext(old_path)[1]
-        new_path = os.path.join(dir_name, log.new_filename + ext)
         
-        # 1. 如果目标文件已经就绪（可能由于防抖等原因已经修改过了）
+        # 修正1：读取数据库实际存在的 target_path 字段
+        # 修正2：使用 os.path.basename 防止字段里存的是绝对路径
+        target_filename = os.path.basename(log.target_path)
+        
+        # 修正3：防止前端传来的名字本身带有 .mp4，避免拼接出 .mp4.mp4
+        if not target_filename.lower().endswith(ext.lower()):
+            target_filename += ext
+            
+        new_path = os.path.join(dir_name, target_filename)
+        
+        # 如果目标文件已经就绪（可能已被提前修改）
         if os.path.exists(new_path):
-            video.filename = log.new_filename
+            video.filename = target_filename
             video.detail = new_path
             log.status = 'success'
             success_count += 1
@@ -244,7 +263,7 @@ def execute_renames():
             
         current_physical_path = old_path
         
-        # 2. 核心修复：原文件不存在，使用黑名单规则推导真实的物理路径
+        # 原文件不存在，使用黑名单规则推导真实的物理路径
         if not os.path.exists(current_physical_path):
             guessed_filename = video.filename
             for bw in blacklist_words:
@@ -256,7 +275,11 @@ def execute_renames():
             guessed_filename = re.sub(r'\.{2,}', '.', guessed_filename)
             guessed_filename = re.sub(r'\s{2,}', ' ', guessed_filename).strip(' .-_')
             
-            guessed_path = os.path.join(dir_name, guessed_filename + ext)
+            # 同样防重加扩展名
+            if not guessed_filename.lower().endswith(ext.lower()):
+                guessed_filename += ext
+                
+            guessed_path = os.path.join(dir_name, guessed_filename)
             
             if os.path.exists(guessed_path):
                 current_physical_path = guessed_path
@@ -266,10 +289,10 @@ def execute_renames():
                 failed_count += 1
                 continue
         
-        # 3. 物理更名并同步数据库
+        # 物理更名并同步数据库
         try:
             os.rename(current_physical_path, new_path)
-            video.filename = log.new_filename
+            video.filename = target_filename
             video.detail = new_path
             log.status = 'success'
             success_count += 1
@@ -286,8 +309,7 @@ def execute_renames():
         msg += f'，失败 {failed_count} 个'
         
     return jsonify({'success': True, 'msg': msg})
-
-
+    
 @dy_bp.route('/sys_tags/retry_failed', methods=['POST'])
 def retry_failed():
     """捞回失败任务等待再次执行"""
