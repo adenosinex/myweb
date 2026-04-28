@@ -31,23 +31,14 @@
         .main-action-btns .van-button { flex: 1; font-size: 16px; }
         .main-action-btns .icon-btn { flex: 0 0 60px; font-size: 22px; padding: 0; }
 
-        /* 面板模块与拖拽 */
         .dynamic-sections { padding-top: 5px; }
-        .drag-section {
-            position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s;
-        }
+        .drag-section { position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s; }
         .drag-section:hover { border-color: #333; }
         .drag-section.is-dragging { opacity: 0.3; border-color: #1989fa; }
-        .drag-handle {
-            position: absolute; left: 0; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; color: #555; cursor: grab; font-size: 14px; font-weight: bold;
-        }
+        .drag-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; color: #555; cursor: grab; font-size: 14px; font-weight: bold; }
         .drag-handle:active { cursor: grabbing; color: #fff; }
 
-        /* Tag分区交互状态 */
-        .tag-group-card { 
-            background: rgba(0,0,0,0.3); border: 1px dashed #444; border-radius: 6px; 
-            padding: 10px; margin-bottom: 10px; min-height: 45px; transition: all 0.2s; 
-        }
+        .tag-group-card { background: rgba(0,0,0,0.3); border: 1px dashed #444; border-radius: 6px; padding: 10px; margin-bottom: 10px; min-height: 45px; transition: all 0.2s; }
         .tag-group-card.drag-over-group { border-color: #e6a23c; background: rgba(230, 162, 60, 0.1); }
         .tag-group-card.drag-over-empty { border-color: #1989fa; background: rgba(25, 137, 250, 0.1); }
         .tag-group-card.is-dragging-group { opacity: 0.3; border-color: #e6a23c; }
@@ -84,9 +75,6 @@
         .tag-input-row input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; }
         .tag-input-row input:focus { border-color: #1989fa; }
         .empty-hint { font-size: 12px; color: #666; font-style: italic; }
-        
-        .fade-in-out { animation: fadeInOut 2.5s forwards; }
-        @keyframes fadeInOut { 0% { opacity: 0; transform: scale(0.8); } 15% { opacity: 1; transform: scale(1.1); } 30% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
 
         @media (max-width: 850px) {
             .layout-wrapper { flex-direction: column; }
@@ -136,6 +124,7 @@
             <div class="panel-header" v-show="!isLoading">
                 <van-button type="primary" icon="search" size="small" @click="showSearch = true">搜索</van-button>
                 <div style="display:flex; gap:6px;">
+                    <van-button type="warning" icon="clock-o" size="small" @click="openHistory">日志</van-button>
                     <van-button type="info" icon="clipboard" size="small" @click="searchFromClipboard">剪贴板</van-button>
                     <van-button type="default" icon="setting" size="small" @click="openConfig">配置</van-button>
                     <van-button type="default" icon="replay" size="small" @click="indexPathq()">更新</van-button>
@@ -183,21 +172,24 @@
                                 <div class="group-title">自动保存状态预览</div>
                                 <div class="rename-preview" style="margin:0;">
                                     <span class="preview-text">{{ generatedFilename }}</span>
-                                    <div style="display: flex; align-items: center; position: relative; width: 40px; justify-content: flex-end;">
-                                        <span v-if="autoSaveStatus === 'pending'" style="color:#e6a23c; font-size:12px; white-space:nowrap;">待保存...</span>
-                                        <span v-if="autoSaveStatus === 'success'" class="fade-in-out" style="position: absolute; right: 0; color:#4fc08d; font-size:18px; font-weight:bold;">✔</span>
+                                    <div style="display: flex; align-items: center; position: relative; gap: 8px;">
+                                        <van-button type="default" size="mini" @click="restoreOriginalName" style="padding: 0 6px; color: #888; background: transparent; border-color: #444;" title="取消所有修改，恢复初始名">恢复原名</van-button>
+                                        <div style="width: 40px; display: flex; justify-content: flex-end; position: relative;">
+                                            <span v-if="autoSaveStatus === 'pending'" style="color:#e6a23c; font-size:12px; white-space:nowrap;">待保存...</span>
+                                            <span v-if="autoSaveStatus === 'success'" style="position: absolute; right: 0; color:#4fc08d; font-size:18px; font-weight:bold;">✔</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
                             <div v-else-if="item === 'tokens'">
-                                <div class="group-title">1. 文件名词块 (点字黑化剔除，点[全]独占)</div>
+                                <div class="group-title">1. 文件名词块 (点字黑化剔除，双击[全]撤销独占)</div>
                                 <div style="min-height: 30px;">
                                     <span v-if="filenameTokens.length === 0" class="empty-hint">分词中或无核心词...</span>
                                     <span v-for="t in filenameTokens" :key="t.text" 
                                           class="token-chip" :class="{'token-off': !t.active}">
                                         <span class="chip-text" @click="toggleToken(t)">{{ t.text }}</span>
-                                        <span class="chip-action" @click.stop="setAsOnlyToken(t.text)" title="设为唯一文件名">[全]</span>
+                                        <span class="chip-action" @click.stop="setAsOnlyToken(t.text)" title="点击设为独占，再次点击恢复全部">[全]</span>
                                         <span class="chip-del" @click.stop="quickBlacklistToken(t.text)" title="打入全局黑名单并剔除">[黑]</span>
                                     </span>
                                 </div>
@@ -229,7 +221,7 @@
                                      @drop.prevent.stop="onGroupDrop($event, gIdx)">
                                      
                                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                                        <div class="drag-handle-group" @mousedown="dragGroupEnabledId = group.id" @mouseup="dragGroupEnabledId = null" @mouseleave="dragGroupEnabledId = null" title="拖拽整个分区上下排序">⋮⋮ 分区</div>
+                                        <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag" title="拖拽整个分区上下排序">⋮⋮ 分区</div>
                                         <span style="color:#ff4d4f; font-size:11px; cursor:pointer;" @click="removeTagGroup(gIdx)">删区</span>
                                     </div>
                                     
@@ -238,7 +230,7 @@
                                         <span v-for="(tag, tIdx) in group.tags" :key="tag"
                                               class="quick-tag-chip" 
                                               :class="{
-                                                  'tag-on': currentCustomTags.includes(tag),
+                                                  'tag-on': currentCustomTags.includes(tag) || (currentVideo?.filename || '').includes('#' + tag),
                                                   'drag-over-tag-left': dragType === 'tag' && dragOverTagInfo?.gIdx === gIdx && dragOverTagInfo?.tIdx === tIdx && dragDropPosition === 'left',
                                                   'drag-over-tag-right': dragType === 'tag' && dragOverTagInfo?.gIdx === gIdx && dragOverTagInfo?.tIdx === tIdx && dragDropPosition === 'right'
                                               }"
@@ -280,6 +272,27 @@
                 </div>
             </div>
         </van-popup>
+
+        <div v-if="showHistory" class="search-modal" style="overflow-y: auto;">
+            <div class="search-modal-content" style="max-width: 500px;">
+                <h4>文件名修改日志 (防丢失与回退)</h4>
+                <p style="font-size: 12px; color: #888; margin-bottom: 12px;">记录最近的成功改名操作，可一键撤销恢复原名。</p>
+                
+                <div style="max-height: 60vh; overflow-y: auto;">
+                    <div v-if="renameHistory.length === 0" style="text-align: center; color: #666; padding: 20px;">暂无成功执行的改名记录</div>
+                    <div v-for="log in renameHistory" :key="log.id" style="background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; color: #888;">{{ log.create_time }}</span>
+                            <span v-if="log.status === 'restored'" style="font-size: 12px; color: #999;">已撤销</span>
+                            <van-button v-if="log.status === 'success'" type="primary" size="mini" @click="handleRestore(log.id)">撤销恢复</van-button>
+                        </div>
+                        <div style="font-size: 13px; color: #ff4d4f; text-decoration: line-through; word-break: break-all;">{{ log.original_name }}</div>
+                        <div style="font-size: 13px; color: #4fc08d; font-weight: bold; margin-top: 4px; word-break: break-all;">{{ log.target_name }}</div>
+                    </div>
+                </div>
+                <button class="search-btn-cancel" style="margin-top: 20px;" @click="showHistory=false">关闭面板</button>
+            </div>
+        </div>
 
         <div v-if="showSearch" class="search-modal">
             <div class="search-modal-content">
@@ -354,14 +367,17 @@
                     </div>
                     
                     <div style="display: flex; align-items: center; margin-top:25px; flex-wrap: wrap; gap: 8px;">
-                        <button class="search-btn-confirm" style="margin: 0; background: #e6a23c; border-color: #e6a23c;" @click="executeRenameQueue" :disabled="isExecuting">
-                            ▶ 批量执行延时队列
+                        <button class="search-btn-confirm" style="margin: 0; background: #e6a23c; border-color: #e6a23c;" @click="executeRenameQueue('queue_only')" :disabled="isExecuting">
+                            ▶ 仅执行最新打标
+                        </button>
+                        <button class="search-btn-confirm" style="margin: 0; background: #67c23a; border-color: #67c23a;" @click="executeRenameQueue('full')" :disabled="isExecuting">
+                            ▶ 全库强制应用黑名单
                         </button>
                         <button class="search-btn-confirm" style="margin: 0; background: #f56c6c; border-color: #f56c6c;" @click="retryFailedQueue" :disabled="isExecuting">
-                            ↻ 一键重试失败项目
+                            ↻ 重试失败项目
                         </button>
                         <span v-if="isExecuting" style="font-size: 13px; color: #e6a23c;">处理中...</span>
-                        <span v-if="executeSuccess" class="fade-in-out" style="color:#4fc08d; font-size:13px; font-weight:bold;">✔ {{ executeMsg }}</span>
+                        <span v-if="executeSuccess && !isExecuting" style="color:#4fc08d; font-size:13px; font-weight:bold;">✔ {{ executeMsg }}</span>
                     </div>
                 </div>
                 
@@ -371,6 +387,22 @@
                         <van-button type="primary" size="small" @click="exportTags">导出 Tag 备份</van-button>
                         <van-button type="warning" size="small" @click="triggerImportTags">导入 Tag 备份</van-button>
                         <input type="file" id="import-tags-file" style="display:none" accept=".json" @change="importTags" />
+                    </div>
+                </div>
+
+                <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                    <h4>批量打标 (CSV 导出/导入)</h4>
+                    <p style="font-size: 12px; color: #888; margin-bottom: 8px;">仅导出无Tag文件，且保持当前网页浏览排序。在CSV第三列添加空格分隔的Tag即可导入。</p>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <select v-model="exportLimit" class="search-select" style="width: 100px;">
+                            <option value="0">全部导出</option>
+                            <option value="100">导出前 100</option>
+                            <option value="500">导出前 500</option>
+                            <option value="1000">导出前 1000</option>
+                        </select>
+                        <van-button type="primary" size="small" @click="exportCSV">导出 CSV</van-button>
+                        <van-button type="warning" size="small" @click="triggerImportCSV">导入 CSV 批量打标</van-button>
+                        <input type="file" id="import-csv-data-file" style="display:none" accept=".csv" @change="importCSVFile" />
                     </div>
                 </div>
 
@@ -425,6 +457,11 @@ createApp({
         let renameTimeoutId = null;
         let pendingRenameData = null;
 
+        const showHistory = ref(false)
+        const renameHistory = ref([])
+        
+        const exportLimit = ref('0')
+
         const refs = { currentIndex, videoQueue, activeVideoIndex, videoLoadStates, videoClass, showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, searchTimeMsg, newPath, pathList }
         const videoPlayer = new VideoPlayer(state, refs), searchManager = new SearchManager(state, refs), configManager = new ConfigManager(refs)
         
@@ -434,7 +471,24 @@ createApp({
         watch(videoIndex, (newVal) => { if (newVal) localStorage.setItem('dy_current_index', newVal); });
         watch(tagGroups, (newVal) => { localStorage.setItem('dy_tag_groups', JSON.stringify(newVal)); }, { deep: true });
 
-        // -------- Tag 导入/导出 --------
+        // -------- 日志与撤销操作 --------
+        async function openHistory() {
+            showHistory.value = true;
+            const res = await fetchRenameHistory();
+            if (res && res.success) { renameHistory.value = res.history; }
+        }
+
+        async function handleRestore(logId) {
+            vant.showLoadingToast({ message: '正在撤销恢复...', forbidClick: true, duration: 0 });
+            const res = await restoreRename(logId);
+            vant.closeToast();
+            if (res && res.success) {
+                vant.showSuccessToast('文件已恢复原名');
+                await openHistory(); 
+                await loadVideos(false, currentIndex.value); 
+            } else { vant.showFailToast(res?.msg || '恢复失败'); }
+        }
+
         function exportTags() {
             const dataStr = JSON.stringify(tagGroups.value, null, 2);
             const blob = new Blob([dataStr], { type: "application/json" });
@@ -455,6 +509,49 @@ createApp({
                 event.target.value = ''; 
             };
             reader.readAsText(file);
+        }
+
+        // -------- CSV 导出/导入操作 --------
+        function exportCSV() {
+            const params = [];
+            if (state.searchKeyword) params.push(`search=${encodeURIComponent(state.searchKeyword)}`);
+            if (state.excludeKeyword) params.push(`exclude=${encodeURIComponent(state.excludeKeyword)}`);
+            if (state.searchScore > 0) params.push(`score=${state.searchScore}`);
+            if (state.searchSize !== 0) params.push(`size=${state.searchSize}`);
+            if (state.sortBy) params.push(`sort_by=${state.sortBy}`);
+            if (exportLimit.value !== '0') params.push(`limit=${exportLimit.value}`);
+            
+            const url = `/dyfn/sys_tags/export_csv?${params.join('&')}`;
+            window.open(url, '_blank');
+        }
+
+        function triggerImportCSV() {
+            document.getElementById('import-csv-data-file').click();
+        }
+
+        async function importCSVFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            vant.showLoadingToast({ message: '正在解析并导入...', forbidClick: true, duration: 0 });
+            try {
+                const res = await axios.post('/dyfn/sys_tags/import_csv', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                vant.closeToast();
+                if (res.data.success) {
+                    vant.showSuccessToast(res.data.msg);
+                } else {
+                    vant.showFailToast(res.data.msg || '导入失败');
+                }
+            } catch (err) {
+                vant.closeToast();
+                vant.showFailToast('网络或服务器异常');
+            }
+            event.target.value = '';
         }
 
         // -------- 外层面板拖拽 --------
@@ -492,7 +589,6 @@ createApp({
         function onTagDragEnter(gIdx) { dragOverGroupIdx.value = gIdx; }
         function onTagDragLeave(gIdx) { if(dragOverGroupIdx.value === gIdx) dragOverGroupIdx.value = null; }
         
-        // 🌟 核心修复点：将事件统一命名为 onGroupDrop 🌟
         function onGroupDrop(e, targetGIdx) {
             dragOverGroupIdx.value = null;
             if (dragType.value === 'group' && draggedGroupIdx.value !== null) {
@@ -508,7 +604,7 @@ createApp({
                     tagGroups.value[targetGIdx].tags.push(tag);
                 }
             }
-            dragType.value = null;
+            dragType.value = null; 
         }
         
         function onTagDrop(e, targetGIdx, targetTIdx) {
@@ -526,7 +622,6 @@ createApp({
             dragType.value = null; dragOverTagInfo.value = null;
         }
 
-        // --- Tag 分区管理 ---
         function addEmptyGroup() { tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); }
         function removeTagGroup(idx) { if (confirm('确定删除此分区及内部所有Tag吗？')) { tagGroups.value.splice(idx, 1); } }
         function addGlobalTag() {
@@ -643,9 +738,38 @@ createApp({
         function seekTo(ratio) { videoPlayer.seekTo(ratio); }
 
         async function loadBlacklist() { try { const res = await axios.get('/dyfn/sys_tags/blacklist'); blacklist.value = res.data.blacklist || []; } catch(e) {} }
-        async function addBlacklistWord() { const kw = newBlacklistWord.value.trim(); if(!kw || blacklist.value.includes(kw)) return; blacklist.value.push(kw); await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); newBlacklistWord.value = ''; vant.showToast('全局黑名单已更新'); }
-        async function addQuickBlacklist() { const kw = quickBlacklistInput.value.trim(); if(!kw) return; if(!blacklist.value.includes(kw)) { blacklist.value.push(kw); await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); } filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); quickBlacklistInput.value = ''; vant.showToast('已拉黑并剔除当前文件名'); }
-        async function quickBlacklistToken(kw) { if(!blacklist.value.includes(kw)) { blacklist.value.push(kw); await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); } filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); vant.showToast(`已拉黑并剔除: ${kw}`); }
+        
+        async function addBlacklistWord() { 
+            const kw = newBlacklistWord.value.trim(); 
+            if(!kw) return; 
+            if(!blacklist.value.includes(kw)) { 
+                blacklist.value.push(kw); 
+                await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); 
+            } 
+            filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); 
+            newBlacklistWord.value = ''; 
+            vant.showToast('全局黑名单已更新'); 
+        }
+        async function addQuickBlacklist() { 
+            const kw = quickBlacklistInput.value.trim(); 
+            if(!kw) return; 
+            if(!blacklist.value.includes(kw)) { 
+                blacklist.value.push(kw); 
+                await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); 
+            } 
+            filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); 
+            quickBlacklistInput.value = ''; 
+            vant.showToast('已拉黑并立刻剔除'); 
+        }
+        async function quickBlacklistToken(kw) { 
+            if(!blacklist.value.includes(kw)) { 
+                blacklist.value.push(kw); 
+                await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); 
+            } 
+            filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); 
+            vant.showToast(`已拉黑并剔除: ${kw}`); 
+        }
+        
         async function removeBlacklistWord(idx) { blacklist.value.splice(idx, 1); await axios.post('/dyfn/sys_tags/blacklist', { blacklist: blacklist.value }); }
         async function openConfig() { showConfig.value = true; await loadBlacklist(); }
 
@@ -666,20 +790,20 @@ createApp({
             } catch (e) { autoSaveStatus.value = ''; }
         }
 
-        async function executeRenameQueue() {
+        // --- 队列分离逻辑：传递 mode ---
+        async function executeRenameQueue(mode = 'queue_only') {
             if (isExecuting.value) return;
             try {
                 isExecuting.value = true; executeSuccess.value = false; executeMsg.value = '执行中...';
-                const res = await axios.post('/dyfn/sys_tags/execute_renames');
+                const res = await axios.post(`/dyfn/sys_tags/execute_renames?mode=${mode}`);
                 isExecuting.value = false;
                 if (res.data.success) {
                     executeMsg.value = res.data.msg; executeSuccess.value = true; 
-                    setTimeout(() => { executeSuccess.value = false; }, 4000);
                     await loadVideos(false, currentIndex.value); 
                 } else {
-                    executeMsg.value = '执行异常'; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 3000);
+                    executeMsg.value = '执行异常'; executeSuccess.value = true; 
                 }
-            } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 3000); }
+            } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
         }
         
         async function retryFailedQueue() {
@@ -689,17 +813,26 @@ createApp({
                 const res = await axios.post('/dyfn/sys_tags/retry_failed');
                 isExecuting.value = false;
                 if (res.data.success) {
-                    executeMsg.value = res.data.msg; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 4000);
+                    executeMsg.value = res.data.msg; executeSuccess.value = true; 
                 } else {
-                    executeMsg.value = '重置失败'; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 3000);
+                    executeMsg.value = '重置失败'; executeSuccess.value = true; 
                 }
-            } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; setTimeout(() => { executeSuccess.value = false; }, 3000); }
+            } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
         }
 
         watch(() => currentVideo.value?.id, async (newId) => {
             if (pendingRenameData) executePendingRename();
             if(newId) {
                 currentCustomTags.value = []; filenameTokens.value = []; autoSaveStatus.value = '';
+                
+                if (currentVideo.value?.tags) {
+                    const existingTags = currentVideo.value.tags.split(',').filter(t => t.trim());
+                    existingTags.forEach(t => {
+                        const tagBody = t.replace('#', '').trim();
+                        if (tagBody && !currentCustomTags.value.includes(tagBody)) currentCustomTags.value.push(tagBody);
+                    });
+                }
+                
                 if (currentVideo.value?.filename) {
                     try {
                         const res = await axios.post('/dyfn/sys_tags/tokenize', { filename: currentVideo.value.filename });
@@ -712,8 +845,21 @@ createApp({
             }
         });
 
-        function setAsOnlyToken(word) { filenameTokens.value.forEach(t => { t.active = (t.text === word); t.isOnly = (t.text === word); }); currentCustomTags.value = []; }
+        function setAsOnlyToken(word) { 
+            const target = filenameTokens.value.find(t => t.text === word);
+            if (target && target.isOnly) {
+                filenameTokens.value.forEach(t => { t.active = true; t.isOnly = false; });
+            } else {
+                filenameTokens.value.forEach(t => { t.active = (t.text === word); t.isOnly = (t.text === word); }); 
+                currentCustomTags.value = []; 
+            }
+        }
         function toggleToken(t) { t.active = !t.active; filenameTokens.value.forEach(tok => tok.isOnly = false); }
+
+        function restoreOriginalName() {
+            filenameTokens.value.forEach(t => { t.active = true; t.isOnly = false; });
+            currentCustomTags.value = [];
+        }
 
         const generatedFilename = computed(() => {
             if (!currentVideo.value || !currentVideo.value.detail) return '';
@@ -770,11 +916,34 @@ createApp({
         })
 
         onMounted(() => {
-            loadBlacklist(); initialLoad(); fetchPaths(); videoPlayer.initEventListeners(); searchManager.initPopstateListener();
-            setTimeout(() => videoPlayer.updateVideoClass(), 1000);
+            loadBlacklist(); initialLoad(); fetchPaths(); 
+            window.addEventListener('wheel', (e) => { if (isSwitching || Math.abs(e.deltaY) < 30) return; if (e.deltaY > 0) nextVideo(); else if (e.deltaY < 0) prevVideo(); });
+            window.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; if (isSwitching) return; if (e.key === 'ArrowDown') nextVideo(); else if (e.key === 'ArrowUp') prevVideo(); });
+            window.addEventListener('dblclick', (e) => {
+                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+                const v = document.querySelectorAll('video')[activeVideoIndex.value];
+                if (!document.fullscreenElement && v) { if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); } 
+                else if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
+            });
+            window.addEventListener('popstate', () => {
+                if (loadFromUrlParams()) doSearch();
+                else { 
+                    searchKeyword.value = state.searchKeyword = ''; excludeKeyword.value = state.excludeKeyword = '';
+                    searchScore.value = state.searchScore = 0; sortBy.value = state.sortBy = '';
+                    sizeOperator.value = 'lte'; sizeValue.value = ''; state.searchSize = 0; state.page = 1; currentIndex.value = 0;
+                    loadVideos(false, 0); 
+                }
+            })
+            setTimeout(() => {
+                const videos = document.querySelectorAll('video');
+                const domIndex = activeVideoIndex.value;
+                if (videos.length && videos[domIndex]) {
+                    const width = videos[domIndex].videoWidth, height = videos[domIndex].videoHeight;
+                    if (width && height) videoClass.value = (height / width) <= 1.1 ? 'video-landscape' : 'video-portrait';
+                }
+            }, 1000);
         })
 
-        // 🌟 核心修复点：将所有被模板依赖的方法和对象，完整暴露出去 🌟
         return { 
             state, currentIndex, currentVideo, videoIndex, showDetail, getVideoUrl, prevVideo, nextVideo, toggleDetail, 
             searchDouyin, handleTouchStart, handleTouchEnd, updateScore: updateScoreHandler, 
@@ -784,15 +953,14 @@ createApp({
             previewForward, previewBackward, seekTo, searchFromClipboard, jumpTarget, jumpTo,
             blacklist, newBlacklistWord, addBlacklistWord, removeBlacklistWord, quickBlacklistInput, addQuickBlacklist, quickBlacklistToken,
             isExecuting, executeSuccess, executeMsg, retryFailedQueue, exportTags, triggerImportTags, importTags,
-            
+            showHistory, renameHistory, openHistory, handleRestore,
             panelOrder, dragEnabledId, onDragStart, onDragEnd, onDrop, enableDrag, disableDrag,
-            
             dragType, dragGroupEnabledId, dragOverGroupIdx, tagGroups, dragOverTagInfo, dragDropPosition,
             onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop, enableGroupDrag, disableGroupDrag,
             onTagDragStart, onTagDragEnd, onTagDragEnter, onTagDragLeave, onTagDrop,
-            
             addEmptyGroup, removeTagGroup, globalTagInput, addGlobalTag, removeSavedTagFromGroup,
-            filenameTokens, currentCustomTags, toggleQuickTag, executeRenameQueue, setAsOnlyToken, toggleToken, autoSaveStatus 
+            filenameTokens, currentCustomTags, toggleQuickTag, executeRenameQueue, setAsOnlyToken, toggleToken, autoSaveStatus, restoreOriginalName,
+            exportLimit, exportCSV, triggerImportCSV, importCSVFile
         }
     }
 }).use(vant).mount('#app')

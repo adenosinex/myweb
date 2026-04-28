@@ -59,12 +59,7 @@ def init_db():
     os.makedirs(DB_DIR, exist_ok=True)
     Base.metadata.create_all(engine)
 
-def extract_tags(filename):
-    main_tag_match = filename.split(' ')[0]
-    tags = [main_tag_match]
-    tags += re.findall(r'#([\u4e00-\u9fa5\w]+)', filename)
-    return tags
-
+ 
 def load_blacklist():
     if os.path.exists(BLACKLIST_FILE):
         with open(BLACKLIST_FILE, 'r', encoding='utf-8') as f:
@@ -213,24 +208,30 @@ import re
 
 import os
 import re
+import os
+import re
+
+import os
+import re
+import os
+import re
 
 @dy_bp.route('/sys_tags/execute_renames', methods=['POST'])
 def execute_renames():
+    # 接收前端传来的模式：'queue_only' (仅执行队列) 或 'full' (全量扫描库)
+    mode = request.args.get('mode', 'queue_only')
     session = Session()
-    # 查询待执行和被手动捞回要求重试的任务
-    logs = session.query(RenameLog).filter(RenameLog.status.in_(['pending', 'retry'])).all()
     
-    try:
-        # 如果 SysTag 依然报错，请确保已在文件顶部导入该类
-        blacklist_records = session.query(SysTag).filter(SysTag.type == 'blacklist').all()
-        blacklist_words = [r.tag_name for r in blacklist_records]
-    except NameError:
-        blacklist_words = [] 
-        print("警告：缺少 SysTag 定义，已跳过黑名单规则推导")
+    raw_blacklist = load_blacklist()
+    blacklist_words = [bw.strip() for bw in raw_blacklist if bw.strip()]
         
     success_count = 0
     failed_count = 0
     
+    # ==============================================================
+    # 第一阶段：必执行。处理手动队列（打标、导表等 pending/retry 的需求）
+    # ==============================================================
+    logs = session.query(RenameLog).filter(RenameLog.status.in_(['pending', 'retry'])).all()
     for log in logs:
         video = session.query(Video).filter(Video.id == log.video_id).first()
         if not video:
@@ -243,44 +244,43 @@ def execute_renames():
         dir_name = os.path.dirname(old_path)
         ext = os.path.splitext(old_path)[1]
         
-        # 修正1：读取数据库实际存在的 target_path 字段
-        # 修正2：使用 os.path.basename 防止字段里存的是绝对路径
-        target_filename = os.path.basename(log.target_path)
-        
-        # 修正3：防止前端传来的名字本身带有 .mp4，避免拼接出 .mp4.mp4
-        if not target_filename.lower().endswith(ext.lower()):
-            target_filename += ext
+        target_filename_base = os.path.basename(log.target_path)
+        if target_filename_base.lower().endswith(ext.lower()):
+            target_filename_base = target_filename_base[:-len(ext)]
             
+        for bw in blacklist_words:
+            target_filename_base = re.sub(re.escape(bw), '', target_filename_base, flags=re.IGNORECASE)
+        
+        target_filename_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', target_filename_base)
+        target_filename_base = re.sub(r'\.{2,}', '.', target_filename_base)
+        target_filename_base = re.sub(r'\s{2,}', ' ', target_filename_base).strip(' .-_')
+        
+        if not target_filename_base:
+            target_filename_base = f"video_unnamed_{video.id}"
+            
+        target_filename = target_filename_base + ext
         new_path = os.path.join(dir_name, target_filename)
         
-        # 如果目标文件已经就绪（可能已被提前修改）
         if os.path.exists(new_path):
             video.filename = target_filename
             video.detail = new_path
+            video.tags = ','.join(extract_tags(target_filename))
             log.status = 'success'
             success_count += 1
             continue
             
         current_physical_path = old_path
-        
-        # 原文件不存在，使用黑名单规则推导真实的物理路径
         if not os.path.exists(current_physical_path):
             guessed_filename = video.filename
+            if guessed_filename.lower().endswith(ext.lower()):
+                guessed_filename = guessed_filename[:-len(ext)]
             for bw in blacklist_words:
-                if bw.strip():
-                    guessed_filename = guessed_filename.replace(bw.strip(), '')
-            
-            # 模拟前端分词和正则的清理逻辑
+                guessed_filename = re.sub(re.escape(bw), '', guessed_filename, flags=re.IGNORECASE)
             guessed_filename = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', guessed_filename)
             guessed_filename = re.sub(r'\.{2,}', '.', guessed_filename)
             guessed_filename = re.sub(r'\s{2,}', ' ', guessed_filename).strip(' .-_')
             
-            # 同样防重加扩展名
-            if not guessed_filename.lower().endswith(ext.lower()):
-                guessed_filename += ext
-                
-            guessed_path = os.path.join(dir_name, guessed_filename)
-            
+            guessed_path = os.path.join(dir_name, guessed_filename + ext)
             if os.path.exists(guessed_path):
                 current_physical_path = guessed_path
             else:
@@ -289,27 +289,181 @@ def execute_renames():
                 failed_count += 1
                 continue
         
-        # 物理更名并同步数据库
         try:
             os.rename(current_physical_path, new_path)
             video.filename = target_filename
             video.detail = new_path
+            video.tags = ','.join(extract_tags(target_filename))
             log.status = 'success'
             success_count += 1
         except Exception as e:
             log.status = 'failed'
             log.error_msg = str(e)
             failed_count += 1
+
+    # ==============================================================
+    # 第二阶段：仅当模式为 'full' 时，执行整体全库洗牌
+    # ==============================================================
+    if mode == 'full' and blacklist_words:
+        all_videos = session.query(Video).all()
+        for video in all_videos:
+            original_name = video.filename
+            ext = os.path.splitext(video.detail)[1]
+            base_name = original_name
+            if base_name.lower().endswith(ext.lower()):
+                base_name = base_name[:-len(ext)]
+                
+            clean_base = base_name
+            needs_clean = False
             
+            for bw in blacklist_words:
+                if re.search(re.escape(bw), clean_base, re.IGNORECASE):
+                    clean_base = re.sub(re.escape(bw), '', clean_base, flags=re.IGNORECASE)
+                    needs_clean = True
+                    
+            if needs_clean:
+                clean_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', clean_base)
+                clean_base = re.sub(r'\.{2,}', '.', clean_base)
+                clean_base = re.sub(r'\s{2,}', ' ', clean_base).strip(' .-_')
+                
+                if not clean_base:
+                    clean_base = f"video_unnamed_{video.id}"
+                    
+                new_filename = clean_base + ext
+                
+                if new_filename != original_name:
+                    dir_name = os.path.dirname(video.detail)
+                    new_path = os.path.join(dir_name, new_filename)
+                    
+                    if os.path.exists(video.detail):
+                        try:
+                            os.rename(video.detail, new_path)
+                            session.add(RenameLog(video_id=video.id, original_path=video.detail, target_path=new_path, status='success'))
+                            video.filename = new_filename
+                            video.detail = new_path
+                            video.tags = ','.join(extract_tags(new_filename))
+                            success_count += 1
+                        except Exception as e:
+                            session.add(RenameLog(video_id=video.id, original_path=video.detail, target_path=new_path, status='failed', error_msg=str(e)))
+                            failed_count += 1
+
     session.commit()
     session.close()
     
-    msg = f'成功执行 {success_count} 个'
+    prefix_msg = "全量洗库： " if mode == 'full' else "执行最新： "
+    msg = f'{prefix_msg}成功 {success_count} 个'
     if failed_count > 0:
         msg += f'，失败 {failed_count} 个'
         
     return jsonify({'success': True, 'msg': msg})
+import csv
+import io
+from flask import make_response
+
+@dy_bp.route('/sys_tags/export_csv', methods=['GET'])
+def export_csv():
+    """导出无 Tag 视频的 CSV 列表"""
+    session = Session()
+    query = session.query(Video)
     
+    # 1. 继承当前网页的搜索、过滤、排序条件
+    query, use_random = apply_video_filters(query, request.args, session)
+    
+    # 2. 核心过滤：只导出没有 Tag（文件名不含 #）的视频
+    query = query.filter(~Video.filename.like('%#%'))
+    
+    sort_by = request.args.get('sort_by', '')
+    if not use_random:
+        if sort_by == 'filename':
+            query = query.order_by(Video.filename.asc())
+        elif sort_by == 'path':
+            query = query.order_by(Video.detail.asc())
+        else:
+            query = query.order_by(Video.id.desc())
+
+    # 3. 数量限制
+    limit = request.args.get('limit', type=int)
+    if limit and limit > 0:
+        query = query.limit(limit)
+        
+    videos = query.all()
+    
+    # 4. 生成 CSV (使用 utf-8-sig 避免 Excel 中文乱码)
+    si = io.StringIO()
+    cw = csv.writer(si)
+    cw.writerow(['id', 'filename', 'tags (请在此列输入空格分割的Tag)'])
+    
+    for v in videos:
+        cw.writerow([v.id, v.filename, ''])
+        
+    session.close()
+    
+    output = make_response(si.getvalue().encode('utf-8-sig'))
+    output.headers["Content-Disposition"] = "attachment; filename=untagged_videos.csv"
+    output.headers["Content-type"] = "text/csv"
+    return output
+
+@dy_bp.route('/sys_tags/import_csv', methods=['POST'])
+def import_csv():
+    """导入 CSV 并将打标任务加入延时改名队列"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'msg': '没有接收到文件'})
+        
+    file = request.files['file']
+    try:
+        stream = io.StringIO(file.stream.read().decode('utf-8-sig'), newline=None)
+        csv_input = csv.reader(stream)
+        header = next(csv_input) # 跳过表头
+        
+        session = Session()
+        count = 0
+        
+        for row in csv_input:
+            if len(row) < 3: 
+                continue
+            
+            vid_id = row[0].strip()
+            tags_str = row[2].strip()
+            
+            if not tags_str or not vid_id.isdigit(): 
+                continue
+                
+            video = session.query(Video).filter(Video.id == int(vid_id)).first()
+            if not video: 
+                continue
+                
+            # 1. 拆分用户输入的空格 tag，并自动附加 #a_ 前缀
+            user_tags = [t.strip() for t in tags_str.split() if t.strip()]
+            if not user_tags: 
+                continue
+            formatted_tags = [f"#a_{t}" for t in user_tags]
+            
+            # 2. 组装新文件名
+            ext = os.path.splitext(video.detail)[1]
+            base_name = video.filename
+            if base_name.lower().endswith(ext.lower()):
+                base_name = base_name[:-len(ext)]
+            
+            new_filename = f"{base_name} {' '.join(formatted_tags)}{ext}"
+            new_target_path = os.path.join(os.path.dirname(video.detail), new_filename)
+            
+            # 3. 将批量打标任务压入延时改名队列，保证安全和溯源
+            log = RenameLog(
+                video_id=video.id,
+                original_path=video.detail,
+                target_path=new_target_path,
+                status='pending'
+            )
+            session.add(log)
+            count += 1
+            
+        session.commit()
+        session.close()
+        return jsonify({'success': True, 'msg': f'成功解析！已将 {count} 个打标任务加入延时队列。'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'msg': f'CSV 解析异常: {str(e)}'})
+
 @dy_bp.route('/sys_tags/retry_failed', methods=['POST'])
 def retry_failed():
     """捞回失败任务等待再次执行"""
@@ -374,10 +528,21 @@ def index_video_path():
         
     return jsonify({'success': True})
 
+def extract_tags(filename):
+    """【核心修复】只提取带有 # 的真实 Tag，兼容 #a_ 批量前缀，彻底丢弃旧的错写逻辑"""
+    return re.findall(r'#([\u4e00-\u9fa5a-zA-Z0-9_]+)', filename)
+
+
 @dy_bp.route('/video-paths/updatefile')
 def index_video_path_update():
     paths = load_paths()
     session = Session()
+    
+    # 🌟 自动洗库：修复之前因 Bug 导致的 tags 字段污染 🌟
+    all_videos = session.query(Video).all()
+    for v in all_videos:
+        v.tags = ','.join(extract_tags(v.filename))
+        
     total_removed = clean_invalid_videos(session)
     existing_videos = {os.path.abspath(v.detail) for v in session.query(Video.detail).all()}
     total_added = 0
@@ -388,7 +553,7 @@ def index_video_path_update():
     session.commit()
     session.close()
     return jsonify({'success': True, 'added': total_added, 'removed': total_removed})
-    
+       
 @dy_bp.route('/config', methods=['GET'])
 def get_config():
     return jsonify({"status": "ok"})
