@@ -128,18 +128,19 @@ class RenameService:
         blacklist_words = BlacklistService.get_all(session)
         success_count, failed_count = 0, 0
         
-        # 1. 优先执行队列
+        # 1. 处理待执行队列
         logs = session.query(RenameLog).filter(RenameLog.status.in_(['pending', 'retry'])).all()
         for log in logs:
             video = session.query(Video).filter(Video.id == log.video_id).first()
             if not video:
                 log.status, log.error_msg = 'failed', '视频记录丢失'
-                failed_count += 1
-                continue
+                failed_count += 1; continue
                 
-            old_path, ext = video.detail, os.path.splitext(video.detail)[1]
+            old_path = video.detail
             dir_name = os.path.dirname(old_path)
+            ext = os.path.splitext(old_path)[1]
             
+            # 从 log 中获取目标基础名并再次应用黑名单清洗（双重保险）
             target_base = os.path.basename(log.target_path)
             if target_base.lower().endswith(ext.lower()): 
                 target_base = target_base[:-len(ext)]
@@ -150,80 +151,69 @@ class RenameService:
             target_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', target_base)
             target_base = re.sub(r'\.{2,}', '.', target_base)
             target_base = re.sub(r'\s{2,}', ' ', target_base).strip(' .-_')
-            if not target_base: 
-                target_base = f"video_unnamed_{video.id}"
-                
-            target_filename = target_base + ext
-            new_path = os.path.join(dir_name, target_filename)
             
-            if os.path.exists(new_path):
-                video.filename, video.detail, log.status = target_filename, new_path, 'success'
-                video.tags = ','.join(RenameService.extract_tags(target_filename))
-                success_count += 1
-                continue
+            if not target_base: 
+                target_base = f"video_{video.id}"
                 
-            curr_path = old_path
-            if not os.path.exists(curr_path):
-                guessed = video.filename
-                if guessed.lower().endswith(ext.lower()): 
-                    guessed = guessed[:-len(ext)]
-                for bw in blacklist_words: 
-                    guessed = re.sub(re.escape(bw), '', guessed, flags=re.IGNORECASE)
-                guessed = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', guessed)
-                guessed = re.sub(r'\.{2,}', '.', guessed)
-                guessed = re.sub(r'\s{2,}', ' ', guessed).strip(' .-_')
-                guessed_path = os.path.join(dir_name, guessed + ext)
-                if os.path.exists(guessed_path): 
-                    curr_path = guessed_path
-                else:
-                    log.status, log.error_msg = 'failed', '物理文件彻底丢失无法匹配'
-                    failed_count += 1
-                    continue
+            new_filename = target_base + ext
+            new_full_path = os.path.join(dir_name, new_filename)
+            
+            # --- 关键逻辑：同步物理文件与数据库 ---
             try:
-                os.rename(curr_path, new_path)
-                video.filename, video.detail, log.status = target_filename, new_path, 'success'
-                video.tags = ','.join(RenameService.extract_tags(target_filename))
+                # 如果旧文件存在，且新旧路径不同，则改名
+                if os.path.exists(old_path) and old_path != new_full_path:
+                    os.rename(old_path, new_full_path)
+                elif not os.path.exists(old_path) and not os.path.exists(new_full_path):
+                    # 如果原文件和目标文件都不在，说明彻底丢了
+                    log.status, log.error_msg = 'failed', '找不到物理文件'
+                    failed_count += 1; continue
+                
+                # 🌟 修复点：物理改名成功（或新路径已存在）后，强制同步数据库字段
+                video.filename = new_filename
+                video.detail = new_full_path
+                video.tags = ','.join(RenameService.extract_tags(new_filename))
+                
+                log.status = 'success'
+                log.target_path = new_full_path # 更新日志里的最终路径
                 success_count += 1
             except Exception as e:
                 log.status, log.error_msg = 'failed', str(e)
                 failed_count += 1
 
-        # 2. 若模式为 full，则对全库未入队的脏文件名进行黑名单清洗
+        # 2. 全库洗牌模式 (mode='full')
         if mode == 'full' and blacklist_words:
-            all_videos = session.query(Video).all()
-            for video in all_videos:
-                ext = os.path.splitext(video.detail)[1]
+            # 逻辑同上，确保在全库清洗时也执行 video.detail = new_path
+            for video in session.query(Video).all():
+                old_path = video.detail
+                if not os.path.exists(old_path): continue
+                
+                ext = os.path.splitext(old_path)[1]
                 base_name = video.filename[:-len(ext)] if video.filename.lower().endswith(ext.lower()) else video.filename
+                
                 clean_base = base_name
                 needs_clean = False
-                
                 for bw in blacklist_words:
                     if re.search(re.escape(bw), clean_base, re.IGNORECASE):
                         clean_base = re.sub(re.escape(bw), '', clean_base, flags=re.IGNORECASE)
                         needs_clean = True
-                        
+                
                 if needs_clean:
                     clean_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', clean_base)
-                    clean_base = re.sub(r'\.{2,}', '.', clean_base)
                     clean_base = re.sub(r'\s{2,}', ' ', clean_base).strip(' .-_')
-                    if not clean_base: 
-                        clean_base = f"video_unnamed_{video.id}"
                     new_filename = clean_base + ext
+                    new_path = os.path.join(os.path.dirname(old_path), new_filename)
                     
-                    if new_filename != video.filename and os.path.exists(video.detail):
-                        new_path = os.path.join(os.path.dirname(video.detail), new_filename)
+                    if new_path != old_path:
                         try:
-                            os.rename(video.detail, new_path)
-                            session.add(RenameLog(video_id=video.id, original_path=video.detail, target_path=new_path, status='success'))
-                            video.filename, video.detail = new_filename, new_path
+                            os.rename(old_path, new_path)
+                            video.filename = new_filename
+                            video.detail = new_path # 🌟 同步数据库路径
                             video.tags = ','.join(RenameService.extract_tags(new_filename))
                             success_count += 1
-                        except Exception as e:
-                            session.add(RenameLog(video_id=video.id, original_path=video.detail, target_path=new_path, status='failed', error_msg=str(e)))
-                            failed_count += 1
-                            
-        return success_count, failed_count
+                        except: failed_count += 1
 
+        session.commit() # 🌟 统一提交，确保所有修改落盘
+        return success_count, failed_count
 
 def load_paths():
     if os.path.exists(PATHS_FILE):
@@ -282,28 +272,43 @@ def apply_size_filter(query, size_param):
     return query
 
 def apply_video_filters(query, request_args, session=None):
-    score, search, exclude, tags, size = request_args.get('score'), request_args.get('search'), request_args.get('exclude'), request_args.get('tags'), request_args.get('size')
+    score = request_args.get('score')
+    search = request_args.get('search')
+    exclude = request_args.get('exclude')
+    tags = request_args.get('tags')
+    size = request_args.get('size')
     use_random = False
     
     if search and 'random' in search.lower():
         use_random = True
         search = search.replace('random', '').strip()
         
-    if score and int(score) > 0: query = query.filter(Video.score == int(score))
-    else: query = query.filter(Video.score != 1)
+    # 🌟 修复 1：明确剔除默认的 '0' 值
+    if score and str(score) != '0': 
+        query = query.filter(Video.score == int(score))
+    else: 
+        # 兼容部分通过第三方工具导入导致 score 为 NULL 的脏数据
+        from sqlalchemy import or_
+        query = query.filter(or_(Video.score != 1, Video.score.is_(None)))
 
     if tags:
-        for tag in tags.split(','): query = query.filter(Video.tags.like(f"%{tag}%"))
-            
+        for tag in tags.split(','): 
+            if tag.strip():
+                query = query.filter(Video.tags.like(f"%{tag}%"))
+                
     if search:
-        for kw in search.strip().split(): query = query.filter(Video.detail.like(f"%{kw}%"))
+        for kw in search.strip().split(): 
+            query = query.filter(Video.detail.like(f"%{kw}%"))
             
     if exclude:
-        for kw in exclude.strip().split(): query = query.filter(~Video.detail.like(f"%{kw}%"))
+        for kw in exclude.strip().split(): 
+            query = query.filter(~Video.detail.like(f"%{kw}%"))
 
-    if size: query = apply_size_filter(query, size)
+    # 🌟 修复 2：如果前端传来了 size='0'，直接忽略，不执行小于 0 的过滤
+    if size and str(size) != '0': 
+        query = apply_size_filter(query, str(size))
+        
     return query, use_random
-
 # ================= 视图控制与路由分配 (Views) =================
 dy_bp = Blueprint('dyfn', __name__, url_prefix='/dyfn')
 
@@ -364,23 +369,54 @@ def api_tokenize():
     core_words = [w for w in words if len(w.strip()) > 1 and not bool(re.match(r'^[^\w\u4e00-\u9fa5]+$', w))]
     return jsonify({'success': True, 'words': core_words})
 
+import os
+from datetime import datetime
+from flask import request, jsonify
+
 @dy_bp.route('/sys_tags/queue_rename', methods=['POST'])
-def api_queue_rename():
-    data = request.get_json()
-    video_id, new_filename = data.get('video_id'), data.get('new_filename')
-    if not video_id or not new_filename: return jsonify({'success': False, 'msg': '参数不完整'}), 400
-    session = Session()
-    video = session.query(Video).filter(Video.id == video_id).first()
-    if not video: 
-        session.close(); return jsonify({'success': False, 'msg': '视频不存在'}), 404
-        
-    dir_name, ext = os.path.dirname(video.detail), os.path.splitext(video.detail)[1]
-    if not new_filename.lower().endswith(ext.lower()): new_filename += ext
+def queue_rename():
+    data = request.json
+    video_id = data.get('video_id')
+    new_filename = data.get('new_filename')
     
-    session.add(RenameLog(video_id=video.id, original_path=video.detail, target_path=os.path.join(dir_name, new_filename), status='pending'))
-    session.commit()
-    session.close()
-    return jsonify({'success': True, 'msg': '已加入延时队列'})
+    session = Session()
+    try:
+        video = session.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            return jsonify({"success": False, "msg": "视频不存在"})
+            
+        target_path = os.path.join(os.path.dirname(video.detail), new_filename)
+        
+        # 🌟 核心机制：查询是否已有待处理的任务 (UPSERT 逻辑)
+        existing_log = session.query(RenameLog).filter(
+            RenameLog.video_id == video_id,
+            RenameLog.status.in_(['pending', 'retry', 'failed'])
+        ).first()
+        
+        if existing_log:
+            # 如果处于排队中，直接覆盖目标路径，防止生成多条冲突的日志
+            existing_log.target_path = target_path
+            existing_log.status = 'pending'
+            existing_log.error_msg = None
+            existing_log.create_time = datetime.now() # 刷新操作时间
+        else:
+            # 没有排队任务，才新建
+            new_log = RenameLog(
+                video_id=video_id,
+                original_path=video.detail,
+                target_path=target_path,
+                status='pending',
+                create_time=datetime.now()
+            )
+            session.add(new_log)
+            
+        session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        session.rollback()
+        return jsonify({"success": False, "msg": str(e)})
+    finally:
+        session.close()
 
 @dy_bp.route('/sys_tags/execute_renames', methods=['POST'])
 def api_execute_renames():
@@ -439,32 +475,99 @@ def api_restore_rename():
     except OSError as e:
         session.close(); return jsonify({'success': False, 'msg': str(e)}), 500
 
-@dy_bp.route('/sys_tags/export_csv', methods=['GET'])
-def api_export_csv():
-    session = Session()
-    query, use_random = apply_video_filters(session.query(Video), request.args, session)
-    query = query.filter(~Video.filename.like('%#%'))
-    sort_by = request.args.get('sort_by', '')
-    
-    if not use_random:
-        if sort_by == 'filename': query = query.order_by(Video.filename.asc())
-        elif sort_by == 'path': query = query.order_by(Video.detail.asc())
-        else: query = query.order_by(Video.id.desc())
+import io
+import csv
+import re
+import os
+from flask import request, send_file
+from sqlalchemy import not_
 
-    limit = request.args.get('limit', type=int)
-    if limit and limit > 0: query = query.limit(limit)
+# --- 新增：专门用于后端的智能文件名过滤器 ---
+def is_meaningful_filename(filename):
+    """
+    判断文件名是否有分析价值：剔除无意义前缀、日期、长哈希、纯数字和符号。
+    """
+    name = os.path.splitext(filename)[0].lower()
+    
+    # 1. 剔除常见无意义前缀
+    name = re.sub(r'^(video|v|mp4|hd)_+', '', name)
+    name = re.sub(r'video|mp4', '', name)
+    
+    # 2. 剔除日期 (如 2024-12-03) 和时间片段
+    name = re.sub(r'\d{4}-\d{2}-\d{2}', '', name)
+    
+    # 3. 剔除长串类似 UUID 或 Hex 散列值的乱码 (8位以上)
+    name = re.sub(r'[a-f0-9]{8,}', '', name)
+    
+    # 4. 彻底剔除所有数字、标点符号、空格，只看剩下的纯“字”
+    name = re.sub(r'[\d\W_]+', '', name)
+    
+    # 5. 判定：如果剩下的字符少于 2 个，并且连一个汉字都没有，视为“废品”
+    if len(name) < 2 and not re.search(r'[\u4e00-\u9fa5]', name):
+        return False
         
-    videos = query.all()
-    si = io.StringIO()
-    cw = csv.writer(si)
-    cw.writerow(['id', 'filename', 'tags (请在此列输入空格分割的Tag)'])
-    for v in videos: cw.writerow([v.id, v.filename, ''])
+    return True
+
+
+@dy_bp.route('/sys_tags/export_csv', methods=['GET'])
+def export_csv():
+    session = Session()  # 视你的数据库会话获取方式而定
+    try:
+        query = session.query(Video)
         
-    session.close()
-    output = make_response(si.getvalue().encode('utf-8-sig'))
-    output.headers["Content-Disposition"] = "attachment; filename=untagged_videos.csv"
-    output.headers["Content-type"] = "text/csv"
-    return output
+        # 1. 继承网页端基础筛选条件
+        query, _ = apply_video_filters(query, request.args, session)
+        
+        # 2. 过滤已打标的（带有 #）
+        query = query.filter(not_(Video.filename.like('%#%')))
+        
+        # 3. 过滤处于改名队列中还没落实的
+        pending_subquery = session.query(RenameLog.video_id).filter(
+            RenameLog.status.in_(['pending', 'retry'])
+        ).subquery()
+        query = query.filter(not_(Video.id.in_(pending_subquery)))
+        
+        # 4. 排序
+        sort_by = request.args.get('sort_by')
+        if sort_by == 'filename':
+            query = query.order_by(Video.filename.asc())
+        elif sort_by == 'path':
+            query = query.order_by(Video.detail.asc())
+        else:
+            query = query.order_by(Video.id.desc())
+            
+        limit = request.args.get('limit', type=int, default=0)
+        
+        # 🌟 核心修改：不在 SQL 层做 Limit，改为在 Python 层流式过滤
+        valid_videos = []
+        for v in query.all():
+            # 经过清洗依然有意义的，才加入导出列表
+            if is_meaningful_filename(v.filename):
+                valid_videos.append(v)
+                
+                # 当收集到足够的合法数据时，立刻停止循环
+                if limit > 0 and len(valid_videos) >= limit:
+                    break
+                    
+        # 5. 生成 CSV
+        output = io.StringIO()
+        output.write('\ufeff')  # BOM 头防乱码
+        writer = csv.writer(output)
+        writer.writerow(['id', 'filename', 'tags'])
+        
+        for v in valid_videos:
+            writer.writerow([v.id, v.filename, ''])
+            
+        output.seek(0)
+        mem_file = io.BytesIO(output.getvalue().encode('utf-8'))
+        return send_file(
+            mem_file,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='untagged_videos.csv'
+        )
+    finally:
+        session.close()
 
 @dy_bp.route('/sys_tags/import_csv', methods=['POST'])
 def api_import_csv():
@@ -559,52 +662,80 @@ def api_update_files():
     session.close()
     return jsonify({'success': True, 'added': total_added, 'removed': total_removed})
 
+import os
+from flask import request, jsonify, Response, stream_with_context
+from sqlalchemy import func
+import random
+
 @dy_bp.route('/videos', methods=['GET'])
 def api_get_videos():
     session = Session()
-    query = session.query(Video)
-    page, page_size = int(request.args.get('page', 1)), int(request.args.get('page_size', 5))
-    latest = int(request.args.get('latest', 0))
-    stream, sort_by = request.args.get('stream', 'false').lower() == 'true', request.args.get('sort_by', '')
-    
-    query, use_random = apply_video_filters(query, request.args, session)
-    
-    if use_random:
-        all_video_ids = {vid for (vid,) in session.query(Video.id).all()}
-        existing_ids = {vid for (vid,) in session.query(VideoRandomOrder.video_id).all()}
-        missing_ids = list(all_video_ids - existing_ids)
-        if missing_ids:
-            random.shuffle(missing_ids)
-            session.query(VideoRandomOrder).update({VideoRandomOrder.order_index: VideoRandomOrder.order_index + len(missing_ids)})
-            for i, vid in enumerate(missing_ids): session.add(VideoRandomOrder(video_id=vid, order_index=i))
-            session.commit()
-            
-        random_subq = session.query(VideoRandomOrder).order_by(VideoRandomOrder.order_index).with_entities(
-            VideoRandomOrder.video_id.label('video_id'), VideoRandomOrder.order_index.label('order_index')
-        ).subquery()
-        query = query.outerjoin(random_subq, Video.id == random_subq.c.video_id).order_by(func.coalesce(random_subq.c.order_index, 1))
-        videos = query.offset((page - 1) * page_size).limit(page_size).all()
-    else:
-        if sort_by == 'filename': query = query.order_by(Video.filename.asc())
-        elif sort_by == 'path': query = query.order_by(Video.detail.asc())
-        else: query = query.order_by(Video.id.desc())
+    try:
+        query = session.query(Video)
+        page, page_size = int(request.args.get('page', 1)), int(request.args.get('page_size', 5))
+        latest = int(request.args.get('latest', 0))
+        stream, sort_by = request.args.get('stream', 'false').lower() == 'true', request.args.get('sort_by', '')
+        
+        query, use_random = apply_video_filters(query, request.args, session)
+        
+        if use_random:
+            all_video_ids = {vid for (vid,) in session.query(Video.id).all()}
+            existing_ids = {vid for (vid,) in session.query(VideoRandomOrder.video_id).all()}
+            missing_ids = list(all_video_ids - existing_ids)
+            if missing_ids:
+                random.shuffle(missing_ids)
+                session.query(VideoRandomOrder).update({VideoRandomOrder.order_index: VideoRandomOrder.order_index + len(missing_ids)})
+                for i, vid in enumerate(missing_ids): session.add(VideoRandomOrder(video_id=vid, order_index=i))
+                session.commit()
+                
+            random_subq = session.query(VideoRandomOrder).order_by(VideoRandomOrder.order_index).with_entities(
+                VideoRandomOrder.video_id.label('video_id'), VideoRandomOrder.order_index.label('order_index')
+            ).subquery()
+            query = query.outerjoin(random_subq, Video.id == random_subq.c.video_id).order_by(func.coalesce(random_subq.c.order_index, 1))
+            videos = query.offset((page - 1) * page_size).limit(page_size).all()
+        else:
+            if sort_by == 'filename': query = query.order_by(Video.filename.asc())
+            elif sort_by == 'path': query = query.order_by(Video.detail.asc())
+            else: query = query.order_by(Video.id.desc())
 
-        if page_size: videos = query.offset((page-1)*page_size).limit(page_size).all()
-        elif latest: videos = query.limit(int(latest)).all()
-        else: videos = query.all()
+            if page_size: videos = query.offset((page-1)*page_size).limit(page_size).all()
+            elif latest: videos = query.limit(int(latest)).all()
+            else: videos = query.all()
             
-    session.close()
+        # 🌟 核心拦截机制：查出当前分页的视频中，正在排队改名的目标文件名
+        pending_map = {}
+        if videos:
+            video_ids = [v.id for v in videos]
+            pending_logs = session.query(RenameLog).filter(
+                RenameLog.video_id.in_(video_ids),
+                RenameLog.status.in_(['pending', 'retry'])
+            ).all()
+            for log in pending_logs:
+                pending_map[log.video_id] = os.path.basename(log.target_path)
+                
+    finally:
+        # 无论发生什么异常，确保安全释放数据库连接
+        session.close()
+
     if stream:
         def generate():
             yield '['
             for i, v in enumerate(videos):
                 if i > 0: yield ','
-                yield f'{{"id":{v.id},"filename":"{v.filename}","tags":"{v.tags}","score":{v.score},"detail":"{v.detail}"}}'
+                # 如果处于排队状态，用新名字欺骗前端
+                fname = pending_map.get(v.id, v.filename)
+                yield f'{{"id":{v.id},"filename":"{fname}","tags":"{v.tags}","score":{v.score},"detail":"{v.detail}"}}'
             yield ']'
         return Response(stream_with_context(generate()), mimetype='application/json')
         
-    return jsonify([{"id": v.id, "filename": v.filename, "tags": v.tags, "score": v.score, "detail": v.detail} for v in videos])
-
+    return jsonify([{
+        "id": v.id, 
+        "filename": pending_map.get(v.id, v.filename),  # 提取映射中的新名字
+        "tags": v.tags, 
+        "score": v.score, 
+        "detail": v.detail
+    } for v in videos])
+    
 @dy_bp.route('/videos/update_score', methods=['POST'])
 def api_update_score():
     data = request.json
@@ -639,11 +770,30 @@ def api_videos_count():
 def index():
     if not os.path.exists(INDEX_FILE): return f"找不到首页文件", 404
     return send_file(INDEX_FILE)
+FILES_TO_SEND = ["moduels/dyfn_extension.py", "pages/media/9dyfn.html"]
+@dy_bp.route('/skip/api/get_latest_code', methods=['GET'])
+def get_latest_code():
+    files_data = {}
+    for rel_path in FILES_TO_SEND:
+        target_path = os.path.abspath(rel_path)
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, 'r', encoding='utf-8') as f:
+                    files_data[rel_path] = f.read()
+            except Exception as e:
+                return jsonify({"error": f"读取文件失败 {rel_path}: {str(e)}"}), 500
+        else:
+            return jsonify({"error": f"云端缺少下发文件: {rel_path}"}), 404
+
+    return jsonify({"status": "success", "files": files_data})
 
 if __name__ == "__main__":
     app = Flask(__name__)
     app.register_blueprint(dy_bp)
+    
     @app.route('/')
-    def root_redirect(): return redirect('/dyfn/')
-    print(f"[*] 服务启动: http://127.0.0.1:82/")
+    def root_redirect():
+        return redirect('/dy/')
+        
+    print(f"[*] 成功挂载蓝图，请访问: http://127.0.0.1:82/")
     app.run(debug=True, host='0.0.0.0', port=82)
