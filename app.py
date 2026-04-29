@@ -73,26 +73,35 @@ def load_extensions(app):
     loaded_blueprints = []
     warnings = []
     errors = []
-
+    abs_current_dir = os.path.abspath(current_dir)
     if os.path.exists(current_dir):
-        for filename in os.listdir(current_dir):
-            if filename.endswith('_extension.py'):
-                module_name = filename[:-3]
-                try:
-                    module = importlib.import_module(current_dir + "." + module_name)
-                    blueprint_found = False
+        for root, dirs, files in os.walk(current_dir):
+            for filename in files:
+                if filename.endswith('_extension.py'):
+                    file_path = os.path.join(root, filename)
+                    # 获取相对于 current_dir 的相对路径 (例如: subfolder/news_extension.py)
+                    relative_path = os.path.relpath(file_path, abs_current_dir)
                     
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        if isinstance(attr, Blueprint):
-                            app.register_blueprint(attr)
-                            loaded_blueprints.append(attr.name)
-                            blueprint_found = True
-                    
-                    if not blueprint_found:
-                        warnings.append(filename)
-                except Exception as e:
-                    errors.append(f"{filename} ({str(e)})")
+                    # 将路径转换为 Python 模块导入路径
+                    # 去掉 .py 后缀，并将系统路径分隔符（\ 或 /）替换为 Python 包所需的点号 (.)
+                    module_name = relative_path[:-3].replace(os.sep, '.')
+                    try:
+                        module = importlib.import_module(current_dir + "." + module_name)
+                        blueprint_found = False
+                        
+                        for attr_name in dir(module):
+                            attr = getattr(module, attr_name)
+                            if isinstance(attr, Blueprint):
+                                app.register_blueprint(attr)
+                                loaded_blueprints.append(attr.name)
+                                blueprint_found = True
+                        
+                        if not blueprint_found:
+                            warnings.append(filename)
+                    except Exception as e:
+                        errors.append(f"{filename} ({str(e)})")
+                
+            
 
     # 手动挂载历史遗留模块
     try:

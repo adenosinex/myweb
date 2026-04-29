@@ -667,6 +667,12 @@ from flask import request, jsonify, Response, stream_with_context
 from sqlalchemy import func
 import random
 
+import os
+from flask import request, jsonify, Response, stream_with_context
+from sqlalchemy import func
+import random
+from datetime import datetime
+
 @dy_bp.route('/videos', methods=['GET'])
 def api_get_videos():
     session = Session()
@@ -702,7 +708,6 @@ def api_get_videos():
             elif latest: videos = query.limit(int(latest)).all()
             else: videos = query.all()
             
-        # 🌟 核心拦截机制：查出当前分页的视频中，正在排队改名的目标文件名
         pending_map = {}
         if videos:
             video_ids = [v.id for v in videos]
@@ -714,7 +719,6 @@ def api_get_videos():
                 pending_map[log.video_id] = os.path.basename(log.target_path)
                 
     finally:
-        # 无论发生什么异常，确保安全释放数据库连接
         session.close()
 
     if stream:
@@ -722,20 +726,20 @@ def api_get_videos():
             yield '['
             for i, v in enumerate(videos):
                 if i > 0: yield ','
-                # 如果处于排队状态，用新名字欺骗前端
-                fname = pending_map.get(v.id, v.filename)
+                # 🌟 强制治愈脱节：有排队用排队名，没排队强制截取 detail 真实的物理文件名！
+                fname = pending_map.get(v.id) or os.path.basename(v.detail)
                 yield f'{{"id":{v.id},"filename":"{fname}","tags":"{v.tags}","score":{v.score},"detail":"{v.detail}"}}'
             yield ']'
         return Response(stream_with_context(generate()), mimetype='application/json')
         
     return jsonify([{
         "id": v.id, 
-        "filename": pending_map.get(v.id, v.filename),  # 提取映射中的新名字
+        "filename": pending_map.get(v.id) or os.path.basename(v.detail), # 🌟 强制治愈脱节
         "tags": v.tags, 
         "score": v.score, 
         "detail": v.detail
     } for v in videos])
-    
+
 @dy_bp.route('/videos/update_score', methods=['POST'])
 def api_update_score():
     data = request.json
