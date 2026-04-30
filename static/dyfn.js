@@ -1,237 +1,497 @@
- // ==========================================
-// dyfn.js - 底层请求与数据管理逻辑 (无 Vue 挂载代码)
-// ==========================================
+// tag-panel.js
+const TagPanel = {
+    template: `
+        <div style="padding: 0 15px 15px 15px;">
+            <div class="dynamic-sections">
+                <div v-for="(item, idx) in panelOrder" :key="item"
+                     class="drag-section"
+                     :draggable="dragEnabledId === item"
+                     @dragstart="onDragStart($event, idx)"
+                     @dragend="onDragEnd"
+                     @dragover.prevent
+                     @dragenter.prevent
+                     @drop="onDrop($event, idx)">
+                     
+                    <div class="drag-handle" @mousedown="enableDrag(item)" @mouseup="disableDrag" @mouseleave="disableDrag" title="按住拖拽排版">⋮⋮</div>
 
-async function fetchLatestVideos(state) {
-    const params = { latest: state.pageSize, page: state.page, page_size: state.pageSize, search: state.searchKeyword, score: state.searchScore }
-    if (state.excludeKeyword) params.exclude = state.excludeKeyword
-    if (state.searchSize && state.searchSize !== 0) params.size = state.searchSize
-    if (state.sortBy) params.sort_by = state.sortBy
-    const res = await axios.get('/dyfn/videos', { params })
-    return res.data
-}
+                    <div class="section-content">
+                        <div v-if="item === 'tokens'">
+                            <div class="group-title">1. 文件名词块 (点字黑化剔除，双击[全]撤销独占)</div>
+                            <div style="min-height: 30px;">
+                                <span v-if="filenameTokens.length === 0" class="empty-hint">分词中或无核心词...</span>
+                                <span v-for="t in filenameTokens" :key="t.text" class="token-chip" :class="{'token-off': !t.active}">
+                                    <span class="chip-text" @click="toggleToken(t)">{{ t.text }}</span>
+                                    <span class="chip-action" @click.stop="setAsOnlyToken(t.text)" title="设为独占">[全]</span>
+                                    <span class="chip-del" @click.stop="quickBlacklistToken(t.text)" title="全局黑名单">[黑]</span>
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div v-else-if="item === 'auto_tags'">
+                            <div class="group-title"><span>2. 机器提取虚拟 Tag (独立分区，点击一键注销)</span></div>
+                            <div style="background: rgba(0,0,0,0.2); border: 1px dashed #553366; border-radius: 6px; padding: 10px; margin-bottom: 10px; min-height: 35px; transition: all 0.2s;">
+                                <span v-if="autoTags.length === 0" class="empty-hint" style="color:#775588;">未检测到 #a_ 开头的虚拟标签...</span>
+                                <span v-for="t in autoTags" :key="t.text" class="auto-tag-chip" :class="{'tag-off': !t.active}" @click="toggleAutoTag(t)">
+                                    #a_{{ t.text }}
+                                </span>
+                            </div>
+                        </div>
 
-function getVideoUrl(id) { return `/dyfn/videos/${id}/stream` }
+                        <div v-else-if="item === 'tags'">
+                            <div class="group-title"><span>3. 人工预设 Tag 分区 (长按拖拽跨区排序)</span></div>
+                            <div class="tag-input-row" style="margin-bottom:12px;">
+                                <input type="text" v-model="globalTagInput" placeholder="输入新 Tag (首区)..." @keyup.enter="addGlobalTag" />
+                                <van-button type="primary" size="small" @click="addGlobalTag">添加</van-button>
+                                <van-button type="default" size="small" @click="addEmptyGroup" style="padding: 0 10px;">+ 新区</van-button>
+                            </div>
+                            <div v-for="(group, gIdx) in tagGroups" :key="group.id" class="tag-group-card" :class="{'drag-over-group': dragType === 'group' && dragOverGroupIdx === gIdx, 'drag-over-empty': dragType === 'tag' && dragOverGroupIdx === gIdx && group.tags.length === 0}" :draggable="dragGroupEnabledId === group.id" @dragstart.stop="onGroupDragStart($event, gIdx)" @dragend.stop="onGroupDragEnd" @dragover.prevent.stop="onGroupDragOver($event, gIdx)" @dragenter.prevent="onTagDragEnter(gIdx)" @dragleave.prevent="onTagDragLeave(gIdx)" @drop.prevent.stop="onGroupDrop($event, gIdx)">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag">⋮⋮ 分区</div>
+                                    <span style="color:#ff4d4f; font-size:11px; cursor:pointer;" @click="removeTagGroup(gIdx)">删区</span>
+                                </div>
+                                <div style="min-height: 35px; padding-bottom: 5px;">
+                                    <span v-if="group.tags.length === 0" class="empty-hint" style="pointer-events: none;">拖拽 Tag 到此...</span>
+                                    <span v-for="(tag, tIdx) in group.tags" :key="tag" class="quick-tag-chip" :class="{'tag-on': isTagActive(tag), 'drag-over-tag-left': dragType === 'tag' && dragOverTagInfo?.gIdx === gIdx && dragOverTagInfo?.tIdx === tIdx && dragDropPosition === 'left', 'drag-over-tag-right': dragType === 'tag' && dragOverTagInfo?.gIdx === gIdx && dragOverTagInfo?.tIdx === tIdx && dragDropPosition === 'right'}" draggable="true" @dragstart.stop="onTagDragStart($event, gIdx, tIdx)" @dragend.stop="onTagDragEnd" @dragover.prevent.stop="onTagDragOver($event, gIdx, tIdx)" @drop.prevent.stop="onTagDrop($event, gIdx, tIdx)">
+                                        <span class="chip-text" @click="handlePresetTagClick(tag)">#{{ tag }}</span>
+                                        <span class="chip-del" @click.stop="removeSavedTagFromGroup(gIdx, tIdx)">×</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
 
-async function updateScore(videoId, score) {
-    await axios.post('/dyfn/videos/update_score', { id: videoId, score: score })
-}
+                        <div v-else-if="item === 'blacklist'">
+                            <div class="group-title">4. 快捷拉黑干扰词 (全局生效)</div>
+                            <div class="tag-input-row" style="margin-bottom:0;">
+                                <input type="text" v-model="quickBlacklistInput" placeholder="输入符号或干扰词..." @keyup.enter="addQuickBlacklist" />
+                                <van-button type="danger" size="small" @click="addQuickBlacklist">拉黑</van-button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-class VideoPlayer {
-    constructor(state, refs) { this.state = state; this.refs = refs; this.touchStartY = 0; this.touchActive = false; this.lastRatios = []; this.isSwitching = false; }
-    initializeVideoQueue() { this.refreshQueue(); }
-    updateVideoClass(videoEl = null) {
-        if (!videoEl) {
-            const videos = document.querySelectorAll('video');
-            const domIndex = this.refs.activeVideoIndex.value;
-            if (!videos.length || !videos[domIndex]) return;
-            videoEl = videos[domIndex];
-        }
-        if (!videoEl) return;
-        const width = videoEl.videoWidth, height = videoEl.videoHeight;
-        if (width && height) {
-            const isLandscape = (height / width) <= 1.1;
-            this.lastRatios.push(isLandscape);
-            if (this.lastRatios.length > 3) this.lastRatios.shift();
-            if (this.lastRatios.length === 3 && this.lastRatios.every(v => v)) this.refs.videoClass.value = 'video-landscape';
-            else if (!isLandscape) this.refs.videoClass.value = 'video-portrait';
-            else this.refs.videoClass.value = 'video-landscape';
-        }
-    }
-    refreshQueue() {
-        if (!this.state.videos || this.state.videos.length === 0) return;
-        const totalVideos = this.state.videos.length;
-        const currentGlobalIndex = this.refs.currentIndex.value;
-        this.refs.videoQueue.value = [];
-        this.refs.activeVideoIndex.value = 1; 
-        this.refs.videoLoadStates.value = [false, false, false];
-        for (let i = -1; i <= 1; i++) {
-            let targetIndex = (currentGlobalIndex + i + totalVideos) % totalVideos;
-            if (this.state.videos[targetIndex]) this.refs.videoQueue.value.push(this.state.videos[targetIndex]);
-        }
-        document.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
-    }
-    updateVideoQueue(direction = 'next') {
-        if (this.state.videos.length === 0) return;
-        const totalVideos = this.state.videos.length;
-        if (direction === 'next') {
-            this.refs.videoQueue.value.shift();
-            let nextVideoIndex = (this.refs.currentIndex.value + 1) % totalVideos;
-            this.refs.videoQueue.value.push(this.state.videos[nextVideoIndex]);
-        } else {
-            this.refs.videoQueue.value.pop();
-            let prevVideoIndex = (this.refs.currentIndex.value - 1 + totalVideos) % totalVideos;
-            this.refs.videoQueue.value.unshift(this.state.videos[prevVideoIndex]);
-        }
-        this.refs.videoLoadStates.value = [false, false, false];
-    }
-    prevVideo() {
-        if (this.isSwitching || this.state.videos.length === 0) return;
-        this.isSwitching = true;
-        document.querySelectorAll('video').forEach(v => v.pause());
-        this.refs.currentIndex.value--;
-        if (this.refs.currentIndex.value < 0) this.refs.currentIndex.value = this.state.videos.length - 1;
-        this.updateVideoQueue('prev');
-        setTimeout(() => { this.playActiveVideo(); this.isSwitching = false; }, 200);
-    }
-    async nextVideo() {
-        if (this.isSwitching || this.state.videos.length === 0) return;
-        this.isSwitching = true;
-        try {
-            document.querySelectorAll('video').forEach(v => v.pause());
-            this.exitFullscreen();
-            let nextIndex = this.refs.currentIndex.value + 1;
-            let isPageChange = false;
-            if (nextIndex >= this.state.videos.length) {
-                if (this.state.page * this.state.pageSize < this.state.totalVideos && typeof this.loadMoreVideos === 'function') {
-                    this.state.page++; await this.loadMoreVideos(); isPageChange = true;
-                }
-                nextIndex = nextIndex % this.state.videos.length;
+            <div v-show="showConfig" class="search-modal" @click.self="showConfig=false">
+                <div class="search-modal-content">
+                    <h4>视频路径与执行控制台</h4>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" v-model="newPath" placeholder="输入绝对路径如 D:/videos" class="search-input" @keyup.enter="addPath" />
+                        <button class="search-btn-confirm" style="margin:0; width:auto;" @click="addPath">添加</button>
+                    </div>
+                    
+                    <div style="margin-top:16px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px;">
+                        <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px; border-bottom: 1px dashed #333; padding-bottom: 8px;">
+                            <button @click="indexPath_del(path)" style="background:transparent; border:none; color:#ff4d4f; cursor:pointer;">✖</button>
+                            <span style="flex:1;font-size:12px;word-break:break-all;margin:0 8px; color: #bbb;">{{ path }}</span>
+                            <button @click="indexPath(path)" style="background: rgba(25,137,250,0.2); border:1px solid #1989fa; color:#1989fa; border-radius:4px; padding: 2px 6px; font-size:12px; cursor:pointer;">索引</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
+                        <h4>全局自动黑名单</h4>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; max-height: 100px; overflow-y: auto;">
+                            <span v-for="(word, idx) in blacklist" :key="idx" style="background:#333; border: 1px solid #444; color:#ddd; font-size:12px; padding:4px 10px; border-radius:12px; cursor:pointer;" @click="removeBlacklistWord(idx)">{{ word }} ×</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" v-model="newBlacklistWord" placeholder="输入需自动屏蔽的词汇" class="search-input" style="flex:1;" @keyup.enter="addBlacklistWord" />
+                            <button class="search-btn-confirm" style="width: auto; padding: 0 15px; margin: 0;" @click="addBlacklistWord">添加</button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top:20px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid #222;">
+                        <span style="font-size: 12px; color: #888; margin-bottom: 4px;">重命名与洗库控制台</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #e6a23c; color: #e6a23c;" @click="executeRenameQueue('queue_only')" :disabled="isExecuting">▶ 执行最新打标</button>
+                            <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #67c23a; color: #67c23a;" @click="executeRenameQueue('full')" :disabled="isExecuting">▶ 全库应用黑名单</button>
+                        </div>
+                        <button class="search-btn-confirm" style="margin: 0; background: transparent; border: 1px dashed #f56c6c; color: #f56c6c;" @click="retryFailedQueue" :disabled="isExecuting">↻ 重试失败的改名任务</button>
+                        <div style="text-align: center; height: 20px; margin-top: 4px;">
+                            <span v-if="isExecuting" style="font-size: 12px; color: #e6a23c;">处理中，请稍候...</span>
+                            <span v-if="executeSuccess && !isExecuting" style="color:#4fc08d; font-size:12px; font-weight:bold;">✔ {{ executeMsg }}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
+                        <h4>高级数据操作 (CSV & JSON)</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                            <van-button type="primary" size="small" @click="exportTags" style="flex:1; background: #2b2b2b; border-color: #444;">⬇ 导出配置</van-button>
+                            <van-button type="warning" size="small" @click="triggerImportTags" style="flex:1; background: #2b2b2b; border-color: #444; color: #e6a23c;">⬆ 导入配置</van-button>
+                        </div>
+                        <div style="background: rgba(25,137,250,0.05); border: 1px solid rgba(25,137,250,0.2); padding: 12px; border-radius: 8px;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select v-model="exportLimit" class="search-select" style="flex: 1;">
+                                    <option value="0">全部导出</option>
+                                    <option value="100">前 100 条</option>
+                                    <option value="500">前 500 条</option>
+                                    <option value="1000">前 1000 条</option>
+                                </select>
+                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #1989fa;" @click="exportCSV">导出</button>
+                            </div>
+                            <button class="search-btn-confirm" style="margin-top:8px; width:100%; background: #e6a23c;" @click="triggerImportCSV">上传 CSV 批量导入打标</button>
+                        </div>
+                    </div>
+                    <button class="search-btn-cancel" @click="showConfig=false" style="border:none; background: transparent !important; text-decoration: underline;">关闭面板</button>
+                </div>
+            </div>
+            
+            <div v-if="showHistory" class="search-modal" @click.self="showHistory=false">
+                <div class="search-modal-content">
+                    <h4>文件名修改日志</h4>
+                    <div style="max-height: 50vh; overflow-y: auto; margin-bottom: 10px;">
+                        <div v-for="log in renameHistory" :key="log.id" style="background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-size: 12px; color: #888;">{{ log.create_time }}</span>
+                                <span v-if="log.status === 'restored'" style="font-size: 12px; color: #999;">已撤销</span>
+                                <van-button v-if="log.status === 'success'" type="primary" size="mini" @click="handleRestore(log.id)">撤销恢复</van-button>
+                            </div>
+                            <div style="font-size: 13px; color: #ff4d4f; text-decoration: line-through; word-break: break-all;">{{ log.original_name }}</div>
+                            <div style="font-size: 13px; color: #4fc08d; font-weight: bold; margin-top: 4px; word-break: break-all;">{{ log.target_name }}</div>
+                        </div>
+                    </div>
+                    <button class="search-btn-cancel" @click="showHistory=false">关闭面板</button>
+                </div>
+            </div>
+
+            <input type="file" id="import-tags-file" style="display:none" accept=".json" @change="importTags" />
+            <input type="file" id="import-csv-data-file" style="display:none" accept=".csv" @change="importCSVFile" />
+        </div>
+    `,
+    props: ['currentVideo', 'videos', 'blacklist', 'currentIndex', 'searchState', 'pathList', 'syncEnabled', 'syncMemory'],
+    emits: ['reload-videos', 'add-path', 'index-path', 'index-path-del', 'index-all', 'add-blacklist', 'remove-blacklist', 'update-sync'],
+    setup(props, { emit, expose }) {
+        const { ref, computed, watch, onMounted } = Vue;
+
+        const panelOrder = ref(JSON.parse(localStorage.getItem('dy_panel_order')) || ['tokens', 'auto_tags', 'tags', 'blacklist']);
+        onMounted(() => {
+            if (panelOrder.value.includes('preview')) {
+                panelOrder.value = panelOrder.value.filter(item => item !== 'preview');
+                localStorage.setItem('dy_panel_order', JSON.stringify(panelOrder.value));
             }
-            this.refs.currentIndex.value = nextIndex;
-            if (isPageChange) this.refreshQueue(); else this.updateVideoQueue('next');
-            setTimeout(() => { this.playActiveVideo(); this.isSwitching = false; }, 250);
-        } catch (e) { console.error(e); this.isSwitching = false; }
-    }
-    playActiveVideo() {
-        const domIndex = this.refs.activeVideoIndex.value;
-        const videos = document.querySelectorAll('video');
-        if (!videos.length || !videos[domIndex]) return;
-        videos.forEach((v, i) => { if (i !== domIndex) { v.pause(); v.muted = true; v.currentTime = 0; } });
-        const activeVideo = videos[domIndex];
-        activeVideo.muted = false;
-        if (activeVideo.ended) activeVideo.currentTime = 0;
-        const playPromise = activeVideo.play();
-        if (playPromise !== undefined) {
-            playPromise.then(() => {}).catch(() => { activeVideo.muted = true; activeVideo.play().catch(() => {}); });
-        }
-        this.checkAndSetVideoClass(activeVideo);
-    }
-    checkAndSetVideoClass(video) {
-        if (!video.hasAttribute('data-class-updated')) {
-            const updateClass = () => { this.updateVideoClass(video); video.setAttribute('data-class-updated', 'true'); };
-            if (video.readyState >= 1) updateClass();
-            else video.addEventListener('loadedmetadata', updateClass, { once: true });
-        }
-    }
-    onVideoReady(index) {
-        this.refs.videoLoadStates.value[index] = true;
-        const video = document.querySelectorAll('video')[index];
-        if (!video) return;
-        if (index === this.refs.activeVideoIndex.value) { if (video.paused) video.play().catch(() => {}); } 
-        else { video.pause(); video.muted = true; }
-    }
-    onVideoLoaded(index) { this.refs.videoLoadStates.value[index] = true; }
-    handleTouchStart(e) { if (this.isSwitching) return; this.touchActive = true; this.touchStartY = e.touches[0].clientY; }
-    handleTouchEnd(e) {
-        if (!this.touchActive) return;
-        const deltaY = e.changedTouches[0].clientY - this.touchStartY;
-        if (Math.abs(deltaY) > 60) { if (deltaY < 0) this.nextVideo(); else this.prevVideo(); }
-        this.touchActive = false;
-    }
-    getCurrentlyPlayingVideo() { const videos = document.querySelectorAll('video'); return videos[this.refs.activeVideoIndex.value] || null; }
-    setLoadMoreVideos(callback) { this.loadMoreVideos = callback; }
-    exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
-    previewForward() { const v = this.getCurrentlyPlayingVideo(); if (v && v.duration) { const step = Math.max(5, v.duration * 0.05); v.currentTime = Math.min(v.duration, v.currentTime + step); } }
-    previewBackward() { const v = this.getCurrentlyPlayingVideo(); if (v && v.duration) { const step = Math.max(5, v.duration * 0.05); v.currentTime = Math.max(0, v.currentTime - step); } }
-    seekTo(ratio) { const v = this.getCurrentlyPlayingVideo(); if (v && v.duration) v.currentTime = v.duration * ratio; }
-    initEventListeners() {
-        window.addEventListener('wheel', (e) => { if (this.isSwitching || Math.abs(e.deltaY) < 30) return; if (e.deltaY > 0) this.nextVideo(); else if (e.deltaY < 0) this.prevVideo(); });
-        window.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; if (this.isSwitching) return; if (e.key === 'ArrowDown') this.nextVideo(); else if (e.key === 'ArrowUp') this.prevVideo(); });
-        window.addEventListener('dblclick', (e) => {
-            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-            const v = this.getCurrentlyPlayingVideo();
-            if (!document.fullscreenElement && v) { if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); } 
-            else if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
         });
-    }
-}
-
-class SearchManager {
-    constructor(state, refs) { this.state = state; this.refs = refs; }
-    async doSearch() {
-        const start = performance.now()
-        this.state.searchKeyword = this.refs.searchKeyword.value.trim()
-        this.state.excludeKeyword = this.refs.excludeKeyword.value.trim()
-        this.state.searchScore = this.refs.searchScore.value
-        this.state.sortBy = this.refs.sortBy.value
-        this.state.searchSize = (this.refs.sizeValue.value && this.refs.sizeValue.value > 0) ? `${this.refs.sizeOperator.value}:${this.refs.sizeValue.value}` : 0
-        this.state.page = 1; this.refs.currentIndex.value = 0; this.refs.showSearch.value = false;
         
-        const params = []
-        if (this.state.searchKeyword) params.push(`search=${encodeURIComponent(this.state.searchKeyword)}`)
-        if (this.state.excludeKeyword) params.push(`exclude=${encodeURIComponent(this.state.excludeKeyword)}`)
-        if (this.state.searchScore > 0) params.push(`score=${this.state.searchScore}`)
-        if (this.state.searchSize !== 0) params.push(`size=${this.state.searchSize}`)
-        
-        const resp = await axios.get(`/dyfn/videos/count${params.length ? '?' + params.join('&') : ''}`)
-        this.state.totalVideos = resp.data.total || 0; this.state.totalpage = this.state.totalVideos;
-        
-        this.updateUrlParams(); this.showSearchHint();
-        await this.loadVideosCallback(false, 0);
-        this.refs.searchTimeMsg.value = '筛选完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒'
-        setTimeout(() => { this.refs.searchTimeMsg.value = '' }, 3000)
-    }
-    showSearchHint() {
-        const conditions = []
-        if (this.state.searchKeyword) conditions.push(`包含: "${this.state.searchKeyword}"`)
-        if (this.state.excludeKeyword) conditions.push(`排除: "${this.state.excludeKeyword}"`)
-        if (this.state.sortBy === 'filename') conditions.push(`纯文件名排序`)
-        if (this.state.sortBy === 'path') conditions.push(`绝对路径排序`)
-        if (this.state.searchScore > 0) conditions.push(`评分: ${this.state.searchScore}分`)
-        if (this.state.searchSize !== 0) {
-            const [op, val] = this.state.searchSize.split(':');
-            conditions.push(`大小: ${op === 'lte' ? '≤' : op === 'gte' ? '≥' : '='}${val}MB`)
-        }
-        if (conditions.length > 0) this.refs.searchTimeMsg.value = `当前条件: ${conditions.join(', ')}`
-    }
-    updateUrlParams() {
-        const url = new URL(window.location);
-        const mapping = { 'search': 'searchKeyword', 'exclude': 'excludeKeyword', 'score': 'searchScore', 'size': 'searchSize', 'sort_by': 'sortBy' };
-        for (let [k, stateKey] of Object.entries(mapping)) {
-            if (this.state[stateKey] && this.state[stateKey] !== 0) url.searchParams.set(k, this.state[stateKey]);
-            else url.searchParams.delete(k);
-        }
-        window.history.pushState({}, '', url);
-    }
-    loadFromUrlParams() {
-        const urlParams = new URLSearchParams(window.location.search);
-        let hasParams = false;
-        if (urlParams.get('search')) { this.refs.searchKeyword.value = this.state.searchKeyword = urlParams.get('search'); hasParams = true; }
-        if (urlParams.get('exclude')) { this.refs.excludeKeyword.value = this.state.excludeKeyword = urlParams.get('exclude'); hasParams = true; }
-        if (urlParams.get('score')) { this.refs.searchScore.value = this.state.searchScore = parseInt(urlParams.get('score')); hasParams = true; }
-        if (urlParams.get('sort_by')) { this.refs.sortBy.value = this.state.sortBy = urlParams.get('sort_by'); hasParams = true; }
-        if (urlParams.get('size')) {
-            const sizeParam = urlParams.get('size');
-            if (sizeParam.includes(':')) {
-                const [op, val] = sizeParam.split(':');
-                this.refs.sizeOperator.value = op; this.refs.sizeValue.value = parseInt(val); this.state.searchSize = sizeParam;
-            } else {
-                this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = parseInt(sizeParam); this.state.searchSize = `lte:${sizeParam}`;
+        const dragEnabledId = ref(null); let dragIndex = null;
+        function enableDrag(item) { dragEnabledId.value = item; }
+        function disableDrag() { dragEnabledId.value = null; }
+        function onDragStart(e, idx) { dragIndex = idx; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.classList.add('is-dragging'), 0); }
+        function onDragEnd(e) { e.target.classList.remove('is-dragging'); dragIndex = null; disableDrag(); }
+        function onDrop(e, dropIndex) {
+            if (dragIndex !== null && dragIndex !== dropIndex) {
+                const item = panelOrder.value.splice(dragIndex, 1)[0];
+                panelOrder.value.splice(dropIndex, 0, item);
+                localStorage.setItem('dy_panel_order', JSON.stringify(panelOrder.value));
             }
-            hasParams = true;
         }
-        return hasParams;
-    }
-    clearSearch() {
-        this.refs.searchKeyword.value = this.state.searchKeyword = ''; this.refs.excludeKeyword.value = this.state.excludeKeyword = '';
-        this.refs.searchScore.value = this.state.searchScore = 0; this.refs.sortBy.value = this.state.sortBy = '';
-        this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = '';
-        this.state.searchSize = 0; this.state.page = 1; this.refs.currentIndex.value = 0;
-        const url = new URL(window.location);
-        ['search', 'exclude', 'score', 'size', 'sort_by'].forEach(k => url.searchParams.delete(k));
-        window.history.pushState({}, '', url);
-    }
-    setLoadVideosCallback(cb) { this.loadVideosCallback = cb; }
-    initPopstateListener() {
-        window.addEventListener('popstate', () => {
-            if (this.loadFromUrlParams()) this.doSearch();
-            else { this.clearSearch(); this.loadVideosCallback(false, 0); }
-        })
-    }
-}
 
-class ConfigManager {
-    constructor(refs) { this.refs = refs; }
-    async fetchPaths() { const resp = await axios.get('/dyfn/video-paths'); this.refs.pathList.value = resp.data.paths || []; }
-}
+        const tagGroups = ref([]);
+        const globalTagInput = ref(''), dragGroupEnabledId = ref(null);
+        const filenameTokens = ref([]), currentCustomTags = ref([]), quickBlacklistInput = ref('');
+        const autoTags = ref([]); 
+        const autoSaveStatus = ref(''); 
+        let renameTimeoutId = null, pendingRenameData = null, tagSaveTimeout = null;
+        const dragType = ref(null), draggedGroupIdx = ref(null), dragOverGroupIdx = ref(null), draggedTagInfo = ref(null), dragOverTagInfo = ref(null), dragDropPosition = ref('');
+        
+        const showConfig = ref(false), showHistory = ref(false), renameHistory = ref([]);
+        const newPath = ref(''), newBlacklistWord = ref(''), exportLimit = ref('0');
+        const isExecuting = ref(false), executeSuccess = ref(false), executeMsg = ref('');
+
+        function getSyncKey(filename) {
+            if (!filename) return '';
+            let s = filename.replace(/\.[^.]+$/, ''); 
+            s = s.replace(/(#a_|#)[\u4e00-\u9fa5a-zA-Z0-9_]+/g, ''); 
+            s = s.replace(/\d+/g, ''); 
+            s = s.replace(/[【】\[\]\(\)\-_，。！!]/g, ' '); 
+            return s.trim().replace(/\s{2,}/g, ' ');
+        }
+
+        function recordSyncAction(tag, action) {
+            if (!props.syncEnabled || !props.currentVideo) return;
+            const key = getSyncKey(props.currentVideo.filename);
+            if (!key) return;
+            
+            let mem = [...props.syncMemory];
+            let recordIdx = mem.findIndex(r => r.key === key);
+            let record;
+            if (recordIdx === -1) {
+                record = { key, added: [], removed: [], ts: Date.now() };
+                mem.unshift(record);
+            } else {
+                record = { ...mem[recordIdx], ts: Date.now() };
+                mem.splice(recordIdx, 1);
+                mem.unshift(record);
+            }
+            
+            if (action === 'add') {
+                if (!record.added.includes(tag)) record.added.push(tag);
+                record.removed = record.removed.filter(t => t !== tag);
+            } else if (action === 'remove') {
+                if (!record.removed.includes(tag)) record.removed.push(tag);
+                record.added = record.added.filter(t => t !== tag);
+            }
+            
+            if (mem.length > 5) mem = mem.slice(0, 5);
+            emit('update-sync', mem);
+        }
+
+        onMounted(async () => {
+            const tgRes = await window.DyAPI.getTagGroups();
+            if (tgRes && tgRes.groups && tgRes.groups.length > 0) tagGroups.value = tgRes.groups;
+            else tagGroups.value = [{ id: 'g_1', tags: [] }]; 
+        });
+
+        watch(tagGroups, (newVal) => { 
+            if (tagGroups.value.length > 0) { clearTimeout(tagSaveTimeout); tagSaveTimeout = setTimeout(() => { window.DyAPI.saveTagGroups(newVal); }, 1500); }
+        }, { deep: true });
+
+        const realFilename = computed(() => {
+            if (!props.currentVideo) return '';
+            const dbName = props.currentVideo.filename || '';
+            const physicalName = props.currentVideo.detail ? props.currentVideo.detail.split(/[\\/]/).pop() : '';
+            if (physicalName.includes('#a_') && !dbName.includes('#a_')) return physicalName;
+            return dbName;
+        });
+
+        watch(() => props.currentVideo?.id, async (newId) => {
+            if (pendingRenameData) executePendingRename(); 
+            if(newId) {
+                currentCustomTags.value = []; autoTags.value = []; filenameTokens.value = []; autoSaveStatus.value = '';
+                
+                if (props.currentVideo) {
+                    const rawFileName = realFilename.value;
+                    const extractedTags = rawFileName.match(/#a_[\u4e00-\u9fa5a-zA-Z0-9_]+|#[\u4e00-\u9fa5a-zA-Z0-9_]+/g);
+                    if (extractedTags) {
+                        extractedTags.forEach(t => {
+                            if (t.startsWith('#a_')) {
+                                const tagBody = t.substring(3).trim();
+                                if (tagBody && !autoTags.value.find(x => x.text === tagBody)) autoTags.value.push({ text: tagBody, active: true });
+                            } else if (t.startsWith('#')) {
+                                let tagBody = t.substring(1).trim(); 
+                                if (tagBody && !currentCustomTags.value.includes(tagBody)) currentCustomTags.value.push(tagBody);
+                            }
+                        });
+                    }
+
+                    if (props.syncEnabled) {
+                        const key = getSyncKey(rawFileName);
+                        const record = props.syncMemory.find(r => r.key === key);
+                        if (record) {
+                            let isApplied = false;
+                            record.added.forEach(t => {
+                                if (!currentCustomTags.value.includes(t)) {
+                                    currentCustomTags.value.push(t);
+                                    isApplied = true;
+                                }
+                            });
+                            record.removed.forEach(t => {
+                                const oldLen = currentCustomTags.value.length;
+                                currentCustomTags.value = currentCustomTags.value.filter(ct => ct !== t);
+                                if(oldLen !== currentCustomTags.value.length) isApplied = true;
+                                
+                                const autoT = autoTags.value.find(at => at.text === t);
+                                if (autoT && autoT.active) {
+                                    autoT.active = false;
+                                    isApplied = true;
+                                }
+                            });
+                            if (isApplied) vant.showToast({message: '⚡ 已套用同源修改', position: 'top', duration: 1000});
+                        }
+                    }
+                    
+                    const cleanForTokenize = rawFileName.replace(/(#a_|#)[\u4e00-\u9fa5a-zA-Z0-9_]+/g, '').replace(/\s{2,}/g, ' ').trim();
+                    try {
+                        const res = await window.DyAPI.tokenize(cleanForTokenize);
+                        if(res.success) { 
+                            const validWords = res.words.filter(w => !props.blacklist.includes(w)); 
+                            filenameTokens.value = validWords.map(w => ({ text: w, active: true, isOnly: false })); 
+                        }
+                    } catch(e) {}
+                }
+            }
+        });
+
+        function isTagActive(tag) { return currentCustomTags.value.includes(tag) || autoTags.value.some(at => at.text === tag && at.active); }
+
+        function handlePresetTagClick(tag) {
+            const autoTag = autoTags.value.find(at => at.text === tag);
+            if (autoTag && autoTag.active) {
+                autoTag.active = false; 
+                recordSyncAction(tag, 'remove');
+                return;
+            }
+            const idx = currentCustomTags.value.indexOf(tag);
+            if (idx > -1) {
+                currentCustomTags.value.splice(idx, 1);
+                recordSyncAction(tag, 'remove');
+            } else {
+                currentCustomTags.value.push(tag);
+                recordSyncAction(tag, 'add');
+            }
+        }
+        
+        function toggleAutoTag(t) { 
+            t.active = !t.active; 
+            recordSyncAction(t.text, t.active ? 'add' : 'remove');
+        }
+
+        const generatedFilename = computed(() => {
+            if (!props.currentVideo) return '';
+            let ext = ''; const match = (props.currentVideo.detail || '').match(/\.[^.]+$/); if (match) ext = match[0];
+            let originalNameBody = realFilename.value;
+            if (originalNameBody.endsWith(ext)) originalNameBody = originalNameBody.slice(0, -ext.length);
+
+            let cleanBase = originalNameBody.replace(/(#a_|#)[\u4e00-\u9fa5a-zA-Z0-9_]+/g, '').replace(/\s{2,}/g, ' ').trim();
+            const activeTokens = filenameTokens.value.filter(t => t.active);
+            const isOnlyMode = (activeTokens.length === 1 && activeTokens[0].isOnly);
+            
+            let base = '';
+            if (isOnlyMode) base = activeTokens[0].text;
+            else {
+                base = cleanBase;
+                props.blacklist.forEach(bw => { if (bw.trim()) base = base.split(bw).join(''); });
+                filenameTokens.value.forEach(t => { if (!t.active) base = base.split(t.text).join(''); });
+                base = base.replace(/\[\s*\]|\(\s*\)|【\s*】/g, '').replace(/\.{2,}/g, '.').replace(/\s{2,}/g, ' ').replace(/^[.\-_ ]+|[.\-_ ]+$/g, ''); 
+            }
+            
+            const activeAutoTagsStr = autoTags.value.filter(t => t.active).map(t => '#a_' + t.text).join(' ');
+            const activeTagsStr = currentCustomTags.value.map(tag => '#' + tag).join(' ');
+            let finalBody = [base, activeAutoTagsStr, activeTagsStr].filter(Boolean).join(' ');
+            
+            if (finalBody) {
+                const words = finalBody.split(/\s+/); const seenTags = new Set(); const deduplicatedWords = [];
+                for (let w of words) { 
+                    if (w.startsWith('#a_') || w.startsWith('#')) { 
+                        const baseTag = w.replace(/^(#a_|#)/, '');
+                        if (!seenTags.has(baseTag)) { seenTags.add(baseTag); deduplicatedWords.push(w); } 
+                    } else { deduplicatedWords.push(w); } 
+                }
+                finalBody = deduplicatedWords.join(' ');
+            }
+            if (!finalBody) return props.currentVideo.filename; 
+            return finalBody + ext;
+        });
+
+        watch(generatedFilename, (newName) => {
+            if (!props.currentVideo || !props.currentVideo.id) return;
+            if (newName === props.currentVideo.filename) { 
+                if (renameTimeoutId) clearTimeout(renameTimeoutId); 
+                pendingRenameData = null; return; 
+            }
+            if (renameTimeoutId) clearTimeout(renameTimeoutId);
+            pendingRenameData = { video_id: props.currentVideo.id, new_filename: newName };
+            autoSaveStatus.value = 'pending'; 
+            renameTimeoutId = setTimeout(() => { executePendingRename(); }, 2000);
+        });
+
+        function setAsOnlyToken(word) { 
+            const target = filenameTokens.value.find(t => t.text === word);
+            if (target && target.isOnly) { filenameTokens.value.forEach(t => { t.active = true; t.isOnly = false; }); } 
+            else { filenameTokens.value.forEach(t => { t.active = (t.text === word); t.isOnly = (t.text === word); }); currentCustomTags.value = []; autoTags.value.forEach(at => at.active = false); }
+        }
+        function toggleToken(t) { t.active = !t.active; filenameTokens.value.forEach(tok => tok.isOnly = false); }
+        function restoreOriginalName() { filenameTokens.value.forEach(t => { t.active = true; t.isOnly = false; }); currentCustomTags.value = []; autoTags.value.forEach(at => at.active = true); }
+        async function addQuickBlacklist() { const kw = quickBlacklistInput.value.trim(); if(kw) { emit('add-blacklist', kw); filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); quickBlacklistInput.value = ''; } }
+        async function quickBlacklistToken(kw) { emit('add-blacklist', kw); filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); }
+
+        function enableGroupDrag(id) { dragGroupEnabledId.value = id; }
+        function disableGroupDrag() { dragGroupEnabledId.value = null; }
+        function onGroupDragStart(e, idx) { dragType.value = 'group'; draggedGroupIdx.value = idx; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.classList.add('is-dragging-group'), 0); }
+        function onGroupDragEnd(e) { e.target.classList.remove('is-dragging-group'); dragType.value = null; draggedGroupIdx.value = null; disableGroupDrag(); }
+        function onTagDragStart(e, gIdx, tIdx) { dragType.value = 'tag'; draggedTagInfo.value = { gIdx, tIdx }; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.classList.add('is-dragging-tag'), 0); }
+        function onTagDragEnd(e) { e.target.classList.remove('is-dragging-tag'); dragType.value = null; draggedTagInfo.value = null; dragOverTagInfo.value = null; }
+        function onTagDragOver(e, gIdx, tIdx) { if (dragType.value !== 'tag') return; dragOverGroupIdx.value = null; dragOverTagInfo.value = { gIdx, tIdx }; const rect = e.target.getBoundingClientRect(); dragDropPosition.value = e.clientX < (rect.left + rect.width / 2) ? 'left' : 'right'; }
+        function onGroupDragOver(e, gIdx) { if (dragType.value === 'group') dragOverGroupIdx.value = gIdx; else if (dragType.value === 'tag') { dragOverGroupIdx.value = gIdx; dragOverTagInfo.value = null; } }
+        function onTagDragEnter(gIdx) { dragOverGroupIdx.value = gIdx; }
+        function onTagDragLeave(gIdx) { if(dragOverGroupIdx.value === gIdx) dragOverGroupIdx.value = null; }
+        function onGroupDrop(e, targetGIdx) { dragOverGroupIdx.value = null; if (dragType.value === 'group' && draggedGroupIdx.value !== null) { const sourceIdx = draggedGroupIdx.value; if (sourceIdx !== targetGIdx) { const item = tagGroups.value.splice(sourceIdx, 1)[0]; tagGroups.value.splice(targetGIdx, 0, item); } } else if (dragType.value === 'tag' && draggedTagInfo.value) { const { gIdx: sourceGIdx, tIdx: sourceTIdx } = draggedTagInfo.value; if (sourceGIdx !== targetGIdx) { const tag = tagGroups.value[sourceGIdx].tags.splice(sourceTIdx, 1)[0]; tagGroups.value[targetGIdx].tags.push(tag); } } dragType.value = null; }
+        function onTagDrop(e, targetGIdx, targetTIdx) { if (dragType.value === 'tag' && draggedTagInfo.value) { const { gIdx: sourceGIdx, tIdx: sourceTIdx } = draggedTagInfo.value; if (sourceGIdx === targetGIdx && sourceTIdx === targetTIdx) return; const tag = tagGroups.value[sourceGIdx].tags.splice(sourceTIdx, 1)[0]; let insertIdx = targetTIdx; if (sourceGIdx === targetGIdx && sourceTIdx < targetTIdx) insertIdx -= 1; if (dragDropPosition.value === 'right') insertIdx += 1; tagGroups.value[targetGIdx].tags.splice(insertIdx, 0, tag); } dragType.value = null; dragOverTagInfo.value = null; }
+
+        function addEmptyGroup() { tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); }
+        function removeTagGroup(idx) { if (confirm('确定删除此分区及内部所有Tag吗？')) { tagGroups.value.splice(idx, 1); } }
+        function addGlobalTag() { const tag = globalTagInput.value.replace(/#/g, '').trim(); if (!tag) return; if (!currentCustomTags.value.includes(tag)) currentCustomTags.value.push(tag); if (tagGroups.value.length === 0) tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); let exists = false; for(let g of tagGroups.value) { if(g.tags.includes(tag)) { exists = true; break; } } if(!exists) { tagGroups.value[0].tags.push(tag); } globalTagInput.value = ''; recordSyncAction(tag, 'add'); }
+        function removeSavedTagFromGroup(gIdx, tIdx) { const tag = tagGroups.value[gIdx].tags[tIdx]; tagGroups.value[gIdx].tags.splice(tIdx, 1); const cIdx = currentCustomTags.value.indexOf(tag); if (cIdx > -1) { currentCustomTags.value.splice(cIdx, 1); recordSyncAction(tag, 'remove'); } }
+
+        async function executePendingRename() {
+            if (!pendingRenameData) return;
+            const dataToSave = { ...pendingRenameData }; pendingRenameData = null;
+            if (renameTimeoutId) { clearTimeout(renameTimeoutId); renameTimeoutId = null; }
+            if (props.currentVideo && props.currentVideo.id === dataToSave.video_id) props.currentVideo.filename = dataToSave.new_filename;
+            else { const v = props.videos.find(vid => vid.id === dataToSave.video_id); if (v) v.filename = dataToSave.new_filename; }
+            autoSaveStatus.value = 'pending';
+            try {
+                const res = await window.DyAPI.queueRename(dataToSave);
+                if (res.success && props.currentVideo && props.currentVideo.id === dataToSave.video_id) { autoSaveStatus.value = 'success'; setTimeout(() => { if(autoSaveStatus.value === 'success') autoSaveStatus.value = ''; }, 2000); } 
+                else { autoSaveStatus.value = ''; }
+            } catch (e) { autoSaveStatus.value = ''; }
+        }
+
+        async function executeRenameQueue(mode = 'queue_only') {
+            if (pendingRenameData) { clearTimeout(renameTimeoutId); await executePendingRename(); }
+            if (isExecuting.value) return;
+            try {
+                isExecuting.value = true; executeSuccess.value = false; executeMsg.value = '执行中...';
+                const res = await window.DyAPI.executeRenames(mode);
+                isExecuting.value = false;
+                if (res.success) { executeMsg.value = res.msg; executeSuccess.value = true; emit('reload-videos', false, props.currentIndex); } 
+                else { executeMsg.value = '执行异常'; executeSuccess.value = true; }
+            } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
+        }
+        
+        async function retryFailedQueue() {
+            if (isExecuting.value) return;
+            try {
+                isExecuting.value = true; executeSuccess.value = false; executeMsg.value = '重置中...';
+                const res = await window.DyAPI.retryFailed();
+                isExecuting.value = false;
+                if (res.success) { executeMsg.value = res.msg; executeSuccess.value = true; } else { executeMsg.value = '重置失败'; executeSuccess.value = true; }
+            } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
+        }
+
+        const addPath = () => emit('add-path', newPath.value);
+        const indexPath = (p) => emit('index-path', p);
+        const indexPath_del = (p) => emit('index-path-del', p);
+        const addBlacklistWord = () => emit('add-blacklist', newBlacklistWord.value);
+        const removeBlacklistWord = (idx) => emit('remove-blacklist', idx);
+        const openConfigPanel = async () => { showConfig.value = true; };
+        const openHistoryPanel = async () => { showHistory.value = true; const res = await window.DyAPI.getRenameHistory(); if (res && res.success) renameHistory.value = res.history; }
+        
+        async function handleRestore(logId) {
+            vant.showLoadingToast({ message: '正在撤销恢复...', forbidClick: true, duration: 0 });
+            const res = await window.DyAPI.restoreRename(logId); vant.closeToast();
+            if (res && res.success) { vant.showSuccessToast('文件已恢复'); await openHistoryPanel(); emit('reload-videos', false, props.currentIndex); } else { vant.showFailToast(res?.msg || '恢复失败'); }
+        }
+
+        function exportTags() { const dataStr = JSON.stringify(tagGroups.value, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `dy_tags_backup_${new Date().getTime()}.json`; a.click(); URL.revokeObjectURL(url); vant.showSuccessToast('配置导出成功'); }
+        function triggerImportTags() { document.getElementById('import-tags-file').click(); }
+        function importTags(event) {
+            const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = (e) => { try { const parsed = JSON.parse(e.target.result); if (Array.isArray(parsed)) { tagGroups.value = parsed; window.DyAPI.saveTagGroups(parsed); vant.showSuccessToast('导入成功'); } else vant.showFailToast('格式不正确'); } catch(err) { vant.showFailToast('解析失败'); } event.target.value = ''; };
+            reader.readAsText(file);
+        }
+        function exportCSV() {
+            const params = [];
+            if (props.searchState.searchKeyword) params.push(`search=${encodeURIComponent(props.searchState.searchKeyword)}`);
+            if (props.searchState.excludeKeyword) params.push(`exclude=${encodeURIComponent(props.searchState.excludeKeyword)}`);
+            if (props.searchState.searchScore > 0) params.push(`score=${props.searchState.searchScore}`);
+            if (props.searchState.searchSize !== 0) params.push(`size=${props.searchState.searchSize}`);
+            if (props.searchState.sortBy) params.push(`sort_by=${props.searchState.sortBy}`);
+            if (exportLimit.value !== '0') params.push(`limit=${exportLimit.value}`);
+            window.open(`/dyfn/sys_tags/export_csv?${params.join('&')}`, '_blank');
+        }
+        function triggerImportCSV() { document.getElementById('import-csv-data-file').click(); }
+        async function importCSVFile(event) {
+            const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('file', file);
+            vant.showLoadingToast({ message: '正在导入...', forbidClick: true, duration: 0 });
+            try { const res = await axios.post('/dyfn/sys_tags/import_csv', formData, { headers: { 'Content-Type': 'multipart/form-data' } }); vant.closeToast(); if (res.data.success) vant.showSuccessToast(res.data.msg); else vant.showFailToast(res.data.msg || '导入失败'); } catch (err) { vant.closeToast(); vant.showFailToast('网络或服务器异常'); }
+            event.target.value = '';
+        }
+
+        expose({ openConfigPanel, openHistoryPanel, autoSaveStatus, restoreOriginalName });
+
+        return {
+            panelOrder, dragEnabledId, onDragStart, onDragEnd, onDrop, enableDrag, disableDrag,
+            autoTags, toggleAutoTag, tagGroups, globalTagInput, dragGroupEnabledId, filenameTokens, currentCustomTags, quickBlacklistInput, autoSaveStatus, dragType, draggedGroupIdx, dragOverGroupIdx, dragOverTagInfo, dragDropPosition,
+            generatedFilename, setAsOnlyToken, toggleToken, restoreOriginalName, addQuickBlacklist, quickBlacklistToken, enableGroupDrag, disableGroupDrag, onGroupDragStart, onGroupDragEnd, onTagDragStart, onTagDragEnd, onTagDragOver, onGroupDragOver, onTagDragEnter, onTagDragLeave, onGroupDrop, onTagDrop, addEmptyGroup, removeTagGroup, addGlobalTag, removeSavedTagFromGroup, 
+            isTagActive, handlePresetTagClick,
+            showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, isExecuting, executeSuccess, executeMsg,
+            addPath, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, exportTags, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile
+        };
+    }
+};

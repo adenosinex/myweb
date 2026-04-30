@@ -774,7 +774,8 @@ def api_videos_count():
 def index():
     if not os.path.exists(INDEX_FILE): return f"找不到首页文件", 404
     return send_file(INDEX_FILE)
-FILES_TO_SEND = ["moduels/dyfn_extension.py", "pages/media/9dyfn.html"]
+FILES_TO_SEND = ["moduels/media/6dyfn_extension.py", "pages/media/9dyfn.html"]
+
 @dy_bp.route('/skip/api/get_latest_code', methods=['GET'])
 def get_latest_code():
     files_data = {}

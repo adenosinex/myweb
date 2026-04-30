@@ -12,7 +12,11 @@
     <script src="http://192.168.31.197:8100/static/cdn/vue-router4.5.global.js"></script>
     <script src="http://192.168.31.197:8100/static/cdn/vant4.min.js"></script>
     <script src="http://192.168.31.197:8100/static/cdn/axios1.1.min.js"></script>
-    <script src="https://apple.su7.dpdns.org:10443/static/dyfn.js"></script>
+    <script src="https://apple4.su7.dpdns.org:10443/static/dyfn.js"></script>
+    <script src="https://apple4.su7.dpdns.org:10443/static/dyfnhead.js"></script>
+    <script src="https://apple4.su7.dpdns.org:10443/static/dyfnst.js"></script>
+    
+   
 
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #000; color: #fff; }
@@ -23,12 +27,8 @@
         .panel-side { width: 420px; background: #141414; border-left: 1px solid #333; display: flex; flex-direction: column; box-sizing: border-box; z-index: 10; }
         
         .panel-header { padding: 15px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: #1a1a1a; }
-        .panel-content { flex: 1; overflow-y: auto; padding: 15px; }
-
-        .static-controls { margin-bottom: 15px; }
-        .main-action-btns { display: flex; gap: 8px; }
-        .main-action-btns .van-button { flex: 1; font-size: 16px; }
-        .main-action-btns .icon-btn { flex: 0 0 60px; font-size: 22px; padding: 0; }
+        .panel-content { flex: 1; overflow-y: auto; padding: 0; }
+        .icon-btn { flex: 0 0 60px; font-size: 22px; padding: 0; }
 
         .dynamic-sections { padding-top: 5px; }
         .drag-section { position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s; }
@@ -45,8 +45,6 @@
         .drag-handle-group { display: inline-flex; align-items: center; color: #888; cursor: grab; font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); }
         .drag-handle-group:active { cursor: grabbing; color: #fff; background: rgba(255,255,255,0.15); }
 
-        .rename-preview { display: flex; align-items: center; gap: 10px; background: #000; padding: 10px; border-radius: 6px; border: 1px solid #333; }
-        .preview-text { flex: 1; color: #4fc08d; font-weight: bold; word-break: break-all; font-size: 14px; }
         .group-title { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         
         .token-chip, .quick-tag-chip, .auto-tag-chip { display: inline-flex; align-items: center; margin: 4px; border-radius: 4px; font-size: 13px; user-select: none; transition: all 0.2s; overflow: visible; position: relative;}
@@ -67,16 +65,12 @@
         
         .chip-text { padding: 5px 8px; cursor: pointer; }
         .chip-action { padding: 5px 6px; background: rgba(0,0,0,0.2); color: #ffeb3b; font-size: 11px; cursor: pointer; border-left: 1px solid rgba(255,255,255,0.2); }
-        .chip-action:active { background: rgba(0,0,0,0.4); }
         .chip-del { color: #ff4d4f; font-weight: bold; padding: 5px 8px; border-left: 1px solid rgba(255,255,255,0.2); cursor: pointer; background: rgba(0,0,0,0.2); font-size: 11px; border-top-right-radius: 14px; border-bottom-right-radius: 14px; }
-        .chip-del:active { background: rgba(255,0,0,0.3); }
-        
         .token-chip.token-off .chip-action, .token-chip.token-off .chip-del { color: #888; border-color: #444; }
         .quick-tag-chip.tag-on .chip-del { border-left-color: rgba(255,255,255,0.4); }
         
         .tag-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
         .tag-input-row input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; }
-        .tag-input-row input:focus { border-color: #1989fa; }
         .empty-hint { font-size: 12px; color: #666; font-style: italic; }
 
         .search-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
@@ -84,13 +78,9 @@
         .search-modal-content h4 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; color: #fff; font-size: 16px;}
         
         .search-input, .search-select { background: #0a0a0a !important; border: 1px solid #444 !important; color: #fff !important; padding: 8px 12px; border-radius: 6px; width: 100%; box-sizing: border-box; outline: none; transition: border 0.3s; }
-        .search-input:focus, .search-select:focus { border-color: #1989fa !important; }
-        
         .search-btn-confirm { background: #1989fa; border: none; color: #fff; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap;}
-        .search-btn-confirm:hover { opacity: 0.8; }
         .search-btn-confirm:disabled { background: #555; cursor: not-allowed; }
         .search-btn-cancel { background: rgba(255,255,255,0.05); border: 1px solid #444; color: #aaa; padding: 10px 15px; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; transition: background 0.2s; font-size: 14px;}
-        .search-btn-cancel:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
         .van-popup { background: #1a1a1a !important; color: #eee !important; border-top: 1px solid #333; }
         .van-rate__item--full .van-icon { color: #e6a23c !important; }
@@ -115,15 +105,7 @@
                 <div style="color:#fff;font-size:18px;">加载中...</div>
             </div>
 
-            <div v-if="searchTimeMsg" style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.7);color:#fff;text-align:center;z-index:20;padding:8px;">
-                {{ searchTimeMsg }}
-            </div>
-            
-            <div class="video-title" @click="toggleDetail" style="z-index:20; top: 70px; cursor: pointer;">
-                {{ videoIndex ? videoIndex + '. ' : '' }}/{{ state?.totalpage ?? 0 }}  {{ currentVideo?.filename }}
-            </div>
-
-            <div class="video-box" v-show="!isLoading && state?.videos?.length" style="height: 100%; padding:0; display:flex; justify-content:center; align-items:center;">
+            <div class="video-box" v-show="!isLoading && state.videos?.length" style="height: 100%; padding:0; display:flex; justify-content:center; align-items:center;">
                 <div class="video-container" style="height: 100%; width: 100%;">
                     <video
                         v-for="(video, index) in videoQueue" :key="video.id" :ref="'video' + index" :src="getVideoUrl(video.id)"
@@ -134,326 +116,58 @@
                     ></video>
                 </div>
             </div>
-
-            <div v-show="!isLoading && (!state?.videos || state.videos.length === 0)" style="color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;">
+            <div v-show="!isLoading && (!state.videos || state.videos.length === 0)" style="color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;">
                 <div>暂无满足条件的视频</div>
             </div>
         </div>
 
         <div class="panel-side">
-            <div class="panel-header" v-show="!isLoading">
-                <van-button type="primary" icon="search" size="small" @click="showSearch = true">搜索</van-button>
-                <div style="display:flex; gap:6px;">
-                    <van-button type="warning" icon="clock-o" size="small" @click="openHistory">日志</van-button>
-                    <van-button type="info" icon="clipboard" size="small" @click="searchFromClipboard">剪贴板</van-button>
-                    <van-button type="default" icon="setting" size="small" @click="openConfig">配置</van-button>
-                    <van-button type="default" icon="replay" size="small" @click="indexPathq">更新</van-button>
-                </div>
+            <header-panel
+                ref="headerRef"
+                :state="state"
+                :video-index="videoIndex"
+                :totalpage="state.totalpage"
+                :current-video="currentVideo"
+                :current-video-score="currentVideo?.score"
+                :last-like-type="lastLikeType"
+                :save-status="tagPanelRef?.autoSaveStatus"
+                :sync-enabled="syncEnabled"
+                :sync-count="syncMemory.length"
+                @action="handleAction"
+                @jump="jumpTo"
+                @update-score="handleUpdateScore"
+                @trigger-search="loadVideos(false, 0)"
+                @open-history="tagPanelRef?.openHistoryPanel()"
+                @open-config="tagPanelRef?.openConfigPanel()"
+                @open-stats="statsPanelRef?.analyzeData()"
+                @refresh-all="refreshAllPaths"
+                @restore-name="tagPanelRef?.restoreOriginalName()"
+                @toggle-sync="saveSyncState"
+                @clear-sync="clearSyncMemory"
+            ></header-panel>
+
+            <div class="panel-content" v-show="!isLoading && state.videos?.length">
+                <tag-panel 
+                    ref="tagPanelRef"
+                    :current-video="currentVideo" 
+                    :videos="state.videos" 
+                    :blacklist="blacklist"
+                    :current-index="currentIndex"
+                    :search-state="state"
+                    :path-list="pathList"
+                    :sync-enabled="syncEnabled"
+                    :sync-memory="syncMemory"
+                    @reload-videos="(append, idx) => loadVideos(append, idx)"
+                    @add-blacklist="addBlacklistWord"
+                    @remove-blacklist="removeBlacklistWord"
+                    @add-path="addPath"
+                    @index-path="indexPath"
+                    @index-path-del="indexPath_del"
+                    @update-sync="updateSyncMemory"
+                ></tag-panel>
             </div>
-
-            <div class="panel-content" v-show="!isLoading && state?.videos?.length">
-                <div class="static-controls">
-                    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid #333;">
-                        <span style="font-size: 13px; color: #888;">进度定位:</span>
-                        <input type="number" v-model="jumpTarget" placeholder="序号" style="width: 70px; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #fff; padding: 4px 6px; border-radius: 4px; text-align: center; font-size: 13px; outline: none;" @keyup.enter="jumpTo" />
-                        <van-button type="primary" size="small" @click="jumpTo" style="padding: 0 12px;">跳转</van-button>
-                        <span style="font-size: 12px; color: #666; margin-left: auto;">当前: {{ videoIndex }} / {{ state?.totalpage ?? 0 }}</span>
-                    </div>
-
-                    <div class="main-action-btns">
-                        <van-button class="icon-btn" id="dislike-button" title="不喜欢 (快捷键 X)" type="default" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike">
-                            <span v-if="currentVideo?.score === 1" style="color:#222;">&#x1F5A4;</span>
-                            <span v-else style="color:#888;">&#x1F5A4;</span>
-                        </van-button>
-                        <van-button type="primary" @click="prevVideo">上一个</van-button>
-                        <van-button type="primary" @click="nextVideo">下一个</van-button>
-                        <van-button class="icon-btn" id="like-button" title="喜欢 (快捷键 Z)" type="default" :class="{ 'btn-active': lastLikeType === 'like' }" @click="toggleLike">
-                            <span v-if="currentVideo?.score === 5" style="color:#ff3b30;">&#x2764;</span>
-                            <span v-else-if="currentVideo?.score === 1" style="color:#170201;">&#x2764;</span>
-                            <span v-else style="color:#888;">&#x2764;</span>
-                        </van-button>
-                    </div>
-                </div>
-
-                <div class="dynamic-sections">
-                    <div v-for="(item, idx) in panelOrder" :key="item"
-                         class="drag-section"
-                         :draggable="dragEnabledId === item"
-                         @dragstart="onDragStart($event, idx)"
-                         @dragend="onDragEnd"
-                         @dragover.prevent
-                         @dragenter.prevent
-                         @drop="onDrop($event, idx)">
-                         
-                        <div class="drag-handle" @mousedown="enableDrag(item)" @mouseup="disableDrag" @mouseleave="disableDrag" title="按住拖拽排版大模块">⋮⋮</div>
-
-                        <div class="section-content">
-                            <div v-if="item === 'preview'">
-                                <div class="group-title">自动保存状态预览</div>
-                                <div class="rename-preview" style="margin:0;">
-                                    <span class="preview-text">{{ generatedFilename }}</span>
-                                    <div style="display: flex; align-items: center; position: relative; gap: 8px;">
-                                        <van-button type="default" size="mini" @click="restoreOriginalName" style="padding: 0 6px; color: #888; background: transparent; border-color: #444;" title="取消所有修改，恢复初始名">恢复原名</van-button>
-                                        <div style="width: 40px; display: flex; justify-content: flex-end; position: relative;">
-                                            <span v-if="autoSaveStatus === 'pending'" style="color:#e6a23c; font-size:12px; white-space:nowrap;">待保存...</span>
-                                            <span v-if="autoSaveStatus === 'success'" style="position: absolute; right: 0; color:#4fc08d; font-size:18px; font-weight:bold;">✔</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-else-if="item === 'tokens'">
-                                <div class="group-title">1. 文件名词块 (点字黑化剔除，双击[全]撤销独占)</div>
-                                <div style="min-height: 30px;">
-                                    <span v-if="filenameTokens.length === 0" class="empty-hint">分词中或无核心词...</span>
-                                    <span v-for="t in filenameTokens" :key="t.text" 
-                                          class="token-chip" :class="{'token-off': !t.active}">
-                                        <span class="chip-text" @click="toggleToken(t)">{{ t.text }}</span>
-                                        <span class="chip-action" @click.stop="setAsOnlyToken(t.text)" title="点击设为独占，再次点击恢复全部">[全]</span>
-                                        <span class="chip-del" @click.stop="quickBlacklistToken(t.text)" title="打入全局黑名单并剔除">[黑]</span>
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <div v-else-if="item === 'auto_tags'">
-                                <div class="group-title">
-                                    <span>2. 机器提取虚拟 Tag (独立分区，点击一键注销)</span>
-                                </div>
-                                <div style="background: rgba(0,0,0,0.2); border: 1px dashed #553366; border-radius: 6px; padding: 10px; margin-bottom: 10px; min-height: 35px; transition: all 0.2s;">
-                                    <span v-if="autoTags.length === 0" class="empty-hint" style="color:#775588;">未检测到 #a_ 开头的虚拟标签...</span>
-                                    <span v-for="t in autoTags" :key="t.text" 
-                                          class="auto-tag-chip" :class="{'tag-off': !t.active}"
-                                          @click="toggleAutoTag(t)">
-                                        #a_{{ t.text }}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div v-else-if="item === 'tags'">
-                                <div class="group-title">
-                                    <span>3. 人工预设 Tag 分区 (长按可拖拽跨区排序)</span>
-                                </div>
-                                
-                                <div class="tag-input-row" style="margin-bottom:12px;">
-                                    <input type="text" v-model="globalTagInput" placeholder="输入新 Tag (自动进入首区)..." @keyup.enter="addGlobalTag" />
-                                    <van-button type="primary" size="small" @click="addGlobalTag">添加</van-button>
-                                    <van-button type="default" size="small" @click="addEmptyGroup" style="padding: 0 10px;">+ 新区</van-button>
-                                </div>
-                                
-                                <div v-for="(group, gIdx) in tagGroups" :key="group.id" 
-                                     class="tag-group-card"
-                                     :class="{
-                                        'drag-over-group': dragType === 'group' && dragOverGroupIdx === gIdx,
-                                        'drag-over-empty': dragType === 'tag' && dragOverGroupIdx === gIdx && group.tags.length === 0
-                                     }"
-                                     :draggable="dragGroupEnabledId === group.id"
-                                     @dragstart.stop="onGroupDragStart($event, gIdx)"
-                                     @dragend.stop="onGroupDragEnd"
-                                     @dragover.prevent.stop="onGroupDragOver($event, gIdx)"
-                                     @dragenter.prevent="onTagDragEnter(gIdx)"
-                                     @dragleave.prevent="onTagDragLeave(gIdx)"
-                                     @drop.prevent.stop="onGroupDrop($event, gIdx)">
-                                     
-                                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                                        <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag" title="拖拽整个分区上下排序">⋮⋮ 分区</div>
-                                        <span style="color:#ff4d4f; font-size:11px; cursor:pointer;" @click="removeTagGroup(gIdx)">删区</span>
-                                    </div>
-                                    
-                                    <div style="min-height: 35px; padding-bottom: 5px;">
-                                        <span v-if="group.tags.length === 0" class="empty-hint" style="pointer-events: none;">拖拽 Tag 到此收纳...</span>
-                                        <span v-for="(tag, tIdx) in group.tags" :key="tag"
-                                              class="quick-tag-chip" 
-                                              :class="{
-                                                  'tag-on': currentCustomTags.includes(tag) || (currentVideo?.filename || '').includes('#' + tag),
-                                                  'drag-over-tag-left': dragType === 'tag' && dragOverTagInfo?.gIdx === gIdx && dragOverTagInfo?.tIdx === tIdx && dragDropPosition === 'left',
-                                                  'drag-over-tag-right': dragType === 'tag' && dragOverTagInfo?.gIdx === gIdx && dragOverTagInfo?.tIdx === tIdx && dragDropPosition === 'right'
-                                              }"
-                                              draggable="true"
-                                              @dragstart.stop="onTagDragStart($event, gIdx, tIdx)"
-                                              @dragend.stop="onTagDragEnd"
-                                              @dragover.prevent.stop="onTagDragOver($event, gIdx, tIdx)"
-                                              @drop.prevent.stop="onTagDrop($event, gIdx, tIdx)">
-                                              
-                                            <span class="chip-text" @click="toggleQuickTag(tag)">#{{ tag }}</span>
-                                            <span class="chip-del" @click.stop="removeSavedTagFromGroup(gIdx, tIdx)" title="彻底删除">×</span>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-else-if="item === 'blacklist'">
-                                <div class="group-title">4. 快捷拉黑干扰词 (全局生效并立刻剔除)</div>
-                                <div class="tag-input-row" style="margin-bottom:0;">
-                                    <input type="text" v-model="quickBlacklistInput" placeholder="输入不需要的符号或干扰词..." @keyup.enter="addQuickBlacklist" />
-                                    <van-button type="danger" size="small" @click="addQuickBlacklist">拉黑</van-button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <van-popup v-model:show="showDetail" position="bottom" round>
-            <div style="padding:20px;">
-                <h4>视频详情</h4>
-                <p style="color: #ccc;">文件名: <span v-for="keyword in currentVideo?.filename?.split(' ')" :key="keyword" @click="searchDouyin(keyword)" style="cursor:pointer;color:#1989fa;margin-right:5px;">{{ keyword }}</span></p>
-                <p style="color: #ccc;">文件路径: <span style="font-size:12px;color:#888;word-break:break-all;">{{ currentVideo?.detail }}</span></p>
-                <p style="color: #ccc; display: flex; align-items: center; gap: 10px;">评分: <van-rate v-model="currentVideo.score" @change="updateScoreHandler" /></p>
-                <div style="display:flex; gap: 10px; margin-top: 20px;">
-                    <van-button type="success" style="flex:1;" block :url="getVideoUrl(currentVideo?.id)" download>下载到本地</van-button>
-                </div>
-            </div>
-        </van-popup>
-
-        <div v-if="showHistory" class="search-modal" @click.self="showHistory=false">
-            <div class="search-modal-content">
-                <h4>文件名修改日志 (防丢失与回退)</h4>
-                <p style="font-size: 12px; color: #888; margin-bottom: 12px;">记录最近的成功改名操作，可一键撤销恢复原名。</p>
-                <div style="max-height: 50vh; overflow-y: auto; margin-bottom: 10px;">
-                    <div v-if="renameHistory.length === 0" style="text-align: center; color: #666; padding: 20px;">暂无成功执行的改名记录</div>
-                    <div v-for="log in renameHistory" :key="log.id" style="background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12px; color: #888;">{{ log.create_time }}</span>
-                            <span v-if="log.status === 'restored'" style="font-size: 12px; color: #999;">已撤销</span>
-                            <van-button v-if="log.status === 'success'" type="primary" size="mini" @click="handleRestore(log.id)">撤销恢复</van-button>
-                        </div>
-                        <div style="font-size: 13px; color: #ff4d4f; text-decoration: line-through; word-break: break-all;">{{ log.original_name }}</div>
-                        <div style="font-size: 13px; color: #4fc08d; font-weight: bold; margin-top: 4px; word-break: break-all;">{{ log.target_name }}</div>
-                    </div>
-                </div>
-                <button class="search-btn-cancel" @click="showHistory=false">关闭面板</button>
-            </div>
-        </div>
-
-        <div v-if="showSearch" class="search-modal" @click.self="showSearch=false">
-            <div class="search-modal-content">
-                <h4>搜索与筛选</h4>
-                <div style="margin-bottom:15px;">
-                    <input type="text" v-model="searchKeyword" placeholder="包含关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" />
-                    <input type="text" v-model="excludeKeyword" placeholder="排除关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" style="margin-top:8px;" />
-                    <div style="text-align:right; margin-top:6px;"><a href="/?search=random" style="font-size:12px;color:#1989fa;text-decoration:none;">↻ 使用 random 随机打乱</a></div>
-                </div>
-                <div style="margin:15px 0;">
-                    <span style="font-size: 14px; color: #ccc;">排序方式：</span>
-                    <select v-model="sortBy" class="search-select" style="margin-top: 5px;">
-                        <option value="">默认 (入库倒序)</option>
-                        <option value="filename">纯文件名正序 (A-Z)</option>
-                        <option value="path">文件路径正序 (按目录结构)</option>
-                    </select>
-                </div>
-                <div style="margin:15px 0;">
-                    <span style="font-size: 14px; color: #ccc;">评分筛选：</span>
-                    <select v-model="searchScore" class="search-select" style="margin-top: 5px;">
-                        <option value="0">不限 (自动过滤1星)</option>
-                        <option value="1">只看1星 (不喜欢)</option>
-                        <option value="2">2分及以上</option>
-                        <option value="3">3分及以上</option>
-                        <option value="4">4分及以上</option>
-                        <option value="5">仅5分</option>
-                    </select>
-                </div>
-                <div style="margin:15px 0;">
-                    <span style="font-size: 14px; color: #ccc;">文件大小筛选：</span>
-                    <div style="display: flex; gap: 8px; margin-top:5px;">
-                        <select v-model="sizeOperator" class="search-select" style="width:auto; flex: 0 0 80px;">
-                            <option value="lte">≤</option>
-                            <option value="gte">≥</option>
-                            <option value="eq">=</option>
-                        </select>
-                        <div style="display: flex; align-items: center; background: #0a0a0a; border: 1px solid #444; border-radius: 6px; flex: 1;">
-                            <input type="number" v-model="sizeValue" placeholder="大小" class="search-input" style="border:none !important; flex:1;" min="1" />
-                            <span style="color:#888; padding-right:12px; font-size: 14px;">MB</span>
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button class="search-btn-confirm" style="flex:1;" @click="doSearch">确认查询</button>
-                    <button class="search-btn-cancel" style="flex:1; margin-top:0;" @click="showSearch=false">取消</button>
-                </div>
-            </div>
-        </div>
-
-        <div v-show="showConfig" class="search-modal" @click.self="showConfig=false">
-            <div class="search-modal-content">
-                <h4>视频路径配置</h4>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" v-model="newPath" placeholder="输入绝对路径如 D:/videos" class="search-input" @keyup.enter="addPath" />
-                    <button class="search-btn-confirm" style="margin:0; width:auto;" @click="addPath">添加</button>
-                </div>
-                
-                <div style="margin-top:16px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px;">
-                    <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px; border-bottom: 1px dashed #333; padding-bottom: 8px;">
-                        <button @click="indexPath_del(path)" style="background:transparent; border:none; color:#ff4d4f; cursor:pointer;">✖</button>
-                        <span style="flex:1;font-size:12px;word-break:break-all;margin:0 8px; color: #bbb;">{{ path }}</span>
-                        <button @click="indexPath(path)" style="background: rgba(25,137,250,0.2); border:1px solid #1989fa; color:#1989fa; border-radius:4px; padding: 2px 6px; font-size:12px; cursor:pointer;">索引</button>
-                    </div>
-                </div>
-
-                <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
-                    <h4>全局自动黑名单</h4>
-                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; max-height: 100px; overflow-y: auto;">
-                        <span v-for="(word, idx) in blacklist" :key="idx" 
-                              style="background:#333; border: 1px solid #444; color:#ddd; font-size:12px; padding:4px 10px; border-radius:12px; cursor:pointer; transition: background 0.2s;"
-                              @click="removeBlacklistWord(idx)" title="点击移除"
-                              onmouseover="this.style.background='#ff4d4f'; this.style.borderColor='#ff4d4f'; this.style.color='#fff';" 
-                              onmouseout="this.style.background='#333'; this.style.borderColor='#444'; this.style.color='#ddd';">
-                            {{ word }} ×
-                        </span>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" v-model="newBlacklistWord" placeholder="输入需自动屏蔽的词汇" class="search-input" style="flex:1;" @keyup.enter="addBlacklistWord" />
-                        <button class="search-btn-confirm" style="width: auto; padding: 0 15px; margin: 0;" @click="addBlacklistWord">添加</button>
-                    </div>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top:20px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid #222;">
-                        <span style="font-size: 12px; color: #888; margin-bottom: 4px;">重命名与洗库控制台</span>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #e6a23c; color: #e6a23c;" @click="executeRenameQueue('queue_only')" :disabled="isExecuting">
-                                ▶ 执行最新打标
-                            </button>
-                            <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #67c23a; color: #67c23a;" @click="executeRenameQueue('full')" :disabled="isExecuting">
-                                ▶ 全库应用黑名单
-                            </button>
-                        </div>
-                        <button class="search-btn-confirm" style="margin: 0; background: transparent; border: 1px dashed #f56c6c; color: #f56c6c;" @click="retryFailedQueue" :disabled="isExecuting">
-                            ↻ 重试失败的改名任务
-                        </button>
-                        
-                        <div style="text-align: center; height: 20px; margin-top: 4px;">
-                            <span v-if="isExecuting" style="font-size: 12px; color: #e6a23c;">处理中，请稍候...</span>
-                            <span v-if="executeSuccess && !isExecuting" style="color:#4fc08d; font-size:12px; font-weight:bold;">✔ {{ executeMsg }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
-                    <h4>高级数据操作 (CSV & JSON)</h4>
-                    
-                    <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                        <van-button type="primary" size="small" @click="exportTags" style="flex:1; background: #2b2b2b; border-color: #444;">⬇ 导出配置</van-button>
-                        <van-button type="warning" size="small" @click="triggerImportTags" style="flex:1; background: #2b2b2b; border-color: #444; color: #e6a23c;">⬆ 导入配置</van-button>
-                        <input type="file" id="import-tags-file" style="display:none" accept=".json" @change="importTags" />
-                    </div>
-
-                    <div style="background: rgba(25,137,250,0.05); border: 1px solid rgba(25,137,250,0.2); padding: 12px; border-radius: 8px;">
-                        <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">批量打标：导出无Tag文件列表，在CSV第三列添加Tag后即可一键导入。</p>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <select v-model="exportLimit" class="search-select" style="flex: 1;">
-                                <option value="0">全部导出</option>
-                                <option value="100">前 100 条</option>
-                                <option value="500">前 500 条</option>
-                                <option value="1000">前 1000 条</option>
-                            </select>
-                            <button class="search-btn-confirm" style="margin:0; width:auto; background: #1989fa;" @click="exportCSV">导出</button>
-                        </div>
-                        <button class="search-btn-confirm" style="margin-top:8px; width:100%; background: #e6a23c;" @click="triggerImportCSV">上传 CSV 批量导入打标</button>
-                        <input type="file" id="import-csv-data-file" style="display:none" accept=".csv" @change="importCSVFile" />
-                    </div>
-                </div>
-                
-                <button class="search-btn-cancel" @click="showConfig=false" style="border:none; background: transparent !important; text-decoration: underline;">关闭面板</button>
-            </div>
+            
+            <stats-panel ref="statsPanelRef"></stats-panel>
         </div>
     </div>
 </div>
@@ -461,10 +175,7 @@
 <script>
 const { createApp, reactive, onMounted, computed, ref, watch } = Vue
 
-// ==========================================
-// 模块 0：纯净 API 接口层
-// ==========================================
-const DyAPI = {
+window.DyAPI = {
     fetchVideos: async (params) => (await axios.get('/dyfn/videos', { params })).data,
     fetchVideoCount: async (params) => (await axios.get('/dyfn/videos/count', { params })).data.total || 0,
     updateScore: async (id, score) => (await axios.post('/dyfn/videos/update_score', { id, score })).data,
@@ -485,16 +196,12 @@ const DyAPI = {
     migrateLegacy: async (tag_groups) => (await axios.post('/dyfn/sys_tags/migrate_legacy', { tag_groups })).data
 };
 
-// ==========================================
-// 模块 1：核心视频播放与控制
-// ==========================================
 function useVideoPlayer(state, loadVideosCb) {
     const currentIndex = ref(0);
     const videoQueue = ref([]);
     const activeVideoIndex = ref(1);
     const videoLoadStates = ref([false, false, false]);
     const videoClass = ref('video-portrait');
-    const jumpTarget = ref('');
     const lastLikeType = ref('');
     const isSwitching = ref(false);
 
@@ -515,11 +222,8 @@ function useVideoPlayer(state, loadVideosCb) {
 
     function updateVideoQueue(direction = 'next') {
         if (state.videos.length === 0) return;
-        if (direction === 'next') {
-            videoQueue.value.shift(); videoQueue.value.push(state.videos[(currentIndex.value + 1) % state.videos.length]);
-        } else {
-            videoQueue.value.pop(); videoQueue.value.unshift(state.videos[(currentIndex.value - 1 + state.videos.length) % state.videos.length]);
-        }
+        if (direction === 'next') { videoQueue.value.shift(); videoQueue.value.push(state.videos[(currentIndex.value + 1) % state.videos.length]); } 
+        else { videoQueue.value.pop(); videoQueue.value.unshift(state.videos[(currentIndex.value - 1 + state.videos.length) % state.videos.length]); }
         videoLoadStates.value = [false, false, false];
     }
 
@@ -528,8 +232,7 @@ function useVideoPlayer(state, loadVideosCb) {
         isSwitching.value = true; 
         document.querySelectorAll('video').forEach(v => v.pause());
         currentIndex.value = currentIndex.value - 1 < 0 ? state.videos.length - 1 : currentIndex.value - 1;
-        updateVideoQueue('prev'); 
-        setTimeout(() => { playActiveVideo(); isSwitching.value = false; }, 200);
+        updateVideoQueue('prev'); setTimeout(() => { playActiveVideo(); isSwitching.value = false; }, 200);
     }
 
     async function nextVideo() {
@@ -556,22 +259,11 @@ function useVideoPlayer(state, loadVideosCb) {
         activeVideo.muted = false; if (activeVideo.ended) activeVideo.currentTime = 0;
         const playPromise = activeVideo.play();
         if (playPromise !== undefined) playPromise.catch(() => { activeVideo.muted = true; activeVideo.play().catch(() => {}); });
-        if (activeVideo.videoWidth && activeVideo.videoHeight) {
-            videoClass.value = (activeVideo.videoHeight / activeVideo.videoWidth) <= 1.1 ? 'video-landscape' : 'video-portrait';
-        } else {
-            activeVideo.addEventListener('loadedmetadata', () => {
-                videoClass.value = (activeVideo.videoHeight / activeVideo.videoWidth) <= 1.1 ? 'video-landscape' : 'video-portrait';
-            }, { once: true });
-        }
+        if (activeVideo.videoWidth && activeVideo.videoHeight) { videoClass.value = (activeVideo.videoHeight / activeVideo.videoWidth) <= 1.1 ? 'video-landscape' : 'video-portrait'; } 
+        else { activeVideo.addEventListener('loadedmetadata', () => { videoClass.value = (activeVideo.videoHeight / activeVideo.videoWidth) <= 1.1 ? 'video-landscape' : 'video-portrait'; }, { once: true }); }
     }
 
-    function onVideoReady(index) {
-        videoLoadStates.value[index] = true;
-        const video = document.querySelectorAll('video')[index];
-        if (!video) return;
-        if (index === activeVideoIndex.value) { if (video.paused) video.play().catch(() => {}); } else { video.pause(); video.muted = true; }
-    }
-
+    function onVideoReady(index) { videoLoadStates.value[index] = true; const video = document.querySelectorAll('video')[index]; if (!video) return; if (index === activeVideoIndex.value) { if (video.paused) video.play().catch(() => {}); } else { video.pause(); video.muted = true; } }
     function onVideoLoaded(index) { videoLoadStates.value[index] = true; }
     function getVideoUrl(id) { return `/dyfn/videos/${id}/stream`; }
     function previewForward() { const v = document.querySelectorAll('video')[activeVideoIndex.value]; if (v && v.duration) v.currentTime = Math.min(v.duration, v.currentTime + Math.max(5, v.duration * 0.05)); }
@@ -580,479 +272,142 @@ function useVideoPlayer(state, loadVideosCb) {
 
     let touchStartY = 0; let touchActive = false;
     function handleTouchStart(e) { if (isSwitching.value) return; touchActive = true; touchStartY = e.touches[0].clientY; }
-    function handleTouchEnd(e) {
-        if (!touchActive) return;
-        const deltaY = e.changedTouches[0].clientY - touchStartY;
-        if (Math.abs(deltaY) > 60) { if (deltaY < 0) nextVideo(); else prevVideo(); }
-        touchActive = false;
-    }
+    function handleTouchEnd(e) { if (!touchActive) return; const deltaY = e.changedTouches[0].clientY - touchStartY; if (Math.abs(deltaY) > 60) { if (deltaY < 0) nextVideo(); else prevVideo(); } touchActive = false; }
 
-    async function jumpTo() {
-        let target = parseInt(jumpTarget.value); if (isNaN(target) || target < 1) target = 1; if (target > state.totalVideos) target = state.totalVideos;
-        const targetPage = Math.floor((target - 1) / state.pageSize) + 1; const indexInPage = (target - 1) % state.pageSize;
-        state.page = targetPage;
-        await loadVideosCb(false, indexInPage); jumpTarget.value = '';
+    async function jumpTo(target) {
+        if (isNaN(target) || target < 1) target = 1; if (target > state.totalVideos) target = state.totalVideos;
+        state.page = Math.floor((target - 1) / state.pageSize) + 1; 
+        const indexInPage = (target - 1) % state.pageSize;
+        await loadVideosCb(false, indexInPage); 
         setTimeout(() => { playActiveVideo(); }, 200);
     }
 
-    async function updateScoreHandler(newScore) { if (currentVideo.value?.id) { await DyAPI.updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; } }
-    async function toggleLike() { if (!currentVideo.value?.id) return; const newScore = currentVideo.value.score === 5 ? 0 : 5; await updateScoreHandler(newScore); lastLikeType.value = newScore === 5 ? 'like' : ''; setTimeout(() => lastLikeType.value = '', 600); }
-    async function toggleDislike() { if (!currentVideo.value?.id) return; const newScore = currentVideo.value.score === 1 ? 0 : 1; await updateScoreHandler(newScore); lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600); }
-    function searchDouyin(kw) { window.open(`https://www.douyin.com/search/${encodeURIComponent(kw)}`, '_blank'); }
-
-    return { currentIndex, videoQueue, activeVideoIndex, videoLoadStates, videoClass, jumpTarget, lastLikeType, currentVideo, videoIndex, refreshQueue, prevVideo, nextVideo, playActiveVideo, onVideoReady, onVideoLoaded, getVideoUrl, previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, jumpTo, updateScoreHandler, toggleLike, toggleDislike, searchDouyin };
-}
-
-// ==========================================
-// 模块 2：搜索与过滤机制
-// ==========================================
-function useSearchManager(state, loadVideosCb) {
-    const searchKeyword = ref(''), excludeKeyword = ref(''), searchScore = ref(0), sortBy = ref(''), searchSize = ref(0), sizeOperator = ref('lte'), sizeValue = ref('');
-    const showSearch = ref(false), searchTimeMsg = ref('');
-
-    async function doSearch() {
-        const start = performance.now();
-        state.searchKeyword = searchKeyword.value.trim(); state.excludeKeyword = excludeKeyword.value.trim();
-        state.searchScore = searchScore.value; state.sortBy = sortBy.value;
-        state.searchSize = (sizeValue.value && sizeValue.value > 0) ? `${sizeOperator.value}:${sizeValue.value}` : 0;
-        state.page = 1; showSearch.value = false;
-        
-        state.totalVideos = state.totalpage = await DyAPI.fetchVideoCount({ search: state.searchKeyword, exclude: state.excludeKeyword, score: state.searchScore, size: state.searchSize });
-        updateUrlParams(); await loadVideosCb(false, 0);
-        searchTimeMsg.value = '筛选完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒'; setTimeout(() => { searchTimeMsg.value = '' }, 3000);
-    }
-
-    function updateUrlParams() {
-        const url = new URL(window.location);
-        const mapping = { 'search': 'searchKeyword', 'exclude': 'excludeKeyword', 'score': 'searchScore', 'size': 'searchSize', 'sort_by': 'sortBy' };
-        for (let [k, stateKey] of Object.entries(mapping)) { if (state[stateKey] && state[stateKey] !== 0) url.searchParams.set(k, state[stateKey]); else url.searchParams.delete(k); }
-        window.history.pushState({}, '', url);
-    }
-
-    function loadFromUrlParams() {
-        const urlParams = new URLSearchParams(window.location.search);
-        let hasParams = false;
-        if (urlParams.get('search')) { searchKeyword.value = state.searchKeyword = urlParams.get('search'); hasParams = true; }
-        if (urlParams.get('exclude')) { excludeKeyword.value = state.excludeKeyword = urlParams.get('exclude'); hasParams = true; }
-        if (urlParams.get('score')) { searchScore.value = state.searchScore = parseInt(urlParams.get('score')); hasParams = true; }
-        if (urlParams.get('sort_by')) { sortBy.value = state.sortBy = urlParams.get('sort_by'); hasParams = true; }
-        if (urlParams.get('size')) {
-            const sizeParam = urlParams.get('size');
-            if (sizeParam.includes(':')) { const [op, val] = sizeParam.split(':'); sizeOperator.value = op; sizeValue.value = parseInt(val); state.searchSize = sizeParam; } 
-            else { sizeOperator.value = 'lte'; sizeValue.value = parseInt(sizeParam); state.searchSize = `lte:${sizeParam}`; }
-            hasParams = true;
-        }
-        return hasParams;
-    }
-
-    function clearSearch() {
-        searchKeyword.value = state.searchKeyword = ''; excludeKeyword.value = state.excludeKeyword = '';
-        searchScore.value = state.searchScore = 0; sortBy.value = state.sortBy = '';
-        sizeOperator.value = 'lte'; sizeValue.value = ''; state.searchSize = 0; state.page = 1;
-    }
-
-    const searchFromClipboard = async () => {
-        if (!navigator.clipboard || !window.isSecureContext) { alert('当前环境不支持或未授权 HTTPS'); return; }
-        try { const text = await navigator.clipboard.readText(); if (!text.trim()) { alert('剪贴板为空'); return; } searchKeyword.value = text.trim(); showSearch.value = false; await doSearch(); } catch (err) { alert('读取失败，检查权限'); }
-    };
-
-    return { searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, showSearch, searchTimeMsg, doSearch, updateUrlParams, loadFromUrlParams, clearSearch, searchFromClipboard };
-}
-
-// ==========================================
-// 模块 3：后台配置与黑名单目录管理
-// ==========================================
-function useConfigManager(loadVideosCb) {
-    const showConfig = ref(false);
-    const newPath = ref(''), pathList = ref([]);
-    const blacklist = ref([]), newBlacklistWord = ref('');
-
-    async function fetchPaths() { pathList.value = await DyAPI.getPaths(); }
-    async function loadBlacklist() { blacklist.value = await DyAPI.getBlacklist(); }
-
-    async function openConfig() { showConfig.value = true; await loadBlacklist(); }
-
-    async function addPath() { 
-        const targetPath = newPath.value.trim(); if (!targetPath) return;
-        vant.showLoadingToast({ message: '正在添加并自动扫描...', forbidClick: true, duration: 0 });
-        try { await DyAPI.addPath(targetPath); newPath.value = ''; await fetchPaths(); await DyAPI.indexPath(targetPath); vant.closeToast(); vant.showSuccessToast('自动扫描完成'); await loadVideosCb(false, 0); } catch(e) { vant.closeToast(); vant.showFailToast('扫描路径失败'); }
-    }
-    async function indexPath(path) { await DyAPI.indexPath(path); vant.showSuccessToast('单目录索引完成'); await loadVideosCb(false, 0); }
-    async function indexPathq() { await DyAPI.updateAllPaths(); vant.showSuccessToast('全库更新完成'); await loadVideosCb(false, 0); }
-    async function indexPath_del(path) { await DyAPI.indexPath(path, true); vant.showSuccessToast('删除并清理索引成功'); await fetchPaths(); await loadVideosCb(false, 0); }
-
-    async function addBlacklistWord(word = null) { 
-        const kw = typeof word === 'string' ? word.trim() : newBlacklistWord.value.trim(); 
-        if(!kw) return; 
-        if(!blacklist.value.includes(kw)) { blacklist.value.push(kw); await DyAPI.updateBlacklist(blacklist.value); } 
-        newBlacklistWord.value = ''; vant.showToast('全局黑名单已更新'); 
-        return kw;
-    }
-    async function removeBlacklistWord(idx) { blacklist.value.splice(idx, 1); await DyAPI.updateBlacklist(blacklist.value); }
-
-    return { showConfig, newPath, pathList, blacklist, newBlacklistWord, fetchPaths, loadBlacklist, openConfig, addPath, indexPath, indexPathq, indexPath_del, addBlacklistWord, removeBlacklistWord };
-}
-
-// ==========================================
-// 模块 4：核心标签打标与批处理系统 (精准分离 #a_ 与 #)
-// ==========================================
-function useTagAndRenameManager(state, playerModule, configModule, loadVideosCb) {
-    const tagGroups = ref([]), globalTagInput = ref(''), dragGroupEnabledId = ref(null);
-    const filenameTokens = ref([]), currentCustomTags = ref([]), quickBlacklistInput = ref('');
+    async function toggleLike() { if (!currentVideo.value?.id) return; const newScore = currentVideo.value.score === 5 ? 0 : 5; await window.DyAPI.updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; lastLikeType.value = newScore === 5 ? 'like' : ''; setTimeout(() => lastLikeType.value = '', 600); }
+    async function toggleDislike() { if (!currentVideo.value?.id) return; const newScore = currentVideo.value.score === 1 ? 0 : 1; await window.DyAPI.updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600); }
     
-    // 🌟 独立存放虚拟 tag 的数组 (带 #a_ 前缀)
-    const autoTags = ref([]); 
-    
-    const autoSaveStatus = ref(''); let renameTimeoutId = null, pendingRenameData = null, tagSaveTimeout = null;
-    const isExecuting = ref(false), executeSuccess = ref(false), executeMsg = ref('');
-    const showHistory = ref(false), renameHistory = ref([]), exportLimit = ref('0');
-
-    const dragType = ref(null), draggedGroupIdx = ref(null), dragOverGroupIdx = ref(null), draggedTagInfo = ref(null), dragOverTagInfo = ref(null), dragDropPosition = ref('');
-
-    watch(tagGroups, (newVal) => { 
-        if (tagGroups.value.length > 0) { clearTimeout(tagSaveTimeout); tagSaveTimeout = setTimeout(() => { DyAPI.saveTagGroups(newVal); }, 1500); }
-    }, { deep: true });
-
-    watch(() => playerModule.currentVideo.value?.id, async (newId) => {
-        if (pendingRenameData) executePendingRename(); 
-        if(newId) {
-            currentCustomTags.value = []; autoTags.value = []; filenameTokens.value = []; autoSaveStatus.value = '';
-            
-            if (playerModule.currentVideo.value?.filename) {
-                const rawFileName = playerModule.currentVideo.value.filename;
-                
-                // 🌟 精准匹配：同时提取 #a_xxx 和 #xxx
-                const extractedTags = rawFileName.match(/#a_[\u4e00-\u9fa5a-zA-Z0-9_]+|#[\u4e00-\u9fa5a-zA-Z0-9_]+/g);
-                if (extractedTags) {
-                    extractedTags.forEach(t => {
-                        if (t.startsWith('#a_')) {
-                            const tagBody = t.substring(3).trim(); // 剥离 #a_
-                            if (tagBody && !autoTags.value.find(x => x.text === tagBody)) {
-                                autoTags.value.push({ text: tagBody, active: true });
-                            }
-                        } else if (t.startsWith('#')) {
-                            let tagBody = t.substring(1).trim(); 
-                            if (tagBody && !currentCustomTags.value.includes(tagBody)) {
-                                currentCustomTags.value.push(tagBody);
-                            }
-                        }
-                    });
-                }
-                
-                try {
-                    const res = await DyAPI.tokenize(rawFileName);
-                    if(res.success) { const validWords = res.words.filter(w => !configModule.blacklist.value.includes(w)); filenameTokens.value = validWords.map(w => ({ text: w, active: true, isOnly: false })); }
-                } catch(e) {}
-            }
-        }
-    });
-
-    const generatedFilename = computed(() => {
-        if (!playerModule.currentVideo.value || !playerModule.currentVideo.value.detail) return '';
-        let ext = ''; const match = playerModule.currentVideo.value.detail.match(/\.[^.]+$/); if (match) ext = match[0];
-        
-        let originalNameBody = playerModule.currentVideo.value.filename;
-        if (originalNameBody.endsWith(ext)) originalNameBody = originalNameBody.slice(0, -ext.length);
-
-        // 🌟 核心排他：拼接前，将原文件名中所有的 #a_ 标签和 # 标签彻底剥离洗净，防止废弃标签残留
-        let cleanBase = originalNameBody
-            .replace(/#a_[\u4e00-\u9fa5a-zA-Z0-9_]+/g, '')
-            .replace(/#[\u4e00-\u9fa5a-zA-Z0-9_]+/g, '')
-            .replace(/\s{2,}/g, ' ')
-            .trim();
-
-        const activeTokens = filenameTokens.value.filter(t => t.active);
-        const isOnlyMode = (activeTokens.length === 1 && activeTokens[0].isOnly);
-        
-        let base = '';
-        if (isOnlyMode) {
-            base = activeTokens[0].text;
-        } else {
-            base = cleanBase;
-            configModule.blacklist.value.forEach(bw => { if (bw.trim()) base = base.split(bw).join(''); });
-            filenameTokens.value.forEach(t => { if (!t.active) base = base.split(t.text).join(''); });
-            base = base.replace(/\[\s*\]|\(\s*\)|【\s*】/g, '').replace(/\.{2,}/g, '.').replace(/\s{2,}/g, ' ').replace(/^[.\-_ ]+|[.\-_ ]+$/g, ''); 
-        }
-        
-        // 🌟 分组装载：严格带上各自的专属前缀
-        const activeAutoTagsStr = autoTags.value.filter(t => t.active).map(t => '#a_' + t.text).join(' ');
-        const activeTagsStr = currentCustomTags.value.map(tag => '#' + tag).join(' ');
-        
-        // 拼接：纯净base + 虚拟Tags + 人工Tags
-        let finalBody = [base, activeAutoTagsStr, activeTagsStr].filter(Boolean).join(' ');
-        
-        // 最后兜底去重处理
-        if (finalBody) {
-            const words = finalBody.split(/\s+/); 
-            const seenTags = new Set(); 
-            const deduplicatedWords = [];
-            for (let w of words) { 
-                if (w.startsWith('#a_') || w.startsWith('#')) { 
-                    if (!seenTags.has(w)) { seenTags.add(w); deduplicatedWords.push(w); } 
-                } else { 
-                    deduplicatedWords.push(w); 
-                } 
-            }
-            finalBody = deduplicatedWords.join(' ');
-        }
-        if (!finalBody) return playerModule.currentVideo.value.filename; 
-        return finalBody + ext;
-    });
-
-    watch(generatedFilename, (newName) => {
-        if (!playerModule.currentVideo.value || !playerModule.currentVideo.value.id) return;
-        if (newName === playerModule.currentVideo.value.filename) { 
-            if (renameTimeoutId) clearTimeout(renameTimeoutId); 
-            pendingRenameData = null; 
-            return; 
-        }
-        if (renameTimeoutId) clearTimeout(renameTimeoutId);
-        pendingRenameData = { video_id: playerModule.currentVideo.value.id, new_filename: newName };
-        autoSaveStatus.value = 'pending'; 
-        renameTimeoutId = setTimeout(() => { executePendingRename(); }, 2000);
-    });
-
-    function setAsOnlyToken(word) { 
-        const target = filenameTokens.value.find(t => t.text === word);
-        if (target && target.isOnly) { filenameTokens.value.forEach(t => { t.active = true; t.isOnly = false; }); } 
-        else { filenameTokens.value.forEach(t => { t.active = (t.text === word); t.isOnly = (t.text === word); }); currentCustomTags.value = []; autoTags.value.forEach(at => at.active = false); }
-    }
-    function toggleToken(t) { t.active = !t.active; filenameTokens.value.forEach(tok => tok.isOnly = false); }
-    function restoreOriginalName() { filenameTokens.value.forEach(t => { t.active = true; t.isOnly = false; }); currentCustomTags.value = []; autoTags.value.forEach(at => at.active = true); }
-
-    function toggleAutoTag(t) { t.active = !t.active; }
-
-    async function addQuickBlacklist() { const kw = await configModule.addBlacklistWord(quickBlacklistInput.value); if(kw) { filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); quickBlacklistInput.value = ''; vant.showToast('已拉黑并立刻剔除'); } }
-    async function quickBlacklistToken(kw) { await configModule.addBlacklistWord(kw); filenameTokens.value = filenameTokens.value.filter(t => t.text !== kw); vant.showToast(`已拉黑并剔除: ${kw}`); }
-
-    function enableGroupDrag(id) { dragGroupEnabledId.value = id; }
-    function disableGroupDrag() { dragGroupEnabledId.value = null; }
-    function onGroupDragStart(e, idx) { dragType.value = 'group'; draggedGroupIdx.value = idx; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.classList.add('is-dragging-group'), 0); }
-    function onGroupDragEnd(e) { e.target.classList.remove('is-dragging-group'); dragType.value = null; draggedGroupIdx.value = null; disableGroupDrag(); }
-    function onTagDragStart(e, gIdx, tIdx) { dragType.value = 'tag'; draggedTagInfo.value = { gIdx, tIdx }; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.classList.add('is-dragging-tag'), 0); }
-    function onTagDragEnd(e) { e.target.classList.remove('is-dragging-tag'); dragType.value = null; draggedTagInfo.value = null; dragOverTagInfo.value = null; }
-    function onTagDragOver(e, gIdx, tIdx) { if (dragType.value !== 'tag') return; dragOverGroupIdx.value = null; dragOverTagInfo.value = { gIdx, tIdx }; const rect = e.target.getBoundingClientRect(); dragDropPosition.value = e.clientX < (rect.left + rect.width / 2) ? 'left' : 'right'; }
-    function onGroupDragOver(e, gIdx) { if (dragType.value === 'group') dragOverGroupIdx.value = gIdx; else if (dragType.value === 'tag') { dragOverGroupIdx.value = gIdx; dragOverTagInfo.value = null; } }
-    function onTagDragEnter(gIdx) { dragOverGroupIdx.value = gIdx; }
-    function onTagDragLeave(gIdx) { if(dragOverGroupIdx.value === gIdx) dragOverGroupIdx.value = null; }
-    function onGroupDrop(e, targetGIdx) { dragOverGroupIdx.value = null; if (dragType.value === 'group' && draggedGroupIdx.value !== null) { const sourceIdx = draggedGroupIdx.value; if (sourceIdx !== targetGIdx) { const item = tagGroups.value.splice(sourceIdx, 1)[0]; tagGroups.value.splice(targetGIdx, 0, item); } } else if (dragType.value === 'tag' && draggedTagInfo.value) { const { gIdx: sourceGIdx, tIdx: sourceTIdx } = draggedTagInfo.value; if (sourceGIdx !== targetGIdx) { const tag = tagGroups.value[sourceGIdx].tags.splice(sourceTIdx, 1)[0]; tagGroups.value[targetGIdx].tags.push(tag); } } dragType.value = null; }
-    function onTagDrop(e, targetGIdx, targetTIdx) { if (dragType.value === 'tag' && draggedTagInfo.value) { const { gIdx: sourceGIdx, tIdx: sourceTIdx } = draggedTagInfo.value; if (sourceGIdx === targetGIdx && sourceTIdx === targetTIdx) return; const tag = tagGroups.value[sourceGIdx].tags.splice(sourceTIdx, 1)[0]; let insertIdx = targetTIdx; if (sourceGIdx === targetGIdx && sourceTIdx < targetTIdx) insertIdx -= 1; if (dragDropPosition.value === 'right') insertIdx += 1; tagGroups.value[targetGIdx].tags.splice(insertIdx, 0, tag); } dragType.value = null; dragOverTagInfo.value = null; }
-
-    function addEmptyGroup() { tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); }
-    function removeTagGroup(idx) { if (confirm('确定删除此分区及内部所有Tag吗？')) { tagGroups.value.splice(idx, 1); } }
-    function addGlobalTag() { const tag = globalTagInput.value.replace(/#/g, '').trim(); if (!tag) return; if (!currentCustomTags.value.includes(tag)) currentCustomTags.value.push(tag); if (tagGroups.value.length === 0) tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); let exists = false; for(let g of tagGroups.value) { if(g.tags.includes(tag)) { exists = true; break; } } if(!exists) { tagGroups.value[0].tags.push(tag); } globalTagInput.value = ''; }
-    function removeSavedTagFromGroup(gIdx, tIdx) { const tag = tagGroups.value[gIdx].tags[tIdx]; tagGroups.value[gIdx].tags.splice(tIdx, 1); const cIdx = currentCustomTags.value.indexOf(tag); if (cIdx > -1) currentCustomTags.value.splice(cIdx, 1); }
-    function toggleQuickTag(tag) { const idx = currentCustomTags.value.indexOf(tag); if (idx > -1) currentCustomTags.value.splice(idx, 1); else currentCustomTags.value.push(tag); }
-
-    async function executePendingRename() {
-        if (!pendingRenameData) return;
-        const dataToSave = { ...pendingRenameData }; 
-        pendingRenameData = null;
-        if (renameTimeoutId) { clearTimeout(renameTimeoutId); renameTimeoutId = null; }
-        
-        if (playerModule.currentVideo.value && playerModule.currentVideo.value.id === dataToSave.video_id) {
-            playerModule.currentVideo.value.filename = dataToSave.new_filename;
-        } else {
-            const v = state.videos.find(vid => vid.id === dataToSave.video_id); 
-            if (v) v.filename = dataToSave.new_filename;
-        }
-
-        autoSaveStatus.value = 'pending';
-        try {
-            const res = await DyAPI.queueRename(dataToSave);
-            if (res.success) { 
-                if (playerModule.currentVideo.value && playerModule.currentVideo.value.id === dataToSave.video_id) { 
-                    autoSaveStatus.value = 'success'; 
-                    setTimeout(() => { if(autoSaveStatus.value === 'success') autoSaveStatus.value = ''; }, 2000); 
-                } 
-            } else { autoSaveStatus.value = ''; }
-        } catch (e) { autoSaveStatus.value = ''; }
-    }
-
-    async function executeRenameQueue(mode = 'queue_only') {
-        if (isExecuting.value) return;
-        try {
-            isExecuting.value = true; executeSuccess.value = false; executeMsg.value = '执行中...';
-            const res = await DyAPI.executeRenames(mode);
-            isExecuting.value = false;
-            if (res.success) { executeMsg.value = res.msg; executeSuccess.value = true; await loadVideosCb(false, playerModule.currentIndex.value); } else { executeMsg.value = '执行异常'; executeSuccess.value = true; }
-        } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
-    }
-    
-    async function retryFailedQueue() {
-        if (isExecuting.value) return;
-        try {
-            isExecuting.value = true; executeSuccess.value = false; executeMsg.value = '重置中...';
-            const res = await DyAPI.retryFailed();
-            isExecuting.value = false;
-            if (res.success) { executeMsg.value = res.msg; executeSuccess.value = true; } else { executeMsg.value = '重置失败'; executeSuccess.value = true; }
-        } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
-    }
-
-    async function openHistory() { showHistory.value = true; const res = await DyAPI.getRenameHistory(); if (res && res.success) { renameHistory.value = res.history; } }
-    async function handleRestore(logId) {
-        vant.showLoadingToast({ message: '正在撤销恢复...', forbidClick: true, duration: 0 });
-        const res = await DyAPI.restoreRename(logId); vant.closeToast();
-        if (res && res.success) { vant.showSuccessToast('文件已恢复原名'); await openHistory(); await loadVideosCb(false, playerModule.currentIndex.value); } else { vant.showFailToast(res?.msg || '恢复失败'); }
-    }
-
-    function exportTags() { const dataStr = JSON.stringify(tagGroups.value, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `dy_tags_backup_${new Date().getTime()}.json`; a.click(); URL.revokeObjectURL(url); vant.showSuccessToast('配置导出成功'); }
-    function triggerImportTags() { document.getElementById('import-tags-file').click(); }
-    function importTags(event) {
-        const file = event.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => { try { const parsed = JSON.parse(e.target.result); if (Array.isArray(parsed)) { tagGroups.value = parsed; DyAPI.saveTagGroups(parsed); vant.showSuccessToast('导入成功'); } else { vant.showFailToast('格式不正确'); } } catch(err) { vant.showFailToast('解析失败'); } event.target.value = ''; };
-        reader.readAsText(file);
-    }
-
-    function exportCSV() {
-        const params = [];
-        if (state.searchKeyword) params.push(`search=${encodeURIComponent(state.searchKeyword)}`);
-        if (state.excludeKeyword) params.push(`exclude=${encodeURIComponent(state.excludeKeyword)}`);
-        if (state.searchScore > 0) params.push(`score=${state.searchScore}`);
-        if (state.searchSize !== 0) params.push(`size=${state.searchSize}`);
-        if (state.sortBy) params.push(`sort_by=${state.sortBy}`);
-        if (exportLimit.value !== '0') params.push(`limit=${exportLimit.value}`);
-        window.open(`/dyfn/sys_tags/export_csv?${params.join('&')}`, '_blank');
-    }
-    function triggerImportCSV() { document.getElementById('import-csv-data-file').click(); }
-    async function importCSVFile(event) {
-        const file = event.target.files[0]; if (!file) return;
-        const formData = new FormData(); formData.append('file', file);
-        vant.showLoadingToast({ message: '正在解析并导入...', forbidClick: true, duration: 0 });
-        try {
-            const res = await axios.post('/dyfn/sys_tags/import_csv', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            vant.closeToast();
-            if (res.data.success) { vant.showSuccessToast(res.data.msg); } else { vant.showFailToast(res.data.msg || '导入失败'); }
-        } catch (err) { vant.closeToast(); vant.showFailToast('网络或服务器异常'); }
-        event.target.value = '';
-    }
-
-    return { autoTags, toggleAutoTag, tagGroups, globalTagInput, dragGroupEnabledId, filenameTokens, currentCustomTags, quickBlacklistInput, autoSaveStatus, isExecuting, executeSuccess, executeMsg, showHistory, renameHistory, exportLimit, dragType, draggedGroupIdx, dragOverGroupIdx, dragOverTagInfo, dragDropPosition, generatedFilename, setAsOnlyToken, toggleToken, restoreOriginalName, addQuickBlacklist, quickBlacklistToken, enableGroupDrag, disableGroupDrag, onGroupDragStart, onGroupDragEnd, onTagDragStart, onTagDragEnd, onTagDragOver, onGroupDragOver, onTagDragEnter, onTagDragLeave, onGroupDrop, onTagDrop, addEmptyGroup, removeTagGroup, addGlobalTag, removeSavedTagFromGroup, toggleQuickTag, executeRenameQueue, retryFailedQueue, openHistory, handleRestore, exportTags, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile };
+    return { currentIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, currentVideo, videoIndex, refreshQueue, prevVideo, nextVideo, playActiveVideo, onVideoReady, onVideoLoaded, getVideoUrl, previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, jumpTo, toggleLike, toggleDislike };
 }
 
-// ==========================================
-// 模块 5：拖拽排版面板
-// ==========================================
-function useDragPanel() {
-    const panelOrder = ref(JSON.parse(localStorage.getItem('dy_panel_order')) || ['preview', 'tokens', 'auto_tags', 'tags', 'blacklist']);
-    const dragEnabledId = ref(null); let dragIndex = null;
-
-    function enableDrag(item) { dragEnabledId.value = item; }
-    function disableDrag() { dragEnabledId.value = null; }
-    function onDragStart(e, idx) { dragIndex = idx; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.classList.add('is-dragging'), 0); }
-    function onDragEnd(e) { e.target.classList.remove('is-dragging'); dragIndex = null; disableDrag(); }
-    function onDrop(e, dropIndex) {
-        if (dragIndex !== null && dragIndex !== dropIndex) {
-            const item = panelOrder.value.splice(dragIndex, 1)[0];
-            panelOrder.value.splice(dropIndex, 0, item);
-            localStorage.setItem('dy_panel_order', JSON.stringify(panelOrder.value));
-        }
-    }
-    return { panelOrder, dragEnabledId, enableDrag, disableDrag, onDragStart, onDragEnd, onDrop };
-}
-
-// ==========================================
-// 🚀 Vue 初始化与事件挂载核心
-// ==========================================
-createApp({
+const app = createApp({
     setup() {
         const state = reactive({ videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', totalVideos: 0, totalpage: 0, globalOffset: 0 });
         const isLoading = ref(true);
-        const showDetail = ref(false);
 
+        const headerRef = ref(null);
+        const tagPanelRef = ref(null);
+        const statsPanelRef = ref(null);
+
+        const syncEnabled = ref(JSON.parse(localStorage.getItem('dy_sync_enabled') ?? 'true'));
+        const syncMemory = ref(JSON.parse(localStorage.getItem('dy_sync_memory') || '[]'));
+        
+        function saveSyncState(val) { syncEnabled.value = val; localStorage.setItem('dy_sync_enabled', JSON.stringify(val)); }
+        function clearSyncMemory() { syncMemory.value = []; localStorage.setItem('dy_sync_memory', '[]'); vant.showToast('已清空同源记忆'); }
+        function updateSyncMemory(newMem) { syncMemory.value = newMem; localStorage.setItem('dy_sync_memory', JSON.stringify(newMem)); }
+
+        const playerModule = useVideoPlayer(state, loadVideos);
+        const {
+            currentIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, 
+            currentVideo, videoIndex, refreshQueue, prevVideo, nextVideo, 
+            playActiveVideo, onVideoReady, onVideoLoaded, getVideoUrl, 
+            previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, 
+            jumpTo, toggleLike, toggleDislike
+        } = playerModule;
+
+        function handleAction(type) {
+            if(type === 'prev') prevVideo();
+            else if(type === 'next') nextVideo();
+            else if(type === 'like') toggleLike();
+            else if(type === 'dislike') toggleDislike();
+        }
+
+        async function handleUpdateScore(newScore) {
+            if (currentVideo.value?.id) { 
+                await window.DyAPI.updateScore(currentVideo.value.id, newScore); 
+                currentVideo.value.score = newScore; 
+            }
+        }
+
+        const pathList = ref([]);
+        const blacklist = ref([]);
+        
         async function loadVideos(append = false, startIndex = 0) {
             isLoading.value = true;
             const params = { page: state.page, page_size: state.pageSize, search: state.searchKeyword, exclude: state.excludeKeyword, score: state.searchScore, size: state.searchSize, sort_by: state.sortBy };
             try {
-                const newVideos = await DyAPI.fetchVideos(params);
+                const newVideos = await window.DyAPI.fetchVideos(params);
                 if (append) state.videos.push(...newVideos); 
-                else { state.videos = newVideos; state.globalOffset = (state.page - 1) * state.pageSize; playerModule.currentIndex.value = startIndex; }
-                playerModule.refreshQueue();
+                else { state.videos = newVideos; state.globalOffset = (state.page - 1) * state.pageSize; currentIndex.value = startIndex; }
+                refreshQueue();
             } finally { isLoading.value = false; }
         }
 
-        const playerModule = useVideoPlayer(state, loadVideos);
-        const searchModule = useSearchManager(state, loadVideos);
-        const configModule = useConfigManager(loadVideos);
-        const tagsModule = useTagAndRenameManager(state, playerModule, configModule, loadVideos);
-        const dragModule = useDragPanel();
+        async function addPath(targetPath) { vant.showLoadingToast({ message: '扫描中...', forbidClick: true, duration: 0 }); try { await window.DyAPI.addPath(targetPath); pathList.value = await window.DyAPI.getPaths(); await window.DyAPI.indexPath(targetPath); vant.closeToast(); vant.showSuccessToast('完成'); await loadVideos(false, 0); } catch(e) { vant.closeToast(); vant.showFailToast('失败'); } }
+        async function indexPath(path) { await window.DyAPI.indexPath(path); vant.showSuccessToast('索引完成'); await loadVideos(false, 0); }
+        async function refreshAllPaths() { await window.DyAPI.updateAllPaths(); vant.showSuccessToast('全库更新完成'); await loadVideos(false, 0); }
+        async function indexPath_del(path) { await window.DyAPI.indexPath(path, true); pathList.value = await window.DyAPI.getPaths(); await loadVideos(false, 0); }
+        async function addBlacklistWord(kw) { if(!blacklist.value.includes(kw)) { blacklist.value.push(kw); await window.DyAPI.updateBlacklist(blacklist.value); } }
+        async function removeBlacklistWord(idx) { blacklist.value.splice(idx, 1); await window.DyAPI.updateBlacklist(blacklist.value); }
 
         onMounted(async () => {
-            if (!dragModule.panelOrder.value.includes('auto_tags')) {
-                const tagsIdx = dragModule.panelOrder.value.indexOf('tags');
-                if (tagsIdx > -1) dragModule.panelOrder.value.splice(tagsIdx, 0, 'auto_tags');
-                else dragModule.panelOrder.value.push('auto_tags');
-            }
-
-            isLoading.value = true;
-            const tgRes = await DyAPI.getTagGroups();
-            if (tgRes && tgRes.groups && tgRes.groups.length > 0) tagsModule.tagGroups.value = tgRes.groups;
-            else tagsModule.tagGroups.value = [{ id: 'g_1', tags: [] }]; 
+            let savedIndex = parseInt(localStorage.getItem('dy_current_index'));
             
-            configModule.blacklist.value = await DyAPI.getBlacklist();
-            searchModule.loadFromUrlParams();
-            state.totalVideos = state.totalpage = await DyAPI.fetchVideoCount({ search: state.searchKeyword, exclude: state.excludeKeyword, score: state.searchScore, size: state.searchSize });
+            isLoading.value = true;
+            pathList.value = await window.DyAPI.getPaths();
+            blacklist.value = await window.DyAPI.getBlacklist();
+            
+            headerRef.value?.loadFromUrlParams();
+            
+            state.totalVideos = state.totalpage = await window.DyAPI.fetchVideoCount({ search: state.searchKeyword, exclude: state.excludeKeyword, score: state.searchScore, size: state.searchSize });
 
-            let startIndex = 0; let savedIndex = parseInt(localStorage.getItem('dy_current_index'));
+            let startIndex = 0;
             if (savedIndex && savedIndex > 0 && savedIndex <= state.totalVideos) {
                 state.page = Math.floor((savedIndex - 1) / state.pageSize) + 1; startIndex = (savedIndex - 1) % state.pageSize;
             } else { state.page = 1; }
 
             await loadVideos(false, startIndex);
             isLoading.value = false;
-            setTimeout(() => { playerModule.playActiveVideo(); }, 500);
+            setTimeout(() => { playActiveVideo(); }, 500);
             
+            // 🌟 核心修复：滚轮精准防误触拦截 🌟
             window.addEventListener('wheel', (e) => { 
+                if (e.target.closest('.panel-side') || e.target.closest('.van-popup') || e.target.closest('.search-modal')) return;
                 if (Math.abs(e.deltaY) < 30) return; 
-                if (e.deltaY > 0) playerModule.nextVideo(); else if (e.deltaY < 0) playerModule.prevVideo(); 
+                if (e.deltaY > 0) nextVideo(); else if (e.deltaY < 0) prevVideo(); 
             });
             window.addEventListener('keydown', (e) => { 
                 if (e.target.tagName === 'INPUT') return; 
-                if (e.key === 'ArrowLeft') playerModule.previewBackward(); 
-                else if (e.key === 'ArrowRight') playerModule.previewForward();
-                else if (e.key === 'ArrowDown') playerModule.nextVideo();
-                else if (e.key === 'ArrowUp') playerModule.prevVideo();
-                else if (e.key === 'Z' || e.key === 'z') document.getElementById('like-button')?.click();
-                else if (e.key === 'X' || e.key === 'x') document.getElementById('dislike-button')?.click();
-                else if (e.key === ' ') { e.preventDefault(); const v = document.querySelectorAll('video')[playerModule.activeVideoIndex.value]; if(v) v.paused ? v.play() : v.pause(); }
-                else if (e.key === '`' || e.key === '·') playerModule.seekTo(0.5);
+                if (e.key === 'ArrowLeft') previewBackward(); else if (e.key === 'ArrowRight') previewForward();
+                else if (e.key === 'ArrowDown') nextVideo(); else if (e.key === 'ArrowUp') prevVideo();
+                else if (e.key === 'Z' || e.key === 'z') toggleLike(); else if (e.key === 'X' || e.key === 'x') toggleDislike();
+                else if (e.key === ' ') { e.preventDefault(); const v = document.querySelectorAll('video')[activeVideoIndex.value]; if(v) v.paused ? v.play() : v.pause(); }
+                else if (e.key === '`' || e.key === '·') seekTo(0.5);
             });
             window.addEventListener('dblclick', (e) => {
                 if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-                const v = document.querySelectorAll('video')[playerModule.activeVideoIndex.value];
+                const v = document.querySelectorAll('video')[activeVideoIndex.value];
                 if (!document.fullscreenElement && v) { if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); } 
                 else if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
             });
             window.addEventListener('popstate', () => {
-                if (searchModule.loadFromUrlParams()) searchModule.doSearch();
-                else { searchModule.clearSearch(); loadVideos(false, 0); }
+                if (headerRef.value?.loadFromUrlParams()) headerRef.value?.doSearch();
+                else { headerRef.value?.clearSearch(); loadVideos(false, 0); }
             });
-            
-            setTimeout(() => {
-                const legacyGroups = JSON.parse(localStorage.getItem('dy_tag_groups') || '[]');
-                if (legacyGroups.length > 1 || (legacyGroups.length === 1 && legacyGroups[0].tags.length > 0)) {
-                    if (confirm("检测到未迁移的历史 Tag 数据！是否立刻一键同步到后台数据库？")) {
-                        DyAPI.migrateLegacy(legacyGroups).then(res => {
-                            if (res.success) { vant.showSuccessToast('迁移成功！'); localStorage.removeItem('dy_tag_groups'); setTimeout(() => location.reload(), 1000); }
-                            else { vant.showFailToast('迁移失败: ' + res.msg); }
-                        });
-                    }
-                }
-            }, 1500);
-        })
+        });
 
         return {
-            state, isLoading, showDetail, toggleDetail: () => showDetail.value = !showDetail.value,
-            ...playerModule,
-            ...searchModule,
-            ...configModule,
-            ...tagsModule,
-            ...dragModule,
-            indexPathq: configModule.indexPathq
+            state, isLoading,
+            headerRef, tagPanelRef, statsPanelRef, videoIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, currentVideo, currentIndex, blacklist, pathList,
+            getVideoUrl, onVideoLoaded, onVideoReady, nextVideo, handleTouchStart, handleTouchEnd, handleUpdateScore,
+            handleAction, jumpTo, loadVideos, addPath, indexPath, refreshAllPaths, indexPath_del, addBlacklistWord, removeBlacklistWord,
+            syncEnabled, syncMemory, saveSyncState, clearSyncMemory, updateSyncMemory
         };
     }
-}).use(vant).mount('#app');
+});
+
+app.component('header-panel', HeaderPanel);
+app.component('tag-panel', TagPanel);
+app.component('stats-panel', StatsPanel);
+app.use(vant).mount('#app');
 </script>
 </body>
 </html>
