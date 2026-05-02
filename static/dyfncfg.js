@@ -2,7 +2,7 @@
 const TagPanel = {
     template: `
         <div style="padding: 0 15px 15px 15px;">
-            <div class="dynamic-sections">
+            <div class="dynamic-sections" v-show="videos?.length > 0">
                 <div v-for="(item, idx) in panelOrder" :key="item"
                      class="drag-section"
                      :draggable="dragEnabledId === item"
@@ -38,7 +38,18 @@ const TagPanel = {
                         </div>
 
                         <div v-else-if="item === 'tags'">
-                            <div class="group-title"><span>3. 人工预设 Tag 分区 (长按拖拽跨区排序)</span></div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <div class="group-title" style="margin-bottom:0;">3. 人工预设 Tag 分区 (长按拖拽)</div>
+                                <div style="display:flex; gap:6px; align-items:center; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; border: 1px solid #444;">
+                                    <span style="font-size: 12px; color: #888;">模板:</span>
+                                    <select v-model="currentProfileName" @change="switchProfile" style="background: transparent; border: none; color: #e6a23c; font-size: 12px; outline: none; max-width: 90px; cursor: pointer;">
+                                        <option v-for="(val, key) in tagProfiles" :key="key" :value="key" style="color: #000;">{{ key }}</option>
+                                    </select>
+                                    <span @click="createNewProfile" style="cursor:pointer; color:#4fc08d; font-size:12px; padding: 0 4px; border-left: 1px solid #333;" title="创建全新空模板">➕</span>
+                                    <span v-if="Object.keys(tagProfiles).length > 1" @click="deleteCurrentProfile" style="cursor:pointer; color:#ff4d4f; font-size:12px; padding: 0 4px;" title="删除当前模板">✖</span>
+                                </div>
+                            </div>
+
                             <div class="tag-input-row" style="margin-bottom:12px;">
                                 <input type="text" v-model="globalTagInput" placeholder="输入新 Tag (首区)..." @keyup.enter="addGlobalTag" />
                                 <van-button type="primary" size="small" @click="addGlobalTag">添加</van-button>
@@ -112,11 +123,18 @@ const TagPanel = {
 
                     <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
                         <h4>高级数据操作 (CSV & JSON)</h4>
-                        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                            <van-button type="primary" size="small" @click="exportTags" style="flex:1; background: #2b2b2b; border-color: #444;">⬇ 导出配置</van-button>
-                            <van-button type="warning" size="small" @click="triggerImportTags" style="flex:1; background: #2b2b2b; border-color: #444; color: #e6a23c;">⬆ 导入配置</van-button>
+                        
+                        <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
+                            <select v-model="exportTarget" class="search-select" style="flex: 1; padding: 4px 8px;">
+                                <option value="ALL">全部模板</option>
+                                <option v-for="(val, key) in tagProfiles" :key="key" :value="key">仅: {{key}}</option>
+                            </select>
+                            <van-button type="primary" size="small" @click="exportTags" style="flex:1; background: #2b2b2b; border-color: #444;">⬇ 导出模板</van-button>
+                            <van-button type="warning" size="small" @click="triggerImportTags" style="flex:1; background: #2b2b2b; border-color: #444; color: #e6a23c;">⬆ 导入模板</van-button>
                         </div>
-                        <div style="background: rgba(25,137,250,0.05); border: 1px solid rgba(25,137,250,0.2); padding: 12px; border-radius: 8px;">
+
+                        <div style="background: rgba(25,137,250,0.05); border: 1px solid rgba(25,137,250,0.2); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                            <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">批量打标：导出无Tag文件列表，在CSV第三列添加Tag后即可一键导入。</p>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <select v-model="exportLimit" class="search-select" style="flex: 1;">
                                     <option value="0">全部导出</option>
@@ -124,10 +142,24 @@ const TagPanel = {
                                     <option value="500">前 500 条</option>
                                     <option value="1000">前 1000 条</option>
                                 </select>
-                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #1989fa;" @click="exportCSV">导出</button>
+                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #1989fa;" @click="exportCSV">导出打标底表</button>
                             </div>
                             <button class="search-btn-confirm" style="margin-top:8px; width:100%; background: #e6a23c;" @click="triggerImportCSV">上传 CSV 批量导入打标</button>
                         </div>
+                        
+                        <div style="background: rgba(142,68,173,0.05); border: 1px solid rgba(142,68,173,0.2); padding: 12px; border-radius: 8px;">
+                            <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">防丢核对：导出“原始名”与“最新物理名”对比表。</p>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select v-model="exportLogLimit" class="search-select" style="flex: 1;">
+                                    <option value="0">全部导出</option>
+                                    <option value="100">前 100 条</option>
+                                    <option value="500">前 500 条</option>
+                                    <option value="1000">前 1000 条</option>
+                                </select>
+                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #8e44ad;" @click="exportRenameLogCSV">导出改名核对表</button>
+                            </div>
+                        </div>
+
                     </div>
                     <button class="search-btn-cancel" @click="showConfig=false" style="border:none; background: transparent !important; text-decoration: underline;">关闭面板</button>
                 </div>
@@ -161,13 +193,71 @@ const TagPanel = {
         const { ref, computed, watch, onMounted } = Vue;
 
         const panelOrder = ref(JSON.parse(localStorage.getItem('dy_panel_order')) || ['tokens', 'auto_tags', 'tags', 'blacklist']);
-        onMounted(() => {
+        
+        const tagProfiles = ref({});
+        const currentProfileName = ref('');
+        const exportTarget = ref('ALL');
+        let isSwitchingProfile = false;
+
+        onMounted(async () => {
             if (panelOrder.value.includes('preview')) {
                 panelOrder.value = panelOrder.value.filter(item => item !== 'preview');
                 localStorage.setItem('dy_panel_order', JSON.stringify(panelOrder.value));
             }
+
+            const tgRes = await window.DyAPI.getTagGroups();
+            let backendGroups = (tgRes && tgRes.groups && tgRes.groups.length > 0) ? tgRes.groups : [{ id: 'g_1', tags: [] }];
+
+            let savedProfiles = JSON.parse(localStorage.getItem('dy_tag_profiles'));
+            let savedCurrentName = localStorage.getItem('dy_current_profile_name');
+
+            if (!savedProfiles || Object.keys(savedProfiles).length === 0) {
+                tagProfiles.value = { '默认方案': backendGroups };
+                currentProfileName.value = '默认方案';
+            } else {
+                tagProfiles.value = savedProfiles;
+                if (savedCurrentName && tagProfiles.value[savedCurrentName]) {
+                    currentProfileName.value = savedCurrentName;
+                } else {
+                    currentProfileName.value = Object.keys(tagProfiles.value)[0];
+                }
+            }
+            
+            tagGroups.value = JSON.parse(JSON.stringify(tagProfiles.value[currentProfileName.value]));
         });
-        
+
+        function switchProfile() {
+            isSwitchingProfile = true;
+            tagGroups.value = JSON.parse(JSON.stringify(tagProfiles.value[currentProfileName.value]));
+            localStorage.setItem('dy_current_profile_name', currentProfileName.value);
+            vant.showToast({ message: `已切换至: ${currentProfileName.value}`, position: 'top', duration: 1000 });
+            setTimeout(() => { isSwitchingProfile = false; }, 200);
+        }
+
+        function createNewProfile() {
+            const name = prompt('请输入新模板名称：\\n(将创建一个干净的空模板)', '新模板');
+            if (name && name.trim()) {
+                const cleanName = name.trim();
+                if (tagProfiles.value[cleanName]) {
+                    vant.showFailToast('模板名称已存在！'); return;
+                }
+                tagProfiles.value[cleanName] = [{ id: 'g_' + Date.now(), tags: [] }];
+                currentProfileName.value = cleanName;
+                switchProfile();
+            }
+        }
+
+        function deleteCurrentProfile() {
+            if (Object.keys(tagProfiles.value).length <= 1) {
+                vant.showFailToast('至少保留一个模板方案！'); return;
+            }
+            if (confirm(`确定要删除模板 [${currentProfileName.value}] 吗？`)) {
+                delete tagProfiles.value[currentProfileName.value];
+                currentProfileName.value = Object.keys(tagProfiles.value)[0];
+                switchProfile();
+            }
+        }
+
         const dragEnabledId = ref(null); let dragIndex = null;
         function enableDrag(item) { dragEnabledId.value = item; }
         function disableDrag() { dragEnabledId.value = null; }
@@ -190,7 +280,7 @@ const TagPanel = {
         const dragType = ref(null), draggedGroupIdx = ref(null), dragOverGroupIdx = ref(null), draggedTagInfo = ref(null), dragOverTagInfo = ref(null), dragDropPosition = ref('');
         
         const showConfig = ref(false), showHistory = ref(false), renameHistory = ref([]);
-        const newPath = ref(''), newBlacklistWord = ref(''), exportLimit = ref('0');
+        const newPath = ref(''), newBlacklistWord = ref(''), exportLimit = ref('0'), exportLogLimit = ref('0');
         const isExecuting = ref(false), executeSuccess = ref(false), executeMsg = ref('');
 
         function getSyncKey(filename) {
@@ -231,14 +321,19 @@ const TagPanel = {
             emit('update-sync', mem);
         }
 
-        onMounted(async () => {
-            const tgRes = await window.DyAPI.getTagGroups();
-            if (tgRes && tgRes.groups && tgRes.groups.length > 0) tagGroups.value = tgRes.groups;
-            else tagGroups.value = [{ id: 'g_1', tags: [] }]; 
-        });
-
         watch(tagGroups, (newVal) => { 
-            if (tagGroups.value.length > 0) { clearTimeout(tagSaveTimeout); tagSaveTimeout = setTimeout(() => { window.DyAPI.saveTagGroups(newVal); }, 1500); }
+            if (isSwitchingProfile) return; 
+
+            if (tagGroups.value.length > 0) { 
+                if(currentProfileName.value && tagProfiles.value[currentProfileName.value]) {
+                    tagProfiles.value[currentProfileName.value] = JSON.parse(JSON.stringify(newVal));
+                    localStorage.setItem('dy_tag_profiles', JSON.stringify(tagProfiles.value));
+                    localStorage.setItem('dy_current_profile_name', currentProfileName.value);
+                }
+
+                clearTimeout(tagSaveTimeout); 
+                tagSaveTimeout = setTimeout(() => { window.DyAPI.saveTagGroups(newVal); }, 1500); 
+            }
         }, { deep: true });
 
         const realFilename = computed(() => {
@@ -458,13 +553,54 @@ const TagPanel = {
             if (res && res.success) { vant.showSuccessToast('文件已恢复'); await openHistoryPanel(); emit('reload-videos', false, props.currentIndex); } else { vant.showFailToast(res?.msg || '恢复失败'); }
         }
 
-        function exportTags() { const dataStr = JSON.stringify(tagGroups.value, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `dy_tags_backup_${new Date().getTime()}.json`; a.click(); URL.revokeObjectURL(url); vant.showSuccessToast('配置导出成功'); }
+        function exportTags() { 
+            let payload;
+            if (exportTarget.value === 'ALL') {
+                payload = { version: 2, current: currentProfileName.value, profiles: tagProfiles.value };
+            } else {
+                payload = { version: 2, current: exportTarget.value, profiles: { [exportTarget.value]: tagProfiles.value[exportTarget.value] } };
+            }
+            const dataStr = JSON.stringify(payload, null, 2); 
+            const blob = new Blob([dataStr], { type: "application/json" }); 
+            const url = URL.createObjectURL(blob); 
+            const a = document.createElement('a'); a.href = url; a.download = `dy_tags_${exportTarget.value === 'ALL' ? 'all' : exportTarget.value}_${new Date().getTime()}.json`; a.click(); 
+            URL.revokeObjectURL(url); 
+            vant.showSuccessToast('配置导出成功'); 
+        }
+
         function triggerImportTags() { document.getElementById('import-tags-file').click(); }
+        
         function importTags(event) {
             const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
-            reader.onload = (e) => { try { const parsed = JSON.parse(e.target.result); if (Array.isArray(parsed)) { tagGroups.value = parsed; window.DyAPI.saveTagGroups(parsed); vant.showSuccessToast('导入成功'); } else vant.showFailToast('格式不正确'); } catch(err) { vant.showFailToast('解析失败'); } event.target.value = ''; };
+            reader.onload = (e) => { 
+                try { 
+                    const parsed = JSON.parse(e.target.result); 
+                    if (parsed.version === 2 && parsed.profiles) {
+                        for (const key in parsed.profiles) {
+                            tagProfiles.value[key] = parsed.profiles[key];
+                        }
+                        currentProfileName.value = parsed.current || Object.keys(parsed.profiles)[0];
+                        localStorage.setItem('dy_tag_profiles', JSON.stringify(tagProfiles.value));
+                        localStorage.setItem('dy_current_profile_name', currentProfileName.value);
+                        switchProfile();
+                        vant.showSuccessToast('模板导入并合并成功');
+                    } else if (Array.isArray(parsed)) { 
+                        const newName = '导入模板_' + new Date().getTime().toString().slice(-4);
+                        tagProfiles.value[newName] = parsed;
+                        currentProfileName.value = newName;
+                        localStorage.setItem('dy_tag_profiles', JSON.stringify(tagProfiles.value));
+                        localStorage.setItem('dy_current_profile_name', currentProfileName.value);
+                        switchProfile();
+                        vant.showSuccessToast('旧版配置已导入为新模板'); 
+                    } else {
+                        vant.showFailToast('格式不正确'); 
+                    }
+                } catch(err) { vant.showFailToast('解析失败'); } 
+                event.target.value = ''; 
+            };
             reader.readAsText(file);
         }
+
         function exportCSV() {
             const params = [];
             if (props.searchState.searchKeyword) params.push(`search=${encodeURIComponent(props.searchState.searchKeyword)}`);
@@ -483,6 +619,17 @@ const TagPanel = {
             event.target.value = '';
         }
 
+        function exportRenameLogCSV() {
+            const params = [];
+            if (props.searchState.searchKeyword) params.push(`search=${encodeURIComponent(props.searchState.searchKeyword)}`);
+            if (props.searchState.excludeKeyword) params.push(`exclude=${encodeURIComponent(props.searchState.excludeKeyword)}`);
+            if (props.searchState.searchScore > 0) params.push(`score=${props.searchState.searchScore}`);
+            if (props.searchState.searchSize !== 0) params.push(`size=${props.searchState.searchSize}`);
+            if (props.searchState.sortBy) params.push(`sort_by=${props.searchState.sortBy}`);
+            if (exportLogLimit.value !== '0') params.push(`limit=${exportLogLimit.value}`);
+            window.open(`/dyfn/sys_tags/export_rename_compare_csv?${params.join('&')}`, '_blank');
+        }
+
         expose({ openConfigPanel, openHistoryPanel, autoSaveStatus, restoreOriginalName });
 
         return {
@@ -490,8 +637,9 @@ const TagPanel = {
             autoTags, toggleAutoTag, tagGroups, globalTagInput, dragGroupEnabledId, filenameTokens, currentCustomTags, quickBlacklistInput, autoSaveStatus, dragType, draggedGroupIdx, dragOverGroupIdx, dragOverTagInfo, dragDropPosition,
             generatedFilename, setAsOnlyToken, toggleToken, restoreOriginalName, addQuickBlacklist, quickBlacklistToken, enableGroupDrag, disableGroupDrag, onGroupDragStart, onGroupDragEnd, onTagDragStart, onTagDragEnd, onTagDragOver, onGroupDragOver, onTagDragEnter, onTagDragLeave, onGroupDrop, onTagDrop, addEmptyGroup, removeTagGroup, addGlobalTag, removeSavedTagFromGroup, 
             isTagActive, handlePresetTagClick,
-            showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, isExecuting, executeSuccess, executeMsg,
-            addPath, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, exportTags, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile
+            showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, exportLogLimit, isExecuting, executeSuccess, executeMsg,
+            addPath, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile, exportRenameLogCSV,
+            tagProfiles, currentProfileName, switchProfile, createNewProfile, deleteCurrentProfile, exportTarget, exportTags
         };
     }
 };

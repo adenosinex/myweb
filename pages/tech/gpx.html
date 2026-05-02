@@ -84,13 +84,25 @@
     <div v-show="processedTracks.length > 0">
       
       <div class="panel-card" v-if="comparisonData">
-        <div class="section-title d-flex align-items-center">
+        <div class="section-title d-flex align-items-center flex-wrap">
            ⏱️ 地理空间用时差值分析
            <select v-model="baselineIndex" @change="renderCharts" class="form-select form-select-sm ms-3" style="width: auto; font-weight: normal; font-size: 13px;">
               <option v-for="(tr, idx) in processedTracks" :value="idx" :key="idx">设置基准轨: {{ tr.filename }}</option>
            </select>
+           <button @click="renameTrack" class="btn btn-sm btn-light border ms-1" style="font-size: 12px; padding: 3px 8px;" title="修改当前基准轨的名称">✏️ 重命名</button>
+           
+           <div class="ms-auto d-flex align-items-center mt-2 mt-md-0">
+             <span class="text-muted me-2" style="font-size: 12px;">时空聚合导出:</span>
+             <select v-model="compareExportWindow" class="form-select form-select-sm me-2" style="width: 100px; font-size: 13px;">
+                <option value="1">1分钟</option>
+                <option value="3">3分钟</option>
+                <option value="5">5分钟</option>
+                <option value="10">10分钟</option>
+             </select>
+             <button @click="exportCompareCSV" class="btn btn-sm btn-outline-primary" style="font-size: 13px; white-space: nowrap;">下载对比序列</button>
+           </div>
         </div>
-        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐。<span class="text-danger fw-bold">正数表示比基准轨慢</span>，<span class="text-success fw-bold">负数表示比基准轨快</span>。点击图例即可进入“单轨聚焦”模式。</div>
+        <div class="text-muted mb-2" style="font-size: 13px;">通过地理分箱(100m)强制对齐。<span class="text-danger fw-bold">正数表示比基准轨慢</span>，<span class="text-success fw-bold">负数表示比基准轨快</span>。系统已自动为您选择整体耗时最短的轨迹作为默认基准。</div>
         <div id="compareChart" class="chart-box"></div>
       </div>
 
@@ -148,7 +160,7 @@
           loading: false, error: '', 
           processedTracks: [], comparisonData: null,
           exportMode: 'raw', exportInterval: 30, activeEvent: null,
-          baselineIndex: 0, 
+          baselineIndex: 0, compareExportWindow: '3', 
           map: null, trackLayer: null, markerLayer: null,
           seqChart: null, loadChart: null, compareChart: null,
           colors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
@@ -208,11 +220,39 @@
           this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, fillOpacity: 0.8 })
             .addTo(this.map).bindPopup(`<b>里程: ${ev.cum_dist_km} km</b><br>${ev.desc}`).openPopup();
         },
+        
+        // --- 新增：重命名轨迹名称并同步更新所有矩阵数据 ---
+        renameTrack() {
+            if (!this.processedTracks.length) return;
+            const oldName = this.processedTracks[this.baselineIndex].filename;
+            const newName = prompt('修改当前轨迹的显示名称 (将同步更新图表与导出字段):', oldName);
+            
+            if (newName && newName.trim() !== '' && newName !== oldName) {
+                // 防止重名覆盖
+                if (this.processedTracks.some(tr => tr.filename === newName)) {
+                    alert('该名称已存在，请使用其他名称！');
+                    return;
+                }
+                
+                // 1. 更新主列表名称
+                this.processedTracks[this.baselineIndex].filename = newName;
+                
+                // 2. 更新对比数据矩阵的 Key
+                if (this.comparisonData && this.comparisonData.cum_time_matrix && this.comparisonData.cum_time_matrix[oldName]) {
+                    this.comparisonData.cum_time_matrix[newName] = this.comparisonData.cum_time_matrix[oldName];
+                    delete this.comparisonData.cum_time_matrix[oldName];
+                }
+                
+                // 3. 强制触发重新渲染
+                this.renderCharts();
+                this.drawMap(this.processedTracks);
+            }
+        },
+
         renderCharts() {
           if (!this.processedTracks.length) return;
           const mainTrack = this.processedTracks[this.baselineIndex].segments;
 
-          // 封装包含独立 time_str 的对象结构，确保 ECharts 底层渲染矩阵不崩溃
           const loadData = mainTrack.map(s => ({ value: [s.offset_min, s.load_score], time_str: s.time_str }));
           const speedData = mainTrack.map(s => ({ value: [s.offset_min, s.speed_kmh], time_str: s.time_str }));
           const vVertData = mainTrack.map(s => ({ value: [s.offset_min, s.v_vert_m_h], time_str: s.time_str }));
@@ -233,7 +273,6 @@
                     let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">绝对时间: ${timeStr} <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(第 ${xVal} min)</span></div>`;
                     
                     params.forEach(p => {
-                        // 拦截处理失效空值
                         if (!p.data || p.value === undefined || p.value === null || isNaN(p.value[1])) return;
                         
                         let unit = p.seriesName.includes('速度') ? ' km/h' : p.seriesName.includes('爬降速') ? ' m/h' : '';
@@ -250,11 +289,7 @@
                     return html;
                 }
             },
-            legend: { 
-                data: ['综合负荷指数', '水平速度(km/h)', '爬降速(m/h)'],
-                selectedMode: 'multiple', 
-                top: 0
-            },
+            legend: { data: ['综合负荷指数', '水平速度(km/h)', '爬降速(m/h)'], selectedMode: 'multiple', top: 0 },
             axisPointer: { link: {xAxisIndex: 'all'} },
             grid: [
                 { left: '6%', right: '5%', top: '8%', height: '23%' },   
@@ -274,7 +309,6 @@
                   min: function(v) { return Math.min(Math.max(v.min, -2000), -200); }
                 }
             ],
-            // 彻底拔除引发 ECharts 崩溃的 visualMap
             series: [
               { name: '综合负荷指数', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: loadData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#8b5cf6' }, areaStyle: {opacity: 0.1} },
               { name: '水平速度(km/h)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: speedData, connectNulls: true, smooth: true, showSymbol: false, itemStyle: { color: '#3b82f6' } },
@@ -288,22 +322,18 @@
           if (!this.seqChart) this.seqChart = echarts.init(document.getElementById('sequenceChart'));
           this.seqChart.setOption({
             tooltip: { 
-                trigger: 'axis',
-                axisPointer: { type: 'line', snap: true, lineStyle: {color: '#94a3b8', type: 'dashed'} },
+                trigger: 'axis', axisPointer: { type: 'line', snap: true, lineStyle: {color: '#94a3b8', type: 'dashed'} },
                 formatter: function(params) {
                     if (!params || !params.length) return '';
                     let validParam = params.find(p => p.data && p.data.time_str);
                     if (!validParam) return '';
-                    
                     let timeStr = validParam.data.time_str;
                     let distKm = parseFloat(validParam.value[0]).toFixed(3);
                     let eleVal = parseFloat(validParam.value[1]).toFixed(1);
-                    
                     let dot = `<span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${validParam.color};"></span>`;
                     return `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">绝对时间: ${timeStr} <span style="font-weight:normal;color:#94a3b8;margin-left:6px;">(里程: ${distKm} km)</span></div>
                             <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
-                                <span>${dot}海拔</span>
-                                <span style="font-weight:bold;margin-left:15px;">${eleVal} m</span>
+                                <span>${dot}海拔</span><span style="font-weight:bold;margin-left:15px;">${eleVal} m</span>
                             </div>`;
                 }
             },
@@ -320,22 +350,22 @@
                 if (dom) {
                     if (!this.compareChart) this.compareChart = echarts.init(dom);
                     const seriesData = [];
-                    
                     let baseName = this.processedTracks[this.baselineIndex].filename;
                     let baseTimes = this.comparisonData.cum_time_matrix[baseName];
                     let trackNames = Object.keys(this.comparisonData.cum_time_matrix);
                     
                     for (let fname of trackNames) {
                         let xyData = this.comparisonData.bins_km.map((dist, idx) => {
-                            let diffMinutes = this.comparisonData.cum_time_matrix[fname][idx] - baseTimes[idx];
-                            return [dist, parseFloat(diffMinutes.toFixed(2))];
+                            let valF = this.comparisonData.cum_time_matrix[fname][idx];
+                            let valB = baseTimes[idx];
+                            if (valF == null || valB == null) return [dist, null]; 
+                            return [dist, parseFloat((valF - valB).toFixed(2))];
                         });
                         seriesData.push({ name: fname, type: 'line', connectNulls: true, smooth: true, showSymbol: false, data: xyData });
                     }
                     this.compareChart.setOption({
                         tooltip: { 
-                            trigger: 'axis', 
-                            axisPointer: { type: 'line', snap: true },
+                            trigger: 'axis', axisPointer: { type: 'line', snap: true },
                             formatter: function(params) {
                                if(!params || !params.length) return '';
                                let html = `<div style="font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:4px;">对齐里程点: ${parseFloat(params[0].value[0]).toFixed(2)} km</div>`;
@@ -351,12 +381,7 @@
                                return html;
                             }
                         },
-                        legend: { 
-                            data: trackNames,
-                            type: 'scroll',
-                            selectedMode: 'single', 
-                            selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' }
-                        },
+                        legend: { data: trackNames, type: 'scroll', selectedMode: 'multiple', selectorLabel: { color: '#3b82f6', borderColor: '#3b82f6' } },
                         grid: { left: '6%', right: '5%', bottom: '15%', top: '15%', containLabel: true },
                         dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 12 }],
                         xAxis: { type: 'value', name: '对齐里程(km)', min: 'dataMin', max: 'dataMax' },
@@ -385,6 +410,22 @@
             this.processedTracks = res.data.tracks;
             this.comparisonData = res.data.comparison;
             
+            // --- 新增：自动寻找耗时最短的轨迹并设为基准 ---
+            if (this.processedTracks && this.processedTracks.length > 0) {
+                let minTime = Infinity;
+                let fastestIdx = 0;
+                this.processedTracks.forEach((tr, idx) => {
+                    if (tr.segments && tr.segments.length > 0) {
+                        const totalTime = tr.segments[tr.segments.length - 1].offset_min;
+                        if (totalTime < minTime) {
+                            minTime = totalTime;
+                            fastestIdx = idx;
+                        }
+                    }
+                });
+                this.baselineIndex = fastestIdx;
+            }
+
             this.$nextTick(() => { 
                 this.renderCharts(); 
                 setTimeout(() => { if(this.map) this.map.invalidateSize(); }, 200);
@@ -394,6 +435,170 @@
           } catch (err) {
             this.error = err.response?.data?.error || '解析异常，可能是GPS坐标跳动过大被系统切断。';
           } finally { this.loading = false; }
+        },
+
+        getInterpolatedTime(trackName, targetDist) {
+            if (!this.comparisonData) return null;
+            const bins = this.comparisonData.bins_km;
+            const times = this.comparisonData.cum_time_matrix[trackName];
+            if (!bins || !times || bins.length === 0) return null;
+
+            if (targetDist <= bins[0]) return times[0];
+
+            for (let i = 0; i < bins.length - 1; i++) {
+                if (targetDist >= bins[i] && targetDist <= bins[i+1]) {
+                    const distRange = bins[i+1] - bins[i];
+                    if (distRange === 0) return times[i];
+                    const ratio = (targetDist - bins[i]) / distRange;
+                    if (times[i] == null || times[i+1] == null) return null;
+                    return times[i] + ratio * (times[i+1] - times[i]);
+                }
+            }
+            return null; 
+        },
+
+       exportCompareCSV() {
+            if (!this.processedTracks.length || !this.comparisonData) return;
+            const baselineSegments = this.processedTracks[this.baselineIndex].segments;
+            const baseTrackName = this.processedTracks[this.baselineIndex].filename;
+            const windowMin = parseFloat(this.compareExportWindow);
+            
+            // 增强版时间解析：同时兼容"完整日期"和"纯时间(HH:mm:ss)"格式
+            const formatTimePlus8h = (timeStr) => {
+                if (!timeStr) return '未知';
+                
+                // 1. 尝试完整日期解析
+                let safeStr = timeStr.replace('T', ' ').replace('Z', '').split('.')[0].replace(/-/g, '/');
+                let d = new Date(safeStr);
+                
+                if (!isNaN(d.getTime())) {
+                    d.setTime(d.getTime() + 8 * 3600000);
+                    const pad = n => n.toString().padStart(2, '0');
+                    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                } 
+                
+                // 2. 如果失败，说明是纯时间 "06:36:32"，直接正则提取并加8
+                let timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+                if (timeMatch) {
+                    let h = parseInt(timeMatch[1], 10);
+                    let m = timeMatch[2];
+                    h = (h + 8) % 24; // 加8小时，超24小时自动跨天归零
+                    const pad = n => n.toString().padStart(2, '0');
+                    return `${pad(h)}:${m}`;
+                }
+
+                return timeStr; // 彻底无解兜底
+            };
+            
+            const baseStartTime = formatTimePlus8h(baselineSegments[0]?.time_str);
+
+            let results = [];
+            let currentTime = windowMin;
+            const maxTime = baselineSegments[baselineSegments.length - 1].offset_min;
+            let lastIndex = 0;
+
+            const otherTrackNames = Object.keys(this.comparisonData.cum_time_matrix).filter(n => n !== baseTrackName);
+            
+            let fieldnames = [
+                `相对时间点(min)_基准起点[${baseStartTime}]`, 
+                '绝对里程(km)', 
+                '海拔高度(m)', 
+                '区间真实均速(km/h)', 
+                '区间等效负荷均速GAP(km/h)'
+            ];
+            
+            otherTrackNames.forEach(name => {
+                const compTrack = this.processedTracks.find(t => t.filename === name);
+                const compStartTime = formatTimePlus8h(compTrack?.segments[0]?.time_str);
+                
+                fieldnames.push(`累计领先[${name}]秒`);
+                fieldnames.push(`本区间净胜[${name}]秒_起点[${compStartTime}]`);
+            });
+
+            let lastCompTimes = {};
+            otherTrackNames.forEach(name => lastCompTimes[name] = 0);
+
+            while (currentTime <= maxTime) {
+                let currentIndex = lastIndex;
+                while (currentIndex < baselineSegments.length && baselineSegments[currentIndex].offset_min < currentTime) {
+                    currentIndex++;
+                }
+                if (currentIndex >= baselineSegments.length) currentIndex = baselineSegments.length - 1;
+
+                const currentSeg = baselineSegments[currentIndex];
+                const lastSeg = baselineSegments[lastIndex];
+
+                let h_up = 0; 
+                let h_down = 0; 
+                let dist_km = currentSeg.cum_dist_km - lastSeg.cum_dist_km;
+
+                for (let i = lastIndex + 1; i <= currentIndex; i++) {
+                    let diff = baselineSegments[i].ele - baselineSegments[i-1].ele;
+                    if (diff > 0) h_up += diff;
+                    else h_down += Math.abs(diff);
+                }
+
+                let eq_dist_km = dist_km + (h_up / 100) - 0.35 * (h_down / 100);
+                if (eq_dist_km < dist_km) eq_dist_km = dist_km; 
+
+                let dt_h = (currentSeg.offset_min - lastSeg.offset_min) / 60; 
+                let speed = dt_h > 0 ? dist_km / dt_h : 0;
+                let eq_speed = dt_h > 0 ? eq_dist_km / dt_h : 0;
+
+                let row = [
+                    currentTime.toFixed(1),
+                    currentSeg.cum_dist_km.toFixed(3),
+                    currentSeg.ele.toFixed(1),
+                    speed.toFixed(1),
+                    eq_speed.toFixed(1)
+                ];
+
+                const baseTimeAtDist = currentSeg.offset_min; 
+                const prevBaseTimeAtDist = lastSeg.offset_min;
+
+                otherTrackNames.forEach(tName => {
+                    let compTime = this.getInterpolatedTime(tName, currentSeg.cum_dist_km);
+                    if (compTime != null) {
+                        let cumDiffSec = (compTime - baseTimeAtDist) * 60;
+                        row.push(cumDiffSec.toFixed(0));
+
+                        let prevCompTime = lastCompTimes[tName];
+                        let compIntervalDuration = compTime - prevCompTime;
+                        let baseIntervalDuration = baseTimeAtDist - prevBaseTimeAtDist;
+                        
+                        let intervalDiffSec = (compIntervalDuration - baseIntervalDuration) * 60;
+                        row.push(intervalDiffSec.toFixed(0));
+
+                        lastCompTimes[tName] = compTime;
+                    } else {
+                        row.push(''); 
+                        row.push(''); 
+                    }
+                });
+
+                results.push(row);
+                
+                lastIndex = currentIndex;
+                currentTime += windowMin;
+                
+                if (currentIndex === baselineSegments.length - 1) break; 
+            }
+
+            let csvContent = '\uFEFF'; 
+            csvContent += fieldnames.join(',') + '\n';
+            results.forEach(row => {
+                let rowStr = row.map(v => `"${v !== undefined ? v : ''}"`).join(',');
+                csvContent += rowStr + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `时空对比与波动分析_${baseTrackName}_${windowMin}min窗口_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         },
         exportCSV() {
           if (!this.processedTracks.length) return;
@@ -480,7 +685,7 @@
               if (latlngs.length > 0) {
                   bounds.extend(latlngs);
                   L.polyline(latlngs, { color: color, weight: index === 0 ? 5 : 3, opacity: 0.8 }).addTo(this.trackLayer)
-                   .bindPopup(`<b>${tr.filename}</b><br>均速: ${tr.overall.terrain.avg_speed} km/h`);
+                     .bindPopup(`<b>${tr.filename}</b><br>均速: ${tr.overall.terrain.avg_speed} km/h`);
               }
           });
           

@@ -2,7 +2,7 @@
 <html lang="zh-cn">
 <head>
     <meta charset="UTF-8">
-    <title>短视频浏览项目</title>
+    <title>短视频tag项目</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" href="http://192.168.31.197:8100/static/cdn/vant@4index.css">
     <link rel="stylesheet" href="http://192.168.31.197:8100/static/dy.css">
@@ -12,85 +12,12 @@
     <script src="http://192.168.31.197:8100/static/cdn/vue-router4.5.global.js"></script>
     <script src="http://192.168.31.197:8100/static/cdn/vant4.min.js"></script>
     <script src="http://192.168.31.197:8100/static/cdn/axios1.1.min.js"></script>
-    <script src="https://apple4.su7.dpdns.org:10443/static/dyfn.js"></script>
+    <script src="https://apple4.su7.dpdns.org:10443/static/dyfncfg.js"></script>
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfnhead.js"></script>
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfnst.js"></script>
     
-   
-
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #000; color: #fff; }
-        #app { height: 100%; width: 100%; }
-        
-        .layout-wrapper { display: flex; flex-direction: row; height: 100%; width: 100%; }
-        .video-side { flex: 1; position: relative; background: #000; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-        .panel-side { width: 420px; background: #141414; border-left: 1px solid #333; display: flex; flex-direction: column; box-sizing: border-box; z-index: 10; }
-        
-        .panel-header { padding: 15px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: #1a1a1a; }
-        .panel-content { flex: 1; overflow-y: auto; padding: 0; }
-        .icon-btn { flex: 0 0 60px; font-size: 22px; padding: 0; }
-
-        .dynamic-sections { padding-top: 5px; }
-        .drag-section { position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s; }
-        .drag-section:hover { border-color: #333; }
-        .drag-section.is-dragging { opacity: 0.3; border-color: #1989fa; }
-        .drag-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; color: #555; cursor: grab; font-size: 14px; font-weight: bold; }
-        .drag-handle:active { cursor: grabbing; color: #fff; }
-
-        .tag-group-card { background: rgba(0,0,0,0.3); border: 1px dashed #444; border-radius: 6px; padding: 10px; margin-bottom: 10px; min-height: 45px; transition: all 0.2s; }
-        .tag-group-card.drag-over-group { border-color: #e6a23c; background: rgba(230, 162, 60, 0.1); }
-        .tag-group-card.drag-over-empty { border-color: #1989fa; background: rgba(25, 137, 250, 0.1); }
-        .tag-group-card.is-dragging-group { opacity: 0.3; border-color: #e6a23c; }
-        
-        .drag-handle-group { display: inline-flex; align-items: center; color: #888; cursor: grab; font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); }
-        .drag-handle-group:active { cursor: grabbing; color: #fff; background: rgba(255,255,255,0.15); }
-
-        .group-title { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        
-        .token-chip, .quick-tag-chip, .auto-tag-chip { display: inline-flex; align-items: center; margin: 4px; border-radius: 4px; font-size: 13px; user-select: none; transition: all 0.2s; overflow: visible; position: relative;}
-        
-        .token-chip { background: #1989fa; color: #fff; border: 1px solid #1989fa; }
-        .token-chip.token-off { background: #111; color: #555; text-decoration: line-through; border: 1px solid #333; }
-        
-        .quick-tag-chip { background: #333; color: #ccc; border: 1px solid #555; border-radius: 14px; cursor: grab;}
-        .quick-tag-chip:active { cursor: grabbing; }
-        .quick-tag-chip.tag-on { background: #e6a23c; color: #fff; border-color: #e6a23c; }
-        .quick-tag-chip.is-dragging-tag { opacity: 0.4; transform: scale(0.9); }
-        .quick-tag-chip.drag-over-tag-left { box-shadow: -3px 0 0 #1989fa; }
-        .quick-tag-chip.drag-over-tag-right { box-shadow: 3px 0 0 #1989fa; }
-
-        .auto-tag-chip { border-radius: 14px; background: rgba(142, 68, 173, 0.15); color: #c39bd3; border: 1px solid #8e44ad; cursor: pointer; padding: 4px 10px; font-weight: bold;}
-        .auto-tag-chip:hover { background: rgba(142, 68, 173, 0.35); }
-        .auto-tag-chip.tag-off { background: #111; color: #555; text-decoration: line-through; border-color: #333; }
-        
-        .chip-text { padding: 5px 8px; cursor: pointer; }
-        .chip-action { padding: 5px 6px; background: rgba(0,0,0,0.2); color: #ffeb3b; font-size: 11px; cursor: pointer; border-left: 1px solid rgba(255,255,255,0.2); }
-        .chip-del { color: #ff4d4f; font-weight: bold; padding: 5px 8px; border-left: 1px solid rgba(255,255,255,0.2); cursor: pointer; background: rgba(0,0,0,0.2); font-size: 11px; border-top-right-radius: 14px; border-bottom-right-radius: 14px; }
-        .token-chip.token-off .chip-action, .token-chip.token-off .chip-del { color: #888; border-color: #444; }
-        .quick-tag-chip.tag-on .chip-del { border-left-color: rgba(255,255,255,0.4); }
-        
-        .tag-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
-        .tag-input-row input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; }
-        .empty-hint { font-size: 12px; color: #666; font-style: italic; }
-
-        .search-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
-        .search-modal-content { background: #1a1a1a !important; color: #eee !important; padding: 20px; border-radius: 12px; border: 1px solid #333; width: 90%; max-width: 500px; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-        .search-modal-content h4 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; color: #fff; font-size: 16px;}
-        
-        .search-input, .search-select { background: #0a0a0a !important; border: 1px solid #444 !important; color: #fff !important; padding: 8px 12px; border-radius: 6px; width: 100%; box-sizing: border-box; outline: none; transition: border 0.3s; }
-        .search-btn-confirm { background: #1989fa; border: none; color: #fff; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap;}
-        .search-btn-confirm:disabled { background: #555; cursor: not-allowed; }
-        .search-btn-cancel { background: rgba(255,255,255,0.05); border: 1px solid #444; color: #aaa; padding: 10px 15px; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; transition: background 0.2s; font-size: 14px;}
-
-        .van-popup { background: #1a1a1a !important; color: #eee !important; border-top: 1px solid #333; }
-        .van-rate__item--full .van-icon { color: #e6a23c !important; }
-        .van-rate__item--void .van-icon { color: #444 !important; }
-
-        @media (max-width: 850px) {
-            .layout-wrapper { flex-direction: column; }
-            .video-side { flex: none; height: 50vh; }
-            .panel-side { width: 100%; flex: 1; border-left: none; border-top: 1px solid #333; }
-        }
+     
     </style>
 </head>
 <body>
@@ -129,7 +56,6 @@
                 :totalpage="state.totalpage"
                 :current-video="currentVideo"
                 :current-video-score="currentVideo?.score"
-                :last-like-type="lastLikeType"
                 :save-status="tagPanelRef?.autoSaveStatus"
                 :sync-enabled="syncEnabled"
                 :sync-count="syncMemory.length"
@@ -146,7 +72,7 @@
                 @clear-sync="clearSyncMemory"
             ></header-panel>
 
-            <div class="panel-content" v-show="!isLoading && state.videos?.length">
+            <div class="panel-content" ref="panelContentRef" @scroll="handlePanelScroll">
                 <tag-panel 
                     ref="tagPanelRef"
                     :current-video="currentVideo" 
@@ -296,6 +222,8 @@ const app = createApp({
         const headerRef = ref(null);
         const tagPanelRef = ref(null);
         const statsPanelRef = ref(null);
+        
+        const panelContentRef = ref(null);
 
         const syncEnabled = ref(JSON.parse(localStorage.getItem('dy_sync_enabled') ?? 'true'));
         const syncMemory = ref(JSON.parse(localStorage.getItem('dy_sync_memory') || '[]'));
@@ -348,6 +276,16 @@ const app = createApp({
         async function addBlacklistWord(kw) { if(!blacklist.value.includes(kw)) { blacklist.value.push(kw); await window.DyAPI.updateBlacklist(blacklist.value); } }
         async function removeBlacklistWord(idx) { blacklist.value.splice(idx, 1); await window.DyAPI.updateBlacklist(blacklist.value); }
 
+        let scrollTimeout = null;
+        function handlePanelScroll(e) {
+            if (!scrollTimeout) {
+                scrollTimeout = setTimeout(() => {
+                    localStorage.setItem('dy_panel_scroll', e.target.scrollTop);
+                    scrollTimeout = null;
+                }, 300);
+            }
+        }
+
         onMounted(async () => {
             let savedIndex = parseInt(localStorage.getItem('dy_current_index'));
             
@@ -366,9 +304,16 @@ const app = createApp({
 
             await loadVideos(false, startIndex);
             isLoading.value = false;
-            setTimeout(() => { playActiveVideo(); }, 500);
             
-            // 🌟 核心修复：滚轮精准防误触拦截 🌟
+            setTimeout(() => { playActiveVideo(); }, 500);
+
+            setTimeout(() => {
+                const savedScroll = localStorage.getItem('dy_panel_scroll');
+                if (savedScroll && panelContentRef.value) {
+                    panelContentRef.value.scrollTop = parseInt(savedScroll, 10);
+                }
+            }, 800);
+            
             window.addEventListener('wheel', (e) => { 
                 if (e.target.closest('.panel-side') || e.target.closest('.van-popup') || e.target.closest('.search-modal')) return;
                 if (Math.abs(e.deltaY) < 30) return; 
@@ -395,7 +340,7 @@ const app = createApp({
         });
 
         return {
-            state, isLoading,
+            state, isLoading, panelContentRef, handlePanelScroll,
             headerRef, tagPanelRef, statsPanelRef, videoIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, currentVideo, currentIndex, blacklist, pathList,
             getVideoUrl, onVideoLoaded, onVideoReady, nextVideo, handleTouchStart, handleTouchEnd, handleUpdateScore,
             handleAction, jumpTo, loadVideos, addPath, indexPath, refreshAllPaths, indexPath_del, addBlacklistWord, removeBlacklistWord,

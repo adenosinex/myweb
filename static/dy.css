@@ -1,240 +1,179 @@
-html,
-body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    background: #000;
-}
+body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+        }
 
-#app {
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden;
-    background: #000;
-}
+        #app {
+            height: 100%;
+            width: 100%;
+            box-sizing: border-box;
+        }
 
-.main-video {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-}
+        /* ====== 1. 核心布局优化 (侧边栏留白隔离) ====== */
+        .layout-wrapper {
+            display: flex;
+            flex-direction: row;
+            height: 100%;
+            width: 100%;
+            padding: 15px; /* 全局内边距，让画面与屏幕边缘拉开距离 */
+            box-sizing: border-box;
+            gap: 15px; /* 视频区和侧边栏的间距 */
+        }
 
-.video-box {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background: #000;
-}
+        .video-side {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-radius: 12px; /* 给视频区域加上圆角 */
+            overflow: hidden;
+        }
 
-.video-title {
-    width: 60%;
-    color: #fff;
-    font-size: 22px;
-    font-weight: bold;
-    margin-bottom: 10px;
-    text-align: center;
-    cursor: pointer;
-}
+        /* 侧边栏：独立板块感，取消紧贴边缘 */
+        .panel-side {
+            width: 420px;
+            background: #141414;
+            border: 1px solid #282828;
+            border-radius: 12px; /* 圆角边框 */
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            z-index: 10;
+            overflow: hidden;
+        }
 
-.video-container {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
+        /* ====== 2. 弱化首尾栏 (取消固定截断边界) ====== */
+        .panel-header {
+            flex: none;
+            padding: 18px 15px 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            background: transparent; /* 取消色块硬截断，融入背景 */
+        }
 
-video {
-    /* 默认样式，可被类覆盖 */
-    background: #000;
-    border-radius: 0;
-    object-fit: cover;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    transition: opacity 0.3s ease;
-}
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
 
-.active-video {
-    opacity: 1;
-    z-index: 2;
-}
+        /* ====== 3. 标题居中，左侧不动 (绝对定位布局) ====== */
+        .title-row-container {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            position: relative; /* 为子元素的绝对定位提供参考 */
+            justify-content: center; /* 让内部的视频标题绝对居中 */
+            height: 40px; 
+            margin-top: 5px;
+        }
+        
+        .title-row-main {
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+            width: 100%;
+        }
 
-.hidden-video {
-    opacity: 0;
-    z-index: 1;
-}
+        /* 左侧作者按钮：钉死在最左侧 */
+        .author-btn {
+            position: absolute !important;
+            left: 0; 
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+        }
 
-/* Loading screen styles */
-.loading-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: #000;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
+        /* ====== 其他通用样式 (合并去重版) ====== */
+        .main-video { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; }
+        .video-box { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #000; }
+        .video-container { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
 
-/* 竖屏视频样式 */
-video {
-    object-fit: contain;
-    height: auto;
-    width: 44vh;
-}
-/* 竖屏视频样式 */
-.video-portrait {
-    height: auto;
-    width: 44vh;
-}
+        video { background: #000; border-radius: 0; object-fit: contain; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); transition: opacity 0.3s ease; height: auto; width: 44vh; }
+        .active-video { opacity: 1; z-index: 2; }
+        .hidden-video { opacity: 0; z-index: 1; }
+        .video-portrait { left: 50%; height: auto; width: 44vh; }
+        .video-landscape { height: 60vh; max-width: 95%; }
 
-/* 横屏视频样式 */
-.video-landscape {
-    height: 60vh;
-    max-width: 95%;
-}
+        .loading-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+        .van-popup { background: #1a1a1a !important; color: #eee !important; border-top: 1px solid #333; }
+        .van-rate__item--full .van-icon { color: #e6a23c !important; }
+        .van-rate__item--void .van-icon { color: #444 !important; }
 
-.van-popup {
-    background: #fff;
-}
+        .video-actions { z-index: 99; align-items: center; flex-direction: column; position: absolute; right: 30px; display: flex; justify-content: center; gap: 20px; }
 
-.video-actions {
-    z-index: 99;
-    align-items: center;
-    flex-direction: column;
-    position: absolute;
-    right: 30px;
-     
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-}
+        .search-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); z-index: 2000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
+        .search-modal-content { background: #1a1a1a !important; color: #eee !important; padding: 20px; border-radius: 12px; border: 1px solid #333; width: 90%; max-width: 500px; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        .search-modal-content h4 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; color: #fff; font-size: 16px;}
 
-.search-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
+        .search-input, .search-select { background: #0a0a0a !important; border: 1px solid #444 !important; color: #fff !important; padding: 8px 12px; border-radius: 6px; width: 100%; box-sizing: border-box; outline: none; transition: border 0.3s; margin-bottom: 12px; font-size: 16px; }
+        .search-btn-confirm, .search-btn-cancel { width: 48%; margin: 4px 1%; padding: 10px; font-size: 16px; border-radius: 6px; border: none; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
+        .search-btn-confirm { background: #1989fa; color: #fff; }
+        .search-btn-confirm:disabled { background: #555; cursor: not-allowed; }
+        .search-btn-cancel { background: rgba(255,255,255,0.05); border: 1px solid #444; color: #aaa; }
 
-.search-modal-content {
-    background: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    width: 90vw;
-    max-width: 400px;
-    box-shadow: 0 2px 12px #0002;
-}
+        .btn-active { background: #ff9800 !important; color: #fff !important; box-shadow: 0 0 8px #ff9800; border-radius: 8px; transition: background 0.2s, color 0.2s, box-shadow 0.2s; }
+        .icon-btn { flex: 0 0 60px; font-size: 22px; padding: 0; }
 
-.search-input,
-.search-select {
-    width: 100%;
-    margin-bottom: 12px;
-    padding: 8px;
-    font-size: 16px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-}
+        .dynamic-sections { padding-top: 5px; }
+        .drag-section { position: relative; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 12px 12px 12px 34px; margin-bottom: 12px; border: 1px dashed transparent; transition: border 0.2s, opacity 0.2s; }
+        .drag-section:hover { border-color: #333; }
+        .drag-section.is-dragging { opacity: 0.3; border-color: #1989fa; }
+        .drag-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; color: #555; cursor: grab; font-size: 14px; font-weight: bold; }
+        .drag-handle:active { cursor: grabbing; color: #fff; }
 
-.search-btn-confirm,
-.search-btn-cancel {
-    width: 48%;
-    margin: 4px 1%;
-    padding: 10px;
-    font-size: 16px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-}
+        .tag-group-card { background: rgba(0,0,0,0.3); border: 1px dashed #444; border-radius: 6px; padding: 10px; margin-bottom: 10px; min-height: 45px; transition: all 0.2s; }
+        .tag-group-card.drag-over-group { border-color: #e6a23c; background: rgba(230, 162, 60, 0.1); }
+        .tag-group-card.drag-over-empty { border-color: #1989fa; background: rgba(25, 137, 250, 0.1); }
+        .tag-group-card.is-dragging-group { opacity: 0.3; border-color: #e6a23c; }
+        
+        .drag-handle-group { display: inline-flex; align-items: center; color: #888; cursor: grab; font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); }
+        .drag-handle-group:active { cursor: grabbing; color: #fff; background: rgba(255,255,255,0.15); }
 
-.search-btn-confirm {
-    background: #1989fa;
-    color: #fff;
-}
+        .group-title { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        
+        .token-chip, .quick-tag-chip, .auto-tag-chip { display: inline-flex; align-items: center; margin: 4px; border-radius: 4px; font-size: 13px; user-select: none; transition: all 0.2s; overflow: visible; position: relative;}
+        
+        .token-chip { background: #1989fa; color: #fff; border: 1px solid #1989fa; }
+        .token-chip.token-off { background: #111; color: #555; text-decoration: line-through; border: 1px solid #333; }
+        
+        .quick-tag-chip { background: #333; color: #ccc; border: 1px solid #555; border-radius: 14px; cursor: grab;}
+        .quick-tag-chip:active { cursor: grabbing; }
+        .quick-tag-chip.tag-on { background: #e6a23c; color: #fff; border-color: #e6a23c; }
+        .quick-tag-chip.is-dragging-tag { opacity: 0.4; transform: scale(0.9); }
+        .quick-tag-chip.drag-over-tag-left { box-shadow: -3px 0 0 #1989fa; }
+        .quick-tag-chip.drag-over-tag-right { box-shadow: 3px 0 0 #1989fa; }
 
-.search-btn-cancel {
-    background: #eee;
-    color: #333;
-}
+        .auto-tag-chip { border-radius: 14px; background: rgba(142, 68, 173, 0.15); color: #c39bd3; border: 1px solid #8e44ad; cursor: pointer; padding: 4px 10px; font-weight: bold;}
+        .auto-tag-chip:hover { background: rgba(142, 68, 173, 0.35); }
+        .auto-tag-chip.tag-off { background: #111; color: #555; text-decoration: line-through; border-color: #333; }
+        
+        .chip-text { padding: 5px 8px; cursor: pointer; }
+        .chip-action { padding: 5px 6px; background: rgba(0,0,0,0.2); color: #ffeb3b; font-size: 11px; cursor: pointer; border-left: 1px solid rgba(255,255,255,0.2); }
+        .chip-del { color: #ff4d4f; font-weight: bold; padding: 5px 8px; border-left: 1px solid rgba(255,255,255,0.2); cursor: pointer; background: rgba(0,0,0,0.2); font-size: 11px; border-top-right-radius: 14px; border-bottom-right-radius: 14px; }
+        .token-chip.token-off .chip-action, .token-chip.token-off .chip-del { color: #888; border-color: #444; }
+        .quick-tag-chip.tag-on .chip-del { border-left-color: rgba(255,255,255,0.4); }
+        
+        .tag-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .tag-input-row input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; }
+        .empty-hint { font-size: 12px; color: #666; font-style: italic; }
 
-.quick-size-btn {
-    display: inline-block;
-    padding: 4px 8px;
-    margin: 2px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background: #f5f5f5;
-    color: #333;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.quick-size-btn:hover {
-    background: #e6f7ff;
-    border-color: #1989fa;
-    color: #1989fa;
-}
-
-.quick-size-btn.clear-btn {
-    background: #fff2e8;
-    border-color: #ff7875;
-    color: #ff4d4f;
-}
-
-.quick-size-btn.clear-btn:hover {
-    background: #fff1f0;
-    border-color: #ff4d4f;
-}
-
-@media (max-width: 600px) {
-    .video-title {
-        font-size: 18px;
-    }
-
-    video {
-        height: 55vh;
-    }
-}
-
-
-html,
-body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    /* 禁止滚动条出现 */
-}
-
-#app {
-    width: 100vw;
-    height: 100vh;
-    box-sizing: border-box;
-    /* 你可以在这里添加居中、背景色等样式 */
-}
-
-.btn-active {
-    background: #ff9800 !important;
-    color: #fff !important;
-    box-shadow: 0 0 8px #ff9800;
-    border-radius: 8px;
-    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-}
+        @media (max-width: 850px) {
+            .layout-wrapper { flex-direction: column; padding: 0; gap: 0; }
+            .video-side { flex: none; height: 50vh; border-radius: 0; }
+            .panel-side { width: 100%; flex: 1; border: none; border-top: 1px solid #333; border-radius: 0; margin: 0; }
+            .video-title { font-size: 18px; }
+            video { height: 55vh; }
+            .author-btn { position: relative !important; transform: none; left: auto; } /* 移动端让出空间 */
+        }

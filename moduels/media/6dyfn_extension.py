@@ -776,6 +776,69 @@ def index():
     return send_file(INDEX_FILE)
 FILES_TO_SEND = ["moduels/media/6dyfn_extension.py", "pages/media/9dyfn.html"]
 
+import csv
+import io
+from flask import Response, stream_with_context
+from sqlalchemy import asc
+
+# 🌟 新增路由：专门导出原始名与物理名对比表，不影响原打标 CSV
+@dy_bp.route('/sys_tags/export_rename_compare_csv', methods=['GET'])
+def export_rename_compare_csv():
+    session = Session()
+    try:
+        search = request.args.get('search', '')
+        exclude = request.args.get('exclude', '')
+        score = int(request.args.get('score', 0))
+        limit = int(request.args.get('limit', 0))
+
+        query = session.query(Video)
+        
+        if search:
+            for word in search.split():
+                query = query.filter(Video.filename.like(f'%{word}%'))
+        if exclude:
+            for word in exclude.split():
+                query = query.filter(~Video.filename.like(f'%{word}%'))
+        if score > 0:
+            if score == 1: query = query.filter(Video.score == 1)
+            else: query = query.filter(Video.score >= score)
+        
+        query = query.order_by(Video.id.desc())
+        if limit > 0:
+            query = query.limit(limit)
+            
+        videos = query.all()
+
+        def generate():
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['视频ID', '原始文件名', '最新物理文件名', '当前标签', '评分', '物理路径'])
+            yield output.getvalue()
+            output.truncate(0)
+            output.seek(0)
+
+            for v in videos:
+                # 查找最早的一条改名日志来判定原始名
+                first_log = session.query(RenameLog).filter(
+                    RenameLog.video_id == v.id
+                ).order_by(RenameLog.create_time.asc()).first()
+                
+                original_name = os.path.basename(first_log.original_path) if first_log else v.filename
+                current_physical_name = os.path.basename(v.detail)
+
+                writer.writerow([v.id, original_name, current_physical_name, v.tags, v.score, v.detail])
+                yield output.getvalue()
+                output.truncate(0)
+                output.seek(0)
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/csv',
+            headers={"Content-Disposition": f"attachment; filename=rename_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+        )
+    finally:
+        session.close()
+
 @dy_bp.route('/skip/api/get_latest_code', methods=['GET'])
 def get_latest_code():
     files_data = {}
