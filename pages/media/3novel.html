@@ -47,6 +47,12 @@
                            class="w-full bg-white border border-zinc-200 rounded-2xl py-3 px-4 pl-11 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition shadow-sm">
                     <span class="absolute left-4 top-3.5 opacity-30">🔍</span>
                 </div>
+
+                <button id="btnUploadTrigger" onclick="document.getElementById('fileUpload').click()" class="bg-zinc-800 text-white px-5 py-3 rounded-2xl text-sm font-bold transition active:scale-95 whitespace-nowrap flex items-center justify-center gap-2 hover:bg-zinc-700 shadow-sm">
+                    📤 批量上传
+                </button>
+                <input type="file" id="fileUpload" multiple accept=".txt" class="hidden" onchange="handleFileUpload(event)">
+
                 <button onclick="fetchAllFiltered()" id="btnFetchAll" class="btn-primary-gradient px-5 py-3 rounded-2xl text-sm font-bold transition active:scale-95 whitespace-nowrap">
                     🚀 一键全量获取 (字数降序)
                 </button>
@@ -133,11 +139,61 @@
             const handleSearchInput = debounce(() => loadNextPage(true), 500);
             document.getElementById('searchInput').addEventListener('input', handleSearchInput);
 
-            // 🌟 性能优化：事件委托绑定书籍点击效果
+            // 事件委托绑定书籍点击效果
             document.getElementById('novelGrid').addEventListener('click', (e) => {
                 const link = e.target.closest('a');
                 if (link) link.classList.add('book-clicked');
             });
+        }
+
+        // =========================================================
+        // 批量上传处理函数
+        // =========================================================
+        async function handleFileUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            const btn = document.getElementById('btnUploadTrigger');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `⏳ 上传中... (${files.length})`;
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/novel/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await res.json();
+                
+                if (result.status === 'success') {
+                    alert(`✅ 成功上传 ${result.count} 本小说！已自动打上 [手动上传] 标签。`);
+                    
+                    // 体验优化：上传成功后，自动清空旧搜索条件，并选中 "手动上传" 标签
+                    document.getElementById('searchInput').value = '';
+                    selectedTags.clear();
+                    selectedTags.add('手动上传');
+                    
+                    // 重新初始化全局状态并刷新列表
+                    await init();
+                    
+                    // 展开标签栏，让用户看到“手动上传”标签亮起
+                    if (!isExpanded) toggleExpandTags();
+                } else {
+                    alert(`❌ 上传失败: ${result.error}`);
+                }
+            } catch (e) {
+                alert(`❌ 上传发生异常: ${e.message}`);
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                event.target.value = ''; // 清除 input 状态以便下次同名文件能触发 onchange
+            }
         }
 
         // 折叠/展开标签
@@ -255,44 +311,44 @@
 
         // 渲染标签筛选器
         function renderTagButtons() {
-            const topTags = ['已完结', '连载中', '未解析'];
+            const topTags = ['已完结', '连载中', '未解析', '手动上传'];
             const sortedTags = Object.keys(globalTagStats).sort((a, b) => {
                 if (topTags.includes(a) && !topTags.includes(b)) return -1;
                 if (!topTags.includes(a) && topTags.includes(b)) return 1;
                 return globalTagStats[b] - globalTagStats[a];
             });
 
-            document.getElementById('tagContainer').innerHTML = sortedTags.map(tag => `
+            document.getElementById('tagContainer').innerHTML = sortedTags.map(tag => {
+                const isActiveClass = selectedTags.has(tag) ? 'tag-active' : '';
+                return `
                 <button onclick="toggleTag('${tag}')" id="tag-btn-${tag}" 
-                        class="px-3 py-1.5 rounded-xl text-[11px] border border-zinc-200 bg-white text-zinc-600 transition-all flex items-center gap-2 hover:border-blue-300">
+                        class="px-3 py-1.5 rounded-xl text-[11px] border border-zinc-200 bg-white text-zinc-600 transition-all flex items-center gap-2 hover:border-blue-300 ${isActiveClass}">
                     <span class="font-medium">${tag}</span>
                     <span class="text-[9px] opacity-40 font-mono">${globalTagStats[tag]}</span>
                 </button>
-            `).join('');
+                `;
+            }).join('');
+            
+            // 每次渲染后检查是否需要显示清除按钮
+            const btnClear = document.getElementById('btnClearFilters');
+            selectedTags.size > 0 ? btnClear.classList.remove('hidden') : btnClear.classList.add('hidden');
         }
 
         // 切换标签状态
         function toggleTag(tag) {
-            const btn = document.getElementById(`tag-btn-${tag}`);
             if (selectedTags.has(tag)) {
                 selectedTags.delete(tag);
-                btn.classList.remove('tag-active');
             } else {
                 selectedTags.add(tag);
-                btn.classList.add('tag-active');
             }
-            
-            const btnClear = document.getElementById('btnClearFilters');
-            selectedTags.size > 0 ? btnClear.classList.remove('hidden') : btnClear.classList.add('hidden');
-            
+            renderTagButtons(); // 重新渲染以更新颜色状态
             loadNextPage(true);
         }
 
         // 清除所有标签过滤
         function clearFilters() {
             selectedTags.clear();
-            document.querySelectorAll('[id^="tag-btn-"]').forEach(b => b.classList.remove('tag-active'));
-            document.getElementById('btnClearFilters').classList.add('hidden');
+            renderTagButtons();
             loadNextPage(true);
         }
 

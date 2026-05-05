@@ -38,23 +38,15 @@ const TagPanel = {
                         </div>
 
                         <div v-else-if="item === 'tags'">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                                <div class="group-title" style="margin-bottom:0;">3. 人工预设 Tag 分区 (长按拖拽)</div>
-                                <div style="display:flex; gap:6px; align-items:center; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; border: 1px solid #444;">
-                                    <span style="font-size: 12px; color: #888;">模板:</span>
-                                    <select v-model="currentProfileName" @change="switchProfile" style="background: transparent; border: none; color: #e6a23c; font-size: 12px; outline: none; max-width: 90px; cursor: pointer;">
-                                        <option v-for="(val, key) in tagProfiles" :key="key" :value="key" style="color: #000;">{{ key }}</option>
-                                    </select>
-                                    <span @click="createNewProfile" style="cursor:pointer; color:#4fc08d; font-size:12px; padding: 0 4px; border-left: 1px solid #333;" title="创建全新空模板">➕</span>
-                                    <span v-if="Object.keys(tagProfiles).length > 1" @click="deleteCurrentProfile" style="cursor:pointer; color:#ff4d4f; font-size:12px; padding: 0 4px;" title="删除当前模板">✖</span>
-                                </div>
+                            <div class="group-title" style="margin-bottom:12px;">3. 人工预设 Tag 分区 (长按拖拽)</div>
+
+                            <div style="background: rgba(25, 137, 250, 0.08); border: 1px solid rgba(25, 137, 250, 0.3); border-radius: 6px; padding: 10px; margin-bottom: 12px; min-height: 30px;">
+                                <span style="font-size: 12px; color: #1989fa; font-weight: bold; margin-bottom: 6px; display: block;">即将保存的 Tag 预览:</span>
+                                <span v-if="activeAutoTags.length === 0 && currentCustomTags.length === 0" class="empty-hint" style="color:#1989fa; opacity: 0.6;">暂无标签...</span>
+                                <span v-for="t in activeAutoTags" :key="'auto'+t" class="auto-tag-chip" style="margin: 2px 4px 2px 0; cursor: default; padding: 2px 8px;">#a_{{ t }}</span>
+                                <span v-for="t in currentCustomTags" :key="'custom'+t" class="quick-tag-chip tag-on" style="margin: 2px 4px 2px 0; cursor: default; padding: 2px 8px;">#{{ t }}</span>
                             </div>
 
-                            <div class="tag-input-row" style="margin-bottom:12px;">
-                                <input type="text" v-model="globalTagInput" placeholder="输入新 Tag (首区)..." @keyup.enter="addGlobalTag" />
-                                <van-button type="primary" size="small" @click="addGlobalTag">添加</van-button>
-                                <van-button type="default" size="small" @click="addEmptyGroup" style="padding: 0 10px;">+ 新区</van-button>
-                            </div>
                             <div v-for="(group, gIdx) in tagGroups" :key="group.id" class="tag-group-card" :class="{'drag-over-group': dragType === 'group' && dragOverGroupIdx === gIdx, 'drag-over-empty': dragType === 'tag' && dragOverGroupIdx === gIdx && group.tags.length === 0}" :draggable="dragGroupEnabledId === group.id" @dragstart.stop="onGroupDragStart($event, gIdx)" @dragend.stop="onGroupDragEnd" @dragover.prevent.stop="onGroupDragOver($event, gIdx)" @dragenter.prevent="onTagDragEnter(gIdx)" @dragleave.prevent="onTagDragLeave(gIdx)" @drop.prevent.stop="onGroupDrop($event, gIdx)">
                                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                                     <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag">⋮⋮ 分区</div>
@@ -66,6 +58,24 @@ const TagPanel = {
                                         <span class="chip-text" @click="handlePresetTagClick(tag)">#{{ tag }}</span>
                                         <span class="chip-del" @click.stop="removeSavedTagFromGroup(gIdx, tIdx)">×</span>
                                     </span>
+                                </div>
+                            </div>
+
+                            <div class="tag-input-row" style="margin-top:12px; margin-bottom:12px;">
+                                <input type="text" v-model="globalTagInput" placeholder="输入新 Tag (首区)..." @keyup.enter="addGlobalTag" />
+                                <van-button type="primary" size="small" @click="addGlobalTag">添加</van-button>
+                                <van-button type="default" size="small" @click="addEmptyGroup" style="padding: 0 10px;">+ 新区</van-button>
+                            </div>
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; background: rgba(0,0,0,0.2); padding: 8px 10px; border-radius: 6px; border: 1px dashed #444;">
+                                <span style="font-size: 12px; color: #888;">多方案模板管理</span>
+                                <div style="display:flex; gap:6px; align-items:center; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; border: 1px solid #444;">
+                                    <span style="font-size: 12px; color: #888;">模板:</span>
+                                    <select v-model="currentProfileName" @change="switchProfile" style="background: transparent; border: none; color: #e6a23c; font-size: 12px; outline: none; max-width: 90px; cursor: pointer;">
+                                        <option v-for="(val, key) in tagProfiles" :key="key" :value="key" style="color: #000;">{{ key }}</option>
+                                    </select>
+                                    <span @click="createNewProfile" style="cursor:pointer; color:#4fc08d; font-size:12px; padding: 0 4px; border-left: 1px solid #333;" title="创建全新空模板">➕</span>
+                                    <span v-if="Object.keys(tagProfiles).length > 1" @click="deleteCurrentProfile" style="cursor:pointer; color:#ff4d4f; font-size:12px; padding: 0 4px;" title="删除当前模板">✖</span>
                                 </div>
                             </div>
                         </div>
@@ -282,6 +292,11 @@ const TagPanel = {
         const showConfig = ref(false), showHistory = ref(false), renameHistory = ref([]);
         const newPath = ref(''), newBlacklistWord = ref(''), exportLimit = ref('0'), exportLogLimit = ref('0');
         const isExecuting = ref(false), executeSuccess = ref(false), executeMsg = ref('');
+
+        // 🌟 核心：计算当前激活的标签 🌟
+        const activeAutoTags = computed(() => {
+            return autoTags.value.filter(t => t.active).map(t => t.text);
+        });
 
         function getSyncKey(filename) {
             if (!filename) return '';
@@ -639,7 +654,8 @@ const TagPanel = {
             isTagActive, handlePresetTagClick,
             showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, exportLogLimit, isExecuting, executeSuccess, executeMsg,
             addPath, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile, exportRenameLogCSV,
-            tagProfiles, currentProfileName, switchProfile, createNewProfile, deleteCurrentProfile, exportTarget, exportTags
+            tagProfiles, currentProfileName, switchProfile, createNewProfile, deleteCurrentProfile, exportTarget, exportTags,
+            activeAutoTags // 暴露给模板
         };
     }
 };

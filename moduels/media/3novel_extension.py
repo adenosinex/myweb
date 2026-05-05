@@ -23,6 +23,10 @@ RESOURCE_NODE_URL = "http://one4.zin6.dpdns.org:8100"
 VECTOR_NODE_URL = "http://15x4.zin6.dpdns.org:5001"
 DB_PATH = 'db/universal_data.db'
 
+# 本地上传存储目录
+UPLOAD_DIR = 'db/novels'
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 # AI 模型配置
 AI_MODEL = 'huihui_ai/qwen2.5-abliterate:3b-instruct'
 AI_BASE_URL = "http://apple4.zin6.dpdns.org:11434/v1"
@@ -52,7 +56,7 @@ text_cache = {}
 
 
 # ==============================================================================
-# [3] 数据库辅助函数 (Database Utilities)
+# [3] 数据库与文件辅助函数 (Database & File Utilities)
 # ==============================================================================
 def save_to_db(collection, payload):
     """通用的 JSON 存储函数"""
@@ -72,6 +76,32 @@ def get_analyzed_novels():
     except Exception:
         return set()
 
+def get_all_novels_merged():
+    """合并远程节点与本地上传的列表"""
+    try:
+        res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
+        remote_files = res.json() if res.status_code == 200 else []
+    except Exception:
+        remote_files = []
+    
+    local_files = [f for f in os.listdir(UPLOAD_DIR) if f.endswith('.txt')]
+    return list(set(remote_files + local_files))
+
+def get_novel_content_text(novel_name):
+    """优先读取本地文本，后备为远程节点"""
+    local_path = os.path.join(UPLOAD_DIR, novel_name)
+    if os.path.exists(local_path):
+        with open(local_path, 'r', encoding='utf-8', errors='ignore') as f:
+            return f.read()
+            
+    try:
+        res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{novel_name}", timeout=10)
+        if res.status_code == 200:
+            return res.json().get('content', '')
+    except Exception:
+        pass
+    return ""
+
 
 # ==============================================================================
 # [4] 文本处理工具箱 (Text Processing Utilities)
@@ -81,11 +111,9 @@ def get_and_split_chapters(novel_name):
     if novel_name in text_cache: 
         return text_cache[novel_name]
         
-    res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{novel_name}", timeout=10)
-    if res.status_code != 200: 
+    text = get_novel_content_text(novel_name)
+    if not text:
         return []
-        
-    text = res.json().get('content', '')
     
     # 兼容性极强的章节匹配正则
     pattern = r'(?:^|\n)[ \t\u3000]*([（【《\[]?(?:正文[ \t\u3000]*)?第[ \t\u3000]*[零一二两三四五六七八九十百千万\d]+[ \t\u3000]*[章回节卷部集折篇][^\n]{0,50})'
@@ -118,14 +146,11 @@ def get_and_split_chapters(novel_name):
 # ==============================================================================
 def analyze_core(novel_name, is_batch=False):
     """核心大模型推理逻辑（提取首尾内容进行状态推断）"""
-    content_res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{novel_name}", timeout=15)
-    if content_res.status_code != 200:
-        raise Exception("资源节点读取失败")
-        
-    full_text = content_res.json().get('content', '')
+    full_text = get_novel_content_text(novel_name)
     word_count = len(full_text)
+    
     if word_count == 0:
-        raise Exception("文本内容为空")
+        raise Exception("文本内容为空或拉取失败")
 
     head_text = full_text[:7000]
     tail_text = full_text[-1500:] if word_count > 7000 else ""
@@ -190,8 +215,12 @@ def analyze_core(novel_name, is_batch=False):
         "raw_prompt": user_prompt,
         "raw_response": json.dumps(raw_json, ensure_ascii=False, indent=2)
     }
-    save_to_db("novel_analysis", db_payload)
     
+    # 解析状态 Tag (简单解析，为了保持兼容)
+    tags = ["已完结" if "已完结" in result_text else "连载中"]
+    db_payload["tags"] = tags
+
+    save_to_db("novel_analysis", db_payload)
     return db_payload
 
 def _run_batch_scan():
@@ -208,11 +237,7 @@ def _run_batch_scan():
     start_time = time.time()
     
     try:
-        res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=10)
-        if res.status_code != 200: 
-            raise Exception("连接资源节点失败")
-            
-        all_novels = res.json()
+        all_novels = get_all_novels_merged()
         analyzed_set = get_analyzed_novels()
         pending_novels = [n for n in all_novels if n not in analyzed_set]
         scan_state["total"] = len(pending_novels)
@@ -235,7 +260,7 @@ def _run_batch_scan():
                 stream_item = {
                     "filename": novel, 
                     "category": f"{result['word_count'] // 10000}万字", 
-                    "ai_tags": ["已完结" if "已完结" in result['tags'] else "连载中"] # tags needs parsing from output, handled here implicitly if existing logic did
+                    "ai_tags": result.get('tags', [])
                 }
                 scan_state["recent_results"].insert(0, stream_item)
                 if len(scan_state["recent_results"]) > 5: 
@@ -257,6 +282,52 @@ def _run_batch_scan():
 # ==============================================================================
 # [6] 基础业务 API (Frontend Display APIs)
 # ==============================================================================
+@novel_ai_bp.route('/upload', methods=['POST'])
+def upload_novels():
+    """批量上传小说文本，并自动打上 '手动上传' 的 tag"""
+    if 'files' not in request.files:
+        return jsonify({"error": "没有找到文件"}), 400
+
+    files = request.files.getlist('files')
+    success_count = 0
+
+    for file in files:
+        if file.filename == '': continue
+        if file.filename.endswith('.txt'):
+            filename = file.filename
+            save_path = os.path.join(UPLOAD_DIR, filename)
+            
+            # 读取内容并处理编码
+            content_bytes = file.read()
+            try:
+                content_str = content_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                content_str = content_bytes.decode('gbk', errors='ignore')
+
+            # 存入本地文件系统
+            with open(save_path, 'w', encoding='utf-8') as f:
+                f.write(content_str)
+
+            # 生成字数并强制注入数据库 tag
+            word_count = len(content_str)
+            db_payload = {
+                "novel_name": filename,
+                "word_count": word_count,
+                "analysis_result": "⚠️ 该书籍为手动上传，尚未经过 AI 深度解析。",
+                "tags": ["手动上传"]  
+            }
+
+            with sqlite3.connect(DB_PATH) as conn:
+                # 避免重复插入，先删后加
+                conn.execute("DELETE FROM store WHERE collection='novel_analysis' AND payload LIKE ?", (f'%"{filename}"%',))
+                conn.execute(
+                    'INSERT INTO store (collection, payload) VALUES (?, ?)', 
+                    ("novel_analysis", json.dumps(db_payload, ensure_ascii=False))
+                )
+            success_count += 1
+
+    return jsonify({"status": "success", "count": success_count})
+
 @novel_ai_bp.route('/list', methods=['GET'])
 def list_novels_paged():
     """分页列表，支持搜索、标签联动，自动过滤回收站，并携带喜欢状态"""
@@ -266,8 +337,7 @@ def list_novels_paged():
         search_kw = request.args.get('search', '').lower()
         selected_tags = [t for t in request.args.get('tags', '').split(',') if t.strip()]
         
-        res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
-        all_files = res.json() if res.status_code == 200 else []
+        all_files = get_all_novels_merged()
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -319,11 +389,7 @@ def get_tag_stats():
     """精准统计：合并文件名与AI标签，并排除回收站文件"""
     try:
         target_tags = request.json.get('tags', []) if request.method == 'POST' else []
-        try:
-            res = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5)
-            all_files = res.json() if res.status_code == 200 else []
-        except: 
-            all_files = []
+        all_files = get_all_novels_merged()
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -451,8 +517,8 @@ def web_chapter(filename, index):
 
 @novel_ai_bp.route('/download/<path:filename>', methods=['GET'])
 def download_novel(filename):
-    res = requests.get(f"{RESOURCE_NODE_URL}/api/novel/content/{filename}", timeout=10)
-    response = make_response('\ufeff' + res.json().get('content', ''))
+    content = get_novel_content_text(filename)
+    response = make_response('\ufeff' + content)
     encoded_name = quote(filename.split('/')[-1])
     response.headers["Content-Disposition"] = f"attachment; filename={encoded_name}; filename*=UTF-8''{encoded_name}"
     response.headers["Content-Type"] = "text/plain; charset=utf-8"
@@ -466,7 +532,7 @@ def download_novel(filename):
 def legado_search():
     keyword = request.args.get('key', '').lower()
     try:
-        all_novels = requests.get(f"{RESOURCE_NODE_URL}/api/novels/json", timeout=5).json()
+        all_novels = get_all_novels_merged()
         with sqlite3.connect(DB_PATH) as conn:
             analysis_dict = {
                 json.loads(r[0])['novel_name']: json.loads(r[0]) 

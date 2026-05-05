@@ -24,7 +24,7 @@
     .stat-box.active { border-color: #1e40af; background: #dbeafe; box-shadow: 0 0 0 2px rgba(30,64,175,0.2); }
     .stat-value { font-size: 20px; font-weight: 700; color: #1e40af; }
     .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
-    .export-panel { background: #fffbeb; border: 1px dashed #fbbf24; border-radius: 8px; padding: 12px; margin-top:12px; }
+    .export-inline-panel { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
     .event-list { max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; margin-top: 12px;}
     .event-item { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; display: flex; align-items: center; }
     .event-item:hover { background: #f8fafc; }
@@ -60,39 +60,17 @@
       <button @click="processGPX" class="btn btn-primary w-100" style="padding: 12px; border-radius: 12px;" :disabled="loading">
         {{ loading ? '数据解算与漂移熔断剔除中...' : '启动并发分析与重构对齐' }}
       </button>
-      
-      <div v-if="processedTracks.length > 0" class="export-panel row g-2 align-items-center">
-         <div class="col-md-3 text-muted" style="font-size:13px; font-weight:bold;">📥 导出主控轨 (均分网格对齐)：</div>
-         <div class="col-md-3">
-            <select v-model="exportMode" class="form-select form-select-sm">
-               <option value="raw">原始底层切片</option>
-               <option value="time">按绝对时间网格聚合</option>
-               <option value="distance">按绝对里程网格聚合</option>
-            </select>
-         </div>
-         <div class="col-md-3" v-if="exportMode !== 'raw'">
-            <input type="number" v-model="exportInterval" class="form-control form-control-sm" :placeholder="exportMode === 'time' ? '秒(≥5)' : '米(≥10)'">
-         </div>
-         <div class="col-md-3">
-            <button @click="exportCSV" class="btn btn-outline-warning btn-sm w-100">无延迟导出</button>
-         </div>
-      </div>
 
       <div v-if="error" class="text-danger text-center mt-3">{{ error }}</div>
     </div>
 
     <div v-show="processedTracks.length > 0">
       
-      <div class="panel-card" v-if="comparisonData">
+      <div class="panel-card" v-if="comparisonData && processedTracks.length > 1">
         <div class="section-title d-flex align-items-center flex-wrap">
            ⏱️ 地理空间用时差值分析
-           <select v-model="baselineIndex" @change="renderCharts" class="form-select form-select-sm ms-3" style="width: auto; font-weight: normal; font-size: 13px;">
-              <option v-for="(tr, idx) in processedTracks" :value="idx" :key="idx">设置基准轨: {{ tr.filename }}</option>
-           </select>
-           <button @click="renameTrack" class="btn btn-sm btn-light border ms-1" style="font-size: 12px; padding: 3px 8px;" title="修改当前基准轨的名称">✏️ 重命名</button>
-           
            <div class="ms-auto d-flex align-items-center mt-2 mt-md-0">
-             <span class="text-muted me-2" style="font-size: 12px;">时空聚合导出:</span>
+             <span class="text-muted me-2" style="font-size: 12px;">对比重构导出:</span>
              <select v-model="compareExportWindow" class="form-select form-select-sm me-2" style="width: 100px; font-size: 13px;">
                 <option value="1">1分钟</option>
                 <option value="3">3分钟</option>
@@ -107,7 +85,48 @@
       </div>
 
       <div class="panel-card">
-        <div class="section-title">📊 宏观轨迹与动力学画像 (主控参考轨: {{ baselineTrackName }})</div>
+        <div class="section-title d-flex align-items-center">
+            📊 宏观轨迹与动力学画像
+            <select v-model="baselineIndex" @change="renderCharts" class="form-select form-select-sm ms-3" style="width: auto; font-weight: normal; font-size: 13px;">
+               <option v-for="(tr, idx) in processedTracks" :value="idx" :key="idx">设置主控轨: {{ tr.filename }}</option>
+            </select>
+            <button @click="renameTrack" class="btn btn-sm btn-light border ms-1" style="font-size: 12px; padding: 3px 8px;" title="修改当前基准轨的名称">✏️ 重命名</button>
+        </div>
+
+        <div class="export-inline-panel">
+            <div class="row g-2 align-items-center">
+                <div class="col-auto text-primary fw-bold" style="font-size:13px;">📥 单轨分段导出:</div>
+                <div class="col-auto">
+                   <select v-model="exportMode" class="form-select form-select-sm">
+                      <option value="raw">原始底层切片</option>
+                      <option value="time">按绝对时间网格聚合</option>
+                      <option value="distance">按绝对里程网格聚合</option>
+                      <option value="segment">【高级】时间窗口波动分段</option>
+                   </select>
+                </div>
+                <div class="col-auto" v-if="exportMode === 'time' || exportMode === 'distance'">
+                   <div class="input-group input-group-sm" style="width:130px;">
+                      <input type="number" v-model="exportInterval" class="form-control" :placeholder="exportMode === 'time' ? '秒(≥5)' : '米(≥10)'">
+                      <span class="input-group-text">{{ exportMode === 'time' ? '秒' : '米' }}</span>
+                   </div>
+                </div>
+                <div class="col-auto" v-if="exportMode === 'segment'">
+                   <div class="input-group input-group-sm" style="width:130px;">
+                      <select v-model="compareExportWindow" class="form-select">
+                         <option value="1">1分钟</option>
+                         <option value="3">3分钟</option>
+                         <option value="5">5分钟</option>
+                         <option value="10">10分钟</option>
+                      </select>
+                      <span class="input-group-text">窗口</span>
+                   </div>
+                </div>
+                <div class="col-auto">
+                   <button @click="handleExport" class="btn btn-primary btn-sm">无延迟导出CSV</button>
+                </div>
+            </div>
+        </div>
+
         <div class="row g-2 mb-3">
           <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ mainTrackOverall?.terrain?.total_distance }}</div><div class="stat-label">真实里程(km)</div></div></div>
           <div class="col-4 col-md-2"><div class="stat-box" style="cursor:default;"><div class="stat-value">{{ mainTrackOverall?.terrain?.avg_speed }}</div><div class="stat-label">移动均速(km/h)</div></div></div>
@@ -159,7 +178,7 @@
           sportType: 'motor', fileList: [], selectedFiles: [],
           loading: false, error: '', 
           processedTracks: [], comparisonData: null,
-          exportMode: 'raw', exportInterval: 30, activeEvent: null,
+          exportMode: 'segment', exportInterval: 30, activeEvent: null,
           baselineIndex: 0, compareExportWindow: '3', 
           map: null, trackLayer: null, markerLayer: null,
           seqChart: null, loadChart: null, compareChart: null,
@@ -220,8 +239,6 @@
           this.markerLayer = L.circleMarker([ev.lat, ev.lon], { radius: 8, fillColor: "#ff0000", color: "#000", weight: 2, fillOpacity: 0.8 })
             .addTo(this.map).bindPopup(`<b>里程: ${ev.cum_dist_km} km</b><br>${ev.desc}`).openPopup();
         },
-        
-        // --- 新增：重命名轨迹名称并同步更新所有矩阵数据 ---
         renameTrack() {
             if (!this.processedTracks.length) return;
             const oldName = this.processedTracks[this.baselineIndex].filename;
@@ -234,21 +251,20 @@
                     return;
                 }
                 
-                // 1. 更新主列表名称
+                // 更新主列表名称
                 this.processedTracks[this.baselineIndex].filename = newName;
                 
-                // 2. 更新对比数据矩阵的 Key
+                // 更新对比数据矩阵的 Key
                 if (this.comparisonData && this.comparisonData.cum_time_matrix && this.comparisonData.cum_time_matrix[oldName]) {
                     this.comparisonData.cum_time_matrix[newName] = this.comparisonData.cum_time_matrix[oldName];
                     delete this.comparisonData.cum_time_matrix[oldName];
                 }
                 
-                // 3. 强制触发重新渲染
+                // 强制触发重新渲染
                 this.renderCharts();
                 this.drawMap(this.processedTracks);
             }
         },
-
         renderCharts() {
           if (!this.processedTracks.length) return;
           const mainTrack = this.processedTracks[this.baselineIndex].segments;
@@ -344,7 +360,7 @@
             series: [ { name: '海拔', type: 'line', data: eleData, connectNulls: true, smooth: true, showSymbol: false, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#94a3b8' } } ]
           }, true);
 
-          if (this.comparisonData) {
+          if (this.comparisonData && this.processedTracks.length > 1) {
              setTimeout(() => {
                 const dom = document.getElementById('compareChart');
                 if (dom) {
@@ -410,7 +426,7 @@
             this.processedTracks = res.data.tracks;
             this.comparisonData = res.data.comparison;
             
-            // --- 新增：自动寻找耗时最短的轨迹并设为基准 ---
+            // 自动寻找耗时最短的轨迹并设为基准
             if (this.processedTracks && this.processedTracks.length > 0) {
                 let minTime = Infinity;
                 let fastestIdx = 0;
@@ -457,40 +473,118 @@
             return null; 
         },
 
-       exportCompareCSV() {
+        formatTimePlus8h(timeStr) {
+            if (!timeStr) return '未知';
+            let safeStr = timeStr.replace('T', ' ').replace('Z', '').split('.')[0].replace(/-/g, '/');
+            let d = new Date(safeStr);
+            if (!isNaN(d.getTime())) {
+                d.setTime(d.getTime() + 8 * 3600000);
+                const pad = n => n.toString().padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            } 
+            let timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+            if (timeMatch) {
+                let h = parseInt(timeMatch[1], 10);
+                let m = timeMatch[2];
+                h = (h + 8) % 24; 
+                const pad = n => n.toString().padStart(2, '0');
+                return `${pad(h)}:${m}`;
+            }
+            return timeStr;
+        },
+
+        handleExport() {
+           if (this.exportMode === 'segment') {
+               this.exportSingleTrackSegmentCSV();
+           } else {
+               this.exportCSV();
+           }
+        },
+
+        exportSingleTrackSegmentCSV() {
+            if (!this.processedTracks.length) return;
+            const baselineSegments = this.processedTracks[this.baselineIndex].segments;
+            const baseTrackName = this.processedTracks[this.baselineIndex].filename;
+            const windowMin = parseFloat(this.compareExportWindow);
+            
+            const baseStartTime = this.formatTimePlus8h(baselineSegments[0]?.time_str);
+
+            let results = [];
+            let currentTime = windowMin;
+            const maxTime = baselineSegments[baselineSegments.length - 1].offset_min;
+            let lastIndex = 0;
+
+            let fieldnames = [
+                `相对时间点(min)_基准起点[${baseStartTime}]`, 
+                '绝对里程(km)', 
+                '海拔高度(m)', 
+                '区间真实均速(km/h)', 
+                '区间等效负荷均速GAP(km/h)'
+            ];
+            
+            while (currentTime <= maxTime) {
+                let currentIndex = lastIndex;
+                while (currentIndex < baselineSegments.length && baselineSegments[currentIndex].offset_min < currentTime) {
+                    currentIndex++;
+                }
+                if (currentIndex >= baselineSegments.length) currentIndex = baselineSegments.length - 1;
+
+                const currentSeg = baselineSegments[currentIndex];
+                const lastSeg = baselineSegments[lastIndex];
+
+                let h_up = 0; 
+                let h_down = 0; 
+                let dist_km = currentSeg.cum_dist_km - lastSeg.cum_dist_km;
+
+                for (let i = lastIndex + 1; i <= currentIndex; i++) {
+                    let diff = baselineSegments[i].ele - baselineSegments[i-1].ele;
+                    if (diff > 0) h_up += diff;
+                    else h_down += Math.abs(diff);
+                }
+
+                let eq_dist_km = dist_km + (h_up / 100) - 0.35 * (h_down / 100);
+                if (eq_dist_km < dist_km) eq_dist_km = dist_km; 
+
+                let dt_h = (currentSeg.offset_min - lastSeg.offset_min) / 60; 
+                let speed = dt_h > 0 ? dist_km / dt_h : 0;
+                let eq_speed = dt_h > 0 ? eq_dist_km / dt_h : 0;
+
+                results.push([
+                    currentTime.toFixed(1),
+                    currentSeg.cum_dist_km.toFixed(3),
+                    currentSeg.ele.toFixed(1),
+                    speed.toFixed(1),
+                    eq_speed.toFixed(1)
+                ]);
+                
+                lastIndex = currentIndex;
+                currentTime += windowMin;
+                if (currentIndex === baselineSegments.length - 1) break; 
+            }
+
+            let csvContent = '\uFEFF'; 
+            csvContent += fieldnames.join(',') + '\n';
+            results.forEach(row => {
+                let rowStr = row.map(v => `"${v !== undefined ? v : ''}"`).join(',');
+                csvContent += rowStr + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `单轨分段波动分析_${baseTrackName}_${windowMin}min窗口_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        },
+
+        exportCompareCSV() {
             if (!this.processedTracks.length || !this.comparisonData) return;
             const baselineSegments = this.processedTracks[this.baselineIndex].segments;
             const baseTrackName = this.processedTracks[this.baselineIndex].filename;
             const windowMin = parseFloat(this.compareExportWindow);
             
-            // 增强版时间解析：同时兼容"完整日期"和"纯时间(HH:mm:ss)"格式
-            const formatTimePlus8h = (timeStr) => {
-                if (!timeStr) return '未知';
-                
-                // 1. 尝试完整日期解析
-                let safeStr = timeStr.replace('T', ' ').replace('Z', '').split('.')[0].replace(/-/g, '/');
-                let d = new Date(safeStr);
-                
-                if (!isNaN(d.getTime())) {
-                    d.setTime(d.getTime() + 8 * 3600000);
-                    const pad = n => n.toString().padStart(2, '0');
-                    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-                } 
-                
-                // 2. 如果失败，说明是纯时间 "06:36:32"，直接正则提取并加8
-                let timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
-                if (timeMatch) {
-                    let h = parseInt(timeMatch[1], 10);
-                    let m = timeMatch[2];
-                    h = (h + 8) % 24; // 加8小时，超24小时自动跨天归零
-                    const pad = n => n.toString().padStart(2, '0');
-                    return `${pad(h)}:${m}`;
-                }
-
-                return timeStr; // 彻底无解兜底
-            };
-            
-            const baseStartTime = formatTimePlus8h(baselineSegments[0]?.time_str);
+            const baseStartTime = this.formatTimePlus8h(baselineSegments[0]?.time_str);
 
             let results = [];
             let currentTime = windowMin;
@@ -509,7 +603,7 @@
             
             otherTrackNames.forEach(name => {
                 const compTrack = this.processedTracks.find(t => t.filename === name);
-                const compStartTime = formatTimePlus8h(compTrack?.segments[0]?.time_str);
+                const compStartTime = this.formatTimePlus8h(compTrack?.segments[0]?.time_str);
                 
                 fieldnames.push(`累计领先[${name}]秒`);
                 fieldnames.push(`本区间净胜[${name}]秒_起点[${compStartTime}]`);
@@ -580,7 +674,6 @@
                 
                 lastIndex = currentIndex;
                 currentTime += windowMin;
-                
                 if (currentIndex === baselineSegments.length - 1) break; 
             }
 
@@ -592,14 +685,14 @@
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `时空对比与波动分析_${baseTrackName}_${windowMin}min窗口_${Date.now()}.csv`);
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `时空多轨对比_${baseTrackName}_${windowMin}min窗口_${Date.now()}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         },
+
         exportCSV() {
           if (!this.processedTracks.length) return;
           if (this.exportMode === 'time' && this.exportInterval < 5) { alert("为防止过度失真，时间聚合不可小于5秒"); return; }
@@ -664,14 +757,14 @@
           });
 
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
-          link.setAttribute("href", url);
-          link.setAttribute("download", `gpx_${this.exportMode}_${this.exportInterval}_${Date.now()}.csv`);
+          link.setAttribute("href", URL.createObjectURL(blob));
+          link.setAttribute("download", `单轨聚合导出_${this.baselineTrackName}_${this.exportMode}_${this.exportInterval}_${Date.now()}.csv`);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
         },
+
         drawMap(tracks) {
           if (!this.map) return;
           if (this.trackLayer) this.map.removeLayer(this.trackLayer);
@@ -684,8 +777,8 @@
               const latlngs = tr.segments.map(s => [s.lat2, s.lon2]);
               if (latlngs.length > 0) {
                   bounds.extend(latlngs);
-                  L.polyline(latlngs, { color: color, weight: index === 0 ? 5 : 3, opacity: 0.8 }).addTo(this.trackLayer)
-                     .bindPopup(`<b>${tr.filename}</b><br>均速: ${tr.overall.terrain.avg_speed} km/h`);
+                  L.polyline(latlngs, { color: color, weight: index === this.baselineIndex ? 5 : 3, opacity: 0.8 }).addTo(this.trackLayer)
+                      .bindPopup(`<b>${tr.filename}</b><br>均速: ${tr.overall.terrain.avg_speed} km/h`);
               }
           });
           
