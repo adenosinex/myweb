@@ -6,8 +6,9 @@ import datetime
 import csv
 import io
 import traceback
+import shutil  # 🌟 新增：用于跨盘/同盘移动文件
 from flask import Flask, Blueprint, request, jsonify, Response, stream_with_context, send_file, abort, redirect, make_response
-from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, func
+from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, func, not_, asc, or_
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 try:
@@ -288,7 +289,6 @@ def apply_video_filters(query, request_args, session=None):
         query = query.filter(Video.score == int(score))
     else: 
         # 兼容部分通过第三方工具导入导致 score 为 NULL 的脏数据
-        from sqlalchemy import or_
         query = query.filter(or_(Video.score != 1, Video.score.is_(None)))
 
     if tags:
@@ -309,6 +309,7 @@ def apply_video_filters(query, request_args, session=None):
         query = apply_size_filter(query, str(size))
         
     return query, use_random
+
 # ================= 视图控制与路由分配 (Views) =================
 dy_bp = Blueprint('dyfn', __name__, url_prefix='/dyfn')
 
@@ -369,10 +370,6 @@ def api_tokenize():
     core_words = [w for w in words if len(w.strip()) > 1 and not bool(re.match(r'^[^\w\u4e00-\u9fa5]+$', w))]
     return jsonify({'success': True, 'words': core_words})
 
-import os
-from datetime import datetime
-from flask import request, jsonify
-
 @dy_bp.route('/sys_tags/queue_rename', methods=['POST'])
 def queue_rename():
     data = request.json
@@ -398,7 +395,7 @@ def queue_rename():
             existing_log.target_path = target_path
             existing_log.status = 'pending'
             existing_log.error_msg = None
-            existing_log.create_time = datetime.now() # 刷新操作时间
+            existing_log.create_time = datetime.datetime.now() # 刷新操作时间
         else:
             # 没有排队任务，才新建
             new_log = RenameLog(
@@ -406,7 +403,7 @@ def queue_rename():
                 original_path=video.detail,
                 target_path=target_path,
                 status='pending',
-                create_time=datetime.now()
+                create_time=datetime.datetime.now()
             )
             session.add(new_log)
             
@@ -474,15 +471,89 @@ def api_restore_rename():
             session.close(); return jsonify({'success': False, 'msg': '环境已不支持恢复'}), 400
     except OSError as e:
         session.close(); return jsonify({'success': False, 'msg': str(e)}), 500
+# 🌟 专门用于后端的自动归档移动逻辑 (深度穿透子目录 + 防止死循环) 🌟
+@dy_bp.route('/sys_tags/archive_files', methods=['POST'])
+def api_archive_files():
+    data = request.get_json() or {}
+    root_dir = data.get('root_dir', '').strip()
+    keyword = data.get('keyword', '').strip()
 
-import io
-import csv
-import re
-import os
-from flask import request, send_file
-from sqlalchemy import not_
+    print(f"\n========== [自动归档任务开始: 深度穿透模式] ==========")
+    print(f"[*] 接收到前端请求: 路径='{root_dir}', 关键词='{keyword}'")
 
-# --- 新增：专门用于后端的智能文件名过滤器 ---
+    if not root_dir or not keyword:
+        return jsonify({'success': False, 'msg': '路径和关键词不能为空'})
+
+    root_dir = os.path.abspath(root_dir)
+    
+    if not os.path.exists(root_dir) or not os.path.isdir(root_dir):
+        return jsonify({'success': False, 'msg': f'处理源路径不存在: {root_dir}'})
+
+    # 目标文件夹路径
+    target_dir = os.path.join(root_dir, keyword)
+    target_dir_abs = os.path.abspath(target_dir)
+    moved_count = 0
+    
+    session = Session()
+    try:
+        # 创建归档文件夹
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # 🌟 核心升级：使用 os.walk 深度遍历所有子目录
+        for current_root, dirs, files in os.walk(root_dir):
+            
+            # 🌟 致命防御：如果是目标归档文件夹及其子文件夹，直接跳过！
+            # 否则会把你刚才移进去的文件再扫一遍，引发混乱。
+            if os.path.abspath(current_root).startswith(target_dir_abs):
+                continue
+
+            for filename in files:
+                file_path = os.path.join(current_root, filename)
+                
+                # 判断关键词是否匹配 (忽略大小写)
+                if keyword.lower() not in filename.lower():
+                    continue
+
+                print(f"  [+] 命中目标: '{file_path}'")
+                new_full_path = os.path.join(target_dir, filename)
+                
+                try:
+                    # 1. 物理移动文件
+                    if os.path.exists(new_full_path):
+                        os.remove(new_full_path) # 容错：如果目标已存在同名文件则覆盖
+                    shutil.move(file_path, new_full_path)
+                    
+                    # 2. 数据库同步修改 (兼容路径标准化比对)
+                    video = session.query(Video).filter(
+                        or_(
+                            Video.detail == file_path,
+                            Video.detail == os.path.abspath(file_path)
+                        )
+                    ).first()
+                    
+                    if video:
+                        video.detail = os.path.abspath(new_full_path)
+                        print(f"      -> 数据库路径同步成功")
+                        
+                    moved_count += 1
+                except Exception as sub_e:
+                    print(f"  [x] 移动报错: '{filename}', 异常: {str(sub_e)}")
+                    continue
+        
+        session.commit()
+        print(f"[*] 深度归档结束，穿透扫描共成功移动 {moved_count} 个文件")
+        print(f"========================================\n")
+        
+        return jsonify({'success': True, 'msg': f'归档完成，穿透扫描共移动 {moved_count} 个文件'})
+    except Exception as e:
+        session.rollback()
+        print(f"[x] 发生全局崩溃异常: {str(e)}")
+        return jsonify({'success': False, 'msg': f'执行目录移动异常: {str(e)}'})
+    finally:
+        session.close()
+
+        
+# --- 智能文件名过滤器 ---
 def is_meaningful_filename(filename):
     """
     判断文件名是否有分析价值：剔除无意义前缀、日期、长哈希、纯数字和符号。
@@ -508,10 +579,9 @@ def is_meaningful_filename(filename):
         
     return True
 
-
 @dy_bp.route('/sys_tags/export_csv', methods=['GET'])
 def export_csv():
-    session = Session()  # 视你的数据库会话获取方式而定
+    session = Session()  
     try:
         query = session.query(Video)
         
@@ -538,14 +608,11 @@ def export_csv():
             
         limit = request.args.get('limit', type=int, default=0)
         
-        # 🌟 核心修改：不在 SQL 层做 Limit，改为在 Python 层流式过滤
+        # 🌟 不在 SQL 层做 Limit，改为在 Python 层流式过滤
         valid_videos = []
         for v in query.all():
-            # 经过清洗依然有意义的，才加入导出列表
             if is_meaningful_filename(v.filename):
                 valid_videos.append(v)
-                
-                # 当收集到足够的合法数据时，立刻停止循环
                 if limit > 0 and len(valid_videos) >= limit:
                     break
                     
@@ -662,17 +729,6 @@ def api_update_files():
     session.close()
     return jsonify({'success': True, 'added': total_added, 'removed': total_removed})
 
-import os
-from flask import request, jsonify, Response, stream_with_context
-from sqlalchemy import func
-import random
-
-import os
-from flask import request, jsonify, Response, stream_with_context
-from sqlalchemy import func
-import random
-from datetime import datetime
-
 @dy_bp.route('/videos', methods=['GET'])
 def api_get_videos():
     session = Session()
@@ -774,14 +830,9 @@ def api_videos_count():
 def index():
     if not os.path.exists(INDEX_FILE): return f"找不到首页文件", 404
     return send_file(INDEX_FILE)
+
 FILES_TO_SEND = ["moduels/media/6dyfn_extension.py", "pages/media/9dyfn.html"]
 
-import csv
-import io
-from flask import Response, stream_with_context
-from sqlalchemy import asc
-
-# 🌟 新增路由：专门导出原始名与物理名对比表，不影响原打标 CSV
 @dy_bp.route('/sys_tags/export_rename_compare_csv', methods=['GET'])
 def export_rename_compare_csv():
     session = Session()
@@ -834,7 +885,7 @@ def export_rename_compare_csv():
         return Response(
             stream_with_context(generate()),
             mimetype='text/csv',
-            headers={"Content-Disposition": f"attachment; filename=rename_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+            headers={"Content-Disposition": f"attachment; filename=rename_history_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
         )
     finally:
         session.close()
@@ -861,7 +912,7 @@ if __name__ == "__main__":
     
     @app.route('/')
     def root_redirect():
-        return redirect('/dy/')
+        return redirect('/dyfn/')
         
     print(f"[*] 成功挂载蓝图，请访问: http://127.0.0.1:82/")
     app.run(debug=True, host='0.0.0.0', port=82)

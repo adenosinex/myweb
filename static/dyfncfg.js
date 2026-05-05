@@ -108,6 +108,20 @@ const TagPanel = {
                     </div>
 
                     <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
+                        <h4>文件自动归档</h4>
+                        <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">将指定路径下包含关键词的文件，移动到该路径下的同名文件夹中。</p>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <input type="text" v-model="archiveRootDir" placeholder="处理源路径 (如 D:/videos)" class="search-input" style="margin-bottom: 0;" />
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" v-model="archiveKeyword" placeholder="归档关键词 (如 少女)" class="search-input" style="flex: 1; margin-bottom: 0;" @keyup.enter="executeArchive" />
+                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #67c23a;" @click="executeArchive" :disabled="isArchiving">
+                                    {{ isArchiving ? '执行中...' : '移动' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
                         <h4>全局自动黑名单</h4>
                         <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; max-height: 100px; overflow-y: auto;">
                             <span v-for="(word, idx) in blacklist" :key="idx" style="background:#333; border: 1px solid #444; color:#ddd; font-size:12px; padding:4px 10px; border-radius:12px; cursor:pointer;" @click="removeBlacklistWord(idx)">{{ word }} ×</span>
@@ -209,6 +223,11 @@ const TagPanel = {
         const exportTarget = ref('ALL');
         let isSwitchingProfile = false;
 
+        // 🌟 归档功能状态 🌟
+        const archiveRootDir = ref(localStorage.getItem('dy_archive_root') || '');
+        const archiveKeyword = ref('');
+        const isArchiving = ref(false);
+
         onMounted(async () => {
             if (panelOrder.value.includes('preview')) {
                 panelOrder.value = panelOrder.value.filter(item => item !== 'preview');
@@ -235,6 +254,41 @@ const TagPanel = {
             
             tagGroups.value = JSON.parse(JSON.stringify(tagProfiles.value[currentProfileName.value]));
         });
+
+        // 🌟 执行归档函数 🌟
+        async function executeArchive() {
+            if (!archiveRootDir.value.trim() || !archiveKeyword.value.trim()) {
+                vant.showFailToast('处理路径和关键词不能为空');
+                return;
+            }
+            if (!confirm(`确定要将 [${archiveRootDir.value}] 下包含 "${archiveKeyword.value}" 的文件，移动到该路径下的 "${archiveKeyword.value}" 文件夹中吗？`)) {
+                return;
+            }
+            
+            localStorage.setItem('dy_archive_root', archiveRootDir.value.trim());
+            isArchiving.value = true;
+            
+            try {
+                // 直接请求后端，由后端完成物理移动
+                const res = await axios.post('/dyfn/sys_tags/archive_files', {
+                    root_dir: archiveRootDir.value.trim(),
+                    keyword: archiveKeyword.value.trim()
+                });
+                
+                if (res.data.success) {
+                    vant.showSuccessToast({ message: res.data.msg || '归档成功', duration: 2000 });
+                    archiveKeyword.value = ''; // 清空关键词方便下次输入
+                    // 归档后建议刷新一下当前列表
+                    emit('reload-videos', false, props.currentIndex);
+                } else {
+                    vant.showFailToast(res.data.msg || '归档失败');
+                }
+            } catch (e) {
+                vant.showFailToast('网络异常或接口未实现');
+            } finally {
+                isArchiving.value = false;
+            }
+        }
 
         function switchProfile() {
             isSwitchingProfile = true;
@@ -293,7 +347,6 @@ const TagPanel = {
         const newPath = ref(''), newBlacklistWord = ref(''), exportLimit = ref('0'), exportLogLimit = ref('0');
         const isExecuting = ref(false), executeSuccess = ref(false), executeMsg = ref('');
 
-        // 🌟 核心：计算当前激活的标签 🌟
         const activeAutoTags = computed(() => {
             return autoTags.value.filter(t => t.active).map(t => t.text);
         });
@@ -655,7 +708,7 @@ const TagPanel = {
             showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, exportLogLimit, isExecuting, executeSuccess, executeMsg,
             addPath, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile, exportRenameLogCSV,
             tagProfiles, currentProfileName, switchProfile, createNewProfile, deleteCurrentProfile, exportTarget, exportTags,
-            activeAutoTags // 暴露给模板
+            activeAutoTags, archiveRootDir, archiveKeyword, isArchiving, executeArchive // 暴露归档变量
         };
     }
 };
