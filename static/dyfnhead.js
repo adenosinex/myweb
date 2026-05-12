@@ -1,4 +1,4 @@
-// header-panel.js
+// dyfnhead.js (或 header-panel.js)
 const HeaderPanel = {
     template: `
         <div>
@@ -38,8 +38,7 @@ const HeaderPanel = {
                             <van-button size="small" type="primary" class="author-btn" @click="copyAuthorName" title="复制文件名空格前第一个词">@作者</van-button>
                             
                             <div class="video-title-clickable" @click="showDetail = true" title="点击查看详情">
-                                <span class="index-tag">{{ videoIndex ? videoIndex + '.' : '' }}</span>
-                                <span class="title-text">{{ currentVideo?.filename }}</span>
+                               {{ videoIndex ? videoIndex + '. ' : '' }}/{{ totalpage ?? 0 }}  {{ currentVideo?.filename }}
                             </div>
                         </div>
                     </div>
@@ -103,6 +102,16 @@ const HeaderPanel = {
                         <input type="text" v-model="excludeKeyword" placeholder="排除关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" style="margin-top:8px;" />
                         <div style="text-align:right; margin-top:6px;"><a href="/?search=random" style="font-size:12px;color:#1989fa;text-decoration:none;">↻ 使用 random 随机打乱</a></div>
                     </div>
+                    
+                    <div style="margin:15px 0;">
+                        <span style="font-size: 14px; color: #ccc;">打标状态：</span>
+                        <select v-model="searchUntagged" class="search-select" style="margin-top: 5px; color: #e6a23c !important;">
+                            <option value="0">全部文件</option>
+                            <option value="1">仅看未打标 (无用户Tag)</option>
+                            <option value="2">仅看已打标 (含用户Tag)</option>
+                        </select>
+                    </div>
+
                     <div style="margin:15px 0;">
                         <span style="font-size: 14px; color: #ccc;">排序方式：</span>
                         <select v-model="sortBy" class="search-select" style="margin-top: 5px;">
@@ -284,9 +293,9 @@ const HeaderPanel = {
                     margin-right: 8px;
                     font-family: monospace;
                     font-size: 16px;
+                    white-space: nowrap;
                 }
 
-                /* 键盘映射列表样式 */
                 .keybind-row {
                     display: flex; 
                     gap: 10px; 
@@ -315,7 +324,6 @@ const HeaderPanel = {
         const showDetail = ref(false);
         const isMounted = ref(false);
 
-        // 🌟 连击缓冲池与键绑状态 🌟
         const showKeyBind = ref(false);
         const keyBinds = ref([]);
         const keyTimeout = ref(parseInt(localStorage.getItem('dy_key_timeout')) || 1000);
@@ -330,7 +338,6 @@ const HeaderPanel = {
             if (keyBinds.value.length === 0) keyBinds.value.push({ key: '', tag: '' });
         }
 
-        // 计算属性：冲突检测
         const conflictKeys = computed(() => {
             const counts = {};
             const conflicts = new Set();
@@ -347,10 +354,9 @@ const HeaderPanel = {
             return key && conflictKeys.value.has(key.toLowerCase());
         }
 
-        // 轻量级拼音首字母提取算法 (利用 localeCompare)
         function getAutoKey(str) {
             if (!str) return '';
-            if (/^[a-zA-Z]+$/.test(str)) return str.substring(0, 2).toLowerCase(); // 纯英文提2位
+            if (/^[a-zA-Z]+$/.test(str)) return str.substring(0, 2).toLowerCase(); 
             
             const borders = "啊芭擦搭蛾发噶哈击喀垃妈拿哦啪期然撒塌挖昔压匝".split('');
             const initials = "abcdefghjklmnopqrstwxyz".split('');
@@ -371,10 +377,9 @@ const HeaderPanel = {
                     key += match;
                 }
             }
-            return key.substring(0, 3).toLowerCase(); // 混合或中文最长提取3位
+            return key.substring(0, 3).toLowerCase(); 
         }
 
-        // 自动读取侧边栏 Tag 并生成映射
         async function autoExtractTags() {
             try {
                 const res = await window.DyAPI.getTagGroups();
@@ -385,7 +390,7 @@ const HeaderPanel = {
 
                 res.groups.forEach(g => {
                     g.tags.forEach(tag => {
-                        if(existingTags.has(tag)) return; // 跳过已存在的
+                        if(existingTags.has(tag)) return; 
                         keyBinds.value.push({ key: getAutoKey(tag), tag: tag });
                         existingTags.add(tag);
                         addedCount++;
@@ -423,7 +428,6 @@ const HeaderPanel = {
                 }
             }, 800);
 
-            // 🌟 核心引擎：多键连击检测缓冲池 🌟
             window.addEventListener('keydown', (e) => {
                 const activeTag = document.activeElement ? document.activeElement.tagName : '';
                 if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
@@ -432,7 +436,6 @@ const HeaderPanel = {
                     keyBuffer += e.key.toLowerCase();
                     clearTimeout(keyTimer);
 
-                    // 精准匹配
                     const bindItem = keyBinds.value.find(item => item.key && item.key.toLowerCase() === keyBuffer);
                     
                     if (bindItem && bindItem.tag) {
@@ -442,15 +445,13 @@ const HeaderPanel = {
                     } else {
                         keyTimer = setTimeout(() => { 
                             keyBuffer = ''; 
-                        }, keyTimeout.value); // 使用配置的灵活超时时间
+                        }, keyTimeout.value);
                     }
                 }
             });
         });
 
-        // 🌟 DOM 投递，实现打标与二次点击反选 🌟
         function applyBindTag(targetTag) {
-            // 查找现有的 Tag 按钮模拟点击实现"二次取消"
             const chipTexts = Array.from(document.querySelectorAll('.chip-text'));
             const targetChip = chipTexts.find(el => el.textContent.trim() === '#' + targetTag);
             
@@ -460,7 +461,6 @@ const HeaderPanel = {
                 return;
             }
 
-            // 寻找输入框添加新的
             const tagInput = document.querySelector('.tag-input-row input[placeholder*="输入新 Tag"]');
             const addBtn = document.querySelector('.tag-input-row .van-button--primary');
             
@@ -476,7 +476,7 @@ const HeaderPanel = {
 
         function openKeyBind() { initKeyBinds(); showKeyBind.value = true; }
         function closeKeyBind() { initKeyBinds(); showKeyBind.value = false; }
-        function addKeyBindRow() { keyBinds.value.unshift({ key: '', tag: '' }); } // 插在最前
+        function addKeyBindRow() { keyBinds.value.unshift({ key: '', tag: '' }); } 
         function removeKeyBindRow(idx) { keyBinds.value.splice(idx, 1); }
         function saveKeyBind() {
             if (conflictKeys.value.size > 0) {
@@ -491,9 +491,14 @@ const HeaderPanel = {
             vant.showSuccessToast('配置保存并生效');
         }
         
-        // --- 原有逻辑保留 ---
-        const searchKeyword = ref(''), excludeKeyword = ref(''), searchScore = ref(0), sortBy = ref('');
-        const sizeOperator = ref('lte'), sizeValue = ref('');
+        const searchKeyword = ref('');
+        const excludeKeyword = ref('');
+        const searchScore = ref(0);
+        const sortBy = ref('');
+        const searchUntagged = ref('0');
+        const sizeOperator = ref('lte');
+        const sizeValue = ref('');
+        
         const localScore = computed({ get: () => props.currentVideoScore || 0, set: (val) => emit('update-score', val) });
 
         async function copyAuthorName() {
@@ -520,15 +525,36 @@ const HeaderPanel = {
         function handleJump() { if(localJumpTarget.value) { emit('jump', parseInt(localJumpTarget.value)); localJumpTarget.value = ''; } }
 
         async function doSearch() {
-            props.state.searchKeyword = searchKeyword.value.trim(); props.state.excludeKeyword = excludeKeyword.value.trim();
-            props.state.searchScore = searchScore.value; props.state.sortBy = sortBy.value;
+            props.state.searchKeyword = searchKeyword.value.trim(); 
+            props.state.excludeKeyword = excludeKeyword.value.trim();
+            props.state.searchScore = searchScore.value; 
+            props.state.sortBy = sortBy.value;
+            props.state.searchUntagged = searchUntagged.value;
             props.state.searchSize = (sizeValue.value && sizeValue.value > 0) ? `${sizeOperator.value}:${sizeValue.value}` : 0;
-            props.state.page = 1; showSearch.value = false;
-            props.state.totalVideos = props.state.totalpage = await window.DyAPI.fetchVideoCount({ search: props.state.searchKeyword, exclude: props.state.excludeKeyword, score: props.state.searchScore, size: props.state.searchSize });
+            props.state.page = 1; 
+            showSearch.value = false;
+            
+            // 🌟 核心修改：使用统一的装载器获取所有参数
+            props.state.totalVideos = props.state.totalpage = await window.DyAPI.fetchVideoCount(window.DyAPI.getSearchParams(props.state));
+            
             const url = new URL(window.location);
-            const mapping = { 'search': 'searchKeyword', 'exclude': 'excludeKeyword', 'score': 'searchScore', 'size': 'searchSize', 'sort_by': 'sortBy' };
-            for (let [k, stateKey] of Object.entries(mapping)) { if (props.state[stateKey] && props.state[stateKey] !== 0) url.searchParams.set(k, props.state[stateKey]); else url.searchParams.delete(k); }
-            window.history.pushState({}, '', url); emit('trigger-search');
+            const mapping = { 
+                'search': 'searchKeyword', 
+                'exclude': 'excludeKeyword', 
+                'score': 'searchScore', 
+                'size': 'searchSize', 
+                'sort_by': 'sortBy',
+                'untagged': 'searchUntagged' 
+            };
+            for (let [k, stateKey] of Object.entries(mapping)) { 
+                if (props.state[stateKey] && props.state[stateKey] !== 0 && props.state[stateKey] !== '0') {
+                    url.searchParams.set(k, props.state[stateKey]); 
+                } else { 
+                    url.searchParams.delete(k); 
+                } 
+            }
+            window.history.pushState({}, '', url); 
+            emit('trigger-search');
         }
 
         function loadFromUrlParams() {
@@ -537,6 +563,7 @@ const HeaderPanel = {
             if (urlParams.get('exclude')) { excludeKeyword.value = props.state.excludeKeyword = urlParams.get('exclude'); hasParams = true; }
             if (urlParams.get('score')) { searchScore.value = props.state.searchScore = parseInt(urlParams.get('score')); hasParams = true; }
             if (urlParams.get('sort_by')) { sortBy.value = props.state.sortBy = urlParams.get('sort_by'); hasParams = true; }
+            if (urlParams.get('untagged')) { searchUntagged.value = props.state.searchUntagged = urlParams.get('untagged'); hasParams = true; } 
             if (urlParams.get('size')) {
                 const sizeParam = urlParams.get('size');
                 if (sizeParam.includes(':')) { const [op, val] = sizeParam.split(':'); sizeOperator.value = op; sizeValue.value = parseInt(val); props.state.searchSize = sizeParam; } 
@@ -549,6 +576,7 @@ const HeaderPanel = {
         function clearSearch() {
             searchKeyword.value = props.state.searchKeyword = ''; excludeKeyword.value = props.state.excludeKeyword = '';
             searchScore.value = props.state.searchScore = 0; sortBy.value = props.state.sortBy = '';
+            searchUntagged.value = '0'; props.state.searchUntagged = '0'; 
             sizeOperator.value = 'lte'; sizeValue.value = ''; props.state.searchSize = 0; props.state.page = 1;
         }
 
@@ -561,7 +589,7 @@ const HeaderPanel = {
 
         return { 
             localJumpTarget, showSearch, showDetail, isMounted, localScore, 
-            searchKeyword, excludeKeyword, searchScore, sortBy, sizeOperator, sizeValue, 
+            searchKeyword, excludeKeyword, searchScore, sortBy, searchUntagged, sizeOperator, sizeValue, 
             handleJump, doSearch, searchFromClipboard, getVideoUrl, searchDouyin, copyAuthorName,
             showKeyBind, keyBinds, keyTimeout, isConflict, openKeyBind, closeKeyBind, addKeyBindRow, removeKeyBindRow, saveKeyBind, autoExtractTags
         };

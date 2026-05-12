@@ -12,8 +12,8 @@ from datetime import datetime
 
 snapshots_bp = Blueprint('snapshots', __name__)
 DB_PATH = 'db/universal_datasmall.db' 
-UPLOAD_FOLDER = 'db/history'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+UPLOAD_FOLDERh = 'db/history'
+os.makedirs(UPLOAD_FOLDERh, exist_ok=True)
 
 executor = ThreadPoolExecutor(max_workers=5)
 
@@ -165,7 +165,7 @@ def upload_snapshot():
     time_prefix = dt_obj.strftime('%Y%m%d_%H%M')
     record_id = f"{time_prefix}_{uuid.uuid4().hex[:4]}"
     
-    filepath = os.path.join(UPLOAD_FOLDER, f"{record_id}.jpg")
+    filepath = os.path.join(UPLOAD_FOLDERh, f"{record_id}.jpg")
     file.save(filepath)
     
     # 3. 统一入库逻辑，消除冗余分支
@@ -193,7 +193,8 @@ def trigger_ai_analysis():
 
 @snapshots_bp.route('/api/img/snapshots/<imgname>', methods=['GET'])
 def get_snapshot_image(imgname):
-    img_path = Path(UPLOAD_FOLDER) / imgname
+    img_path = Path(UPLOAD_FOLDERh) / imgname
+    print(img_path)
     if img_path.is_file(): return send_file(img_path)
     return abort(404, description="Image not found")
 

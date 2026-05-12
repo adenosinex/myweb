@@ -15,10 +15,6 @@
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfncfg.js"></script>
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfnhead.js"></script>
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfnst.js"></script>
-    
-    <style>
-     
-    </style>
 </head>
 <body>
 <div id="app">
@@ -102,6 +98,15 @@
 const { createApp, reactive, onMounted, computed, ref, watch } = Vue
 
 window.DyAPI = {
+    // 🌟 核心修改：统一的参数聚合器，杜绝遗漏
+    getSearchParams: (state) => ({
+        search: state.searchKeyword,
+        exclude: state.excludeKeyword,
+        score: state.searchScore,
+        size: state.searchSize,
+        sort_by: state.sortBy,
+        untagged: state.searchUntagged
+    }),
     fetchVideos: async (params) => (await axios.get('/dyfn/videos', { params })).data,
     fetchVideoCount: async (params) => (await axios.get('/dyfn/videos/count', { params })).data.total || 0,
     updateScore: async (id, score) => (await axios.post('/dyfn/videos/update_score', { id, score })).data,
@@ -216,7 +221,8 @@ function useVideoPlayer(state, loadVideosCb) {
 
 const app = createApp({
     setup() {
-        const state = reactive({ videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', totalVideos: 0, totalpage: 0, globalOffset: 0 });
+        // 🌟 将 searchUntagged 补充进全局 State 中
+        const state = reactive({ videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', searchUntagged: '0', totalVideos: 0, totalpage: 0, globalOffset: 0 });
         const isLoading = ref(true);
 
         const headerRef = ref(null);
@@ -260,7 +266,8 @@ const app = createApp({
         
         async function loadVideos(append = false, startIndex = 0) {
             isLoading.value = true;
-            const params = { page: state.page, page_size: state.pageSize, search: state.searchKeyword, exclude: state.excludeKeyword, score: state.searchScore, size: state.searchSize, sort_by: state.sortBy };
+            // 🌟 核心修改：利用统一器装载所有参数，不再漏掉任何字段
+            const params = { page: state.page, page_size: state.pageSize, ...window.DyAPI.getSearchParams(state) };
             try {
                 const newVideos = await window.DyAPI.fetchVideos(params);
                 if (append) state.videos.push(...newVideos); 
@@ -295,7 +302,8 @@ const app = createApp({
             
             headerRef.value?.loadFromUrlParams();
             
-            state.totalVideos = state.totalpage = await window.DyAPI.fetchVideoCount({ search: state.searchKeyword, exclude: state.excludeKeyword, score: state.searchScore, size: state.searchSize });
+            // 🌟 核心修改：初始化同样使用统一参数装载器
+            state.totalVideos = state.totalpage = await window.DyAPI.fetchVideoCount(window.DyAPI.getSearchParams(state));
 
             let startIndex = 0;
             if (savedIndex && savedIndex > 0 && savedIndex <= state.totalVideos) {

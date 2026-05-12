@@ -55,6 +55,13 @@ HOSTS = {
         "last_ipv6": None,
         "last_seen": 0
     },
+    "fn": {
+        "lan_ipv4": "192.168.31.28",
+        "ipv4dns": "fn4.su7.dpdns.org",
+        "ipv6dns": "fn.su7.dpdns.org",
+        "last_ipv6": None,
+        "last_seen": 0
+    },
     "fast": {
         "lan_ipv4": "192.168.31.82",
         "ipv4dns": "fast4.su7.dpdns.org",
@@ -400,3 +407,5 @@ def init_dns_service():
         print("❌ 初始化失败：无法获取 Cloudflare Zone ID")
 
 # 此处不自动执行 init_dns_service()，建议在 app.py 的 __main__ 或 app.before_first_request 中执行，以防止阻塞
+
+# init_dns_service()

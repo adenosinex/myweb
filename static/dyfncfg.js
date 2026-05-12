@@ -48,8 +48,13 @@ const TagPanel = {
                             </div>
 
                             <div v-for="(group, gIdx) in tagGroups" :key="group.id" class="tag-group-card" :class="{'drag-over-group': dragType === 'group' && dragOverGroupIdx === gIdx, 'drag-over-empty': dragType === 'tag' && dragOverGroupIdx === gIdx && group.tags.length === 0}" :draggable="dragGroupEnabledId === group.id" @dragstart.stop="onGroupDragStart($event, gIdx)" @dragend.stop="onGroupDragEnd" @dragover.prevent.stop="onGroupDragOver($event, gIdx)" @dragenter.prevent="onTagDragEnter(gIdx)" @dragleave.prevent="onTagDragLeave(gIdx)" @drop.prevent.stop="onGroupDrop($event, gIdx)">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                                    <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag">⋮⋮ 分区</div>
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:10px;">
+                                        <div class="drag-handle-group" @mousedown="enableGroupDrag(group.id)" @mouseup="disableGroupDrag" @mouseleave="disableGroupDrag">⋮⋮ 分区</div>
+                                        <label style="font-size:11px; color:#e6a23c; cursor:pointer; display:flex; align-items:center; gap:4px;" title="勾选后，该分区的Tag将在同名人物(正则提取)文件间自动传染合并">
+                                            <input type="checkbox" v-model="group.is_person" /> 标记为特征类(扩散)
+                                        </label>
+                                    </div>
                                     <span style="color:#ff4d4f; font-size:11px; cursor:pointer;" @click="removeTagGroup(gIdx)">删区</span>
                                 </div>
                                 <div style="min-height: 35px; padding-bottom: 5px;">
@@ -92,106 +97,153 @@ const TagPanel = {
             </div>
 
             <div v-show="showConfig" class="search-modal" @click.self="showConfig=false">
-                <div class="search-modal-content">
-                    <h4>视频路径与执行控制台</h4>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" v-model="newPath" placeholder="输入绝对路径如 D:/videos" class="search-input" @keyup.enter="addPath" />
-                        <button class="search-btn-confirm" style="margin:0; width:auto;" @click="addPath">添加</button>
-                    </div>
-                    
-                    <div style="margin-top:16px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px;">
-                        <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px; border-bottom: 1px dashed #333; padding-bottom: 8px;">
-                            <button @click="indexPath_del(path)" style="background:transparent; border:none; color:#ff4d4f; cursor:pointer;">✖</button>
-                            <span style="flex:1;font-size:12px;word-break:break-all;margin:0 8px; color: #bbb;">{{ path }}</span>
-                            <button @click="indexPath(path)" style="background: rgba(25,137,250,0.2); border:1px solid #1989fa; color:#1989fa; border-radius:4px; padding: 2px 6px; font-size:12px; cursor:pointer;">索引</button>
-                        </div>
+                <div class="search-modal-content" style="max-width: 650px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h4>系统配置与智能归档</h4>
+                        <van-button size="mini" @click="showConfig=false">关闭</van-button>
                     </div>
 
-                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
-                        <h4>文件自动归档</h4>
-                        <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">将指定路径下包含关键词的文件，移动到该路径下的同名文件夹中。</p>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <input type="text" v-model="archiveRootDir" placeholder="处理源路径 (如 D:/videos)" class="search-input" style="margin-bottom: 0;" />
+                    <div style="background: rgba(103, 194, 58, 0.05); border: 1px solid rgba(103, 194, 58, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 20px; margin-top: 15px;">
+                        <h5 style="margin:0 0 10px 0; color:#67c23a;">📦 智能洗库归档引擎 (稀有优先 + 特征传染)</h5>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <input type="text" v-model="archiveRootDir" placeholder="处理源路径 (如 D:/videos)" class="search-input" style="margin-bottom:0;" />
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <div style="flex:1;">
+                                    <span style="font-size:11px; color:#888;">人物名正则 (留空则不识别，默认提首词):</span>
+                                    <input type="text" v-model="archivePersonRegex" placeholder="如 ^(\\S+)" class="search-input" style="padding:4px 8px; font-size:13px; margin-bottom:0;" />
+                                </div>
+                                <div style="flex:0 0 80px;">
+                                    <span style="font-size:11px; color:#888;">归档阈值:</span>
+                                    <input type="number" v-model="archiveThreshold" class="search-input" style="padding:4px 8px; font-size:13px; margin-bottom:0;" />
+                                </div>
+                                <div style="flex:0 0 80px;">
+                                    <span style="font-size:11px; color:#888;">数量上限:</span>
+                                    <input type="number" v-model="archiveMaxPer" class="search-input" style="padding:4px 8px; font-size:13px; margin-bottom:0;" />
+                                </div>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#e6a23c; font-size:12px; font-weight:bold;">
+                                    <input type="checkbox" v-model="forceRearchive" /> 强制全量重归档 (含已归档文件)
+                                </label>
+                                <van-button type="success" size="small" @click="getArchivePlan" :loading="isArchiving" style="height:32px; padding:0 20px; box-shadow: 0 4px 10px rgba(103,194,58,0.3);">生成预览</van-button>
+                            </div>
+                        </div>
+
+                        <div v-if="archivePlan.length > 0" style="margin-top:15px; border-top:1px dashed #444; padding-top:15px;">
+                            <div style="max-height: 250px; overflow-y: auto; background: #000; border-radius: 6px; padding: 5px;">
+                                <table style="width:100%; font-size:12px; color:#ccc; border-collapse: collapse;">
+                                    <thead style="position: sticky; top: 0; background: #222;">
+                                        <tr>
+                                            <th style="text-align:left; padding:8px;">拟建文件夹</th>
+                                            <th style="text-align:left; padding:8px;">包含Tag</th>
+                                            <th style="text-align:center; padding:8px;">文件数</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="p in archivePlan" :key="p.folder_name" style="border-bottom: 1px solid #222;">
+                                            <td style="padding:8px; color:#e6a23c;">{{ p.folder_name }}</td>
+                                            <td style="padding:8px;">{{ p.display_tags.join(', ') }}</td>
+                                            <td style="padding:8px; text-align:center;">{{ p.files.length }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                                <span style="font-size:12px; color:#888;">共计 {{ archivePlan.length }} 个文件夹</span>
+                                <van-button type="danger" size="small" block @click="executeArchive" style="flex:0 0 150px;">确认物理移动</van-button>
+                            </div>
+                        </div>
+                        
+                        <van-button type="warning" size="small" @click="fixLegacyFilenames" style="margin-top: 15px; width: 100%; border-radius: 6px; background: rgba(230,162,60,0.1); border: 1px dashed #e6a23c; color: #e6a23c;">🔧 急救：一键修复历史错误篡改的文件名</van-button>
+                    </div>
+
+                    <div style="opacity: 0.8; border-top: 1px dashed #333; padding-top: 15px;">
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" v-model="newPath" placeholder="输入绝对路径如 D:/videos" class="search-input" @keyup.enter="addPathLocal" style="margin-bottom:0;" />
+                            <button class="search-btn-confirm" style="margin:0; width:auto;" @click="addPathLocal">添加</button>
+                        </div>
+                        
+                        <div style="margin-top:16px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px;">
+                            <div v-for="(path, idx) in pathList" :key="path" style="display:flex;align-items:center;margin-bottom:8px; border-bottom: 1px dashed #333; padding-bottom: 8px;">
+                                <button @click="indexPath_del(path)" style="background:transparent; border:none; color:#ff4d4f; cursor:pointer;">✖</button>
+                                <span style="flex:1;font-size:12px;word-break:break-all;margin:0 8px; color: #bbb;">{{ path }}</span>
+                                <button @click="indexPath(path)" style="background: rgba(25,137,250,0.2); border:1px solid #1989fa; color:#1989fa; border-radius:4px; padding: 2px 6px; font-size:12px; cursor:pointer;">索引</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
+                            <h4>全局自动黑名单</h4>
+                            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; max-height: 100px; overflow-y: auto;">
+                                <span v-for="(word, idx) in blacklist" :key="idx" style="background:#333; border: 1px solid #444; color:#ddd; font-size:12px; padding:4px 10px; border-radius:12px; cursor:pointer;" @click="removeBlacklistWord(idx)">{{ word }} ×</span>
+                            </div>
                             <div style="display: flex; gap: 8px;">
-                                <input type="text" v-model="archiveKeyword" placeholder="归档关键词 (如 少女)" class="search-input" style="flex: 1; margin-bottom: 0;" @keyup.enter="executeArchive" />
-                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #67c23a;" @click="executeArchive" :disabled="isArchiving">
-                                    {{ isArchiving ? '执行中...' : '移动' }}
-                                </button>
+                                <input type="text" v-model="newBlacklistWord" placeholder="输入需自动屏蔽的词汇" class="search-input" style="flex:1; margin-bottom:0;" @keyup.enter="addBlacklistWord" />
+                                <button class="search-btn-confirm" style="width: auto; padding: 0 15px; margin: 0;" @click="addBlacklistWord">添加</button>
                             </div>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
-                        <h4>全局自动黑名单</h4>
-                        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; max-height: 100px; overflow-y: auto;">
-                            <span v-for="(word, idx) in blacklist" :key="idx" style="background:#333; border: 1px solid #444; color:#ddd; font-size:12px; padding:4px 10px; border-radius:12px; cursor:pointer;" @click="removeBlacklistWord(idx)">{{ word }} ×</span>
-                        </div>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" v-model="newBlacklistWord" placeholder="输入需自动屏蔽的词汇" class="search-input" style="flex:1;" @keyup.enter="addBlacklistWord" />
-                            <button class="search-btn-confirm" style="width: auto; padding: 0 15px; margin: 0;" @click="addBlacklistWord">添加</button>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top:20px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid #222;">
-                        <span style="font-size: 12px; color: #888; margin-bottom: 4px;">重命名与洗库控制台</span>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #e6a23c; color: #e6a23c;" @click="executeRenameQueue('queue_only')" :disabled="isExecuting">▶ 执行最新打标</button>
-                            <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #67c23a; color: #67c23a;" @click="executeRenameQueue('full')" :disabled="isExecuting">▶ 全库应用黑名单</button>
-                        </div>
-                        <button class="search-btn-confirm" style="margin: 0; background: transparent; border: 1px dashed #f56c6c; color: #f56c6c;" @click="retryFailedQueue" :disabled="isExecuting">↻ 重试失败的改名任务</button>
-                        <div style="text-align: center; height: 20px; margin-top: 4px;">
-                            <span v-if="isExecuting" style="font-size: 12px; color: #e6a23c;">处理中，请稍候...</span>
-                            <span v-if="executeSuccess && !isExecuting" style="color:#4fc08d; font-size:12px; font-weight:bold;">✔ {{ executeMsg }}</span>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
-                        <h4>高级数据操作 (CSV & JSON)</h4>
-                        
-                        <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
-                            <select v-model="exportTarget" class="search-select" style="flex: 1; padding: 4px 8px;">
-                                <option value="ALL">全部模板</option>
-                                <option v-for="(val, key) in tagProfiles" :key="key" :value="key">仅: {{key}}</option>
-                            </select>
-                            <van-button type="primary" size="small" @click="exportTags" style="flex:1; background: #2b2b2b; border-color: #444;">⬇ 导出模板</van-button>
-                            <van-button type="warning" size="small" @click="triggerImportTags" style="flex:1; background: #2b2b2b; border-color: #444; color: #e6a23c;">⬆ 导入模板</van-button>
-                        </div>
-
-                        <div style="background: rgba(25,137,250,0.05); border: 1px solid rgba(25,137,250,0.2); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-                            <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">批量打标：导出无Tag文件列表，在CSV第三列添加Tag后即可一键导入。</p>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <select v-model="exportLimit" class="search-select" style="flex: 1;">
-                                    <option value="0">全部导出</option>
-                                    <option value="100">前 100 条</option>
-                                    <option value="500">前 500 条</option>
-                                    <option value="1000">前 1000 条</option>
-                                </select>
-                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #1989fa;" @click="exportCSV">导出打标底表</button>
-                            </div>
-                            <button class="search-btn-confirm" style="margin-top:8px; width:100%; background: #e6a23c;" @click="triggerImportCSV">上传 CSV 批量导入打标</button>
                         </div>
                         
-                        <div style="background: rgba(142,68,173,0.05); border: 1px solid rgba(142,68,173,0.2); padding: 12px; border-radius: 8px;">
-                            <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">防丢核对：导出“原始名”与“最新物理名”对比表。</p>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <select v-model="exportLogLimit" class="search-select" style="flex: 1;">
-                                    <option value="0">全部导出</option>
-                                    <option value="100">前 100 条</option>
-                                    <option value="500">前 500 条</option>
-                                    <option value="1000">前 1000 条</option>
-                                </select>
-                                <button class="search-btn-confirm" style="margin:0; width:auto; background: #8e44ad;" @click="exportRenameLogCSV">导出改名核对表</button>
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top:20px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid #222;">
+                            <span style="font-size: 12px; color: #888; margin-bottom: 4px;">重命名与洗库控制台</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #e6a23c; color: #e6a23c;" @click="executeRenameQueue('queue_only')" :disabled="isExecuting">▶ 执行最新打标</button>
+                                <button class="search-btn-confirm" style="margin: 0; flex: 1; background: transparent; border: 1px solid #67c23a; color: #67c23a;" @click="executeRenameQueue('full')" :disabled="isExecuting">▶ 全库应用黑名单</button>
+                            </div>
+                            <button class="search-btn-confirm" style="margin: 0; background: transparent; border: 1px dashed #f56c6c; color: #f56c6c;" @click="retryFailedQueue" :disabled="isExecuting">↻ 重试失败的改名任务</button>
+                            <div style="text-align: center; height: 20px; margin-top: 4px;">
+                                <span v-if="isExecuting" style="font-size: 12px; color: #e6a23c;">处理中，请稍候...</span>
+                                <span v-if="executeSuccess && !isExecuting" style="color:#4fc08d; font-size:12px; font-weight:bold;">✔ {{ executeMsg }}</span>
                             </div>
                         </div>
 
+                        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px dashed #444;">
+                            <h4>高级数据操作 (CSV & JSON)</h4>
+                            <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
+                                <select v-model="exportTarget" class="search-select" style="flex: 1; padding: 4px 8px; margin-bottom:0;">
+                                    <option value="ALL">全部模板</option>
+                                    <option v-for="(val, key) in tagProfiles" :key="key" :value="key">仅: {{key}}</option>
+                                </select>
+                                <van-button type="primary" size="small" @click="exportTags" style="flex:1; background: #2b2b2b; border-color: #444;">⬇ 导出模板</van-button>
+                                <van-button type="warning" size="small" @click="triggerImportTags" style="flex:1; background: #2b2b2b; border-color: #444; color: #e6a23c;">⬆ 导入模板</van-button>
+                            </div>
+                            <div style="background: rgba(25,137,250,0.05); border: 1px solid rgba(25,137,250,0.2); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                                <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">批量打标：导出无Tag文件列表，在CSV第三列添加Tag后即可一键导入。</p>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <select v-model="exportLimit" class="search-select" style="flex: 1; margin-bottom:0;">
+                                        <option value="0">全部导出</option>
+                                        <option value="100">前 100 条</option>
+                                        <option value="500">前 500 条</option>
+                                        <option value="1000">前 1000 条</option>
+                                    </select>
+                                    <button class="search-btn-confirm" style="margin:0; width:auto; background: #1989fa;" @click="exportCSV">导出打标底表</button>
+                                </div>
+                                <button class="search-btn-confirm" style="margin-top:8px; width:100%; background: #e6a23c;" @click="triggerImportCSV">上传 CSV 批量导入打标</button>
+                            </div>
+                            <div style="background: rgba(142,68,173,0.05); border: 1px solid rgba(142,68,173,0.2); padding: 12px; border-radius: 8px;">
+                                <p style="font-size: 12px; color: #888; margin-top: 0; margin-bottom: 10px;">防丢核对：导出“原始名”与“最新物理名”对比表。</p>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <select v-model="exportLogLimit" class="search-select" style="flex: 1; margin-bottom:0;">
+                                        <option value="0">全部导出</option>
+                                        <option value="100">前 100 条</option>
+                                        <option value="500">前 500 条</option>
+                                        <option value="1000">前 1000 条</option>
+                                    </select>
+                                    <button class="search-btn-confirm" style="margin:0; width:auto; background: #8e44ad;" @click="exportRenameLogCSV">导出改名核对表</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <button class="search-btn-cancel" @click="showConfig=false" style="border:none; background: transparent !important; text-decoration: underline;">关闭面板</button>
                 </div>
             </div>
             
             <div v-if="showHistory" class="search-modal" @click.self="showHistory=false">
                 <div class="search-modal-content">
-                    <h4>文件名修改日志</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
+                        <h4 style="margin:0;">文件名修改日志</h4>
+                        <van-button size="mini" @click="showHistory=false">关闭</van-button>
+                    </div>
                     <div style="max-height: 50vh; overflow-y: auto; margin-bottom: 10px;">
                         <div v-for="log in renameHistory" :key="log.id" style="background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -203,7 +255,6 @@ const TagPanel = {
                             <div style="font-size: 13px; color: #4fc08d; font-weight: bold; margin-top: 4px; word-break: break-all;">{{ log.target_name }}</div>
                         </div>
                     </div>
-                    <button class="search-btn-cancel" @click="showHistory=false">关闭面板</button>
                 </div>
             </div>
 
@@ -223,10 +274,24 @@ const TagPanel = {
         const exportTarget = ref('ALL');
         let isSwitchingProfile = false;
 
-        // 🌟 归档功能状态 🌟
+        const showConfig = ref(false);
         const archiveRootDir = ref(localStorage.getItem('dy_archive_root') || '');
-        const archiveKeyword = ref('');
+        const archiveThreshold = ref(parseInt(localStorage.getItem('dy_archive_threshold')) || 10);
+        const archiveMaxPer = ref(parseInt(localStorage.getItem('dy_archive_max_per')) || 50);
+        const forceRearchive = ref(localStorage.getItem('dy_force_rearchive') === 'true');
+        
+        // 🌟 初始化为默认提取首词正则
+        const storedRegex = localStorage.getItem('dy_archive_person_regex');
+        const archivePersonRegex = ref(storedRegex !== null ? storedRegex : '^(\\S+)');
+        
+        const archivePlan = ref([]);
         const isArchiving = ref(false);
+
+        watch(archiveRootDir, (val) => localStorage.setItem('dy_archive_root', val));
+        watch(archiveThreshold, (val) => localStorage.setItem('dy_archive_threshold', val));
+        watch(archiveMaxPer, (val) => localStorage.setItem('dy_archive_max_per', val));
+        watch(forceRearchive, (val) => localStorage.setItem('dy_force_rearchive', val));
+        watch(archivePersonRegex, (val) => localStorage.setItem('dy_archive_person_regex', val));
 
         onMounted(async () => {
             if (panelOrder.value.includes('preview')) {
@@ -235,7 +300,7 @@ const TagPanel = {
             }
 
             const tgRes = await window.DyAPI.getTagGroups();
-            let backendGroups = (tgRes && tgRes.groups && tgRes.groups.length > 0) ? tgRes.groups : [{ id: 'g_1', tags: [] }];
+            let backendGroups = (tgRes && tgRes.groups && tgRes.groups.length > 0) ? tgRes.groups : [{ id: 'g_1', tags: [], is_person: false }];
 
             let savedProfiles = JSON.parse(localStorage.getItem('dy_tag_profiles'));
             let savedCurrentName = localStorage.getItem('dy_current_profile_name');
@@ -255,38 +320,66 @@ const TagPanel = {
             tagGroups.value = JSON.parse(JSON.stringify(tagProfiles.value[currentProfileName.value]));
         });
 
-        // 🌟 执行归档函数 🌟
-        async function executeArchive() {
-            if (!archiveRootDir.value.trim() || !archiveKeyword.value.trim()) {
-                vant.showFailToast('处理路径和关键词不能为空');
-                return;
-            }
-            if (!confirm(`确定要将 [${archiveRootDir.value}] 下包含 "${archiveKeyword.value}" 的文件，移动到该路径下的 "${archiveKeyword.value}" 文件夹中吗？`)) {
-                return;
-            }
+        async function fixLegacyFilenames() {
+            if (!archiveRootDir.value) return vant.showFailToast('请先输入处理源路径');
+            if (!confirm('确定扫描并修复该路径下所有错误带有 arc_ 前缀的归档文件吗？')) return;
             
-            localStorage.setItem('dy_archive_root', archiveRootDir.value.trim());
-            isArchiving.value = true;
-            
+            vant.showLoadingToast({ message: '修复中...', forbidClick: true, duration: 0 });
             try {
-                // 直接请求后端，由后端完成物理移动
-                const res = await axios.post('/dyfn/sys_tags/archive_files', {
-                    root_dir: archiveRootDir.value.trim(),
-                    keyword: archiveKeyword.value.trim()
-                });
-                
+                const res = await axios.post('/dyfn/sys_tags/fix_legacy_filenames', { root_dir: archiveRootDir.value });
+                vant.closeToast();
                 if (res.data.success) {
-                    vant.showSuccessToast({ message: res.data.msg || '归档成功', duration: 2000 });
-                    archiveKeyword.value = ''; // 清空关键词方便下次输入
-                    // 归档后建议刷新一下当前列表
+                    vant.showSuccessToast(res.data.msg);
                     emit('reload-videos', false, props.currentIndex);
                 } else {
-                    vant.showFailToast(res.data.msg || '归档失败');
+                    vant.showFailToast(res.data.msg);
                 }
             } catch (e) {
-                vant.showFailToast('网络异常或接口未实现');
+                vant.closeToast();
+                vant.showFailToast('请求失败');
+            }
+        }
+
+        async function getArchivePlan() {
+            if (!archiveRootDir.value) return vant.showFailToast('请输入路径');
+            isArchiving.value = true;
+            try {
+                const res = await axios.post('/dyfn/sys_tags/archive_plan', {
+                    root_dir: archiveRootDir.value,
+                    tag_groups: props.searchState.tagGroups || JSON.parse(localStorage.getItem('dy_tag_profiles'))[localStorage.getItem('dy_current_profile_name')],
+                    threshold: archiveThreshold.value,
+                    max_per_folder: archiveMaxPer.value,
+                    force_rearchive: forceRearchive.value,
+                    person_regex: archivePersonRegex.value
+                });
+                if (res.data.success) {
+                    archivePlan.value = res.data.plan;
+                } else {
+                    vant.showFailToast(res.data.msg);
+                }
+            } catch (e) {
+                vant.showFailToast('请求失败');
             } finally {
                 isArchiving.value = false;
+            }
+        }
+
+        async function executeArchive() {
+            if (archivePlan.value.length === 0) return;
+            try {
+                const res = await axios.post('/dyfn/sys_tags/archive_execute', {
+                    plan: archivePlan.value,
+                    root_dir: archiveRootDir.value
+                });
+                if (res.data.success) {
+                    vant.showSuccessToast(res.data.msg);
+                    archivePlan.value = [];
+                    emit('reload-videos', false, props.currentIndex);
+                } else {
+                    vant.showFailToast(res.data.msg);
+                }
+            } catch (e) {
+                vant.showFailToast('执行异常');
             }
         }
 
@@ -305,7 +398,7 @@ const TagPanel = {
                 if (tagProfiles.value[cleanName]) {
                     vant.showFailToast('模板名称已存在！'); return;
                 }
-                tagProfiles.value[cleanName] = [{ id: 'g_' + Date.now(), tags: [] }];
+                tagProfiles.value[cleanName] = [{ id: 'g_' + Date.now(), tags: [], is_person: false }];
                 currentProfileName.value = cleanName;
                 switchProfile();
             }
@@ -343,7 +436,7 @@ const TagPanel = {
         let renameTimeoutId = null, pendingRenameData = null, tagSaveTimeout = null;
         const dragType = ref(null), draggedGroupIdx = ref(null), dragOverGroupIdx = ref(null), draggedTagInfo = ref(null), dragOverTagInfo = ref(null), dragDropPosition = ref('');
         
-        const showConfig = ref(false), showHistory = ref(false), renameHistory = ref([]);
+        const showHistory = ref(false), renameHistory = ref([]);
         const newPath = ref(''), newBlacklistWord = ref(''), exportLimit = ref('0'), exportLogLimit = ref('0');
         const isExecuting = ref(false), executeSuccess = ref(false), executeMsg = ref('');
 
@@ -566,9 +659,9 @@ const TagPanel = {
         function onGroupDrop(e, targetGIdx) { dragOverGroupIdx.value = null; if (dragType.value === 'group' && draggedGroupIdx.value !== null) { const sourceIdx = draggedGroupIdx.value; if (sourceIdx !== targetGIdx) { const item = tagGroups.value.splice(sourceIdx, 1)[0]; tagGroups.value.splice(targetGIdx, 0, item); } } else if (dragType.value === 'tag' && draggedTagInfo.value) { const { gIdx: sourceGIdx, tIdx: sourceTIdx } = draggedTagInfo.value; if (sourceGIdx !== targetGIdx) { const tag = tagGroups.value[sourceGIdx].tags.splice(sourceTIdx, 1)[0]; tagGroups.value[targetGIdx].tags.push(tag); } } dragType.value = null; }
         function onTagDrop(e, targetGIdx, targetTIdx) { if (dragType.value === 'tag' && draggedTagInfo.value) { const { gIdx: sourceGIdx, tIdx: sourceTIdx } = draggedTagInfo.value; if (sourceGIdx === targetGIdx && sourceTIdx === targetTIdx) return; const tag = tagGroups.value[sourceGIdx].tags.splice(sourceTIdx, 1)[0]; let insertIdx = targetTIdx; if (sourceGIdx === targetGIdx && sourceTIdx < targetTIdx) insertIdx -= 1; if (dragDropPosition.value === 'right') insertIdx += 1; tagGroups.value[targetGIdx].tags.splice(insertIdx, 0, tag); } dragType.value = null; dragOverTagInfo.value = null; }
 
-        function addEmptyGroup() { tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); }
+        function addEmptyGroup() { tagGroups.value.push({ id: 'g_' + Date.now(), tags: [], is_person: false }); }
         function removeTagGroup(idx) { if (confirm('确定删除此分区及内部所有Tag吗？')) { tagGroups.value.splice(idx, 1); } }
-        function addGlobalTag() { const tag = globalTagInput.value.replace(/#/g, '').trim(); if (!tag) return; if (!currentCustomTags.value.includes(tag)) currentCustomTags.value.push(tag); if (tagGroups.value.length === 0) tagGroups.value.push({ id: 'g_' + Date.now(), tags: [] }); let exists = false; for(let g of tagGroups.value) { if(g.tags.includes(tag)) { exists = true; break; } } if(!exists) { tagGroups.value[0].tags.push(tag); } globalTagInput.value = ''; recordSyncAction(tag, 'add'); }
+        function addGlobalTag() { const tag = globalTagInput.value.replace(/#/g, '').trim(); if (!tag) return; if (!currentCustomTags.value.includes(tag)) currentCustomTags.value.push(tag); if (tagGroups.value.length === 0) tagGroups.value.push({ id: 'g_' + Date.now(), tags: [], is_person: false }); let exists = false; for(let g of tagGroups.value) { if(g.tags.includes(tag)) { exists = true; break; } } if(!exists) { tagGroups.value[0].tags.push(tag); } globalTagInput.value = ''; recordSyncAction(tag, 'add'); }
         function removeSavedTagFromGroup(gIdx, tIdx) { const tag = tagGroups.value[gIdx].tags[tIdx]; tagGroups.value[gIdx].tags.splice(tIdx, 1); const cIdx = currentCustomTags.value.indexOf(tag); if (cIdx > -1) { currentCustomTags.value.splice(cIdx, 1); recordSyncAction(tag, 'remove'); } }
 
         async function executePendingRename() {
@@ -607,7 +700,7 @@ const TagPanel = {
             } catch (e) { isExecuting.value = false; executeMsg.value = '网络异常'; executeSuccess.value = true; }
         }
 
-        const addPath = () => emit('add-path', newPath.value);
+        const addPathLocal = () => emit('add-path', newPath.value);
         const indexPath = (p) => emit('index-path', p);
         const indexPath_del = (p) => emit('index-path-del', p);
         const addBlacklistWord = () => emit('add-blacklist', newBlacklistWord.value);
@@ -706,9 +799,9 @@ const TagPanel = {
             generatedFilename, setAsOnlyToken, toggleToken, restoreOriginalName, addQuickBlacklist, quickBlacklistToken, enableGroupDrag, disableGroupDrag, onGroupDragStart, onGroupDragEnd, onTagDragStart, onTagDragEnd, onTagDragOver, onGroupDragOver, onTagDragEnter, onTagDragLeave, onGroupDrop, onTagDrop, addEmptyGroup, removeTagGroup, addGlobalTag, removeSavedTagFromGroup, 
             isTagActive, handlePresetTagClick,
             showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, exportLogLimit, isExecuting, executeSuccess, executeMsg,
-            addPath, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile, exportRenameLogCSV,
+            addPathLocal, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile, exportRenameLogCSV,
             tagProfiles, currentProfileName, switchProfile, createNewProfile, deleteCurrentProfile, exportTarget, exportTags,
-            activeAutoTags, archiveRootDir, archiveKeyword, isArchiving, executeArchive // 暴露归档变量
+            activeAutoTags, archiveRootDir, archiveThreshold, archiveMaxPer, archivePlan, isArchiving, forceRearchive, archivePersonRegex, getArchivePlan, executeArchive, fixLegacyFilenames
         };
     }
 };

@@ -272,23 +272,53 @@ def apply_size_filter(query, size_param):
         query = query.filter(Video.file_size <= int(size_param) * 1024 * 1024)
     return query
 
+from sqlalchemy import func
+
+import re
+
+class TagFilter:
+    # 自动 tag：#a_xxx
+    _AUTO_TAG = re.compile(r'#a_[A-Za-z0-9_\u4e00-\u9fff]+')
+
+    # 人工 tag：#xxx（排除 #a_）
+    _MANUAL_TAG = re.compile(r'(?<!a_)#[A-Za-z0-9_\u4e00-\u9fff]+')
+
+    # 无效 tag：# 或 ## 或 ####
+    _INVALID_HASH = re.compile(r'#+\s*')
+
+    @classmethod
+    def is_untagged_or_auto(cls, filename: str) -> bool:
+        """
+        True = 没有人工tag（允许自动tag）
+        False = 存在人工tag
+        """
+
+        # 1. 去掉自动 tag
+        tmp = cls._AUTO_TAG.sub('', filename)
+
+        # 2. 清理无效 #
+        tmp = cls._INVALID_HASH.sub('', tmp)
+
+        # 3. 判断是否还存在人工 tag
+        return not bool(cls._MANUAL_TAG.search(tmp))
+        
 def apply_video_filters(query, request_args, session=None):
     score = request_args.get('score')
     search = request_args.get('search')
     exclude = request_args.get('exclude')
     tags = request_args.get('tags')
     size = request_args.get('size')
+    untagged = str(request_args.get('untagged', '0')) # 🌟 新增参数解析
     use_random = False
     
     if search and 'random' in search.lower():
         use_random = True
         search = search.replace('random', '').strip()
         
-    # 🌟 修复 1：明确剔除默认的 '0' 值
     if score and str(score) != '0': 
         query = query.filter(Video.score == int(score))
     else: 
-        # 兼容部分通过第三方工具导入导致 score 为 NULL 的脏数据
+        from sqlalchemy import or_
         query = query.filter(or_(Video.score != 1, Video.score.is_(None)))
 
     if tags:
@@ -304,12 +334,24 @@ def apply_video_filters(query, request_args, session=None):
         for kw in exclude.strip().split(): 
             query = query.filter(~Video.detail.like(f"%{kw}%"))
 
-    # 🌟 修复 2：如果前端传来了 size='0'，直接忽略，不执行小于 0 的过滤
     if size and str(size) != '0': 
         query = apply_size_filter(query, str(size))
         
-    return query, use_random
+    # 🌟 核心过滤逻辑：纯 SQL 剔除法 🌟
+    if untagged == '1':
+        # 仅看未打标 (要求：将 "#a_" 替换为空后，文件名里不再有任何 "#")
+        base = func.replace(Video.filename, '#a_', '')
 
+        query = query.filter(
+            ~base.like('%#_%')
+        )
+        # query = query.filter(~func.replace(Video.filename, '#a', '').like('%#%'))
+    elif untagged == '2':
+        # 仅看已打标 (要求：将 "#a_" 替换为空后，文件名里依然包含 "#")
+        query = query.filter(func.replace(Video.filename, '#a_', '').like('%#%'))
+        
+    return query, use_random
+    
 # ================= 视图控制与路由分配 (Views) =================
 dy_bp = Blueprint('dyfn', __name__, url_prefix='/dyfn')
 
@@ -471,88 +513,187 @@ def api_restore_rename():
             session.close(); return jsonify({'success': False, 'msg': '环境已不支持恢复'}), 400
     except OSError as e:
         session.close(); return jsonify({'success': False, 'msg': str(e)}), 500
-# 🌟 专门用于后端的自动归档移动逻辑 (深度穿透子目录 + 防止死循环) 🌟
-@dy_bp.route('/sys_tags/archive_files', methods=['POST'])
-def api_archive_files():
+
+# 🌟 核心 1：生成智能归档计划 (正则参数完全听令于前端，支持停用识别)
+@dy_bp.route('/sys_tags/archive_plan', methods=['POST'])
+def api_archive_plan():
     data = request.get_json() or {}
-    root_dir = data.get('root_dir', '').strip()
-    keyword = data.get('keyword', '').strip()
+    root_dir = os.path.abspath(data.get('root_dir', '').strip())
+    tag_groups = data.get('tag_groups', [])
+    threshold = int(data.get('threshold', 10))
+    max_per_folder = int(data.get('max_per_folder', 50))
+    force_rearchive = data.get('force_rearchive', False)
+    person_regex = data.get('person_regex', '').strip()  # 接收正则
 
-    print(f"\n========== [自动归档任务开始: 深度穿透模式] ==========")
-    print(f"[*] 接收到前端请求: 路径='{root_dir}', 关键词='{keyword}'")
+    if not os.path.exists(root_dir):
+        return jsonify({'success': False, 'msg': '路径不存在'})
 
-    if not root_dir or not keyword:
-        return jsonify({'success': False, 'msg': '路径和关键词不能为空'})
-
-    root_dir = os.path.abspath(root_dir)
+    # 1. 建立有效 Tag 映射表，剥离“人物/特征属性”
+    valid_tags_map = {}
+    person_tags_set = set()
     
-    if not os.path.exists(root_dir) or not os.path.isdir(root_dir):
-        return jsonify({'success': False, 'msg': f'处理源路径不存在: {root_dir}'})
+    for g in tag_groups:
+        g_name = g.get('id', '未分类')
+        is_person = g.get('is_person', False)
+        for t in g.get('tags', []):
+            valid_tags_map[t] = g_name
+            if is_person:
+                person_tags_set.add(t)
 
-    # 目标文件夹路径
-    target_dir = os.path.join(root_dir, keyword)
-    target_dir_abs = os.path.abspath(target_dir)
+    all_files_raw = []
+    person_dict = {}
+    
+    for current_root, dirs, files in os.walk(root_dir):
+        if not force_rearchive and "_arc_" in current_root: 
+            continue 
+            
+        for f in files:
+            f_path = os.path.join(current_root, f)
+            explicit_tags = [t for t in valid_tags_map.keys() if f'#{t}' in f]
+            
+            clean_f = os.path.splitext(f)[0]
+            person_name = ""
+            
+            # 🌟 动态正则提取：如果前端传了正则，才去提取人物名
+            if person_regex:
+                try:
+                    import re
+                    m = re.search(person_regex, clean_f)
+                    if m:
+                        person_name = m.group(1).strip() if len(m.groups()) > 0 else m.group(0).strip()
+                except Exception:
+                    pass
+            
+            # ⚠️ 删除了原有的强行空格兜底，若 person_regex 为空，则 person_name 为空，不传染
+            
+            all_files_raw.append({
+                'path': f_path, 
+                'name': f, 
+                'explicit_tags': explicit_tags,
+                'person': person_name
+            })
+            
+            if person_name:
+                for t in explicit_tags:
+                    if t in person_tags_set:
+                        if person_name not in person_dict:
+                            person_dict[person_name] = set()
+                        person_dict[person_name].add(t)
+
+    # 2. 标签传染 (扩散) & 统计词频
+    all_files = []
+    tag_counts = {t: 0 for t in valid_tags_map.keys()}
+    
+    for file_info in all_files_raw:
+        p_name = file_info['person']
+        e_tags = set(file_info['explicit_tags'])
+        
+        # 传染人物特征
+        if p_name in person_dict:
+            e_tags.update(person_dict[p_name])
+            
+        final_tags = list(e_tags)
+        if final_tags:
+            all_files.append({'path': file_info['path'], 'name': file_info['name'], 'tags': final_tags})
+            for t in final_tags: tag_counts[t] += 1
+
+    # 3. 稀有度分配
+    buckets = {t: [] for t in valid_tags_map.keys()}
+    for file_info in all_files:
+        rarest_tag = min(file_info['tags'], key=lambda t: tag_counts[t])
+        buckets[rarest_tag].append(file_info['path'])
+
+    # 4. 阈值与合并
+    final_plan = []
+    catch_all_bucket = []
+    
+    for group in tag_groups:
+        group_tags = group.get('tags', [])
+        small_tags_in_group = []
+        combined_files = []
+
+        for t in group_tags:
+            files = buckets.get(t, [])
+            if len(files) >= threshold:
+                for i in range(0, len(files), max_per_folder):
+                    chunk = files[i:i + max_per_folder]
+                    suffix = f"_{i//max_per_folder + 1}" if len(files) > max_per_folder else ""
+                    final_plan.append({
+                        'folder_name': f"_arc_{t}{suffix}",
+                        'display_tags': [t],
+                        'files': chunk
+                    })
+            elif len(files) > 0:
+                small_tags_in_group.append(t)
+                combined_files.extend(files)
+        
+        if len(combined_files) >= threshold:
+            folder_name = f"_arc_" + "_".join(small_tags_in_group[:3]) 
+            final_plan.append({
+                'folder_name': folder_name,
+                'display_tags': small_tags_in_group,
+                'files': combined_files
+            })
+        else:
+            catch_all_bucket.extend(combined_files)
+
+    if catch_all_bucket:
+        final_plan.append({
+            'folder_name': "_arc_未分类_零碎收集",
+            'display_tags': ["多种兜底"],
+            'files': catch_all_bucket
+        })
+
+    return jsonify({'success': True, 'plan': final_plan})
+
+# 🌟 核心 2：执行归档物理移动 (保持原样移动，不修改实际文件名)
+@dy_bp.route('/sys_tags/archive_execute', methods=['POST'])
+def api_archive_execute():
+    data = request.get_json() or {}
+    plan = data.get('plan', [])
+    root_dir = os.path.abspath(data.get('root_dir', '').strip())
+    
     moved_count = 0
-    
     session = Session()
     try:
-        # 创建归档文件夹
-        os.makedirs(target_dir, exist_ok=True)
-        
-        # 🌟 核心升级：使用 os.walk 深度遍历所有子目录
-        for current_root, dirs, files in os.walk(root_dir):
+        for item in plan:
+            target_dir = os.path.join(root_dir, item['folder_name'])
+            os.makedirs(target_dir, exist_ok=True)
             
-            # 🌟 致命防御：如果是目标归档文件夹及其子文件夹，直接跳过！
-            # 否则会把你刚才移进去的文件再扫一遍，引发混乱。
-            if os.path.abspath(current_root).startswith(target_dir_abs):
-                continue
-
-            for filename in files:
-                file_path = os.path.join(current_root, filename)
+            for old_path in item['files']:
+                if not os.path.exists(old_path): continue
                 
-                # 判断关键词是否匹配 (忽略大小写)
-                if keyword.lower() not in filename.lower():
-                    continue
-
-                print(f"  [+] 命中目标: '{file_path}'")
-                new_full_path = os.path.join(target_dir, filename)
+                filename = os.path.basename(old_path)
+                new_path = os.path.join(target_dir, filename)
                 
-                try:
-                    # 1. 物理移动文件
-                    if os.path.exists(new_full_path):
-                        os.remove(new_full_path) # 容错：如果目标已存在同名文件则覆盖
-                    shutil.move(file_path, new_full_path)
+                if old_path != new_path:
+                    if os.path.exists(new_path):
+                        os.remove(new_path)
+                    shutil.move(old_path, new_path)
                     
-                    # 2. 数据库同步修改 (兼容路径标准化比对)
                     video = session.query(Video).filter(
-                        or_(
-                            Video.detail == file_path,
-                            Video.detail == os.path.abspath(file_path)
-                        )
+                        or_(Video.detail == old_path, Video.detail == os.path.abspath(old_path))
                     ).first()
                     
-                    if video:
-                        video.detail = os.path.abspath(new_full_path)
-                        print(f"      -> 数据库路径同步成功")
-                        
-                    moved_count += 1
-                except Exception as sub_e:
-                    print(f"  [x] 移动报错: '{filename}', 异常: {str(sub_e)}")
-                    continue
+                    if video: 
+                        video.detail = os.path.abspath(new_path)
+                moved_count += 1
         
         session.commit()
-        print(f"[*] 深度归档结束，穿透扫描共成功移动 {moved_count} 个文件")
-        print(f"========================================\n")
         
-        return jsonify({'success': True, 'msg': f'归档完成，穿透扫描共移动 {moved_count} 个文件'})
+        # 强制清理：掏空底部的废弃归档文件夹
+        for current_root, dirs, files in os.walk(root_dir, topdown=False):
+            if "_arc_" in current_root and not dirs and not files:
+                try: os.rmdir(current_root)
+                except: pass
+                
+        return jsonify({'success': True, 'msg': f'执行完毕，成功归档 {moved_count} 个文件'})
     except Exception as e:
         session.rollback()
-        print(f"[x] 发生全局崩溃异常: {str(e)}")
-        return jsonify({'success': False, 'msg': f'执行目录移动异常: {str(e)}'})
+        return jsonify({'success': False, 'msg': str(e)})
     finally:
         session.close()
 
-        
 # --- 智能文件名过滤器 ---
 def is_meaningful_filename(filename):
     """
