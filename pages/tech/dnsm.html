@@ -33,13 +33,8 @@
         font-weight: 600;
     }
 
-    .btn-green {
-        background: #10b981;
-    }
-
-    .btn-blue {
-        background: #3b82f6;
-    }
+    .btn-green { background: #10b981; }
+    .btn-blue { background: #3b82f6; }
 
     table {
         width: 100%;
@@ -54,6 +49,7 @@
         padding: 12px 15px;
         text-align: left;
         border-bottom: 1px solid #eee;
+        vertical-align: middle;
     }
 
     th {
@@ -62,25 +58,34 @@
         white-space: nowrap;
     }
 
-    tr:hover {
-        background-color: #f1f4f8;
-    }
+    tr:hover { background-color: #f1f4f8; }
 
+    /* 状态灯样式 */
     .status {
         display: inline-block;
+        flex-shrink: 0;
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        margin-right: 5px;
-        vertical-align: middle;
+    }
+    .ok { background-color: #10b981; }
+    .err { background-color: #ef4444; }
+    .pending {
+        background-color: #d1d5db;
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 0.5; }
+        50% { opacity: 1; }
+        100% { opacity: 0.5; }
     }
 
-    .ok {
-        background-color: #10b981;
-    }
-
-    .err {
-        background-color: #ef4444;
+    /* 布局对齐 */
+    .flex-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
     .action-group {
@@ -93,8 +98,7 @@
         padding: 6px;
         border: 1px solid #ccc;
         border-radius: 4px;
-        flex-grow: 1;
-        min-width: 220px;
+        width: 160px;
     }
 
     .action-group button {
@@ -106,25 +110,20 @@
         white-space: nowrap;
     }
 
-    .auto-btn {
-        background: #10b981;
-    }
+    .auto-btn { background: #10b981; }
+    .update-btn { background: #3b82f6; }
 
-    .update-btn {
-        background: #3b82f6;
-    }
-
-    .small {
-        color: #666;
-        font-size: 0.9em;
-        margin-left: 8px;
+    .domain-text {
+        color: #555;
+        font-family: monospace;
+        font-size: 13px;
     }
 
     .ipv6-text {
-        font-size: 12px;
-        color: #666;
+        font-family: monospace;
+        font-size: 13px;
+        color: #333;
         word-break: break-all;
-        margin-top: 4px;
     }
 
 </style>
@@ -135,160 +134,116 @@
 <h2>DNS Control Panel</h2>
 
 <div class="topbar">
-
-    <button class="btn-green" onclick="autoIpv6All(event)">
-        Auto Update All IPv6
-    </button>
-
-    <button class="btn-blue" onclick="load()">
-        Refresh
-    </button>
-
+    <button class="btn-green" onclick="autoIpv6All(event)">Auto Update All IPv6</button>
+    <button class="btn-blue" onclick="load()">Refresh</button>
 </div>
 
 <table>
-
     <thead>
         <tr>
             <th>Name</th>
-            <th>LAN IPv4</th>
-            <th>IPv4 Status</th>
-            <th>IPv6 Status</th>
+            <th>IPv4 (局域网Ping)</th>
+            <th>IPv4 Domain (DNS解析)</th>
+           
+            <th>IPv6 Domain (DNS解析)</th>
             <th>Last Seen</th>
-            <th>Manual Action</th>
+            <th>Action</th>
         </tr>
     </thead>
-
     <tbody id="tb">
         <tr>
-            <td colspan="6">
-                Loading...
-            </td>
+            <td colspan="7">Loading...</td>
         </tr>
     </tbody>
-
 </table>
 
 <script>
 
+function renderTable(data, isPending) {
+    const tb = document.getElementById("tb");
+    tb.innerHTML = "";
+
+    for (const [name, h] of Object.entries(data)) {
+        const tr = document.createElement("tr");
+
+        // 将状态灯直接封装成小组件，贴在对应的数据旁边
+        const getLight = (status, title) => 
+            `<span class="status ${isPending ? 'pending' : (status ? 'ok' : 'err')}" title="${title}"></span>`;
+
+        const v4LocalLight = getLight(h.ipv4_ok, "IPv4 Ping 连通性");
+        const v4DnsLight = getLight(h.dns_ok, "IPv4 DNS 解析状态");
+        const v6LocalLight = getLight(h.ipv6_ok, "IPv6 Ping 连通性 (需有历史记录)");
+        const v6DnsLight = getLight(h.ipv6_dns_ok, "IPv6 DNS 解析状态");
+
+        const timeStr = h.last_seen ? new Date(h.last_seen * 1000).toLocaleString() : "-";
+        const v6AddressHtml = h.last_ipv6 
+            ? `<span class="ipv6-text">${h.last_ipv6}</span>` 
+            : `<span class="ipv6-text" style="color:#aaa;">无本地记录</span>`;
+
+        tr.innerHTML = `
+            <td><strong>${name}</strong></td>
+            
+            <!-- IPv4 物理连通性 -->
+            <td>
+                <div class="flex-cell">
+                    ${v4LocalLight}
+                    <span>${h.lan_ipv4 || '-'}</span>
+                </div>
+            </td>
+            
+            <!-- IPv4 域名解析 -->
+            <td>
+                <div class="flex-cell">
+                    ${v4DnsLight}
+                    <span class="domain-text">${h.ipv4dns || '-'}</span>
+                </div>
+            </td>
+            
+           
+            
+            <!-- IPv6 域名解析 -->
+            <td>
+                <div class="flex-cell">
+                    ${v6DnsLight}
+                    <span class="domain-text">${h.ipv6dns || '-'}</span>
+                </div>
+            </td>
+            
+            <td style="font-size:0.9em; color:#666;">${timeStr}</td>
+            
+            <td>
+                <div class="action-group">
+                    <input id="ip_${name}" placeholder="Enter IPv6" value="">
+                    <button class="auto-btn" onclick="autoIpv6('${h.lan_ipv4}')">Auto</button>
+                    <button class="update-btn" onclick="upd('${h.lan_ipv4}', '${name}')">Update</button>
+                </div>
+            </td>
+        `;
+        tb.appendChild(tr);
+    }
+}
+
 async function load() {
-
+    const tb = document.getElementById("tb");
+    
     try {
+        // 第一阶段：快速渲染静态信息和 Loading 状态
+        const hostRes = await fetch("/dns/api/hosts");
+        if (!hostRes.ok) throw new Error("Failed to fetch static configurations.");
+        const hostData = await hostRes.json();
+        renderTable(hostData, true);
 
-        const res = await fetch("/dns/api/status");
-
-        if (!res.ok) {
-            throw new Error("Network response was not ok");
-        }
-
-        const data = await res.json();
-
-        const tb = document.getElementById("tb");
-
-        tb.innerHTML = "";
-
-        for (const [name, h] of Object.entries(data)) {
-
-            const tr = document.createElement("tr");
-
-            const v4LocalStatus =
-                `<span class="status ${h.ipv4_ok ? 'ok' : 'err'}"></span>`;
-
-            const v4DnsStatus =
-                `<span class="status ${h.dns_ok ? 'ok' : 'err'}"></span>`;
-
-            const v6LocalStatus =
-                `<span class="status ${h.ipv6_ok ? 'ok' : 'err'}"></span>`;
-
-            const v6DnsStatus =
-                `<span class="status ${h.ipv6_dns_ok ? 'ok' : 'err'}"></span>`;
-
-            const timeStr =
-                h.last_seen
-                ? new Date(h.last_seen * 1000).toLocaleString()
-                : "-";
-
-            tr.innerHTML = `
-
-                <td>
-                    <strong>${name}</strong>
-                </td>
-
-                <td>
-                    ${h.lan_ipv4 || '-'}
-                </td>
-
-                <td>
-
-                    ${v4LocalStatus}
-                    ${v4DnsStatus}
-
-                    <span class="small">
-                        ${h.ipv4dns || '-'}
-                    </span>
-
-                </td>
-
-                <td>
-
-                    ${v6LocalStatus}
-                    ${v6DnsStatus}
-
-                    <span class="small">
-                        ${h.ipv6dns || '-'}
-                    </span>
-
-                    ${
-                        h.last_ipv6
-                        ? `<div class="ipv6-text">${h.last_ipv6}</div>`
-                        : ''
-                    }
-
-                </td>
-
-                <td>
-                    ${timeStr}
-                </td>
-
-                <td>
-
-                    <div class="action-group">
-
-                        <input
-                            id="ip_${name}"
-                            placeholder="Enter IPv6 manually"
-                            value=""
-                        >
-
-                        <button
-                            class="auto-btn"
-                            onclick="autoIpv6('${h.lan_ipv4}')"
-                        >
-                            Auto
-                        </button>
-
-                        <button
-                            class="update-btn"
-                            onclick="upd('${h.lan_ipv4}', '${name}')"
-                        >
-                            Update
-                        </button>
-
-                    </div>
-
-                </td>
-            `;
-
-            tb.appendChild(tr);
-        }
+        // 第二阶段：拉取耗时状态并更新灯光
+        const statusRes = await fetch("/dns/api/status");
+        if (!statusRes.ok) throw new Error("Failed to fetch live status.");
+        const statusData = await statusRes.json();
+        renderTable(statusData, false);
 
     } catch (error) {
-
-        document.getElementById("tb").innerHTML = `
+        tb.innerHTML = `
             <tr>
-                <td colspan="6" style="color:red;">
-                    Error loading data:
-                    ${error.message}
+                <td colspan="7" style="color:red; text-align:center;">
+                    Error loading data: ${error.message}
                 </td>
             </tr>
         `;
@@ -296,138 +251,75 @@ async function load() {
 }
 
 async function autoIpv6(lan) {
-
     try {
-
-        const res = await fetch(
-            "/dns/auto_ipv6_update",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    lan_ipv4: lan
-                })
-            }
-        );
-
+        const res = await fetch("/dns/auto_ipv6_update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lan_ipv4: lan })
+        });
         const data = await res.json();
-
+        
         if (data.ipv6) {
-
-            alert(
-                "IPv6 Updated\n\n" +
-                data.ipv6
-            );
-
+            alert("IPv6 Updated\n\n" + data.ipv6);
         } else {
-
-            alert(
-                "IPv6 not found"
-            );
+            alert("IPv6 not found");
         }
-
         await load();
-
     } catch (e) {
-
         alert(e);
     }
 }
 
 async function autoIpv6All(event) {
-
     try {
-
         const btn = event.target;
-
         btn.disabled = true;
-
         btn.innerText = "Updating...";
 
-        const res = await fetch(
-            "/dns/auto_ipv6_update_all",
-            {
-                method: "POST"
-            }
-        );
-
+        const res = await fetch("/dns/auto_ipv6_update_all", { method: "POST" });
         const data = await res.json();
 
         let ok = 0;
         let fail = 0;
 
         for (const [name, r] of Object.entries(data)) {
-
-            if (r.status === "updated") {
-                ok++;
-            } else {
-                fail++;
-            }
+            if (r.status === "updated") ok++;
+            else fail++;
         }
 
-        alert(
-            `IPv6 Update Finished\n\nSuccess: ${ok}\nFailed: ${fail}`
-        );
-
+        alert(`IPv6 Update Finished\n\nSuccess: ${ok}\nFailed: ${fail}`);
         await load();
-
         btn.disabled = false;
-
         btn.innerText = "Auto Update All IPv6";
-
     } catch (e) {
-
         alert(e);
     }
 }
 
 async function upd(lan, name) {
-
-    const inputEl =
-        document.getElementById(`ip_${name}`);
-
-    if (!inputEl) {
-        return;
-    }
-
+    const inputEl = document.getElementById(`ip_${name}`);
+    if (!inputEl) return;
+    
     const ip = inputEl.value;
-
     if (!ip) {
         alert("Please input IPv6");
         return;
     }
 
     try {
-
-        await fetch(
-            "/dns/manual_update",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    lan_ipv4: lan,
-                    ipv6: ip
-                })
-            }
-        );
-
+        await fetch("/dns/manual_update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lan_ipv4: lan, ipv6: ip })
+        });
         inputEl.value = "";
-
         await load();
-
     } catch (error) {
-
-        alert(
-            "Update failed: " +
-            error.message
-        );
+        alert("Update failed: " + error.message);
     }
 }
 
+// 页面初始化加载
 load();
 
 </script>

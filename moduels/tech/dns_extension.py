@@ -17,7 +17,6 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# 懒加载机制：避免在 Flask 导入蓝图时因网络阻塞或报错直接导致应用崩溃
 _CF_ZONE_ID = None
 
 def get_zone_id():
@@ -46,7 +45,6 @@ def get_zone_id():
     return None
 
 # ================= Host =================
-# 配置所有需要管理的主机
 HOSTS = {
     "one": {
         "lan_ipv4": "192.168.31.204",
@@ -55,7 +53,6 @@ HOSTS = {
         "last_ipv6": None,
         "last_seen": 0
     },
-    
     "fast": {
         "lan_ipv4": "192.168.31.82",
         "ipv4dns": "fast4.su7.dpdns.org",
@@ -265,21 +262,32 @@ def verify_single_host(name, h):
         ipv4_resolved_correctly = False
 
     try:
-        # 强制指定协议族为 socket.AF_INET6，否则只要存在 IPv4 A 记录也会不报错通过
+        # 强制指定协议族为 socket.AF_INET6
         socket.getaddrinfo(h["ipv6dns"], None, socket.AF_INET6)
         ipv6_dns_ok = True
     except Exception:
         ipv6_dns_ok = False
+
+    # 修复：执行并返回本地 IPv6 测试状态
+    ipv6_ok = False
+    if h.get("last_ipv6"):
+        ipv6_ok = ping6(h["last_ipv6"])
 
     return name, {
         **h,
         "ipv4_ok": ipv4_ok,
         "dns_ok": dns_ok,
         "ipv4_resolved_correctly": ipv4_resolved_correctly,
-        "ipv6_dns_ok": ipv6_dns_ok
+        "ipv6_dns_ok": ipv6_dns_ok,
+        "ipv6_ok": ipv6_ok
     }
 
 # ================= API =================
+@dns_bp.route("/api/hosts")
+def api_hosts():
+    """提供纯静态配置，用于前端快速渲染"""
+    return jsonify(HOSTS)
+
 @dns_bp.route("/register", methods=["POST"])
 def register():
     d = request.json
@@ -289,20 +297,17 @@ def register():
     name = d.get("name")
     ipv4 = d["lan_ipv4"]
     
-    # 未传 name 时，根据 IP 反查对应的主机
     if not name:
         for existing_name, host_info in HOSTS.items():
             if host_info["lan_ipv4"] == ipv4:
                 name = existing_name
                 break
                 
-    # 防止 name 为 None 导致空键写入
     if not name:
         return jsonify({"error": "Unknown host IP and name not provided"}), 400
     
     if name in HOSTS:
         host = HOSTS[name]
-        
         if host["lan_ipv4"] != d["lan_ipv4"]:
             host["lan_ipv4"] = d["lan_ipv4"]
             cf_upsert(host["ipv4dns"], d["lan_ipv4"], "A")
@@ -321,7 +326,6 @@ def register():
         host["last_seen"] = time.time()
         return jsonify({"status": "updated"})
     
-    # 动态注册新的主机
     HOSTS[name] = {
         "lan_ipv4": d["lan_ipv4"],
         "ipv4dns": d.get("ipv4_domain", f"{name}4.su7.dpdns.org"),
@@ -384,7 +388,6 @@ def api_status():
     
     with ThreadPoolExecutor(max_workers=workers_count) as executor:
         futures = [executor.submit(verify_single_host, name, h) for name, h in HOSTS.items()]
-        
         for future in futures:
             name, data = future.result()
             result[name] = data
@@ -393,7 +396,6 @@ def api_status():
 
 # ================= 初始化 =================
 def init_dns_service():
-    """初始化DNS服务，可在Flask主程序启动完成后显式调用"""
     if get_zone_id():
         print(f"✅ Cloudflare Zone ID 获取成功: {_CF_ZONE_ID[:8]}...")
         auto_register_all_domains()
@@ -402,121 +404,71 @@ def init_dns_service():
 
 def get_ipv6_from_lan_ipv4(ipv4):
     try:
-        # 获取 MAC
-        arp_out = subprocess.check_output(
-            ["arp", "-n", ipv4],
-            text=True
-        )
-
+        arp_out = subprocess.check_output(["arp", "-n", ipv4], text=True)
         import re
-
         mac_match = re.search(r"(([0-9a-f]{1,2}:){5}[0-9a-f]{1,2})", arp_out, re.I)
         if not mac_match:
             return None
 
         mac = mac_match.group(1).lower()
-
-        # 获取 ndp
-        ndp_out = subprocess.check_output(
-            ["ndp", "-a"],
-            text=True
-        )
+        ndp_out = subprocess.check_output(["ndp", "-a"], text=True)
 
         ipv6_list = []
-
         for line in ndp_out.splitlines():
             line_low = line.lower()
-
             if mac in line_low:
                 parts = line.split()
-
                 if not parts:
                     continue
-
                 ipv6 = parts[0]
-
-                # 过滤垃圾地址
-                if (
-                    ipv6.startswith("240")
-                    and not ipv6.startswith("fe80")
-                    and not ipv6.startswith("fd")
-                ):
+                if (ipv6.startswith("240") and not ipv6.startswith("fe80") and not ipv6.startswith("fd")):
                     ipv6_list.append(ipv6)
 
         if not ipv6_list:
             return None
-
-        # 返回最新一个
         return ipv6_list[0]
-
     except Exception as e:
         print(f"IPv6 lookup failed: {e}")
         return None
 
 @dns_bp.route("/auto_ipv6_update", methods=["POST"])
 def auto_ipv6_update():
-
     d = request.json
-
     if not d or "lan_ipv4" not in d:
         return jsonify({"error": "missing lan_ipv4"}), 400
 
     name, host = find_host(d["lan_ipv4"])
-
     if not host:
         return jsonify({"error": "host not found"}), 404
 
     ipv6 = get_ipv6_from_lan_ipv4(host["lan_ipv4"])
-
     if not ipv6:
         return jsonify({"error": "ipv6 not found"}), 404
 
     cf_upsert(host["ipv6dns"], ipv6, "AAAA")
-
     host["last_ipv6"] = ipv6
     host["last_seen"] = time.time()
 
-    return jsonify({
-        "status": "updated",
-        "ipv6": ipv6
-    })
+    return jsonify({"status": "updated", "ipv6": ipv6})
+
 @dns_bp.route("/auto_ipv6_update_all", methods=["POST"])
 def auto_ipv6_update_all():
-
     result = {}
-
     for name, host in HOSTS.items():
-
         try:
-
             ipv6 = get_ipv6_from_lan_ipv4(host["lan_ipv4"])
-
             if not ipv6:
-                result[name] = {
-                    "status": "not_found"
-                }
+                result[name] = {"status": "not_found"}
                 continue
-
             ok = cf_upsert(host["ipv6dns"], ipv6, "AAAA")
-
             if ok:
                 host["last_ipv6"] = ipv6
                 host["last_seen"] = time.time()
-
             result[name] = {
                 "status": "updated" if ok else "failed",
                 "ipv6": ipv6
             }
-
         except Exception as e:
-
-            result[name] = {
-                "status": "error",
-                "error": str(e)
-            }
+            result[name] = {"status": "error", "error": str(e)}
 
     return jsonify(result)
-
-# 此处不自动执行 init_dns_service()，建议在 app.py 的 __main__ 或 app.before_first_request 中执行，以防止阻塞
-
-# init_dns_service()
