@@ -55,13 +55,7 @@ HOSTS = {
         "last_ipv6": None,
         "last_seen": 0
     },
-    "fn": {
-        "lan_ipv4": "192.168.31.28",
-        "ipv4dns": "fn4.su7.dpdns.org",
-        "ipv6dns": "fn.su7.dpdns.org",
-        "last_ipv6": None,
-        "last_seen": 0
-    },
+    
     "fast": {
         "lan_ipv4": "192.168.31.82",
         "ipv4dns": "fast4.su7.dpdns.org",
@@ -405,6 +399,123 @@ def init_dns_service():
         auto_register_all_domains()
     else:
         print("❌ 初始化失败：无法获取 Cloudflare Zone ID")
+
+def get_ipv6_from_lan_ipv4(ipv4):
+    try:
+        # 获取 MAC
+        arp_out = subprocess.check_output(
+            ["arp", "-n", ipv4],
+            text=True
+        )
+
+        import re
+
+        mac_match = re.search(r"(([0-9a-f]{1,2}:){5}[0-9a-f]{1,2})", arp_out, re.I)
+        if not mac_match:
+            return None
+
+        mac = mac_match.group(1).lower()
+
+        # 获取 ndp
+        ndp_out = subprocess.check_output(
+            ["ndp", "-a"],
+            text=True
+        )
+
+        ipv6_list = []
+
+        for line in ndp_out.splitlines():
+            line_low = line.lower()
+
+            if mac in line_low:
+                parts = line.split()
+
+                if not parts:
+                    continue
+
+                ipv6 = parts[0]
+
+                # 过滤垃圾地址
+                if (
+                    ipv6.startswith("240")
+                    and not ipv6.startswith("fe80")
+                    and not ipv6.startswith("fd")
+                ):
+                    ipv6_list.append(ipv6)
+
+        if not ipv6_list:
+            return None
+
+        # 返回最新一个
+        return ipv6_list[0]
+
+    except Exception as e:
+        print(f"IPv6 lookup failed: {e}")
+        return None
+
+@dns_bp.route("/auto_ipv6_update", methods=["POST"])
+def auto_ipv6_update():
+
+    d = request.json
+
+    if not d or "lan_ipv4" not in d:
+        return jsonify({"error": "missing lan_ipv4"}), 400
+
+    name, host = find_host(d["lan_ipv4"])
+
+    if not host:
+        return jsonify({"error": "host not found"}), 404
+
+    ipv6 = get_ipv6_from_lan_ipv4(host["lan_ipv4"])
+
+    if not ipv6:
+        return jsonify({"error": "ipv6 not found"}), 404
+
+    cf_upsert(host["ipv6dns"], ipv6, "AAAA")
+
+    host["last_ipv6"] = ipv6
+    host["last_seen"] = time.time()
+
+    return jsonify({
+        "status": "updated",
+        "ipv6": ipv6
+    })
+@dns_bp.route("/auto_ipv6_update_all", methods=["POST"])
+def auto_ipv6_update_all():
+
+    result = {}
+
+    for name, host in HOSTS.items():
+
+        try:
+
+            ipv6 = get_ipv6_from_lan_ipv4(host["lan_ipv4"])
+
+            if not ipv6:
+                result[name] = {
+                    "status": "not_found"
+                }
+                continue
+
+            ok = cf_upsert(host["ipv6dns"], ipv6, "AAAA")
+
+            if ok:
+                host["last_ipv6"] = ipv6
+                host["last_seen"] = time.time()
+
+            result[name] = {
+                "status": "updated" if ok else "failed",
+                "ipv6": ipv6
+            }
+
+        except Exception as e:
+
+            result[name] = {
+                "status": "error",
+                "error": str(e)
+            }
+
+    return jsonify(result)
 
 # 此处不自动执行 init_dns_service()，建议在 app.py 的 __main__ 或 app.before_first_request 中执行，以防止阻塞
 

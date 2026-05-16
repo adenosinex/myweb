@@ -222,8 +222,21 @@ function useVideoPlayer(state, loadVideosCb) {
 const app = createApp({
     setup() {
         // 🌟 将 searchUntagged 补充进全局 State 中
-        const state = reactive({ videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', searchUntagged: '0', totalVideos: 0, totalpage: 0, globalOffset: 0 });
-        const isLoading = ref(true);
+        const state = reactive({ 
+    videos: [], 
+    page: 1, 
+    pageSize: 10, 
+    searchKeyword: '', 
+    excludeKeyword: '', 
+    searchScore: 0, 
+    searchSize: 0, 
+    sortBy: '', 
+    searchUntagged: '0',  // 🌟 新增：显式声明，建立响应式追踪
+    totalVideos: 0, 
+    totalpage: 0, 
+    globalOffset: 0 
+});
+const isLoading = ref(true);
 
         const headerRef = ref(null);
         const tagPanelRef = ref(null);

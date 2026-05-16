@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>DNS Panel</title>
+
 <style>
     body {
         font-family: system-ui, -apple-system, sans-serif;
@@ -10,10 +11,36 @@
         color: #333;
         padding: 20px;
     }
+
     h2 {
         border-bottom: 2px solid #ddd;
         padding-bottom: 10px;
     }
+
+    .topbar {
+        margin-bottom: 16px;
+        display: flex;
+        gap: 12px;
+    }
+
+    .topbar button {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .btn-green {
+        background: #10b981;
+    }
+
+    .btn-blue {
+        background: #3b82f6;
+    }
+
     table {
         width: 100%;
         border-collapse: collapse;
@@ -22,19 +49,23 @@
         border-radius: 4px;
         overflow: hidden;
     }
+
     th, td {
         padding: 12px 15px;
         text-align: left;
         border-bottom: 1px solid #eee;
     }
+
     th {
         background-color: #f8f9fa;
         font-weight: 600;
         white-space: nowrap;
     }
+
     tr:hover {
         background-color: #f1f4f8;
     }
+
     .status {
         display: inline-block;
         width: 12px;
@@ -43,30 +74,59 @@
         margin-right: 5px;
         vertical-align: middle;
     }
-    .ok { background-color: #10b981; }
-    .err { background-color: #ef4444; }
+
+    .ok {
+        background-color: #10b981;
+    }
+
+    .err {
+        background-color: #ef4444;
+    }
+
     .action-group {
         display: flex;
         gap: 8px;
+        align-items: center;
     }
+
     .action-group input {
         padding: 6px;
         border: 1px solid #ccc;
         border-radius: 4px;
         flex-grow: 1;
-        min-width: 120px;
+        min-width: 220px;
     }
+
     .action-group button {
         padding: 6px 12px;
-        background-color: #3b82f6;
         color: white;
         border: none;
         border-radius: 4px;
         cursor: pointer;
+        white-space: nowrap;
     }
-    .action-group button:hover {
-        background-color: #2563eb;
+
+    .auto-btn {
+        background: #10b981;
     }
+
+    .update-btn {
+        background: #3b82f6;
+    }
+
+    .small {
+        color: #666;
+        font-size: 0.9em;
+        margin-left: 8px;
+    }
+
+    .ipv6-text {
+        font-size: 12px;
+        color: #666;
+        word-break: break-all;
+        margin-top: 4px;
+    }
+
 </style>
 </head>
 
@@ -74,94 +134,302 @@
 
 <h2>DNS Control Panel</h2>
 
+<div class="topbar">
+
+    <button class="btn-green" onclick="autoIpv6All(event)">
+        Auto Update All IPv6
+    </button>
+
+    <button class="btn-blue" onclick="load()">
+        Refresh
+    </button>
+
+</div>
+
 <table>
+
     <thead>
         <tr>
             <th>Name</th>
             <th>LAN IPv4</th>
-            <th>IPv4 Status (Local / DNS)</th>
-            <th>IPv6 Status (Local / DNS)</th>
+            <th>IPv4 Status</th>
+            <th>IPv6 Status</th>
             <th>Last Seen</th>
-            <th>Manual Action (IPv6 override)</th>
+            <th>Manual Action</th>
         </tr>
     </thead>
+
     <tbody id="tb">
-        <tr><td colspan="6">Loading...</td></tr>
+        <tr>
+            <td colspan="6">
+                Loading...
+            </td>
+        </tr>
     </tbody>
+
 </table>
 
 <script>
+
 async function load() {
+
     try {
-        // 直接请求后端已经多线程优化过的 status 接口
+
         const res = await fetch("/dns/api/status");
-        if (!res.ok) throw new Error("Network response was not ok");
+
+        if (!res.ok) {
+            throw new Error("Network response was not ok");
+        }
+
         const data = await res.json();
-        
+
         const tb = document.getElementById("tb");
+
         tb.innerHTML = "";
 
         for (const [name, h] of Object.entries(data)) {
+
             const tr = document.createElement("tr");
 
-            const v4LocalStatus = `<span class="status ${h.ipv4_ok ? 'ok' : 'err'}" title="Local IPv4"></span>`;
-            const v4DnsStatus = `<span class="status ${h.dns_ok ? 'ok' : 'err'}" title="DNS IPv4"></span>`;
-            const v6LocalStatus = `<span class="status ${h.ipv6_ok ? 'ok' : 'err'}" title="Local IPv6"></span>`;
-            const v6DnsStatus = `<span class="status ${h.ipv6_dns_ok ? 'ok' : 'err'}" title="DNS IPv6"></span>`;
+            const v4LocalStatus =
+                `<span class="status ${h.ipv4_ok ? 'ok' : 'err'}"></span>`;
 
-            const timeStr = h.last_seen ? new Date(h.last_seen * 1000).toLocaleTimeString() : "-";
+            const v4DnsStatus =
+                `<span class="status ${h.dns_ok ? 'ok' : 'err'}"></span>`;
+
+            const v6LocalStatus =
+                `<span class="status ${h.ipv6_ok ? 'ok' : 'err'}"></span>`;
+
+            const v6DnsStatus =
+                `<span class="status ${h.ipv6_dns_ok ? 'ok' : 'err'}"></span>`;
+
+            const timeStr =
+                h.last_seen
+                ? new Date(h.last_seen * 1000).toLocaleString()
+                : "-";
 
             tr.innerHTML = `
-                <td><strong>${name}</strong></td>
-                <td>${h.lan_ipv4 || '-'}</td>
-                
+
                 <td>
-                    ${v4LocalStatus} ${v4DnsStatus} 
-                    <span style="color:#666; font-size: 0.9em; margin-left: 8px;">${h.ipv4dns || '-'}</span>
-                </td>
-                
-                <td>
-                    ${v6LocalStatus} ${v6DnsStatus}
-                    <span style="color:#666; font-size: 0.9em; margin-left: 8px;">${h.ipv6dns || '-'}</span>
+                    <strong>${name}</strong>
                 </td>
 
-                <td>${timeStr}</td>
+                <td>
+                    ${h.lan_ipv4 || '-'}
+                </td>
 
-                <td class="action-group">
-                    <input id="ip_${name}" placeholder="Enter new IPv6" value="">
-                    <button onclick="upd('${h.lan_ipv4}', '${name}')">Update</button>
+                <td>
+
+                    ${v4LocalStatus}
+                    ${v4DnsStatus}
+
+                    <span class="small">
+                        ${h.ipv4dns || '-'}
+                    </span>
+
+                </td>
+
+                <td>
+
+                    ${v6LocalStatus}
+                    ${v6DnsStatus}
+
+                    <span class="small">
+                        ${h.ipv6dns || '-'}
+                    </span>
+
+                    ${
+                        h.last_ipv6
+                        ? `<div class="ipv6-text">${h.last_ipv6}</div>`
+                        : ''
+                    }
+
+                </td>
+
+                <td>
+                    ${timeStr}
+                </td>
+
+                <td>
+
+                    <div class="action-group">
+
+                        <input
+                            id="ip_${name}"
+                            placeholder="Enter IPv6 manually"
+                            value=""
+                        >
+
+                        <button
+                            class="auto-btn"
+                            onclick="autoIpv6('${h.lan_ipv4}')"
+                        >
+                            Auto
+                        </button>
+
+                        <button
+                            class="update-btn"
+                            onclick="upd('${h.lan_ipv4}', '${name}')"
+                        >
+                            Update
+                        </button>
+
+                    </div>
+
                 </td>
             `;
+
             tb.appendChild(tr);
         }
+
     } catch (error) {
-        document.getElementById("tb").innerHTML = `<tr><td colspan="6" style="color:red;">Error loading data: ${error.message}</td></tr>`;
+
+        document.getElementById("tb").innerHTML = `
+            <tr>
+                <td colspan="6" style="color:red;">
+                    Error loading data:
+                    ${error.message}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+async function autoIpv6(lan) {
+
+    try {
+
+        const res = await fetch(
+            "/dns/auto_ipv6_update",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    lan_ipv4: lan
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        if (data.ipv6) {
+
+            alert(
+                "IPv6 Updated\n\n" +
+                data.ipv6
+            );
+
+        } else {
+
+            alert(
+                "IPv6 not found"
+            );
+        }
+
+        await load();
+
+    } catch (e) {
+
+        alert(e);
+    }
+}
+
+async function autoIpv6All(event) {
+
+    try {
+
+        const btn = event.target;
+
+        btn.disabled = true;
+
+        btn.innerText = "Updating...";
+
+        const res = await fetch(
+            "/dns/auto_ipv6_update_all",
+            {
+                method: "POST"
+            }
+        );
+
+        const data = await res.json();
+
+        let ok = 0;
+        let fail = 0;
+
+        for (const [name, r] of Object.entries(data)) {
+
+            if (r.status === "updated") {
+                ok++;
+            } else {
+                fail++;
+            }
+        }
+
+        alert(
+            `IPv6 Update Finished\n\nSuccess: ${ok}\nFailed: ${fail}`
+        );
+
+        await load();
+
+        btn.disabled = false;
+
+        btn.innerText = "Auto Update All IPv6";
+
+    } catch (e) {
+
+        alert(e);
     }
 }
 
 async function upd(lan, name) {
-    const inputEl = document.getElementById(`ip_${name}`);
-    if (!inputEl) return;
-    
+
+    const inputEl =
+        document.getElementById(`ip_${name}`);
+
+    if (!inputEl) {
+        return;
+    }
+
     const ip = inputEl.value;
 
+    if (!ip) {
+        alert("Please input IPv6");
+        return;
+    }
+
     try {
-        await fetch("/dns/manual_update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                lan_ipv4: lan,
-                ipv6: ip
-            })
-        });
-        // 提交后直接重新拉取全部状态，因为后端已经是多线程，速度很快
-        load();
+
+        await fetch(
+            "/dns/manual_update",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    lan_ipv4: lan,
+                    ipv6: ip
+                })
+            }
+        );
+
+        inputEl.value = "";
+
+        await load();
+
     } catch (error) {
-        alert("Update failed: " + error.message);
+
+        alert(
+            "Update failed: " +
+            error.message
+        );
     }
 }
 
 load();
+
 </script>
 
 </body>

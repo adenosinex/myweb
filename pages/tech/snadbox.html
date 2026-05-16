@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>我的自定义沙盒</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1000px; margin: 40px auto; background: #f4f5f7; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn { padding: 10px 20px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: #0043a6; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; }
+        .back-link:hover { text-decoration: underline; }
+        
+        .view-container { display: none; }
+        .view-container.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
+        .card-wrapper { position: relative; }
+        .card { background: white; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s; border: 1px solid #eaeaea; display: block; }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
+        .card .icon { font-size: 36px; margin-bottom: 12px; }
+        .card .title { font-size: 15px; font-weight: bold; }
+        
+        /* 编辑按钮样式 */
+        .card-edit-btn { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; display: none; border: none; }
+        .card-wrapper:hover .card-edit-btn { display: block; }
+        .card-edit-btn:hover { background: #28a745; color: white; }
+
+        .form-panel { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        textarea { width: 100%; height: 500px; padding: 15px; font-family: 'Consolas', monospace; background: #1e1e1e; color: #d4d4d4; border: none; border-radius: 5px; box-sizing: border-box; resize: vertical; }
+    </style>
+</head>
+<body>
+
+    <!-- 视图 1：列表 -->
+    <div id="view-list" class="view-container active">
+        <div class="header">
+            <h2>🛠️ 个人工具箱 & HTML沙盒</h2>
+            <button class="btn" onclick="switchView('upload')">+ 新建项目</button>
+        </div>
+        <div class="grid" id="pages-grid"></div>
+    </div>
+
+    <!-- 视图 2：新建 -->
+    <div id="view-upload" class="view-container">
+        <div class="form-panel">
+            <h2>🚀 部署新项目</h2>
+            <form id="upload-form">
+                <div class="form-group">
+                    <label>标题</label>
+                    <input type="text" id="upload-title" required>
+                </div>
+                <div class="form-group">
+                    <label>图标 (Emoji或URL)</label>
+                    <input type="text" id="upload-icon">
+                </div>
+                <div class="form-group">
+                    <label>完整 HTML 代码</label>
+                    <textarea id="upload-html" required></textarea>
+                </div>
+                <button type="submit" class="btn">保存</button>
+                <span class="back-link" onclick="switchView('list')">返回</span>
+            </form>
+        </div>
+    </div>
+
+    <!-- 视图 3：编辑 -->
+    <div id="view-edit" class="view-container">
+        <div class="form-panel">
+            <h2>✏️ 编辑项目</h2>
+            <form id="edit-form">
+                <input type="hidden" id="edit-id">
+                <div class="form-group">
+                    <label>标题</label>
+                    <input type="text" id="edit-title" required>
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <input type="text" id="edit-icon">
+                </div>
+                <div class="form-group">
+                    <label>完整 HTML 代码</label>
+                    <textarea id="edit-html" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-success">更新</button>
+                <span class="back-link" onclick="switchView('list')">取消</span>
+            </form>
+        </div>
+    </div>
+
+    <script>
+         const API_BASE = '/sandbox';
+
+        function switchView(viewName, param = null) {
+            document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${viewName}`).classList.add('active');
+
+            if (viewName === 'list') loadPages();
+            else if (viewName === 'upload') document.getElementById('upload-form').reset();
+            else if (viewName === 'edit' && param) loadEditData(param);
+        }
+
+        function loadPages() {
+            fetch(`${API_BASE}/api/pages`)
+                .then(res => res.json())
+                .then(data => {
+                    const grid = document.getElementById('pages-grid');
+                    grid.innerHTML = ''; 
+                    data.forEach(page => {
+                        grid.innerHTML += `
+                            <div class="card-wrapper">
+                                <a href="${API_BASE}/view/${page.id}" target="_blank" class="card">
+                                    <div class="icon">${page.icon || '📄'}</div>
+                                    <div class="title">${page.title}</div>
+                                </a>
+                                <button class="card-edit-btn" onclick="switchView('edit', '${page.id}')">编辑</button>
+                            </div>
+                        `;
+                    });
+                }).catch(err => console.error("加载列表失败", err));
+        }
+
+        function loadEditData(pageId) {
+            fetch(`${API_BASE}/api/pages/${pageId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) return alert(data.error);
+                    document.getElementById('edit-id').value = data.id;
+                    document.getElementById('edit-title').value = data.title || '';
+                    document.getElementById('edit-icon').value = data.icon || '';
+                    document.getElementById('edit-html').value = data.html_content || '';
+                }).catch(err => alert("读取失败"));
+        }
+
+        // 新建提交
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetch(`${API_BASE}/api/pages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: document.getElementById('upload-title').value,
+                    icon: document.getElementById('upload-icon').value,
+                    html_content: document.getElementById('upload-html').value
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.status === 'success') switchView('list');
+                else alert(data.error);
+            });
+        });
+
+        // 编辑更新提交
+        document.getElementById('edit-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const pageId = document.getElementById('edit-id').value;
+            fetch(`${API_BASE}/api/pages/${pageId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: document.getElementById('edit-title').value,
+                    icon: document.getElementById('edit-icon').value,
+                    html_content: document.getElementById('edit-html').value
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.status === 'success') switchView('list');
+                else alert(data.error);
+            });
+        });
+
+        window.onload = () => switchView('list');
+    </script>
+</body>
+</html>

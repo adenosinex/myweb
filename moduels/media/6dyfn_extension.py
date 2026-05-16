@@ -8,7 +8,8 @@ import io
 import traceback
 import shutil  # 🌟 新增：用于跨盘/同盘移动文件
 from flask import Flask, Blueprint, request, jsonify, Response, stream_with_context, send_file, abort, redirect, make_response
-from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, func, not_, asc, or_
+from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, func, not_, asc, or_, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 try:
@@ -73,12 +74,46 @@ class CustomTag(Base):
     name = Column(String, nullable=False)
     order_index = Column(Integer, default=0)
 
+
+# ================= 🌟 核心提取引擎 (下沉至 SQLite 原生) =================
+class TagFilter:
+    # 自动 tag：#a_xxx
+    _AUTO_TAG = re.compile(r'#a_[A-Za-z0-9_\u4e00-\u9fa5]+')
+
+    # 人工 tag：只允许 # 后面紧跟纯中文或纯英文。不允许带下划线、数字等废符号。
+    _MANUAL_TAG = re.compile(r'#[A-Za-z\u4e00-\u9fa5]+(?![_0-9A-Za-z\u4e00-\u9fa5])')
+
+    @classmethod
+    def is_untagged_or_auto(cls, filename: str) -> bool:
+        """
+        True = 没有有效人工tag（即忽略自动tag后，剩下的全是不合格杂碎标签，视为未打标）
+        False = 存在符合严格规定的人工tag
+        """
+        if not filename: return True
+        tmp = cls._AUTO_TAG.sub('', filename)
+        return not bool(cls._MANUAL_TAG.search(tmp))
+
+
 engine = create_engine(DB_PATH, echo=False)
+
+@event.listens_for(Engine, "connect")
+def sqlite_engine_connect(dbapi_connection, connection_record):
+    """🌟 黑科技：将 Python 正则打包成底层 SQLite 函数，打通跨层面的高速 SQL 搜索过滤"""
+    def _is_untagged(filename):
+        return 1 if TagFilter.is_untagged_or_auto(filename) else 0
+        
+    try:
+        # 在 SQLite 引擎中直接注册 `is_untagged` 供 SQL 语句使用
+        dbapi_connection.create_function("is_untagged", 1, _is_untagged)
+    except Exception:
+        pass
+
 Session = sessionmaker(bind=engine)
 
 def init_db():
     os.makedirs(DB_DIR, exist_ok=True)
     Base.metadata.create_all(engine)
+
 
 # ================= 核心逻辑服务层 (Services) =================
 class BlacklistService:
@@ -122,7 +157,47 @@ class TagService:
 class RenameService:
     @staticmethod
     def extract_tags(filename):
-        return re.findall(r'#([\u4e00-\u9fa5a-zA-Z0-9_]+)', filename)
+        # 1. 提取系统自动生成的 tag (保留完整的 a_xxx)
+        auto_tags = [m.group(1) for m in re.finditer(r'#(a_[A-Za-z0-9_\u4e00-\u9fa5]+)', filename)]
+        # 2. 从文件名中暂时移除自动 tag，防止干扰人工 tag 提取
+        tmp = re.sub(r'#a_[A-Za-z0-9_\u4e00-\u9fa5]+', '', filename)
+        # 3. 提取严格规则的人工 tag (只能是纯中文或纯英文，不能有数字、下划线等符号跟随或夹杂)
+        manual_tags = re.findall(r'#([A-Za-z\u4e00-\u9fa5]+)(?![_0-9A-Za-z\u4e00-\u9fa5])', tmp)
+        return auto_tags + manual_tags
+
+    @staticmethod
+    def clean_filename_base(base_name, blacklist_words):
+        """核心重构：在执行黑名单清洗前，将有效 Tag 隔离保护"""
+        protected_tags = []
+        def protect_tag(match):
+            protected_tags.append(match.group(0))
+            return f" __TAG_{len(protected_tags)-1}__ "
+        
+        # 1. 匹配 # 号后紧跟的非空字符，将其隔离保护
+        temp_base = re.sub(r'#\S+', protect_tag, base_name)
+        
+        # 2. 对非 Tag 区域执行黑名单清洗
+        needs_clean = False
+        for bw in blacklist_words:
+            if bw.strip() and re.search(re.escape(bw), temp_base, re.IGNORECASE):
+                temp_base = re.sub(re.escape(bw), '', temp_base, flags=re.IGNORECASE)
+                needs_clean = True
+                
+        # 3. 常规无效符号清洗
+        temp_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', temp_base)
+        temp_base = re.sub(r'\.{2,}', '.', temp_base)
+        
+        # 4. 彻底清理孤立的 # 号 (因为有效的 tag 已被隔离，剩下的独立 # 号均为废弃残留)
+        if re.search(r'#+', temp_base):
+            temp_base = re.sub(r'#+', '', temp_base)
+            needs_clean = True
+
+        # 5. 还原被保护的标签
+        for i, tag in enumerate(protected_tags):
+            temp_base = temp_base.replace(f"__TAG_{i}__", tag)
+            
+        temp_base = re.sub(r'\s{2,}', ' ', temp_base).strip(' .-_')
+        return temp_base, needs_clean
 
     @staticmethod
     def process_renames(session, mode='queue_only'):
@@ -141,17 +216,12 @@ class RenameService:
             dir_name = os.path.dirname(old_path)
             ext = os.path.splitext(old_path)[1]
             
-            # 从 log 中获取目标基础名并再次应用黑名单清洗（双重保险）
             target_base = os.path.basename(log.target_path)
             if target_base.lower().endswith(ext.lower()): 
                 target_base = target_base[:-len(ext)]
             
-            for bw in blacklist_words:
-                target_base = re.sub(re.escape(bw), '', target_base, flags=re.IGNORECASE)
-            
-            target_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', target_base)
-            target_base = re.sub(r'\.{2,}', '.', target_base)
-            target_base = re.sub(r'\s{2,}', ' ', target_base).strip(' .-_')
+            # 🌟 调用隔离清洗算法，保护 Tag 文本不被破坏
+            target_base, _ = RenameService.clean_filename_base(target_base, blacklist_words)
             
             if not target_base: 
                 target_base = f"video_{video.id}"
@@ -159,31 +229,26 @@ class RenameService:
             new_filename = target_base + ext
             new_full_path = os.path.join(dir_name, new_filename)
             
-            # --- 关键逻辑：同步物理文件与数据库 ---
             try:
-                # 如果旧文件存在，且新旧路径不同，则改名
                 if os.path.exists(old_path) and old_path != new_full_path:
                     os.rename(old_path, new_full_path)
                 elif not os.path.exists(old_path) and not os.path.exists(new_full_path):
-                    # 如果原文件和目标文件都不在，说明彻底丢了
                     log.status, log.error_msg = 'failed', '找不到物理文件'
                     failed_count += 1; continue
                 
-                # 🌟 修复点：物理改名成功（或新路径已存在）后，强制同步数据库字段
                 video.filename = new_filename
                 video.detail = new_full_path
                 video.tags = ','.join(RenameService.extract_tags(new_filename))
                 
                 log.status = 'success'
-                log.target_path = new_full_path # 更新日志里的最终路径
+                log.target_path = new_full_path 
                 success_count += 1
             except Exception as e:
                 log.status, log.error_msg = 'failed', str(e)
                 failed_count += 1
 
-        # 2. 全库洗牌模式 (mode='full')
+        # 2. 全库洗牌模式
         if mode == 'full' and blacklist_words:
-            # 逻辑同上，确保在全库清洗时也执行 video.detail = new_path
             for video in session.query(Video).all():
                 old_path = video.detail
                 if not os.path.exists(old_path): continue
@@ -191,16 +256,10 @@ class RenameService:
                 ext = os.path.splitext(old_path)[1]
                 base_name = video.filename[:-len(ext)] if video.filename.lower().endswith(ext.lower()) else video.filename
                 
-                clean_base = base_name
-                needs_clean = False
-                for bw in blacklist_words:
-                    if re.search(re.escape(bw), clean_base, re.IGNORECASE):
-                        clean_base = re.sub(re.escape(bw), '', clean_base, flags=re.IGNORECASE)
-                        needs_clean = True
+                # 同步使用隔离清洗算法
+                clean_base, needs_clean = RenameService.clean_filename_base(base_name, blacklist_words)
                 
                 if needs_clean:
-                    clean_base = re.sub(r'\[\s*\]|\(\s*\)|【\s*】', '', clean_base)
-                    clean_base = re.sub(r'\s{2,}', ' ', clean_base).strip(' .-_')
                     new_filename = clean_base + ext
                     new_path = os.path.join(os.path.dirname(old_path), new_filename)
                     
@@ -208,14 +267,13 @@ class RenameService:
                         try:
                             os.rename(old_path, new_path)
                             video.filename = new_filename
-                            video.detail = new_path # 🌟 同步数据库路径
+                            video.detail = new_path 
                             video.tags = ','.join(RenameService.extract_tags(new_filename))
                             success_count += 1
                         except: failed_count += 1
 
-        session.commit() # 🌟 统一提交，确保所有修改落盘
+        session.commit()
         return success_count, failed_count
-
 def load_paths():
     if os.path.exists(PATHS_FILE):
         with open(PATHS_FILE, 'r', encoding='utf-8') as f:
@@ -272,35 +330,6 @@ def apply_size_filter(query, size_param):
         query = query.filter(Video.file_size <= int(size_param) * 1024 * 1024)
     return query
 
-from sqlalchemy import func
-
-import re
-
-class TagFilter:
-    # 自动 tag：#a_xxx
-    _AUTO_TAG = re.compile(r'#a_[A-Za-z0-9_\u4e00-\u9fff]+')
-
-    # 人工 tag：#xxx（排除 #a_）
-    _MANUAL_TAG = re.compile(r'(?<!a_)#[A-Za-z0-9_\u4e00-\u9fff]+')
-
-    # 无效 tag：# 或 ## 或 ####
-    _INVALID_HASH = re.compile(r'#+\s*')
-
-    @classmethod
-    def is_untagged_or_auto(cls, filename: str) -> bool:
-        """
-        True = 没有人工tag（允许自动tag）
-        False = 存在人工tag
-        """
-
-        # 1. 去掉自动 tag
-        tmp = cls._AUTO_TAG.sub('', filename)
-
-        # 2. 清理无效 #
-        tmp = cls._INVALID_HASH.sub('', tmp)
-
-        # 3. 判断是否还存在人工 tag
-        return not bool(cls._MANUAL_TAG.search(tmp))
         
 def apply_video_filters(query, request_args, session=None):
     score = request_args.get('score')
@@ -308,7 +337,13 @@ def apply_video_filters(query, request_args, session=None):
     exclude = request_args.get('exclude')
     tags = request_args.get('tags')
     size = request_args.get('size')
-    untagged = str(request_args.get('untagged', '0')) # 🌟 新增参数解析
+    
+    # 兼容前端传入的 1/2 或 true/false
+    untag_raw = str(request_args.get('untagged', '0')).lower()
+    if untag_raw in ('1', 'true'): untagged = '1'
+    elif untag_raw in ('2', 'false'): untagged = '2'
+    else: untagged = '0'
+    
     use_random = False
     
     if search and 'random' in search.lower():
@@ -328,7 +363,8 @@ def apply_video_filters(query, request_args, session=None):
                 
     if search:
         for kw in search.strip().split(): 
-            query = query.filter(Video.detail.like(f"%{kw}%"))
+            # 🌟 优化点：文本搜索同时应用到 文件名 和 路径，防止遗漏
+            query = query.filter(or_(Video.detail.like(f"%{kw}%"), Video.filename.like(f"%{kw}%")))
             
     if exclude:
         for kw in exclude.strip().split(): 
@@ -337,18 +373,11 @@ def apply_video_filters(query, request_args, session=None):
     if size and str(size) != '0': 
         query = apply_size_filter(query, str(size))
         
-    # 🌟 核心过滤逻辑：纯 SQL 剔除法 🌟
+    # 🌟 核心过滤：直接呼叫底层 SQLite 绑定的原生正则函数，不再依赖内存，分页完美生效！
     if untagged == '1':
-        # 仅看未打标 (要求：将 "#a_" 替换为空后，文件名里不再有任何 "#")
-        base = func.replace(Video.filename, '#a_', '')
-
-        query = query.filter(
-            ~base.like('%#_%')
-        )
-        # query = query.filter(~func.replace(Video.filename, '#a', '').like('%#%'))
+        query = query.filter(func.is_untagged(Video.filename) == 1)
     elif untagged == '2':
-        # 仅看已打标 (要求：将 "#a_" 替换为空后，文件名里依然包含 "#")
-        query = query.filter(func.replace(Video.filename, '#a_', '').like('%#%'))
+        query = query.filter(func.is_untagged(Video.filename) == 0)
         
     return query, use_random
     
@@ -360,16 +389,13 @@ def setup(): init_db()
 
 @dy_bp.route('/sys_tags/migrate_legacy', methods=['POST'])
 def migrate_legacy_data():
-    """接收前端触发的旧数据迁移操作"""
     session = Session()
     try:
         data = request.get_json() or {}
-        # 1. 迁移本地 JSON 黑名单至 SQLite
         if os.path.exists(BLACKLIST_FILE):
             with open(BLACKLIST_FILE, 'r', encoding='utf-8') as f:
                 legacy_bl = json.load(f)
                 if legacy_bl: BlacklistService.sync_list(session, legacy_bl)
-        # 2. 迁移前端传来的 localStorage Tag 数据
         legacy_groups = data.get('tag_groups', [])
         if legacy_groups: TagService.sync_groups(session, legacy_groups)
         return jsonify({'success': True, 'msg': '历史数据迁移成功！'})
@@ -426,20 +452,17 @@ def queue_rename():
             
         target_path = os.path.join(os.path.dirname(video.detail), new_filename)
         
-        # 🌟 核心机制：查询是否已有待处理的任务 (UPSERT 逻辑)
         existing_log = session.query(RenameLog).filter(
             RenameLog.video_id == video_id,
             RenameLog.status.in_(['pending', 'retry', 'failed'])
         ).first()
         
         if existing_log:
-            # 如果处于排队中，直接覆盖目标路径，防止生成多条冲突的日志
             existing_log.target_path = target_path
             existing_log.status = 'pending'
             existing_log.error_msg = None
-            existing_log.create_time = datetime.datetime.now() # 刷新操作时间
+            existing_log.create_time = datetime.datetime.now()
         else:
-            # 没有排队任务，才新建
             new_log = RenameLog(
                 video_id=video_id,
                 original_path=video.detail,
@@ -514,7 +537,6 @@ def api_restore_rename():
     except OSError as e:
         session.close(); return jsonify({'success': False, 'msg': str(e)}), 500
 
-# 🌟 核心 1：生成智能归档计划 (正则参数完全听令于前端，支持停用识别)
 @dy_bp.route('/sys_tags/archive_plan', methods=['POST'])
 def api_archive_plan():
     data = request.get_json() or {}
@@ -523,12 +545,11 @@ def api_archive_plan():
     threshold = int(data.get('threshold', 10))
     max_per_folder = int(data.get('max_per_folder', 50))
     force_rearchive = data.get('force_rearchive', False)
-    person_regex = data.get('person_regex', '').strip()  # 接收正则
+    person_regex = data.get('person_regex', '').strip() 
 
     if not os.path.exists(root_dir):
         return jsonify({'success': False, 'msg': '路径不存在'})
 
-    # 1. 建立有效 Tag 映射表，剥离“人物/特征属性”
     valid_tags_map = {}
     person_tags_set = set()
     
@@ -554,7 +575,6 @@ def api_archive_plan():
             clean_f = os.path.splitext(f)[0]
             person_name = ""
             
-            # 🌟 动态正则提取：如果前端传了正则，才去提取人物名
             if person_regex:
                 try:
                     import re
@@ -563,8 +583,6 @@ def api_archive_plan():
                         person_name = m.group(1).strip() if len(m.groups()) > 0 else m.group(0).strip()
                 except Exception:
                     pass
-            
-            # ⚠️ 删除了原有的强行空格兜底，若 person_regex 为空，则 person_name 为空，不传染
             
             all_files_raw.append({
                 'path': f_path, 
@@ -580,7 +598,6 @@ def api_archive_plan():
                             person_dict[person_name] = set()
                         person_dict[person_name].add(t)
 
-    # 2. 标签传染 (扩散) & 统计词频
     all_files = []
     tag_counts = {t: 0 for t in valid_tags_map.keys()}
     
@@ -588,7 +605,6 @@ def api_archive_plan():
         p_name = file_info['person']
         e_tags = set(file_info['explicit_tags'])
         
-        # 传染人物特征
         if p_name in person_dict:
             e_tags.update(person_dict[p_name])
             
@@ -597,13 +613,11 @@ def api_archive_plan():
             all_files.append({'path': file_info['path'], 'name': file_info['name'], 'tags': final_tags})
             for t in final_tags: tag_counts[t] += 1
 
-    # 3. 稀有度分配
     buckets = {t: [] for t in valid_tags_map.keys()}
     for file_info in all_files:
         rarest_tag = min(file_info['tags'], key=lambda t: tag_counts[t])
         buckets[rarest_tag].append(file_info['path'])
 
-    # 4. 阈值与合并
     final_plan = []
     catch_all_bucket = []
     
@@ -646,7 +660,6 @@ def api_archive_plan():
 
     return jsonify({'success': True, 'plan': final_plan})
 
-# 🌟 核心 2：执行归档物理移动 (保持原样移动，不修改实际文件名)
 @dy_bp.route('/sys_tags/archive_execute', methods=['POST'])
 def api_archive_execute():
     data = request.get_json() or {}
@@ -681,7 +694,6 @@ def api_archive_execute():
         
         session.commit()
         
-        # 强制清理：掏空底部的废弃归档文件夹
         for current_root, dirs, files in os.walk(root_dir, topdown=False):
             if "_arc_" in current_root and not dirs and not files:
                 try: os.rmdir(current_root)
@@ -694,30 +706,15 @@ def api_archive_execute():
     finally:
         session.close()
 
-# --- 智能文件名过滤器 ---
 def is_meaningful_filename(filename):
-    """
-    判断文件名是否有分析价值：剔除无意义前缀、日期、长哈希、纯数字和符号。
-    """
     name = os.path.splitext(filename)[0].lower()
-    
-    # 1. 剔除常见无意义前缀
     name = re.sub(r'^(video|v|mp4|hd)_+', '', name)
     name = re.sub(r'video|mp4', '', name)
-    
-    # 2. 剔除日期 (如 2024-12-03) 和时间片段
     name = re.sub(r'\d{4}-\d{2}-\d{2}', '', name)
-    
-    # 3. 剔除长串类似 UUID 或 Hex 散列值的乱码 (8位以上)
     name = re.sub(r'[a-f0-9]{8,}', '', name)
-    
-    # 4. 彻底剔除所有数字、标点符号、空格，只看剩下的纯“字”
     name = re.sub(r'[\d\W_]+', '', name)
-    
-    # 5. 判定：如果剩下的字符少于 2 个，并且连一个汉字都没有，视为“废品”
     if len(name) < 2 and not re.search(r'[\u4e00-\u9fa5]', name):
         return False
-        
     return True
 
 @dy_bp.route('/sys_tags/export_csv', methods=['GET'])
@@ -725,20 +722,16 @@ def export_csv():
     session = Session()  
     try:
         query = session.query(Video)
-        
-        # 1. 继承网页端基础筛选条件
         query, _ = apply_video_filters(query, request.args, session)
         
-        # 2. 过滤已打标的（带有 #）
-        query = query.filter(not_(Video.filename.like('%#%')))
+        # 兜底：强制要求数据库层必须是未打标的
+        query = query.filter(func.is_untagged(Video.filename) == 1)
         
-        # 3. 过滤处于改名队列中还没落实的
         pending_subquery = session.query(RenameLog.video_id).filter(
             RenameLog.status.in_(['pending', 'retry'])
         ).subquery()
         query = query.filter(not_(Video.id.in_(pending_subquery)))
         
-        # 4. 排序
         sort_by = request.args.get('sort_by')
         if sort_by == 'filename':
             query = query.order_by(Video.filename.asc())
@@ -748,18 +741,16 @@ def export_csv():
             query = query.order_by(Video.id.desc())
             
         limit = request.args.get('limit', type=int, default=0)
+        if limit > 0: query = query.limit(limit)
         
-        # 🌟 不在 SQL 层做 Limit，改为在 Python 层流式过滤
         valid_videos = []
         for v in query.all():
+            # 这里只需把无意义如 111.mp4 这种过滤掉即可
             if is_meaningful_filename(v.filename):
                 valid_videos.append(v)
-                if limit > 0 and len(valid_videos) >= limit:
-                    break
                     
-        # 5. 生成 CSV
         output = io.StringIO()
-        output.write('\ufeff')  # BOM 头防乱码
+        output.write('\ufeff') 
         writer = csv.writer(output)
         writer.writerow(['id', 'filename', 'tags'])
         
@@ -923,7 +914,6 @@ def api_get_videos():
             yield '['
             for i, v in enumerate(videos):
                 if i > 0: yield ','
-                # 🌟 强制治愈脱节：有排队用排队名，没排队强制截取 detail 真实的物理文件名！
                 fname = pending_map.get(v.id) or os.path.basename(v.detail)
                 yield f'{{"id":{v.id},"filename":"{fname}","tags":"{v.tags}","score":{v.score},"detail":"{v.detail}"}}'
             yield ']'
@@ -931,7 +921,7 @@ def api_get_videos():
         
     return jsonify([{
         "id": v.id, 
-        "filename": pending_map.get(v.id) or os.path.basename(v.detail), # 🌟 强制治愈脱节
+        "filename": pending_map.get(v.id) or os.path.basename(v.detail),
         "tags": v.tags, 
         "score": v.score, 
         "detail": v.detail
@@ -1010,7 +1000,6 @@ def export_rename_compare_csv():
             output.seek(0)
 
             for v in videos:
-                # 查找最早的一条改名日志来判定原始名
                 first_log = session.query(RenameLog).filter(
                     RenameLog.video_id == v.id
                 ).order_by(RenameLog.create_time.asc()).first()
