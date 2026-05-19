@@ -154,6 +154,21 @@
                 else alert(data.error);
             });
         });
+        function showToast(msg) {
+    const t = document.createElement('div');
+    t.textContent = msg;
+    Object.assign(t.style, {
+        position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)',
+        background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px',
+        fontWeight:'bold', fontSize:'15px', zIndex:9999,
+        boxShadow:'0 4px 12px rgba(0,0,0,0.15)',
+        animation:'fadeIn 0.3s ease'
+    });
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800);
+    setTimeout(() => t.remove(), 2200);
+}
+
 
         // 编辑更新提交
         document.getElementById('edit-form').addEventListener('submit', function(e) {
@@ -168,7 +183,7 @@
                     html_content: document.getElementById('edit-html').value
                 })
             }).then(res => res.json()).then(data => {
-                if (data.status === 'success') switchView('list');
+                if (data.status === 'success')showToast('✅ 已保存');
                 else alert(data.error);
             });
         });

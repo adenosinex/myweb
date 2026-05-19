@@ -136,7 +136,9 @@ function useVideoPlayer(state, loadVideosCb) {
     const lastLikeType = ref('');
     const isSwitching = ref(false);
 
-    const currentVideo = computed(() => (videoQueue.value.length > 0 && activeVideoIndex.value < videoQueue.value.length) ? videoQueue.value[activeVideoIndex.value] || {} : state.videos[currentIndex.value] || {});
+    // 🌟 核心修复：直接指向响应式主数组，摒弃基于 videoQueue 缓存的旧对象指针
+    const currentVideo = computed(() => state.videos[currentIndex.value] || {});
+    
     const videoIndex = computed(() => (state.searchKeyword || state.videos.length > 0) ? state.globalOffset + currentIndex.value + 1 : null);
 
     watch(videoIndex, (newVal) => { if (newVal) localStorage.setItem('dy_current_index', newVal); });
@@ -218,7 +220,6 @@ function useVideoPlayer(state, loadVideosCb) {
     
     return { currentIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, currentVideo, videoIndex, refreshQueue, prevVideo, nextVideo, playActiveVideo, onVideoReady, onVideoLoaded, getVideoUrl, previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, jumpTo, toggleLike, toggleDislike };
 }
-
 const app = createApp({
     setup() {
         // 🌟 将 searchUntagged 补充进全局 State 中
