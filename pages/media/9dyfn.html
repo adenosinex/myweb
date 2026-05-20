@@ -12,33 +12,70 @@
     <script src="http://192.168.31.197:8100/static/cdn/vue-router4.5.global.js"></script>
     <script src="http://192.168.31.197:8100/static/cdn/vant4.min.js"></script>
     <script src="http://192.168.31.197:8100/static/cdn/axios1.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfncfg.js"></script>
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfnhead.js"></script>
     <script src="https://apple4.su7.dpdns.org:10443/static/dyfnst.js"></script>
+    <style>
+        /* 1. 锁死控制栏使其永不自动隐藏，去除所有黑色渐变背景 */
+        .art-video-player .art-bottom {
+            opacity: 1 !important;
+            visibility: visible !important;
+            transform: translateY(0) !important;
+            position: absolute !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: transparent !important; /* 彻底移除底部黑影 */
+            z-index: 50 !important;
+        }
+        
+        /* 2. 隐藏 ArtPlayer 默认的居中大播放按钮 */
+        .art-video-player .art-state {
+            display: none !important;
+        }
+
+        /* 3. 彻底去除画面的黑色遮罩层、变暗层（包括暂停时的蒙版） */
+        .art-video-player .art-mask,
+        .art-video-player .art-backdrop {
+            display: none !important;
+            opacity: 0 !important;
+            background: transparent !important;
+        }
+
+        /* 4. 按照你的要求设置的 Video 尺寸与偏移 (加入 transform 保证偏移后自身能居中对齐) */
+        .art-video-player .art-video {
+            position: absolute !important;
+            top: 50% !important;
+            left: 44% !important;
+            width: 100% !important;
+            height: 70% !important;
+            transform: translate(-50%, -50%) !important; 
+            object-fit: contain !important; 
+        }
+    </style>
 </head>
 <body>
 <div id="app">
     <div class="layout-wrapper">
         <div class="video-side" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-            <div style="position:absolute;top:18px;left:18px;z-index:20;">
+            <!-- 头部区：Logo 与 后台暂停开关 -->
+            <div style="position:absolute;top:18px;left:18px;z-index:100;display:flex;align-items:center;gap:15px;">
                 <a href="http://one4.zin6.site:5000" target="_blank"><img src="/static/logo.png" alt="LOGO" style="height:40px;" onerror="this.style.display='none'"></a>
+                <label style="display:flex;align-items:center;gap:6px;color:#fff;background:rgba(0,0,0,0.6);padding:6px 12px;border-radius:20px;font-size:12px;cursor:pointer;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.15);">
+                    <input type="checkbox" v-model="autoPauseEnabled" @change="saveAutoPauseState(autoPauseEnabled)"> 后台自动暂停
+                </label>
             </div>
 
             <div v-if="isLoading" class="loading-screen" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#000;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:50;">
                 <div style="color:#fff;font-size:18px;">加载中...</div>
             </div>
 
-            <div class="video-box" v-show="!isLoading && state.videos?.length" style="height: 100%; padding:0; display:flex; justify-content:center; align-items:center;">
-                <div class="video-container" style="height: 100%; width: 100%;">
-                    <video
-                        v-for="(video, index) in videoQueue" :key="video.id" :ref="'video' + index" :src="getVideoUrl(video.id)"
-                        :class="[videoClass, { 'active-video': index === activeVideoIndex, 'hidden-video': index !== activeVideoIndex }]"
-                        :muted="index !== activeVideoIndex" :controls="index === activeVideoIndex"
-                        preload="auto" playsinline
-                        @ended="nextVideo" @loadeddata="onVideoLoaded(index)" @canplaythrough="onVideoReady(index)"
-                    ></video>
-                </div>
+            <div class="video-box" v-show="!isLoading && state.videos?.length" style="position: relative; width: 100%; height: 100%; padding:0; background: #000;">
+                <div id="artplayer-container" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%;"></div>
             </div>
+
             <div v-show="!isLoading && (!state.videos || state.videos.length === 0)" style="color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;">
                 <div>暂无满足条件的视频</div>
             </div>
@@ -95,10 +132,9 @@
 </div>
 
 <script>
-const { createApp, reactive, onMounted, computed, ref, watch } = Vue
+const { createApp, reactive, onMounted, computed, ref, watch, nextTick } = Vue
 
 window.DyAPI = {
-    // 🌟 核心修改：统一的参数聚合器，杜绝遗漏
     getSearchParams: (state) => ({
         search: state.searchKeyword,
         exclude: state.excludeKeyword,
@@ -129,79 +165,95 @@ window.DyAPI = {
 
 function useVideoPlayer(state, loadVideosCb) {
     const currentIndex = ref(0);
-    const videoQueue = ref([]);
-    const activeVideoIndex = ref(1);
-    const videoLoadStates = ref([false, false, false]);
-    const videoClass = ref('video-portrait');
-    const lastLikeType = ref('');
     const isSwitching = ref(false);
+    const lastLikeType = ref('');
+    let art = null; 
 
-    // 🌟 核心修复：直接指向响应式主数组，摒弃基于 videoQueue 缓存的旧对象指针
     const currentVideo = computed(() => state.videos[currentIndex.value] || {});
-    
     const videoIndex = computed(() => (state.searchKeyword || state.videos.length > 0) ? state.globalOffset + currentIndex.value + 1 : null);
 
     watch(videoIndex, (newVal) => { if (newVal) localStorage.setItem('dy_current_index', newVal); });
 
-    function refreshQueue() {
-        if (!state.videos || state.videos.length === 0) return;
-        videoQueue.value = []; activeVideoIndex.value = 1; videoLoadStates.value = [false, false, false];
-        for (let i = -1; i <= 1; i++) {
-            let targetIndex = (currentIndex.value + i + state.videos.length) % state.videos.length;
-            if (state.videos[targetIndex]) videoQueue.value.push(state.videos[targetIndex]);
+    function initArtPlayer() {
+        if (!currentVideo.value?.id) return;
+        
+        const url = getVideoUrl(currentVideo.value.id);
+        
+        if (art) {
+            art.switch = url;
+            return;
         }
-        document.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
-    }
 
-    function updateVideoQueue(direction = 'next') {
-        if (state.videos.length === 0) return;
-        if (direction === 'next') { videoQueue.value.shift(); videoQueue.value.push(state.videos[(currentIndex.value + 1) % state.videos.length]); } 
-        else { videoQueue.value.pop(); videoQueue.value.unshift(state.videos[(currentIndex.value - 1 + state.videos.length) % state.videos.length]); }
-        videoLoadStates.value = [false, false, false];
+        art = new Artplayer({
+            container: '#artplayer-container',
+            url: url,
+            volume: 1.0,
+            isLive: false,
+            muted: false,
+            autoplay: true,
+            pip: true,
+            autoSize: true,
+            autoMini: false,
+            screenshot: true,
+            setting: true,
+            loop: false,
+            flip: true,
+            playbackRate: true,
+            aspectRatio: false,
+            fullscreen: true,
+            fullscreenWeb: true,
+            subtitleOffset: true,
+            miniProgressBar: false,
+            mutex: true,
+            backdrop: false, /* 🌟 强制关闭背景遮罩变暗效果 */
+            playsInline: true,
+            autoPlayback: false,
+            theme: '#1989fa',
+            controls: [
+                {
+                    position: 'right',
+                    html: '<span style="font-size:14px; padding: 4px 8px; background:rgba(25,137,250,0.5); border-radius:4px;">下一个</span>',
+                    index: 10,
+                    style: { padding: '0 10px', cursor: 'pointer', color: '#fff' },
+                    click: function () { nextVideo(); },
+                },
+            ],
+        });
+
+        art.on('video:ended', () => {
+            nextVideo();
+        });
     }
 
     function prevVideo() {
         if (isSwitching.value || state.videos.length === 0) return;
         isSwitching.value = true; 
-        document.querySelectorAll('video').forEach(v => v.pause());
         currentIndex.value = currentIndex.value - 1 < 0 ? state.videos.length - 1 : currentIndex.value - 1;
-        updateVideoQueue('prev'); setTimeout(() => { playActiveVideo(); isSwitching.value = false; }, 200);
+        initArtPlayer();
+        setTimeout(() => { isSwitching.value = false; }, 200);
     }
 
     async function nextVideo() {
         if (isSwitching.value || state.videos.length === 0) return;
         isSwitching.value = true; 
-        document.querySelectorAll('video').forEach(v => v.pause());
-        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         
-        let nextIndex = currentIndex.value + 1, isPageChange = false;
+        let nextIndex = currentIndex.value + 1;
         if (nextIndex >= state.videos.length) {
-            if (state.page * state.pageSize < state.totalVideos) { state.page++; await loadVideosCb(true); isPageChange = true; }
+            if (state.page * state.pageSize < state.totalVideos) { 
+                state.page++; 
+                await loadVideosCb(true); 
+            }
             nextIndex = nextIndex % state.videos.length;
         }
         currentIndex.value = nextIndex;
-        if (isPageChange) refreshQueue(); else updateVideoQueue('next');
-        setTimeout(() => { playActiveVideo(); isSwitching.value = false; }, 250);
+        initArtPlayer();
+        setTimeout(() => { isSwitching.value = false; }, 250);
     }
 
-    function playActiveVideo() {
-        const domIndex = activeVideoIndex.value, videos = document.querySelectorAll('video');
-        if (!videos.length || !videos[domIndex]) return;
-        videos.forEach((v, i) => { if (i !== domIndex) { v.pause(); v.muted = true; v.currentTime = 0; } });
-        const activeVideo = videos[domIndex];
-        activeVideo.muted = false; if (activeVideo.ended) activeVideo.currentTime = 0;
-        const playPromise = activeVideo.play();
-        if (playPromise !== undefined) playPromise.catch(() => { activeVideo.muted = true; activeVideo.play().catch(() => {}); });
-        if (activeVideo.videoWidth && activeVideo.videoHeight) { videoClass.value = (activeVideo.videoHeight / activeVideo.videoWidth) <= 1.1 ? 'video-landscape' : 'video-portrait'; } 
-        else { activeVideo.addEventListener('loadedmetadata', () => { videoClass.value = (activeVideo.videoHeight / activeVideo.videoWidth) <= 1.1 ? 'video-landscape' : 'video-portrait'; }, { once: true }); }
-    }
-
-    function onVideoReady(index) { videoLoadStates.value[index] = true; const video = document.querySelectorAll('video')[index]; if (!video) return; if (index === activeVideoIndex.value) { if (video.paused) video.play().catch(() => {}); } else { video.pause(); video.muted = true; } }
-    function onVideoLoaded(index) { videoLoadStates.value[index] = true; }
     function getVideoUrl(id) { return `/dyfn/videos/${id}/stream`; }
-    function previewForward() { const v = document.querySelectorAll('video')[activeVideoIndex.value]; if (v && v.duration) v.currentTime = Math.min(v.duration, v.currentTime + Math.max(5, v.duration * 0.05)); }
-    function previewBackward() { const v = document.querySelectorAll('video')[activeVideoIndex.value]; if (v && v.duration) v.currentTime = Math.max(0, v.currentTime - Math.max(5, v.duration * 0.05)); }
-    function seekTo(ratio) { const v = document.querySelectorAll('video')[activeVideoIndex.value]; if (v && v.duration) v.currentTime = v.duration * ratio; }
+    function previewForward() { if (art) art.currentTime = Math.min(art.duration, art.currentTime + 5); }
+    function previewBackward() { if (art) art.currentTime = Math.max(0, art.currentTime - 5); }
+    function seekTo(ratio) { if (art) art.currentTime = art.duration * ratio; }
 
     let touchStartY = 0; let touchActive = false;
     function handleTouchStart(e) { if (isSwitching.value) return; touchActive = true; touchStartY = e.touches[0].clientY; }
@@ -212,53 +264,45 @@ function useVideoPlayer(state, loadVideosCb) {
         state.page = Math.floor((target - 1) / state.pageSize) + 1; 
         const indexInPage = (target - 1) % state.pageSize;
         await loadVideosCb(false, indexInPage); 
-        setTimeout(() => { playActiveVideo(); }, 200);
+        setTimeout(() => { initArtPlayer(); }, 200);
     }
 
     async function toggleLike() { if (!currentVideo.value?.id) return; const newScore = currentVideo.value.score === 5 ? 0 : 5; await window.DyAPI.updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; lastLikeType.value = newScore === 5 ? 'like' : ''; setTimeout(() => lastLikeType.value = '', 600); }
     async function toggleDislike() { if (!currentVideo.value?.id) return; const newScore = currentVideo.value.score === 1 ? 0 : 1; await window.DyAPI.updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600); }
     
-    return { currentIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, currentVideo, videoIndex, refreshQueue, prevVideo, nextVideo, playActiveVideo, onVideoReady, onVideoLoaded, getVideoUrl, previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, jumpTo, toggleLike, toggleDislike };
+    return { 
+        currentIndex, currentVideo, videoIndex, lastLikeType,
+        initArtPlayer, getArtPlayer: () => art,
+        prevVideo, nextVideo, getVideoUrl, previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, jumpTo, toggleLike, toggleDislike 
+    };
 }
+
 const app = createApp({
     setup() {
-        // 🌟 将 searchUntagged 补充进全局 State 中
         const state = reactive({ 
-    videos: [], 
-    page: 1, 
-    pageSize: 10, 
-    searchKeyword: '', 
-    excludeKeyword: '', 
-    searchScore: 0, 
-    searchSize: 0, 
-    sortBy: '', 
-    searchUntagged: '0',  // 🌟 新增：显式声明，建立响应式追踪
-    totalVideos: 0, 
-    totalpage: 0, 
-    globalOffset: 0 
-});
-const isLoading = ref(true);
+            videos: [], page: 1, pageSize: 10, searchKeyword: '', excludeKeyword: '', searchScore: 0, searchSize: 0, sortBy: '', searchUntagged: '0', totalVideos: 0, totalpage: 0, globalOffset: 0 
+        });
+        const isLoading = ref(true);
 
         const headerRef = ref(null);
         const tagPanelRef = ref(null);
         const statsPanelRef = ref(null);
-        
         const panelContentRef = ref(null);
 
         const syncEnabled = ref(JSON.parse(localStorage.getItem('dy_sync_enabled') ?? 'true'));
         const syncMemory = ref(JSON.parse(localStorage.getItem('dy_sync_memory') || '[]'));
         
+        const autoPauseEnabled = ref(JSON.parse(localStorage.getItem('dy_auto_pause') ?? 'true'));
+
         function saveSyncState(val) { syncEnabled.value = val; localStorage.setItem('dy_sync_enabled', JSON.stringify(val)); }
         function clearSyncMemory() { syncMemory.value = []; localStorage.setItem('dy_sync_memory', '[]'); vant.showToast('已清空同源记忆'); }
         function updateSyncMemory(newMem) { syncMemory.value = newMem; localStorage.setItem('dy_sync_memory', JSON.stringify(newMem)); }
+        function saveAutoPauseState(val) { autoPauseEnabled.value = val; localStorage.setItem('dy_auto_pause', JSON.stringify(val)); }
 
         const playerModule = useVideoPlayer(state, loadVideos);
         const {
-            currentIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, 
-            currentVideo, videoIndex, refreshQueue, prevVideo, nextVideo, 
-            playActiveVideo, onVideoReady, onVideoLoaded, getVideoUrl, 
-            previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, 
-            jumpTo, toggleLike, toggleDislike
+            currentIndex, currentVideo, videoIndex, lastLikeType, initArtPlayer, getArtPlayer,
+            prevVideo, nextVideo, getVideoUrl, previewForward, previewBackward, seekTo, handleTouchStart, handleTouchEnd, jumpTo, toggleLike, toggleDislike
         } = playerModule;
 
         function handleAction(type) {
@@ -280,13 +324,14 @@ const isLoading = ref(true);
         
         async function loadVideos(append = false, startIndex = 0) {
             isLoading.value = true;
-            // 🌟 核心修改：利用统一器装载所有参数，不再漏掉任何字段
             const params = { page: state.page, page_size: state.pageSize, ...window.DyAPI.getSearchParams(state) };
             try {
                 const newVideos = await window.DyAPI.fetchVideos(params);
                 if (append) state.videos.push(...newVideos); 
                 else { state.videos = newVideos; state.globalOffset = (state.page - 1) * state.pageSize; currentIndex.value = startIndex; }
-                refreshQueue();
+                
+                await nextTick();
+                initArtPlayer();
             } finally { isLoading.value = false; }
         }
 
@@ -315,8 +360,6 @@ const isLoading = ref(true);
             blacklist.value = await window.DyAPI.getBlacklist();
             
             headerRef.value?.loadFromUrlParams();
-            
-            // 🌟 核心修改：初始化同样使用统一参数装载器
             state.totalVideos = state.totalpage = await window.DyAPI.fetchVideoCount(window.DyAPI.getSearchParams(state));
 
             let startIndex = 0;
@@ -326,8 +369,6 @@ const isLoading = ref(true);
 
             await loadVideos(false, startIndex);
             isLoading.value = false;
-            
-            setTimeout(() => { playActiveVideo(); }, 500);
 
             setTimeout(() => {
                 const savedScroll = localStorage.getItem('dy_panel_scroll');
@@ -336,6 +377,20 @@ const isLoading = ref(true);
                 }
             }, 800);
             
+            let wasPlayingBeforeHidden = false;
+            document.addEventListener('visibilitychange', () => {
+                if (!autoPauseEnabled.value) return;
+                const player = getArtPlayer();
+                if (!player) return;
+
+                if (document.hidden) {
+                    wasPlayingBeforeHidden = player.playing;
+                    if (wasPlayingBeforeHidden) player.pause();
+                } else {
+                    if (wasPlayingBeforeHidden) player.play().catch(()=>{});
+                }
+            });
+            
             window.addEventListener('wheel', (e) => { 
                 if (e.target.closest('.panel-side') || e.target.closest('.van-popup') || e.target.closest('.search-modal')) return;
                 if (Math.abs(e.deltaY) < 30) return; 
@@ -343,17 +398,14 @@ const isLoading = ref(true);
             });
             window.addEventListener('keydown', (e) => { 
                 if (e.target.tagName === 'INPUT') return; 
+                const player = getArtPlayer();
+                if (!player) return;
+
                 if (e.key === 'ArrowLeft') previewBackward(); else if (e.key === 'ArrowRight') previewForward();
                 else if (e.key === 'ArrowDown') nextVideo(); else if (e.key === 'ArrowUp') prevVideo();
                 else if (e.key === 'Z' || e.key === 'z') toggleLike(); else if (e.key === 'X' || e.key === 'x') toggleDislike();
-                else if (e.key === ' ') { e.preventDefault(); const v = document.querySelectorAll('video')[activeVideoIndex.value]; if(v) v.paused ? v.play() : v.pause(); }
+                else if (e.key === ' ') { e.preventDefault(); player.toggle(); }
                 else if (e.key === '`' || e.key === '·') seekTo(0.5);
-            });
-            window.addEventListener('dblclick', (e) => {
-                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-                const v = document.querySelectorAll('video')[activeVideoIndex.value];
-                if (!document.fullscreenElement && v) { if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); } 
-                else if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
             });
             window.addEventListener('popstate', () => {
                 if (headerRef.value?.loadFromUrlParams()) headerRef.value?.doSearch();
@@ -363,8 +415,9 @@ const isLoading = ref(true);
 
         return {
             state, isLoading, panelContentRef, handlePanelScroll,
-            headerRef, tagPanelRef, statsPanelRef, videoIndex, videoQueue, activeVideoIndex, videoClass, lastLikeType, currentVideo, currentIndex, blacklist, pathList,
-            getVideoUrl, onVideoLoaded, onVideoReady, nextVideo, handleTouchStart, handleTouchEnd, handleUpdateScore,
+            headerRef, tagPanelRef, statsPanelRef, videoIndex, lastLikeType, currentVideo, currentIndex, blacklist, pathList,
+            autoPauseEnabled, saveAutoPauseState,
+            getVideoUrl, nextVideo, handleTouchStart, handleTouchEnd, handleUpdateScore,
             handleAction, jumpTo, loadVideos, addPath, indexPath, refreshAllPaths, indexPath_del, addBlacklistWord, removeBlacklistWord,
             syncEnabled, syncMemory, saveSyncState, clearSyncMemory, updateSyncMemory
         };

@@ -44,7 +44,7 @@
       align-items: center;
     }
     .knowledge-header i { margin-right: 6px; }
-    
+
     .tags-container {
       display: flex;
       flex-wrap: wrap;
@@ -112,7 +112,7 @@
       box-shadow: 0 4px 6px rgba(0,0,0,0.05);
       border: 1px solid #e2e8f0;
     }
-    
+
     .exercise-label {
       font-size: 16px;
       font-weight: 600;
@@ -133,7 +133,22 @@
       border-radius: 12px;
       font-size: 12px;
     }
-    
+    .priority-badge {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 6px;
+    }
+    .priority-badge.must {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .priority-badge.opt {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+
     .input-row {
       display: flex;
       align-items: flex-end;
@@ -207,7 +222,7 @@
       transition: all 0.2s;
     }
     .rating-star.active { color: #f59e0b; }
-    
+
     .btn-generate {
       width: 100%;
       padding: 16px;
@@ -221,7 +236,7 @@
       cursor: pointer;
       font-weight: bold;
     }
-    
+
     .record-container {
       background: white;
       border-radius: 16px;
@@ -265,14 +280,15 @@
 <body>
   <div class="app-container" id="app">
     <h1>自重与功能性训练记录</h1>
-    
+
+    <!-- 知识库：完全由 KNOWLEDGE_DB 驱动 -->
     <div class="knowledge-card">
       <div class="knowledge-header">
         <i>💡</i> 核心原则与生理监控
       </div>
       <div class="tags-container">
-        <span 
-          v-for="(item, index) in knowledgeDB" 
+        <span
+          v-for="(item, index) in knowledgeDB"
           :key="index"
           @click="activeKnowledgeIndex = index"
           class="knowledge-tag"
@@ -284,54 +300,54 @@
       <div class="knowledge-content">{{ currentKnowledge?.content }}</div>
     </div>
 
+    <!-- 计划选择器：完全由 PLANS 驱动，增删计划只改 JS -->
     <div class="plan-selector">
-      <div class="plan-btn" :class="{ active: currentPlan === 'A' }" @click="switchPlan('A')">
-        A: 爆发与推链
-      </div>
-      <div class="plan-btn" :class="{ active: currentPlan === 'Gym' }" @click="switchPlan('Gym')">
-        Gym: 后链与水平拉
-      </div>
-      <div class="plan-btn" :class="{ active: currentPlan === 'B' }" @click="switchPlan('B')">
-        B: 控制与抗旋
+      <div
+        v-for="key in planKeys"
+        :key="key"
+        class="plan-btn"
+        :class="{ active: currentPlan === key }"
+        @click="switchPlan(key)"
+      >
+        {{ plans[key].label }}
       </div>
     </div>
 
+    <!-- 练习列表：完全由当前计划的 exercises 数组驱动 -->
     <div>
       <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 16px;">记录数据</h2>
-      
+
       <div v-for="exercise in currentExercises" :key="exercise.name" class="exercise-item">
         <div class="exercise-label">
           <div class="exercise-label-left">
             <i style="margin-right:8px;">🎯</i>
             <span>{{ exercise.name }}</span>
+            <span v-if="exercise.priority === 'must'" class="priority-badge must">必做</span>
+            <span v-if="exercise.priority === 'optional'" class="priority-badge opt">可选</span>
           </div>
           <span class="intensity-badge">单次强度: {{ exercise.intensity }}</span>
         </div>
-        
+
         <div class="input-row" v-if="inputs[exercise.name]">
           <div class="input-group">
 
-            <!-- 重量 (按需展示) -->
             <div v-if="inputs[exercise.name].weight !== undefined">
               <div class="input-label">负重(kg)</div>
               <input type="number" step="0.5" min="0" v-model.number="inputs[exercise.name].weight">
             </div>
             <span v-if="inputs[exercise.name].weight !== undefined && inputs[exercise.name].sets !== undefined">+</span>
 
-            <!-- 组数 -->
             <div v-if="inputs[exercise.name].sets !== undefined">
               <div class="input-label">组数</div>
               <input type="number" min="0" v-model.number="inputs[exercise.name].sets">
             </div>
             <span v-if="inputs[exercise.name].reps !== undefined || inputs[exercise.name].time !== undefined">×</span>
 
-            <!-- 次数 -->
             <div v-if="inputs[exercise.name].reps !== undefined">
               <div class="input-label">次数</div>
               <input type="number" min="0" v-model.number="inputs[exercise.name].reps">
             </div>
 
-            <!-- 时间 -->
             <div v-if="inputs[exercise.name].time !== undefined">
               <div class="input-label">时间(s)</div>
               <input type="number" min="0" step="5" v-model.number="inputs[exercise.name].time">
@@ -346,10 +362,10 @@
     <div class="exercise-item">
       <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 8px; margin-top:0;">体感评分 (综合疲劳度)</h2>
       <div class="rating-container">
-        <span 
-          v-for="i in 5" 
-          :key="i" 
-          class="rating-star" 
+        <span
+          v-for="i in 5"
+          :key="i"
+          class="rating-star"
           :class="{ 'active': i <= rating }"
           @click="rating = i"
         >★</span>
@@ -381,45 +397,111 @@
   <script>
     const { createApp } = Vue;
 
-    const knowledgeData = [
-      { category: "结构修正纪律", content: "【干涉避免】：农夫行走极度榨取前臂神经与核心抗屈曲，必须强制置于Gym日最后收尾。\n【补偿必须】：高强度肩内旋需外旋补偿，面拉/反向飞鸟不可省略，重量宜轻，强调离心控制。" },
-      { category: "手腕与推力纪律", content: "【伪俄挺纪律】：绝对禁止手指正朝前方做深度前倾！手腕韧带适应周期极长，不能硬磨。\n必须将手指朝外（外八字）或使用支架。A日应在双杠前优先做伪俄挺，避免前束力竭导致关节代偿。" },
-      { category: "后链与结构韧性", content: "【山羊挺身】：目标是强化髋伸展，而非腰椎。核心微收含胸，由臀部和腘绳肌发力拉回水平，顶点严禁反弓腰椎。\n下肢孤立动作避开脊柱重压，建立后腰系统韧性。" },
-      { category: "预疲劳与真实容量", content: "【接受退步假象】：雨刷器与左右弯同属高强度抗旋，初期切入极易引发下背DOMS破坏骨盆稳定，前两周各砍一组。\n高难度动作后的常规组，严格保留2次余力，不可凑数导致动作变形。" }
+    // ============================================================
+    //  ▸  知识库 — 增删改这里即可，UI 自动跟随
+    // ============================================================
+    const KNOWLEDGE_DB = [
+      {
+        category: "修补厂法则",
+        content: "健身房不是主战场，是修补厂。骑行是引擎，体操是技能，徒步是享受。\nGym的唯一使命：修复骑行/体操/徒步覆盖不了的不均衡，防止未来出问题。\n必做4动作（RDL/北欧挺/山羊挺身/双手农夫行走）= 20分钟搞定。\n可选4动作（单手农夫行走/绳索划船/面拉/腿举）= 有时间就加。"
+      },
+      {
+        category: "RDL髋铰链纪律",
+        content: "【核心】：RDL学的是髋铰链模式——弯腰时用髋关节而不是腰椎发力。空杆练到完美，不加重。\n【判断标准】：空杆×15×3、全程无腰痛、连续2周稳定后，每2周+2.5kg。\n【50kg教训】：错误模式下的重量是灾难。模式对了，重量是副产品。\n【日常迁移】：搬重物、背包弯腰、骑行后弯腰锁车——髋铰链保护所有弯腰场景。"
+      },
+      {
+        category: "手腕与推力纪律",
+        content: "【伪俄挺纪律】：绝对禁止手指正朝前方做深度前倾！手腕韧带适应周期极长，不能硬磨。\n必须将手指朝外（外八字）或使用支架。A日应在双杠前优先做伪俄挺，避免前束力竭导致关节代偿。"
+      },
+      {
+        category: "后链与结构韧性",
+        content: "【北欧挺】：腘绳肌是最大短板（腿弯举45kg第6个抽筋）。北欧挺零器械、自重即可、离心效率极高。向前缓慢倒下，推回。3×3-5即可。\n【山羊挺身】：强化髋伸展而非腰椎。核心微收含胸，由臀部和腘绳肌发力拉回，顶点严禁反弓。\n【两者互补】：RDL=抗屈曲能力（弯腰时脊柱不弯），山羊挺身=伸展力量（把弯的身体拉回来）。"
+      },
+      {
+        category: "预疲劳与真实容量",
+        content: "【接受退步假象】：雨刷器与左右弯同属高强度抗旋，初期切入极易引发下背DOMS破坏骨盆稳定，前两周各砍一组。\n高难度动作后的常规组，严格保留2次余力，不可凑数导致动作变形。\n【农夫行走】：永远放在Gym日最后收尾。双手版重量大、脊柱压缩感强、全身张力高——最纯粹的享受。单手版额外训练抗侧屈核心。"
+      }
     ];
 
-    // 自重部分去除 weight 属性
-    const planA = [
-      { name: "双力臂", intensity: 6, sets: 5, reps: 3 }, 
-      { name: "伪俄挺", intensity: 5, sets: 4, reps: 5 },
-      { name: "双杠臂屈伸", intensity: 4, sets: 4, reps: 8 },
-      { name: "举腿碰杆", intensity: 4, sets: 3, reps: 5 },
-      { name: "单臂悬挂", intensity: 3, sets: 2, time: 10 }
-    ];
+    // ============================================================
+    //  ▸  计划模板 — 所有计划定义在此
+    //
+    //  新增计划：加一个 key + 对象即可，按钮/列表自动生成
+    //  新增动作：在对应计划的 exercises 数组加一行即可
+    //
+    //  动作字段：
+    //    name       — 动作名（同一计划内不能重复）
+    //    priority   — 'must' 必做 | 'optional' 可选 | 留空不显示标签
+    //    intensity  — 单次强度系数（用于综合得分）
+    //    weight     — 默认负重(kg)，留 undefined = 纯自重
+    //    sets       — 默认组数
+    //    reps       — 默认每组次数（与 time 二选一）
+    //    time       — 默认每组秒数（与 reps 二选一）
+    // ============================================================
 
-    const planGym = [
-      { name: "臀推", intensity: 6, weight: 40, sets: 4, reps: 8 },
-      { name: "胸托划船", intensity: 5, weight: 20, sets: 4, reps: 8 },
-      { name: "山羊挺身", intensity: 4, sets: 3, reps: 12 }, // 默认自重启动
-      { name: "高拉/腿弯举", intensity: 4, weight: 25, sets: 3, reps: 10 },
-      { name: "面拉/反向飞鸟", intensity: 3, weight: 10, sets: 3, reps: 15 },
-      { name: "单手农夫行走", intensity: 7, weight: 30, sets: 3, time: 60 },
-      { name: "双手农夫行走", intensity: 7, weight: 40, sets: 3, time: 120 }
-    ];
+    const PLANS = {
 
-    const planB = [
-      { name: "进阶团身前水平", intensity: 5, sets: 4, reps: 1, time: 7 },
-      { name: "标准引体", intensity: 4, sets: 4, reps: 5 },
-      { name: "单杠抗旋雨刷器", intensity: 5, sets: 2, reps: 4 },
-      { name: "悬垂举腿左右弯", intensity: 4, sets: 2, reps: 6 },
-      { name: "轻伪俄挺", intensity: 3, sets: 3, reps: 4 }
-    ];
+      A: {
+        label: "A: 爆发与推链",
+        duration: 35,
+        exercises: [
+          { name: "双力臂",         intensity: 6, sets: 5, reps: 3 },
+          { name: "伪俄挺",         intensity: 5, sets: 4, reps: 5 },
+          { name: "双杠臂屈伸",     intensity: 4, sets: 4, reps: 8 },
+          { name: "举腿碰杆",       intensity: 4, sets: 3, reps: 5 },
+          { name: "单臂悬挂",       intensity: 3, sets: 2, time: 10 }
+        ]
+      },
+
+      Gym: {
+        label: "Gym: 修补厂",
+        duration: 25,
+        exercises: [
+          { name: "RDL",            priority: "must",      intensity: 5, weight: 20,  sets: 3, reps: 8 },
+          { name: "北欧挺",         priority: "must",      intensity: 5,               sets: 3, reps: 5 },
+          { name: "山羊挺身",       priority: "must",      intensity: 4, weight: 20,  sets: 3, reps: 10 },
+          { name: "双手农夫行走",   priority: "must",      intensity: 8, weight: 50,  sets: 3, time: 40 },
+          { name: "单手农夫行走",   priority: "optional",  intensity: 7, weight: 30,  sets: 3, time: 40 },
+          { name: "绳索划船",       priority: "optional",  intensity: 4, weight: 40,  sets: 3, reps: 10 },
+          { name: "面拉加重版",     priority: "optional",  intensity: 3, weight: 15,  sets: 3, reps: 12 },
+          { name: "腿举",           priority: "optional",  intensity: 4, weight: 60,  sets: 3, reps: 10 }
+        ]
+      },
+
+      B: {
+        label: "B: 控制与抗旋",
+        duration: 45,
+        exercises: [
+          { name: "进阶团身前水平",   intensity: 5, sets: 4, reps: 1, time: 7 },
+          { name: "标准引体",         intensity: 4, sets: 4, reps: 5 },
+          { name: "单杠抗旋雨刷器",   intensity: 5, sets: 2, reps: 4 },
+          { name: "悬垂举腿左右弯",   intensity: 4, sets: 2, reps: 6 },
+          { name: "轻伪俄挺",         intensity: 3, sets: 3, reps: 4 }
+        ]
+      }
+
+      // ——— 新增计划示例 ———
+      // C: {
+      //   label: "C: 我的新计划",
+      //   duration: 40,
+      //   exercises: [
+      //     { name: "动作1", intensity: 5, sets: 4, reps: 8 },
+      //     { name: "动作2", intensity: 4, weight: 30, sets: 3, reps: 10 },
+      //   ]
+      // },
+    };
+
+    // ============================================================
+    //  ▸  Vue App — 通用逻辑，不需要改
+    // ============================================================
 
     createApp({
       data() {
         return {
-          currentPlan: 'A',
-          knowledgeDB: knowledgeData,
+          plans: PLANS,
+          planKeys: Object.keys(PLANS),
+          currentPlan: Object.keys(PLANS)[0],
+          knowledgeDB: KNOWLEDGE_DB,
           activeKnowledgeIndex: 0,
           inputs: {},
           rating: 4,
@@ -429,10 +511,11 @@
         }
       },
       computed: {
+        currentPlanConfig() {
+          return this.plans[this.currentPlan];
+        },
         currentExercises() {
-          if (this.currentPlan === 'A') return planA;
-          if (this.currentPlan === 'Gym') return planGym;
-          return planB;
+          return this.currentPlanConfig.exercises;
         },
         currentKnowledge() {
           return this.knowledgeDB[this.activeKnowledgeIndex] || {};
@@ -442,9 +525,9 @@
         this.applyDefaults();
       },
       methods: {
-        switchPlan(plan) {
-          if(this.currentPlan === plan) return;
-          this.currentPlan = plan;
+        switchPlan(key) {
+          if (this.currentPlan === key) return;
+          this.currentPlan = key;
           this.applyDefaults();
           this.generatedRecord = '';
         },
@@ -453,12 +536,12 @@
           this.currentExercises.forEach(ex => {
             this.inputs[ex.name] = {
               weight: ex.weight,
-              sets: ex.sets,
-              reps: ex.reps,
-              time: ex.time
+              sets:   ex.sets,
+              reps:   ex.reps,
+              time:   ex.time
             };
           });
-          this.duration = this.currentPlan === 'A' ? 35 : (this.currentPlan === 'Gym' ? 50 : 45);
+          this.duration = this.currentPlanConfig.duration || 30;
           this.rating = 4;
           this.remark = '';
         },
@@ -474,60 +557,54 @@
           }
         },
         generateRecord() {
-          const today = new Date();
-          const yy = today.getFullYear().toString().slice(-2);
-          const mm = (today.getMonth() + 1).toString().padStart(2, '0');
-          const dd = today.getDate().toString().padStart(2, '0');
-          const hh = today.getHours().toString().padStart(2, '0');
-          const min = today.getMinutes().toString().padStart(2, '0');
-          
+          const now = new Date();
+          const yy  = now.getFullYear().toString().slice(-2);
+          const mm  = (now.getMonth() + 1).toString().padStart(2, '0');
+          const dd  = now.getDate().toString().padStart(2, '0');
+          const hh  = now.getHours().toString().padStart(2, '0');
+          const min = now.getMinutes().toString().padStart(2, '0');
+
           let totalIntensity = 0;
-          let itemsText = [];
+          const itemsText = [];
 
           for (const ex of this.currentExercises) {
             const val = this.inputs[ex.name];
-            if (val && val.sets > 0 && (val.reps > 0 || val.time > 0)) {
-              
-              // Intensity Calculation
-              let repsMultiplier = val.reps || 1;
-              if (val.reps === undefined && val.time !== undefined) {
-                repsMultiplier = Math.max(1, Math.round(val.time / 10)); 
-              }
-              const total = val.sets * repsMultiplier;
-              totalIntensity += total * ex.intensity;
+            if (!val || val.sets <= 0 || (val.reps <= 0 && !val.time)) continue;
 
-              // Formatting Output
-              let itemStr = ex.name;
-              if (val.weight !== undefined && val.weight > 0) {
-                itemStr += ` ${val.weight}kg`;
-              }
-              
-              let volumeStr = `${val.sets}x`;
-              if (val.reps !== undefined) volumeStr += val.reps;
-              if (val.time !== undefined) {
-                volumeStr += val.reps !== undefined ? `(${val.time}s)` : `${val.time}s`;
-              }
-              
-              itemsText.push(`${itemStr} ${volumeStr}`);
+            let repsMultiplier = val.reps || 1;
+            if (val.reps === undefined && val.time !== undefined) {
+              repsMultiplier = Math.max(1, Math.round(val.time / 10));
             }
+            totalIntensity += val.sets * repsMultiplier * ex.intensity;
+
+            let itemStr = ex.name;
+            if (val.weight !== undefined && val.weight > 0) {
+              itemStr += ` ${val.weight}kg`;
+            }
+
+            let volumeStr = `${val.sets}x`;
+            if (val.reps !== undefined) volumeStr += val.reps;
+            if (val.time !== undefined) {
+              volumeStr += val.reps !== undefined ? `(${val.time}s)` : `${val.time}s`;
+            }
+
+            itemsText.push(`${itemStr} ${volumeStr}`);
           }
 
           let tag = "适中";
-          if (totalIntensity > 350) tag = "高容量日";
-          else if (totalIntensity < 200) tag = "恢复/技术";
+          if (totalIntensity > 350)      tag = "高容量日";
+          else if (totalIntensity < 200)  tag = "恢复/技术";
 
           let record = `[计划${this.currentPlan} | ${tag}] ${yy}.${mm}.${dd} ${hh}:${min}\n`;
-
-          if (itemsText.length > 0) record += itemsText.join('  ') + '\n';
-          if (totalIntensity > 0) record += `综合强度得分: ${Math.round(totalIntensity)}\n`;
+          if (itemsText.length) record += itemsText.join('  ') + '\n';
+          if (totalIntensity)   record += `综合强度得分: ${Math.round(totalIntensity)}\n`;
 
           record += `体感评分: ${'★'.repeat(this.rating)}\n`;
-          
+
           if (this.rating >= 5 && totalIntensity < 250) {
             record += "⚠️ 疲劳高反馈：低容量导致高疲劳，需留意中枢神经透支状态。\n";
           }
-
-          if (this.duration) record += `用时: ${this.duration}分钟\n`;
+          if (this.duration)      record += `用时: ${this.duration}分钟\n`;
           if (this.remark.trim()) record += `备注: ${this.remark}`;
 
           this.generatedRecord = record.trim();
@@ -536,13 +613,13 @@
           try {
             await navigator.clipboard.writeText(this.generatedRecord);
             alert('记录已复制！');
-          } catch (err) {
-            const textarea = document.createElement('textarea');
-            textarea.value = this.generatedRecord;
-            document.body.appendChild(textarea);
-            textarea.select();
+          } catch {
+            const ta = document.createElement('textarea');
+            ta.value = this.generatedRecord;
+            document.body.appendChild(ta);
+            ta.select();
             document.execCommand('copy');
-            document.body.removeChild(textarea);
+            document.body.removeChild(ta);
             alert('记录已复制！');
           }
         }

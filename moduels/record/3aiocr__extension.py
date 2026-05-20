@@ -21,13 +21,13 @@ executor = ThreadPoolExecutor(max_workers=5)
 OCR_CONFIG = {
     "base_url": "https://api.siliconflow.cn/v1/chat/completions",
     "api_key": os.getenv("SILICONFLOW_API_KEY"),
-    "model": "Qwen/Qwen2.5-VL-32B-Instruct"
+    "model": "Qwen/Qwen3-VL-8B-Instruct"
 }
 
 NLP_CONFIG = {
-    "base_url": "https://openrouter.ai/api/v1/chat/completions",
-    "api_key": os.getenv("OP_API_KEY"),
-    "model": "x-ai/grok-4-fast"
+     "base_url": "https://api.siliconflow.cn/v1/chat/completions",
+    "api_key": os.getenv("SILICONFLOW_API_KEY"),
+    "model": "deepseek-ai/DeepSeek-V4-Flash"
     # "model": "minimax/minimax-m2.5:free"
 }
 # NLP_CONFIG = {
