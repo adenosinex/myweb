@@ -9,8 +9,8 @@
     <meta name="theme-color" content="#0f172a">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="/static/cdn/tailwindcss3.4.17.js"></script>
-    <script src="/static/cdn/wavesurfer.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
     <script>
         tailwind.config={theme:{extend:{colors:{ink:{50:'#f8f6f2',100:'#f0ece4',200:'#e2dbd0',300:'#c9bfb0',400:'#a89a86',500:'#8a7b68',600:'#6b5e4e',700:'#50463a',800:'#362f28',900:'#1c1814'},tea:{50:'#effcf9',100:'#d7f7ef',200:'#b3efe0',300:'#7ae2cc',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488',700:'#0f766e'}}}}}
     </script>
@@ -64,33 +64,35 @@
             <svg class="w-4 h-4 text-ink-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" stroke-linecap="round"/></svg>
             <input type="text" id="searchInput" class="w-full bg-ink-800 text-ink-200 placeholder-ink-500 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:bg-ink-800/80 focus:ring-1 ring-tea-500/50 transition-all border border-ink-700/50" placeholder="搜索录音标题或内容..." oninput="handleSearch(this.value)">
         </div>
+        <!-- 修改了导航栏按钮的功能：专注于上传文件，录音交给首页悬浮按钮 -->
         <button onclick="RecordCtrl.open()" class="bg-tea-500 hover:bg-tea-400 active:bg-tea-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm flex items-center gap-2 shrink-0 shadow-md shadow-tea-500/25 transition-all hover:shadow-lg">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
-            <span class="hidden sm:block">记一条</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            <span class="hidden sm:block">上传</span>
         </button>
     </div>
 </nav>
 
 <!-- ─── Main ─── -->
-<main class="max-w-3xl mx-auto px-4 pt-6 pb-24 relative z-10">
+<!-- 增加了 pb-32 以免底部悬浮按钮遮挡最后一条记录 -->
+<main class="max-w-3xl mx-auto px-4 pt-6 pb-32 relative z-10">
     <div id="timeline" class="space-y-4"></div>
     <div id="emptyState" class="hidden py-20 text-center anim-fade-in-up">
         <div class="w-20 h-20 bg-ink-100 rounded-full flex items-center justify-center mx-auto mb-6 border border-ink-200/80">
             <svg class="w-9 h-9 text-ink-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"/></svg>
         </div>
         <h3 class="font-display text-2xl font-bold text-ink-700 mb-2">尚无录音记录</h3>
-        <p class="text-ink-400 text-sm mb-3">点击「记一条」开始录音，或将音频 / 视频文件拖拽到此页面</p>
-        <div class="inline-flex items-center gap-2 text-xs text-ink-300 bg-ink-100 border border-ink-200/60 rounded-lg px-3 py-2 mb-8">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-            拖拽文件到页面任意位置即可上传
-        </div>
-        <br>
-        <button onclick="RecordCtrl.open()" class="inline-flex items-center gap-2 bg-ink-900 hover:bg-ink-800 text-ink-50 px-6 py-3 rounded-xl text-sm font-semibold transition-all shadow-md">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
-            开始录音
-        </button>
+        <p class="text-ink-400 text-sm mb-3">点击底部麦克风开始录音，或将音频/视频文件拖拽到此页面</p>
     </div>
 </main>
+
+<!-- ─── 首页底部一键录音悬浮按钮 (FAB) ─── -->
+<div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center pointer-events-none drop-shadow-2xl">
+    <div id="quickRecTime" class="hidden mb-3 bg-ink-900/90 text-white font-mono text-sm px-5 py-1.5 rounded-full backdrop-blur-md pointer-events-auto shadow-lg border border-white/10 anim-fade-in">00:00</div>
+    <button id="quickRecBtn" onclick="RecordCtrl.toggleRecord()" class="w-16 h-16 rounded-full bg-ink-900 text-white flex items-center justify-center pointer-events-auto transition-all duration-300 active:scale-90 border-[3px] border-white shadow-xl hover:bg-ink-800 relative group">
+        <svg id="quickMicIcon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        <div id="quickRecDot" class="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 border-2 border-white rounded-full hidden"></div>
+    </button>
+</div>
 
 <!-- ─── Detail Modal (transcript only) ─── -->
 <div id="detailModal" class="fixed inset-0 z-50 hidden">
@@ -119,47 +121,42 @@
     </div>
 </div>
 
-<!-- ─── Record Modal ─── -->
+<!-- ─── Upload Modal (简化为专用于上传) ─── -->
 <div id="recordModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-ink-900/60 backdrop-blur-sm anim-fade-in" onclick="RecordCtrl.close()"></div>
     <div class="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center sm:p-4 pointer-events-none">
         <div class="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl p-6 text-center shadow-2xl pointer-events-auto anim-slide-up relative overflow-hidden">
             <div class="absolute top-0 right-0 w-40 h-40 bg-tea-500/[0.04] rounded-full -translate-y-1/2 translate-x-1/2"></div>
             <div class="w-12 h-1.5 bg-ink-200 rounded-full mx-auto mb-6 sm:hidden"></div>
-            <h3 class="font-display font-bold text-ink-800 text-xl mb-1">记录声音</h3>
-            <p class="text-ink-400 text-xs mb-6">录音或上传音频 / 视频文件</p>
-
-            <button id="micBtn" onclick="RecordCtrl.toggleRecord()" class="w-28 h-28 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4 active:scale-95 transition-all duration-200 border-[3px] border-white shadow-sm ring-1 ring-ink-200/60 hover:ring-red-200 relative">
-                <svg id="micIcon" class="w-11 h-11" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-                <div id="micRecDot" class="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full hidden"></div>
-            </button>
-            <p id="recordStatus" class="text-sm text-ink-400 font-mono mb-6 tracking-wide h-5">点击麦克风开始录音</p>
-
-            <div class="flex items-center gap-3 mb-5">
-                <div class="flex-1 h-px bg-ink-200/80"></div>
-                <span class="text-xs text-ink-300 font-medium">或上传文件（支持拖拽）</span>
-                <div class="flex-1 h-px bg-ink-200/80"></div>
-            </div>
+            <h3 class="font-display font-bold text-ink-800 text-xl mb-1">上传文件</h3>
+            <p class="text-ink-400 text-xs mb-8">支持自动提取视频中的音频转录文字</p>
 
             <div class="flex gap-3">
-                <label class="flex-1 py-3 bg-ink-50 hover:bg-ink-100 active:bg-ink-200/60 text-ink-600 font-semibold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 border border-ink-200/60 hover:border-ink-300">
-                    <svg class="w-4 h-4 text-ink-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-                    音频文件
-                    <input type="file" accept="audio/*" class="hidden" onchange="RecordCtrl.handleUpload(this.files[0],0,false)">
+                <label class="flex-1 py-4 bg-ink-50 hover:bg-ink-100 active:bg-ink-200/60 text-ink-600 font-semibold text-sm rounded-xl transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 border border-ink-200/60 hover:border-ink-300">
+                    <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <svg class="w-5 h-5 text-ink-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                    </div>
+                    上传音频
+                    <input type="file" accept="audio/*" class="absolute w-0 h-0 opacity-0" onchange="if(this.files.length) RecordCtrl.handleUpload(this.files[0],0,false); this.value=''">
                 </label>
-                <label class="flex-1 py-3 bg-ink-50 hover:bg-ink-100 active:bg-ink-200/60 text-ink-600 font-semibold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 border border-ink-200/60 hover:border-ink-300">
-                    <svg class="w-4 h-4 text-ink-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
-                    视频文件
-                    <input type="file" accept="video/*" class="hidden" onchange="RecordCtrl.handleUpload(this.files[0],0,false)">
+                <label class="flex-1 py-4 bg-ink-50 hover:bg-ink-100 active:bg-ink-200/60 text-ink-600 font-semibold text-sm rounded-xl transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 border border-ink-200/60 hover:border-ink-300">
+                    <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <svg class="w-5 h-5 text-ink-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
+                    </div>
+                    上传视频
+                    <input type="file" accept="video/*" class="absolute w-0 h-0 opacity-0" onchange="if(this.files.length) RecordCtrl.handleUpload(this.files[0],0,false); this.value=''">
                 </label>
             </div>
-            <button onclick="RecordCtrl.close()" class="w-full mt-4 py-2.5 text-ink-400 hover:text-ink-600 text-xs font-medium transition-colors">取消</button>
-
-            <div id="uploadOverlay" class="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center gap-4 hidden anim-fade-in rounded-t-3xl sm:rounded-3xl">
-                <div class="w-10 h-10 border-[3px] border-ink-200 border-t-tea-500 rounded-full animate-spin"></div>
-                <p id="uploadStatusText" class="text-sm font-medium text-ink-600">正在上传...</p>
-            </div>
+            <button onclick="RecordCtrl.close()" class="w-full mt-6 py-2 text-ink-400 hover:text-ink-600 text-sm font-medium transition-colors">取消</button>
         </div>
+    </div>
+</div>
+
+<!-- ─── Global Upload Overlay ─── -->
+<div id="uploadOverlay" class="fixed inset-0 z-[100] bg-ink-900/40 backdrop-blur-sm flex flex-col items-center justify-center gap-4 hidden anim-fade-in">
+    <div class="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4">
+        <div class="w-10 h-10 border-[3px] border-ink-200 border-t-tea-500 rounded-full animate-spin"></div>
+        <p id="uploadStatusText" class="text-sm font-medium text-ink-600">正在处理并上传...</p>
     </div>
 </div>
 
@@ -170,12 +167,12 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
         </svg>
         <h3 class="font-display text-xl font-bold text-ink-800 mb-1">释放以上传</h3>
-        <p class="text-ink-400 text-sm">支持 MP3 · WAV · M4A · MP4 · MOV</p>
+        <p class="text-ink-400 text-sm">支持音频及视频文件</p>
     </div>
 </div>
 
 <!-- ─── Toast ─── -->
-<div id="toastContainer" class="fixed bottom-6 right-4 sm:right-6 z-[60] flex flex-col gap-2 items-end pointer-events-none"></div>
+<div id="toastContainer" class="fixed bottom-24 right-4 sm:right-6 z-[60] flex flex-col gap-2 items-end pointer-events-none"></div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -213,6 +210,7 @@ const handleSearch = val => {
         if (state.filtered.length === 0) {
             $('emptyState').classList.remove('hidden');
             $('emptyState').querySelector('h3').textContent = kw ? '没有找到匹配的录音' : '尚无录音记录';
+            $('emptyState').querySelector('p').textContent = kw ? '请尝试更换关键词' : '点击底部麦克风开始录音，或将音频/视频文件拖拽到此页面';
         } else {
             $('emptyState').classList.add('hidden');
             renderChunk();
@@ -225,11 +223,11 @@ function buildCardHTML(item) {
     const isProcessing = item.status !== 'completed' && !item.status.includes('failed');
     const isFailed = item.status.includes('failed');
     const isVideo = (item.mime_type||'').startsWith('video/');
-    const hasAudio = item.audio_url && item.status === 'completed';
+    const hasAudio = item.audio_url && item.status !== 'uploaded';
 
     const badge = isProcessing
         ? `<span class="text-[11px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-md font-mono font-medium flex items-center gap-1 shrink-0"><span class="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>处理中</span>`
-        : isFailed ? `<span class="text-[11px] bg-red-50 text-red-600 px-2 py-0.5 rounded-md font-mono font-medium shrink-0">失败</span>` : '';
+        : isFailed ? `<span class="text-[11px] bg-red-50 text-red-600 px-2 py-0.5 rounded-md font-mono font-medium shrink-0">中断</span>` : '';
 
     const icon = isVideo
         ? `<div class="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center shrink-0"><svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"/></svg></div>`
@@ -256,11 +254,11 @@ function buildCardHTML(item) {
         </div>` : isProcessing ? `
         <div class="flex items-center gap-2 mt-3 pt-3 border-t border-ink-100/60" onclick="event.stopPropagation()">
             <div class="w-4 h-4 border-2 border-ink-200 border-t-tea-500 rounded-full animate-spin"></div>
-            <span class="text-xs text-ink-400 font-mono">处理中...</span>
+            <span class="text-xs text-ink-400 font-mono">转录排队中...</span>
         </div>` : '';
 
     const actions = `<div class="flex justify-end gap-2 mt-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200" onclick="event.stopPropagation()">
-        ${isFailed?`<button class="flex items-center gap-1.5 text-xs text-tea-600 bg-tea-50 hover:bg-tea-100 px-3 py-1.5 rounded-lg font-semibold transition-colors" onclick="retryRecord('${item.id}')"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"/></svg>重试</button>`:''}
+        ${isFailed?`<button class="flex items-center gap-1.5 text-xs text-tea-600 bg-tea-50 hover:bg-tea-100 px-3 py-1.5 rounded-lg font-semibold transition-colors" onclick="retryRecord('${item.id}')"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"/></svg>云端重试</button>`:''}
         <button class="flex items-center gap-1.5 text-xs text-ink-400 hover:text-red-500 bg-ink-50 hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition-colors" onclick="deleteRecord('${item.id}')"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>删除</button>
     </div>`;
 
@@ -344,7 +342,7 @@ const deleteRecord = async id => {
 const retryRecord = async id => {
     try {
         await fetch(`${API_PREFIX}/retry`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
-        showToast('已提交重试','success'); loadData();
+        showToast('已提交云端重试','success'); loadData();
     } catch(e) { showToast('重试失败','error'); }
 };
 
@@ -427,23 +425,17 @@ const InlinePlayer = {
 };
 InlinePlayer.init();
 
-/* ── Record Controller ────────────────────── */
+/* ── Record Controller (支持首页FAB录音) ────────────────────── */
 const RecordCtrl = {
     mediaRecorder: null, audioChunks: [], startTime: 0, timer: null, isRecording: false,
 
     open() {
         $('recordModal').classList.remove('hidden');
-        $('uploadOverlay').classList.add('hidden');
-        $('recordStatus').innerText = '点击麦克风开始录音';
-        $('micBtn').className = 'w-28 h-28 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4 active:scale-95 transition-all duration-200 border-[3px] border-white shadow-sm ring-1 ring-ink-200/60 hover:ring-red-200 relative';
-        $('micRecDot').classList.add('hidden');
         document.querySelectorAll('#recordModal input[type=file]').forEach(i => i.value = '');
     },
 
     close() {
         $('recordModal').classList.add('hidden');
-        if (this.isRecording) this.stopRecord();
-        clearInterval(this.timer);
     },
 
     async toggleRecord() {
@@ -463,38 +455,58 @@ const RecordCtrl = {
                     let ext = '.webm';
                     if (mime.includes('mp4')||mime.includes('m4a')) ext='.m4a'; else if (mime.includes('ogg')) ext='.ogg'; else if (mime.includes('aac')) ext='.aac'; else if (mime.includes('wav')) ext='.wav';
                     const dur = Math.round((Date.now() - this.startTime) / 1000);
-                    if (blob.size === 0 || dur < 1) { showToast('录音时间过短','error'); $('recordStatus').innerText='点击麦克风开始录音'; return; }
+                    if (blob.size === 0 || dur < 1) { 
+                        showToast('录音时间过短','error'); 
+                        this._resetFAB();
+                        return; 
+                    }
                     this.handleUpload(new File([blob], `Rec_${Date.now()}${ext}`, { type: mime }), dur, true);
                 };
                 this.mediaRecorder.start(1000);
                 this.isRecording = true;
                 this.startTime = Date.now();
-                $('micBtn').className = 'w-28 h-28 rounded-full bg-red-500 text-white flex items-center justify-center mx-auto mb-4 active:scale-95 transition-all duration-200 border-[3px] border-white shadow-md ring-1 ring-red-300 recording-pulse relative';
-                $('micRecDot').classList.remove('hidden');
-                $('micRecDot').classList.add('animate-pulse');
+                
+                // 触发首页 FAB 录音动效
+                $('quickRecBtn').className = 'w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center pointer-events-auto transition-all duration-300 active:scale-90 border-[3px] border-white shadow-xl recording-pulse relative';
+                $('quickRecDot').classList.remove('hidden');
+                $('quickRecDot').classList.add('animate-pulse');
+                $('quickRecTime').classList.remove('hidden');
+                
                 this.timer = setInterval(() => {
                     const s = Math.floor((Date.now() - this.startTime) / 1000);
-                    $('recordStatus').innerText = `正在录音 ${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+                    $('quickRecTime').innerText = `🔴 ${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
                 }, 500);
-            } catch(e) { showToast('无法访问麦克风，请检查权限','error'); }
-        } else { this.stopRecord(); }
+            } catch(e) { showToast('无法访问麦克风，请检查系统权限设置','error'); }
+        } else { 
+            this.stopRecord(); 
+        }
     },
 
     stopRecord() {
-        this.mediaRecorder.stop();
-        this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        if(this.mediaRecorder && this.isRecording) {
+            this.mediaRecorder.stop();
+            this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
         this.isRecording = false;
         clearInterval(this.timer);
-        $('recordStatus').innerText = '处理中...';
-        $('micBtn').className = 'w-28 h-28 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4 active:scale-95 transition-all duration-200 border-[3px] border-white shadow-sm ring-1 ring-ink-200/60 relative';
-        $('micRecDot').classList.add('hidden');
+        this._resetFAB();
+    },
+    
+    _resetFAB() {
+        $('quickRecBtn').className = 'w-16 h-16 rounded-full bg-ink-900 text-white flex items-center justify-center pointer-events-auto transition-all duration-300 active:scale-90 border-[3px] border-white shadow-xl hover:bg-ink-800 relative group';
+        $('quickRecDot').classList.add('hidden');
+        $('quickRecTime').classList.add('hidden');
+        $('quickRecTime').innerText = '00:00';
     },
 
     async handleUpload(file, explicitDuration, isRecorded = false) {
         if (!file) return;
         const isVideo = file.type.startsWith('video/');
+        $('recordModal').classList.add('hidden');
+        
+        // 使用全局透明遮罩防止多次点击
         $('uploadOverlay').classList.remove('hidden');
-        $('uploadStatusText').innerText = isVideo ? '正在上传视频并提取音频...' : '正在上传...';
+        $('uploadStatusText').innerText = isVideo ? '正在提取视频音轨...' : '正在封包并上传...';
 
         let duration = explicitDuration || 0;
         if (!duration) {
@@ -519,7 +531,6 @@ const RecordCtrl = {
             const data = await res.json();
             if (data.id) fetch(`${API_PREFIX}/start`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:[data.id]}) });
 
-            /* Optimistic insert */
             const rec = {
                 id: data.id || ('tmp_'+Date.now()),
                 title_with_tags: file.name.replace(/\.[^.]+$/, ''),
@@ -537,8 +548,8 @@ const RecordCtrl = {
             const tl = $('timeline');
             tl.firstChild ? tl.insertBefore(card, tl.firstChild) : tl.appendChild(card);
 
-            $('recordModal').classList.add('hidden');
-            showToast(isVideo ? '视频上传成功，正在提取音频...' : '上传成功，正在转录...', 'success');
+            $('uploadOverlay').classList.add('hidden');
+            showToast(isVideo ? '视频提取成功，正发往云端...' : '录音上传成功，准备转录...', 'success');
             if (!state.poll) state.poll = setInterval(loadData, 4000);
         } catch(e) {
             $('uploadOverlay').classList.add('hidden');
@@ -546,8 +557,8 @@ const RecordCtrl = {
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(file); a.download = file.name;
                 document.body.appendChild(a); a.click(); a.remove();
-                showToast('上传失败，录音已保存到下载目录','error');
-            } else { showToast('上传失败，请检查网络','error'); }
+                showToast('上传失败，已保存至本地下载目录','error');
+            } else { showToast('上传失败，请检查网络连接','error'); }
         }
     }
 };

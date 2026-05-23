@@ -6,6 +6,7 @@
     <title>动态知识库</title>
     <script src="/static/cdn/vue3.5.31.js"></script>
     <script src="/static/cdn/tailwindcss3.4.17.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="/static/cdn/github-markdown.min.css">
     <link rel="stylesheet" href="/static/cdn/nprogress.min.css">
     <script src="/static/cdn/nprogress.min.js"></script>
@@ -20,12 +21,13 @@
         .drop-zone-active { background-color: #eff6ff !important; border-color: #93c5fd !important; }
         .editor-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
         
-        /* 文件夹操作图标显隐控制 */
         .folder-action { opacity: 0; transition: opacity 0.2s; }
         .folder-row:hover .folder-action { opacity: 1; }
         @media (max-width: 768px) {
             .folder-action { opacity: 1; } 
         }
+        
+        #md-graph-container { width: 100%; height: 100%; min-height: 600px; background: white;}
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-screen flex overflow-hidden font-sans" id="app">
@@ -58,8 +60,9 @@
         <div class="p-4 border-b border-slate-200 flex flex-col gap-3">
             <div class="flex items-center justify-between">
                 <div class="flex bg-slate-100 p-1 rounded-lg w-full">
-                    <button @click="switchMode('view')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">📖 阅读</button>
-                    <button @click="switchMode('edit')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">✍️ 编辑</button>
+                    <button @click="switchMode('view')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">📖</button>
+                    <button @click="switchMode('edit')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">✍️</button>
+                    <button @click="switchMode('graph')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'graph' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">🕸️</button>
                 </div>
                 <button @click="isSidebarOpen = false" class="ml-2 p-1.5 text-slate-400 md:hidden hover:bg-slate-100 rounded-md">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -212,18 +215,35 @@
 
     <div class="flex-1 flex flex-col bg-slate-50 relative w-full overflow-hidden">
         
-        <div v-if="!activeDoc && currentMode === 'view'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
-            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-            </button>
+        <template v-if="currentMode === 'graph'">
+            <div class="flex items-center p-3 bg-white border-b border-slate-200 z-10 shadow-sm shrink-0 justify-between">
+                <div class="flex items-center">
+                    <button @click="isSidebarOpen = !isSidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition md:hidden shrink-0">☰</button>
+                    <div class="font-semibold text-lg text-slate-700">🕸️ 知识标签网络视图</div>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="exportCSV" class="px-3 py-1.5 text-xs font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition">
+                        ⬇️ 导出未标记
+                    </button>
+                    <button @click="triggerFileInput" class="px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-600 text-emerald-600 hover:bg-emerald-50 transition">
+                        ⬆️ 导入 CSV
+                    </button>
+                    <input type="file" id="csv-file" style="display:none" accept=".csv" @change="importCSV">
+                </div>
+            </div>
+            <div class="flex-1 relative bg-white p-2">
+                <div id="md-graph-container"></div>
+            </div>
+        </template>
+        
+        <div v-else-if="!activeDoc && currentMode === 'view'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
+            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
             <div class="text-5xl mb-4 opacity-20">📄</div>
             <div class="text-sm md:text-base">选择左侧文档开始阅读</div>
         </div>
 
         <div v-else-if="!activeDoc && !isCreating && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
-            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-            </button>
+            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
             <div class="text-5xl mb-4 opacity-20">✍️</div>
             <div class="text-sm md:text-base">选择左侧文档或新建开始编辑</div>
         </div>
@@ -240,15 +260,8 @@
 
         <template v-if="currentMode === 'edit' && (activeDoc || isCreating)">
             <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0 justify-between">
-                
                 <div class="flex items-center gap-2 flex-1 min-w-[150px]">
-                    <button @click="isSidebarOpen = true" class="p-1.5 md:hidden text-slate-600 hover:bg-slate-100 rounded-md transition" title="打开目录">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                    </button>
-                     <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4" title="删除当前文档">
-                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" class="hidden md:inline"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        删除文档
-                    </button>
+                    <button @click="isSidebarOpen = true" class="p-1.5 md:hidden text-slate-600 hover:bg-slate-100 rounded-md transition" title="打开目录"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
                     <div class="flex-1 flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
                         <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
                         <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音 (支持下划线目录)">
@@ -256,10 +269,7 @@
                 </div>
                 
                 <div class="w-full md:w-auto flex justify-between md:justify-end gap-2 items-center mt-1 md:mt-0">
-                    <!-- <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4" title="删除当前文档">
-                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" class="hidden md:inline"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        删除文档
-                    </button> -->
+                    <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4">删除</button>
                     <div class="flex gap-2">
                         <button @click="saveDoc" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
                                 :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
@@ -276,7 +286,7 @@
             <div class="flex-1 flex overflow-hidden bg-white">
                 <textarea v-show="!isPreview" v-model="editContent" ref="editorRef"
                           class="flex-1 p-4 md:p-8 border-none outline-none resize-none editor-font text-[15px] leading-relaxed bg-slate-50 text-slate-700 focus:ring-0" 
-                          placeholder="# 在这里输入 Markdown 标题...&#10;&#10;输入正文内容..."></textarea>
+                          placeholder="---&#10;tags: 默认标签&#10;---&#10;# 在这里输入 Markdown 标题..."></textarea>
                 
                 <div v-show="isPreview" class="flex-1 p-4 md:p-8 overflow-y-auto bg-white transition-opacity">
                     <div class="max-w-[880px] mx-auto markdown-body" v-html="editPreviewHtml"></div>
@@ -290,28 +300,24 @@
 
         createApp({
             setup() {
-                // =============== 全局状态 ===============
                 const currentMode = ref('view'); 
                 const isSidebarOpen = ref(window.innerWidth >= 768);
                 const rawDocs = ref([]);
                 const activeDoc = ref(null);
-                const isCreating = ref(false); // 控制新建状态标记
+                const isCreating = ref(false); 
                 const maxLevel = 2;
                 const abortController = ref(null);
 
-                // =============== 搜索与目录状态 ===============
                 const dragOverTarget = ref(null);
                 const searchQuery = ref('');
                 const isSearching = ref(false);
                 const searchResults = ref(null);
                 let searchTimeout = null;
+                let chartInstance = null;
 
                 const folderState = ref(JSON.parse(localStorage.getItem('docFolderState') || '{}'));
-                watch(folderState, (newVal) => {
-                    localStorage.setItem('docFolderState', JSON.stringify(newVal));
-                }, { deep: true });
+                watch(folderState, (newVal) => { localStorage.setItem('docFolderState', JSON.stringify(newVal)); }, { deep: true });
 
-                // =============== 编辑器状态 ===============
                 const isPreview = ref(false);
                 const saveSuccess = ref(false);
                 const docTitle = ref('');
@@ -323,15 +329,19 @@
                 const selectedDocs = ref([]);
                 const showMoveModal = ref(false);
 
-                // =============== 阅读器状态 ===============
                 const viewHtml = ref('');
                 const viewScrollContainer = ref(null);
                 const sidebarScroll = ref(null);
 
-                // =============== 模式切换 ===============
                 const switchMode = async (mode) => {
                     currentMode.value = mode;
                     selectedDocs.value = [];
+                    
+                    if (mode === 'graph') {
+                        nextTick(() => renderGraph());
+                        return;
+                    }
+                    
                     if (activeDoc.value) {
                         await loadDoc(activeDoc.value);
                     } else if (mode === 'edit') {
@@ -341,14 +351,11 @@
                     }
                 };
 
-                // =============== 数据计算 ===============
                 const allFolderPaths = computed(() => {
                     let paths = [];
                     for (let f1 in tree.value.folders) {
                         paths.push(tree.value.folders[f1].path);
-                        for (let f2 in tree.value.folders[f1].folders) {
-                            paths.push(tree.value.folders[f1].folders[f2].path);
-                        }
+                        for (let f2 in tree.value.folders[f1].folders) paths.push(tree.value.folders[f1].folders[f2].path);
                     }
                     return paths;
                 });
@@ -367,9 +374,7 @@
                         folders.forEach(f => {
                             currentPath = currentPath ? `${currentPath}_${f}` : f;
                             if (!currentLevel.folders[f]) {
-                                if (folderState.value[currentPath] === undefined) {
-                                    folderState.value[currentPath] = false; 
-                                }
+                                if (folderState.value[currentPath] === undefined) folderState.value[currentPath] = false; 
                                 currentLevel.folders[f] = { name: f, path: currentPath, items: [], folders: {} };
                             }
                             currentLevel = currentLevel.folders[f];
@@ -384,37 +389,120 @@
                     return doc ? doc.title : docId;
                 };
 
-                // =============== API 与加载逻辑 ===============
                 const loadList = async () => {
                     try {
                         const res = await fetch('/api/docs/list');
                         const data = await res.json();
+                        rawDocs.value = data.docs;
                         
-                        let docObjects = data.docs.map(id => {
-                            let parts = id.split('_');
-                            let depth = Math.min(parts.length - 1, maxLevel);
-                            return { id: id, title: parts.slice(depth).join('_') };
-                        });
+                        if(currentMode.value === 'graph' && chartInstance) {
+                            renderGraph();
+                        }
+                    } catch (e) { console.error('列表获取失败', e); }
+                };
 
-                        docObjects.sort((a, b) => a.id.localeCompare(b.id, 'zh-CN', { numeric: true }));
-                        rawDocs.value = docObjects;
-
-                        rawDocs.value.forEach(async (docObj) => {
-                            try {
-                                const rawRes = await fetch(`/api/docs/raw/${encodeURIComponent(docObj.id)}`);
-                                if (rawRes.ok) {
-                                    const match = (await rawRes.json()).content.match(/^(?:#+\s*)?([^\n]+)/);
-                                    if (match && match[1] && match[1].trim().length < 40) {
-                                        docObj.title = match[1].trim();
-                                    }
-                                }
-                            } catch (e) {}
-                        });
-
-                        selectedDocs.value = selectedDocs.value.filter(id => rawDocs.value.some(d => d.id === id));
-                    } catch (e) {
-                        console.error('列表获取失败', e);
+                // =============== 核心修复点：通过 JS 触发文件选择框 ===============
+                const triggerFileInput = () => {
+                    const fileInput = document.getElementById('csv-file');
+                    if (fileInput) {
+                        fileInput.click();
                     }
+                };
+
+                // =============== 图表与 CSV 逻辑 ===============
+                const renderGraph = () => {
+                    const container = document.getElementById('md-graph-container');
+                    if (!container) return;
+                    if (!chartInstance) chartInstance = echarts.init(container);
+
+                    const nodes = [];
+                    const links = [];
+                    const categoriesSet = new Set();
+                    const tagMap = new Map(); 
+                    const tagCounts = {}; 
+
+                    rawDocs.value.forEach(page => {
+                        let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
+                        if(pTags.length === 0) pTags = ['未分类'];
+                        pTags.forEach(tag => tagCounts[tag] = (tagCounts[tag] || 0) + 1);
+                    });
+
+                    rawDocs.value.forEach(page => {
+                        let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
+                        if(pTags.length === 0) pTags = ['未分类'];
+                        
+                        pTags.forEach(tag => {
+                            categoriesSet.add(tag);
+                            if (!tagMap.has(tag)) {
+                                const count = tagCounts[tag];
+                                const nodeSize = Math.min(100, 40 + count * 5); 
+                                nodes.push({
+                                    id: 'TAG_' + tag,
+                                    name: tag, 
+                                    value: count,
+                                    symbolSize: nodeSize,
+                                    category: tag,
+                                    itemStyle: { borderWidth: 3, borderColor: '#fff', shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' },
+                                    label: { show: true, formatter: '{b}\n({c})', fontSize: 14, fontWeight: 'bold' }
+                                });
+                                tagMap.set(tag, true);
+                            }
+                            links.push({ source: page.id, target: 'TAG_' + tag });
+                        });
+
+                        nodes.push({
+                            id: page.id,
+                            name: page.title,
+                            symbolSize: 18,
+                            category: pTags[0], 
+                            label: { show: true, position: 'right', formatter: '{b}' }
+                        });
+                    });
+
+                    const categories = Array.from(categoriesSet).map(name => ({ name }));
+                    const option = {
+                        tooltip: { 
+                            formatter: function(p) {
+                                if(p.data.id && p.data.id.startsWith('TAG_')) return `🏷️ <b>${p.data.name}</b><br/>共聚集了 ${p.data.value} 个项目`;
+                                return `📄 ${p.data.name}`;
+                            } 
+                        },
+                        legend: { data: categories.map(c => c.name), type: 'scroll', bottom: 10 },
+                        series: [{
+                            type: 'graph', layout: 'force',
+                            force: { repulsion: 300, edgeLength: [40, 90] },
+                            data: nodes, links: links, categories: categories,
+                            roam: true, label: { position: 'right' },
+                            lineStyle: { color: 'source', curveness: 0.1 }
+                        }]
+                    };
+
+                    chartInstance.setOption(option);
+                    chartInstance.off('click');
+                    chartInstance.on('click', function (params) {
+                        if (params.data && !params.data.id.startsWith('TAG_')) {
+                            switchMode('view');
+                            loadDoc(params.data.id);
+                        }
+                    });
+                };
+
+                const exportCSV = () => { window.location.href = `/api/docs/export_untagged`; };
+
+                const importCSV = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    fetch(`/api/docs/import_tags`, { method: 'POST', body: formData })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert(`✅ 成功更新了 ${data.updated} 个文档标签`);
+                            loadList();
+                        } else alert(data.error);
+                    }).catch(err => alert("上传处理失败"));
+                    event.target.value = '';
                 };
 
                 const loadDoc = async (docId) => {
@@ -424,7 +512,6 @@
                     oldDocTitle.value = docId;
 
                     if (window.innerWidth < 768) isSidebarOpen.value = false;
-
                     if (abortController.value) abortController.value.abort();
                     abortController.value = new AbortController();
                     const signal = abortController.value.signal;
@@ -439,162 +526,29 @@
                             if (isPreview.value) await refreshPreview();
                         } else {
                             viewHtml.value = '<div class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>';
-                            
                             const resFast = await fetch(`/api/docs/content/${encodeURIComponent(docId)}`, { signal });
                             const dataFast = await resFast.json();
                             if (dataFast.error) throw new Error(dataFast.error);
                             viewHtml.value = dataFast.html;
                             
                             if (viewScrollContainer.value) viewScrollContainer.value.scrollTop = 0;
-                            nextTick(() => highlightAndScroll());
                             NProgress.set(0.6);
-
                             const resFresh = await fetch(`/api/docs/refresh/${encodeURIComponent(docId)}`, { signal });
                             const dataFresh = await resFresh.json();
-                            if (!dataFresh.error && dataFresh.html !== dataFast.html) {
-                                viewHtml.value = dataFresh.html;
-                                nextTick(() => highlightAndScroll());
-                            }
+                            if (!dataFresh.error && dataFresh.html !== dataFast.html) viewHtml.value = dataFresh.html;
                         }
                     } catch (e) {
-                        if (e.name !== 'AbortError') {
-                            if (currentMode.value === 'view') {
-                                viewHtml.value = `<div class="text-red-500 p-5 text-center">⚠️ 加载失败: ${e.message}</div>`;
-                            } else {
-                                alert(e.message);
-                            }
-                        }
-                    } finally {
-                        NProgress.done();
-                    }
+                        if (e.name !== 'AbortError') alert(e.message);
+                    } finally { NProgress.done(); }
                 };
 
-                // =============== 搜索与高亮 ===============
-                const debouncedSearch = () => {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = setTimeout(async () => {
-                        if (!searchQuery.value.trim()) {
-                            searchResults.value = null;
-                            return;
-                        }
-                        isSearching.value = true;
-                        try {
-                            const res = await fetch(`/api/docs/search?q=${encodeURIComponent(searchQuery.value)}`);
-                            searchResults.value = (await res.json()).results || [];
-                        } catch(e) {
-                            searchResults.value = [];
-                        } finally {
-                            isSearching.value = false;
-                        }
-                    }, 300);
-                };
-
-                const highlightAndScroll = () => {
-                    const query = searchQuery.value.trim();
-                    if (!query || !viewScrollContainer.value) return;
-                    const container = viewScrollContainer.value.querySelector('.markdown-body');
-                    if (!container) return;
-
-                    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
-                    const nodes = [];
-                    while(walker.nextNode()) nodes.push(walker.currentNode);
-
-                    const regex = new RegExp(`(${query})`, 'gi');
-                    let firstMatch = null;
-
-                    nodes.forEach(node => {
-                        if (regex.test(node.nodeValue)) {
-                            const span = document.createElement('span');
-                            span.innerHTML = node.nodeValue.replace(regex, '<mark class="bg-yellow-200 text-black rounded px-0.5 select-none">$1</mark>');
-                            node.parentNode.replaceChild(span, node);
-                            if (!firstMatch) firstMatch = span.querySelector('mark');
-                        }
-                    });
-
-                    if (firstMatch) setTimeout(() => firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
-                };
-
-                // =============== 目录与交互控制 ===============
-                const expandAll = () => {
-                    for (let key in folderState.value) folderState.value[key] = true;
-                };
-
-                const collapseAll = () => {
-                    for (let key in folderState.value) folderState.value[key] = false;
-                };
-
-                const toggleFolder = (path) => {
-                    folderState.value[path] = !folderState.value[path];
-                };
-
-                const toggleSelect = (docId) => {
-                    if (currentMode.value !== 'edit') return;
-                    const idx = selectedDocs.value.indexOf(docId);
-                    if (idx > -1) selectedDocs.value.splice(idx, 1);
-                    else selectedDocs.value.push(docId);
-                };
-
-                const handleDocClick = (e, docId) => {
-                    if (currentMode.value === 'edit' && (e.ctrlKey || e.metaKey)) {
-                        toggleSelect(docId);
-                    } else {
-                        if (!selectedDocs.value.includes(docId) || selectedDocs.value.length > 1) {
-                            selectedDocs.value = [];
-                        }
-                        loadDoc(docId);
-                    }
-                };
-
-                const renameFolder = async (folderPath) => {
-                    const newName = prompt(`重命名文件夹 "${folderPath}"\n请输入新名称 (请勿包含下划线):`);
-                    if (!newName || newName.includes('_')) return;
-
-                    const pathParts = folderPath.split('_');
-                    pathParts[pathParts.length - 1] = newName;
-                    const newPath = pathParts.join('_');
-
-                    if (folderPath === newPath) return;
-
-                    NProgress.start();
-                    const filesToRename = rawDocs.value.filter(doc => doc.id.startsWith(folderPath + '_'));
-
-                    try {
-                        for (const docObj of filesToRename) {
-                            const oldId = docObj.id;
-                            const pureName = oldId.substring(folderPath.length + 1);
-                            const newId = `${newPath}_${pureName}`;
-                            
-                            await fetch('/api/docs/rename', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ oldName: oldId, newName: newId })
-                            });
-
-                            if (activeDoc.value === oldId) {
-                                activeDoc.value = newId;
-                                oldDocTitle.value = newId;
-                                docTitle.value = newId;
-                            }
-                        }
-                        if (folderState.value[folderPath] !== undefined) {
-                            folderState.value[newPath] = folderState.value[folderPath];
-                        }
-                        await loadList();
-                    } catch(e) {
-                        alert("部分文件重命名失败，请检查网络");
-                    } finally {
-                        NProgress.done();
-                    }
-                };
-
-                // =============== 编辑器专有逻辑 ===============
                 const createNew = () => {
                     if (currentMode.value !== 'edit') switchMode('edit');
                     activeDoc.value = null;
                     isCreating.value = true;
                     docTitle.value = '';
                     oldDocTitle.value = '';
-                    editContent.value = '';
+                    editContent.value = '---\ntags: 新建标签\n---\n# 新文档\n\n正文内容';
                     if (window.innerWidth < 768) isSidebarOpen.value = false;
                     if (isPreview.value) togglePreview();
                     setTimeout(() => editorRef.value?.focus(), 50);
@@ -604,16 +558,7 @@
                     let name = docTitle.value.trim();
                     const old_name = oldDocTitle.value.trim();
                     const docContent = editContent.value;
-
-                    if (!name) {
-                        const match = docContent.match(/^(?:#+\s*)?([^\n]+)/);
-                        if (match && match[1]) {
-                            name = match[1].trim().replace(/[\\/:*?"<>|]/g, '').substring(0, 50);
-                            docTitle.value = name;
-                        }
-                    }
-
-                    if (!name) return alert('无法自动提取到有效文件名，请手动输入');
+                    if (!name) return alert('请手动输入文件名');
 
                     NProgress.start();
                     try {
@@ -622,12 +567,10 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ name, old_name, content: docContent })
                         });
-
                         if (res.ok) {
                             oldDocTitle.value = name;
                             activeDoc.value = name;
                             await loadList();
-                            
                             saveSuccess.value = true;
                             setTimeout(() => saveSuccess.value = false, 1500);
                             if (isPreview.value) await refreshPreview();
@@ -635,31 +578,21 @@
                             const err = await res.json();
                             alert('保存失败: ' + err.error);
                         }
-                    } catch (e) {
-                        alert('网络错误，保存失败');
-                    } finally {
-                        NProgress.done();
-                    }
+                    } catch (e) { alert('网络错误，保存失败');
+                    } finally { NProgress.done(); }
                 };
 
                 const deleteDoc = async (docId) => {
                     if (!docId) return;
-                    if (!confirm(`确定要删除文档 "${docId}" 吗？此操作不可恢复。`)) return;
-
+                    if (!confirm(`确定要删除文档 "${docId}" 吗？`)) return;
                     NProgress.start();
                     try {
                         const res = await fetch(`/api/docs/delete/${encodeURIComponent(docId)}`, { method: 'DELETE' });
                         if (res.ok) {
                             if (oldDocTitle.value === docId) activeDoc.value = null;
                             await loadList();
-                        } else {
-                            alert('删除失败');
-                        }
-                    } catch (e) {
-                        alert('网络错误');
-                    } finally {
-                        NProgress.done();
-                    }
+                        } else alert('删除失败');
+                    } catch (e) { alert('网络错误'); } finally { NProgress.done(); }
                 };
 
                 const togglePreview = async () => {
@@ -679,10 +612,39 @@
                             }
                         } catch (e) {}
                     }
-                    editPreviewHtml.value = '<div class="text-slate-400 pt-5">* 文档尚未保存至服务器，当前无法预览效果。<br>请先点击“保存修改”。</div>';
+                    editPreviewHtml.value = '<div class="text-slate-400 pt-5">* 需先点击“保存修改”。</div>';
                 };
 
-                // =============== 拖拽控制 ===============
+                const debouncedSearch = () => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(async () => {
+                        if (!searchQuery.value.trim()) { searchResults.value = null; return; }
+                        isSearching.value = true;
+                        try {
+                            const res = await fetch(`/api/docs/search?q=${encodeURIComponent(searchQuery.value)}`);
+                            searchResults.value = (await res.json()).results || [];
+                        } catch(e) { searchResults.value = []; } finally { isSearching.value = false; }
+                    }, 300);
+                };
+
+                const expandAll = () => { for (let key in folderState.value) folderState.value[key] = true; };
+                const collapseAll = () => { for (let key in folderState.value) folderState.value[key] = false; };
+                const toggleFolder = (path) => { folderState.value[path] = !folderState.value[path]; };
+                const toggleSelect = (docId) => {
+                    if (currentMode.value !== 'edit') return;
+                    const idx = selectedDocs.value.indexOf(docId);
+                    if (idx > -1) selectedDocs.value.splice(idx, 1);
+                    else selectedDocs.value.push(docId);
+                };
+
+                const handleDocClick = (e, docId) => {
+                    if (currentMode.value === 'edit' && (e.ctrlKey || e.metaKey)) toggleSelect(docId);
+                    else {
+                        if (!selectedDocs.value.includes(docId) || selectedDocs.value.length > 1) selectedDocs.value = [];
+                        loadDoc(docId);
+                    }
+                };
+
                 const autoScroll = (e) => {
                     if (!sidebarScroll.value) return;
                     const threshold = 60; 
@@ -750,8 +712,8 @@
                             selectedDocs.value = [];
                             await loadList();
                         }
-                    } catch (e) {
-                        alert(`⚠️ 文件移动失败: ${e.message}`);
+                    } catch (err) {
+                        alert(`⚠️ 文件移动失败: ${err.message}`);
                     } finally {
                         NProgress.done();
                     }
@@ -787,46 +749,68 @@
                         }
                         selectedDocs.value = [];
                         await loadList();
-                    } catch (e) {
+                    } catch (err) {
                         alert("部分文件移动失败");
                     } finally {
                         NProgress.done();
                     }
                 };
 
-                // =============== 快捷键 ===============
-                const handleKeydown = (e) => {
-                    const isModifierPressed = e.ctrlKey || e.metaKey;
-                    if (isModifierPressed && currentMode.value === 'edit' && activeDoc.value) {
-                        if (e.key.toLowerCase() === 's') {
-                            e.preventDefault();
-                            saveDoc();
+                const renameFolder = async (folderPath) => {
+                    const newName = prompt(`重命名文件夹 "${folderPath}"\n请输入新名称 (请勿包含下划线):`);
+                    if (!newName || newName.includes('_')) return;
+
+                    const pathParts = folderPath.split('_');
+                    pathParts[pathParts.length - 1] = newName;
+                    const newPath = pathParts.join('_');
+
+                    if (folderPath === newPath) return;
+
+                    NProgress.start();
+                    const filesToRename = rawDocs.value.filter(doc => doc.id.startsWith(folderPath + '_'));
+
+                    try {
+                        for (const docObj of filesToRename) {
+                            const oldId = docObj.id;
+                            const pureName = oldId.substring(folderPath.length + 1);
+                            const newId = `${newPath}_${pureName}`;
+                            
+                            await fetch('/api/docs/rename', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ oldName: oldId, newName: newId })
+                            });
+
+                            if (activeDoc.value === oldId) {
+                                activeDoc.value = newId;
+                                oldDocTitle.value = newId;
+                                docTitle.value = newId;
+                            }
                         }
-                        if (e.key.toLowerCase() === 'p') {
-                            e.preventDefault();
-                            togglePreview();
+                        if (folderState.value[folderPath] !== undefined) {
+                            folderState.value[newPath] = folderState.value[folderPath];
                         }
+                        await loadList();
+                    } catch(err) {
+                        alert("部分文件重命名失败，请检查网络");
+                    } finally {
+                        NProgress.done();
                     }
                 };
 
-                onMounted(() => {
-                    loadList();
-                    window.addEventListener('keydown', handleKeydown);
-                });
+                window.addEventListener('resize', () => { if (chartInstance && currentMode.value === 'graph') chartInstance.resize(); });
+                onMounted(() => { loadList(); });
 
-                onUnmounted(() => {
-                    window.removeEventListener('keydown', handleKeydown);
-                });
-
+                // 在这里必须暴露 triggerFileInput 函数供模板使用
                 return {
                     currentMode, switchMode, isSidebarOpen, 
                     tree, folderState, activeDoc, isCreating, dragOverTarget, isPreview, saveSuccess,
                     docTitle, editContent, editPreviewHtml, editorRef, sidebarScroll, viewScrollContainer,
-                    selectedDocs, showMoveModal, allFolderPaths, executeBulkMove,
-                    toggleFolder, renameFolder, createNew, loadDoc, saveDoc, deleteDoc, togglePreview,
-                    autoScroll, dragStart, handleDrop, handleDocClick, toggleSelect,
-                    expandAll, collapseAll, viewHtml, getTitle,
-                    searchQuery, isSearching, searchResults, debouncedSearch
+                    selectedDocs, showMoveModal, allFolderPaths,
+                    toggleFolder, createNew, loadDoc, saveDoc, deleteDoc, togglePreview, renameFolder,
+                    handleDocClick, toggleSelect, expandAll, collapseAll, viewHtml, getTitle,
+                    searchQuery, isSearching, searchResults, debouncedSearch, 
+                    exportCSV, importCSV, triggerFileInput, executeBulkMove, autoScroll, dragStart, handleDrop
                 };
             }
         }).mount('#app');

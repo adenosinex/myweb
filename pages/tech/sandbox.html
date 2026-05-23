@@ -3,13 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <title>我的自定义沙盒</title>
+    <!-- 引入 ECharts 用于渲染网状图 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1000px; margin: 40px auto; background: #f4f5f7; color: #333; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 40px auto; background: #f4f5f7; color: #333; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .btn { padding: 10px 20px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .header-actions { display: flex; gap: 10px; }
+        .btn { padding: 8px 16px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 14px;}
         .btn:hover { background: #0043a6; }
         .btn-success { background: #28a745; }
         .btn-success:hover { background: #218838; }
+        .btn-outline { background: transparent; border: 1px solid #0052cc; color: #0052cc; }
+        .btn-outline:hover { background: #e6f0ff; }
         .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; }
         .back-link:hover { text-decoration: underline; }
         
@@ -17,34 +22,47 @@
         .view-container.active { display: block; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
         .card-wrapper { position: relative; }
-        .card { background: white; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s; border: 1px solid #eaeaea; display: block; }
+        .card { background: white; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s; border: 1px solid #eaeaea; display: block; height: 100%; box-sizing: border-box; }
         .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
         .card .icon { font-size: 36px; margin-bottom: 12px; }
-        .card .title { font-size: 15px; font-weight: bold; }
+        .card .title { font-size: 15px; font-weight: bold; margin-bottom: 8px;}
+        .card .tags { font-size: 12px; color: #888; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; display: inline-block; margin: 2px; }
         
-        /* 编辑按钮样式 */
         .card-edit-btn { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; display: none; border: none; }
         .card-wrapper:hover .card-edit-btn { display: block; }
         .card-edit-btn:hover { background: #28a745; color: white; }
 
         .form-panel { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px;}
         input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        textarea { width: 100%; height: 500px; padding: 15px; font-family: 'Consolas', monospace; background: #1e1e1e; color: #d4d4d4; border: none; border-radius: 5px; box-sizing: border-box; resize: vertical; }
+        textarea { width: 100%; height: 400px; padding: 15px; font-family: 'Consolas', monospace; background: #1e1e1e; color: #d4d4d4; border: none; border-radius: 5px; box-sizing: border-box; resize: vertical; }
+
+        #graph-container { width: 100%; height: 650px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: none; }
     </style>
 </head>
 <body>
 
-    <!-- 视图 1：列表 -->
+    <!-- 视图 1：列表 / 关系图 -->
     <div id="view-list" class="view-container active">
         <div class="header">
             <h2>🛠️ 个人工具箱 & HTML沙盒</h2>
-            <button class="btn" onclick="switchView('upload')">+ 新建项目</button>
+            <div class="header-actions">
+                <button class="btn btn-outline" onclick="exportCSV()">⬇️ 导出未标记(CSV)</button>
+                <button class="btn btn-outline" onclick="document.getElementById('csv-file').click()">⬆️ 导入标记(CSV)</button>
+                <input type="file" id="csv-file" style="display:none" accept=".csv" onchange="importCSV(event)">
+                <button class="btn btn-success" id="toggle-view-btn" onclick="toggleViewMode()">🕸️ 切换网状图</button>
+                <button class="btn" onclick="switchView('upload')">+ 新建项目</button>
+            </div>
         </div>
+        
+        <!-- 列表展现 -->
         <div class="grid" id="pages-grid"></div>
+        
+        <!-- ECharts 展现 -->
+        <div id="graph-container"></div>
     </div>
 
     <!-- 视图 2：新建 -->
@@ -59,6 +77,10 @@
                 <div class="form-group">
                     <label>图标 (Emoji或URL)</label>
                     <input type="text" id="upload-icon">
+                </div>
+                <div class="form-group">
+                    <label>标签 (逗号分隔，便于图谱归类)</label>
+                    <input type="text" id="upload-tags" placeholder="例如: 工具, 游戏, 数据可视化">
                 </div>
                 <div class="form-group">
                     <label>完整 HTML 代码</label>
@@ -85,6 +107,10 @@
                     <input type="text" id="edit-icon">
                 </div>
                 <div class="form-group">
+                    <label>标签 (逗号分隔)</label>
+                    <input type="text" id="edit-tags">
+                </div>
+                <div class="form-group">
                     <label>完整 HTML 代码</label>
                     <textarea id="edit-html" required></textarea>
                 </div>
@@ -95,37 +121,216 @@
     </div>
 
     <script>
-         const API_BASE = '/sandbox';
+        const API_BASE = '/sandbox';
+        let currentPagesData = [];
+        let isGraphMode = false;
+        let chartInstance = null;
 
         function switchView(viewName, param = null) {
             document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
             document.getElementById(`view-${viewName}`).classList.add('active');
 
-            if (viewName === 'list') loadPages();
-            else if (viewName === 'upload') document.getElementById('upload-form').reset();
-            else if (viewName === 'edit' && param) loadEditData(param);
+            if (viewName === 'list') {
+                loadPages();
+            } else if (viewName === 'upload') {
+                document.getElementById('upload-form').reset();
+            } else if (viewName === 'edit' && param) {
+                loadEditData(param);
+            }
         }
 
+        // 数据请求
         function loadPages() {
             fetch(`${API_BASE}/api/pages`)
                 .then(res => res.json())
                 .then(data => {
-                    const grid = document.getElementById('pages-grid');
-                    grid.innerHTML = ''; 
-                    data.forEach(page => {
-                        grid.innerHTML += `
-                            <div class="card-wrapper">
-                                <a href="${API_BASE}/view/${page.id}" target="_blank" class="card">
-                                    <div class="icon">${page.icon || '📄'}</div>
-                                    <div class="title">${page.title}</div>
-                                </a>
-                                <button class="card-edit-btn" onclick="switchView('edit', '${page.id}')">编辑</button>
-                            </div>
-                        `;
-                    });
+                    currentPagesData = data;
+                    if (isGraphMode) {
+                        renderGraph();
+                    } else {
+                        renderGrid();
+                    }
                 }).catch(err => console.error("加载列表失败", err));
         }
 
+        // 渲染宫格列表
+        function renderGrid() {
+            const grid = document.getElementById('pages-grid');
+            grid.innerHTML = ''; 
+            currentPagesData.forEach(page => {
+                let tagsHtml = '';
+                if(page.tags) {
+                    tagsHtml = page.tags.split(/[,，]/).map(t => `<span class="tags">${t.trim()}</span>`).join('');
+                }
+                grid.innerHTML += `
+                    <div class="card-wrapper">
+                        <a href="${API_BASE}/view/${page.id}" target="_blank" class="card">
+                            <div class="icon">${page.icon || '📄'}</div>
+                            <div class="title">${page.title}</div>
+                            <div>${tagsHtml}</div>
+                        </a>
+                        <button class="card-edit-btn" onclick="switchView('edit', '${page.id}')">编辑</button>
+                    </div>
+                `;
+            });
+        }
+
+        // 视图切换逻辑
+        function toggleViewMode() {
+            isGraphMode = !isGraphMode;
+            const btn = document.getElementById('toggle-view-btn');
+            const grid = document.getElementById('pages-grid');
+            const graph = document.getElementById('graph-container');
+
+            if (isGraphMode) {
+                btn.innerHTML = '🔲 切换列表视图';
+                grid.style.display = 'none';
+                graph.style.display = 'block';
+                renderGraph();
+            } else {
+                btn.innerHTML = '🕸️ 切换网状图';
+                graph.style.display = 'none';
+                grid.style.display = 'grid';
+                renderGrid();
+            }
+        }
+
+        // ECharts 网状力导向图渲染
+// ECharts 网状力导向图渲染 (带统计数据与动态大小缩放)
+        function renderGraph() {
+            const container = document.getElementById('graph-container');
+            if (!chartInstance) chartInstance = echarts.init(container);
+
+            const nodes = [];
+            const links = [];
+            const categoriesSet = new Set();
+            const tagMap = new Map(); 
+            const tagCounts = {}; // 新增：用于统计每个标签下的文件数量
+
+            // 第一次遍历：统计每个 tag 的数量
+            currentPagesData.forEach(page => {
+                let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
+                if(pTags.length === 0) pTags = ['未分类'];
+                pTags.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                });
+            });
+
+            // 第二次遍历：构建节点和连线
+            currentPagesData.forEach(page => {
+                let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
+                if(pTags.length === 0) pTags = ['未分类'];
+                
+                pTags.forEach(tag => {
+                    categoriesSet.add(tag);
+                    if (!tagMap.has(tag)) {
+                        // 创建标签主节点，动态计算大小并添加数量数据
+                        const count = tagCounts[tag];
+                        // 基础大小为 40，每个文件增加 5 的大小，最大体积封顶限制在 100 避免图谱失衡
+                        const nodeSize = Math.min(100, 40 + count * 5); 
+                        
+                        nodes.push({
+                            id: 'TAG_' + tag,
+                            name: tag, 
+                            value: count, // 设为 value 以供 formatter 读取
+                            symbolSize: nodeSize,
+                            category: tag,
+                            itemStyle: { borderWidth: 3, borderColor: '#fff', shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' },
+                            // 使用 formatter 显示 标签名 和 (数量)
+                            label: { show: true, formatter: '{b}\n({c})', fontSize: 15, fontWeight: 'bold' }
+                        });
+                        tagMap.set(tag, true);
+                    }
+
+                    // 建立连接
+                    links.push({
+                        source: page.id,
+                        target: 'TAG_' + tag
+                    });
+                });
+
+                // 创建文件子节点
+                nodes.push({
+                    id: page.id,
+                    name: page.title,
+                    symbolSize: 18,
+                    category: pTags[0], // 文件颜色以其第一个标签为准
+                    url: `${API_BASE}/view/${page.id}`,
+                    // 文件节点仅显示名称，屏蔽 value 值
+                    label: { show: true, position: 'right', formatter: '{b}' }
+                });
+            });
+
+            const categories = Array.from(categoriesSet).map(name => ({ name }));
+
+            const option = {
+                tooltip: { 
+                    formatter: function(params) {
+                        // 如果是标签主节点，提示框显示统计信息
+                        if(params.data.id && params.data.id.startsWith('TAG_')) {
+                            return `🏷️ <b>${params.data.name}</b><br/>共聚集了 ${params.data.value} 个项目`;
+                        }
+                        return `📄 ${params.data.name}`;
+                    } 
+                },
+                legend: { data: categories.map(c => c.name), type: 'scroll', bottom: 10 },
+                animationDurationUpdate: 1500,
+                animationEasingUpdate: 'quinticInOut',
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    force: { repulsion: 400, edgeLength: [50, 100] },
+                    data: nodes,
+                    links: links,
+                    categories: categories,
+                    roam: true,
+                    label: { position: 'right' },
+                    lineStyle: { color: 'source', curveness: 0.1 }
+                }]
+            };
+
+            chartInstance.setOption(option);
+            
+            // 点击节点跳转
+            chartInstance.off('click');
+            chartInstance.on('click', function (params) {
+                if (params.data && params.data.url) {
+                    window.open(params.data.url, '_blank');
+                }
+            });
+        }
+        // CSV 离线处理相关
+        function exportCSV() {
+            window.location.href = `${API_BASE}/api/export_untagged`;
+            showToast('开始下载 CSV 文件');
+        }
+
+        function importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch(`${API_BASE}/api/import_tags`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(`✅ 成功更新了 ${data.updated} 个项目`);
+                    loadPages();
+                } else {
+                    alert(data.error);
+                }
+            }).catch(err => alert("上传处理失败"));
+            
+            // 重置 input 以便连续上传同一文件
+            event.target.value = '';
+        }
+
+        // 编辑数据回填
         function loadEditData(pageId) {
             fetch(`${API_BASE}/api/pages/${pageId}`)
                 .then(res => res.json())
@@ -134,11 +339,12 @@
                     document.getElementById('edit-id').value = data.id;
                     document.getElementById('edit-title').value = data.title || '';
                     document.getElementById('edit-icon').value = data.icon || '';
+                    document.getElementById('edit-tags').value = data.tags || '';
                     document.getElementById('edit-html').value = data.html_content || '';
                 }).catch(err => alert("读取失败"));
         }
 
-        // 新建提交
+        // 提交逻辑
         document.getElementById('upload-form').addEventListener('submit', function(e) {
             e.preventDefault();
             fetch(`${API_BASE}/api/pages`, {
@@ -147,6 +353,7 @@
                 body: JSON.stringify({
                     title: document.getElementById('upload-title').value,
                     icon: document.getElementById('upload-icon').value,
+                    tags: document.getElementById('upload-tags').value,
                     html_content: document.getElementById('upload-html').value
                 })
             }).then(res => res.json()).then(data => {
@@ -154,23 +361,7 @@
                 else alert(data.error);
             });
         });
-        function showToast(msg) {
-    const t = document.createElement('div');
-    t.textContent = msg;
-    Object.assign(t.style, {
-        position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)',
-        background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px',
-        fontWeight:'bold', fontSize:'15px', zIndex:9999,
-        boxShadow:'0 4px 12px rgba(0,0,0,0.15)',
-        animation:'fadeIn 0.3s ease'
-    });
-    document.body.appendChild(t);
-    setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800);
-    setTimeout(() => t.remove(), 2200);
-}
 
-
-        // 编辑更新提交
         document.getElementById('edit-form').addEventListener('submit', function(e) {
             e.preventDefault();
             const pageId = document.getElementById('edit-id').value;
@@ -180,15 +371,40 @@
                 body: JSON.stringify({
                     title: document.getElementById('edit-title').value,
                     icon: document.getElementById('edit-icon').value,
+                    tags: document.getElementById('edit-tags').value,
                     html_content: document.getElementById('edit-html').value
                 })
             }).then(res => res.json()).then(data => {
-                if (data.status === 'success')showToast('✅ 已保存');
-                else alert(data.error);
+                if (data.status === 'success') {
+                    showToast('✅ 已保存');
+                    switchView('list'); // 保存后返回列表
+                } else alert(data.error);
             });
+        });
+
+        function showToast(msg) {
+            const t = document.createElement('div');
+            t.textContent = msg;
+            Object.assign(t.style, {
+                position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)',
+                background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px',
+                fontWeight:'bold', fontSize:'15px', zIndex:9999,
+                boxShadow:'0 4px 12px rgba(0,0,0,0.15)',
+                animation:'fadeIn 0.3s ease'
+            });
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800);
+            setTimeout(() => t.remove(), 2200);
+        }
+
+        // 响应窗口大小变化，重绘图表
+        window.addEventListener('resize', () => {
+            if (chartInstance && isGraphMode) {
+                chartInstance.resize();
+            }
         });
 
         window.onload = () => switchView('list');
     </script>
-</body>
+</body> 
 </html>
