@@ -1,6 +1,7 @@
 
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
 <meta charset="UTF-8">
 <title>AI 聚合</title>
@@ -8,10 +9,10 @@
 <style>
 
 body{
-    font-family: Arial;
-    max-width: 1000px;
-    margin: auto;
-    padding: 20px;
+    max-width:1000px;
+    margin:auto;
+    padding:20px;
+    font-family:Arial;
 }
 
 textarea{
@@ -26,13 +27,13 @@ button{
 
 .card{
     border:1px solid #ccc;
-    margin-top:15px;
     border-radius:8px;
+    margin-top:15px;
 }
 
 .card-header{
     background:#f5f5f5;
-    padding:10px;
+    padding:12px;
     cursor:pointer;
     font-weight:bold;
 }
@@ -40,7 +41,7 @@ button{
 .card-content{
     display:none;
     padding:15px;
-    white-space: pre-wrap;
+    white-space:pre-wrap;
 }
 
 .success{
@@ -51,15 +52,15 @@ button{
     color:red;
 }
 
+.loading{
+    color:orange;
+}
+
 #final{
     margin-top:30px;
     border:2px solid #333;
     padding:20px;
-    white-space: pre-wrap;
-}
-
-.loading{
-    color:orange;
+    white-space:pre-wrap;
 }
 
 </style>
@@ -73,7 +74,9 @@ button{
 
 <br>
 
-<button onclick="startAsk()">开始</button>
+<button onclick="startAsk()">
+开始
+</button>
 
 <div id="results"></div>
 
@@ -81,28 +84,29 @@ button{
 
 <script>
 
-const MODELS = [
-    "GPT-4.1",
-    "Claude",
-    "DeepSeek"
-]
-
-function createCard(model){
+function createCard(title){
 
     const div = document.createElement("div")
+
     div.className = "card"
 
     div.innerHTML = `
-        <div class="card-header">${model}</div>
+        <div class="card-header">
+            ${title}
+        </div>
+
         <div class="card-content loading">
             请求中...
         </div>
     `
 
-    div.querySelector(".card-header")
-    .onclick = function(){
+    const header =
+        div.querySelector(".card-header")
 
-        const content = div.querySelector(".card-content")
+    const content =
+        div.querySelector(".card-content")
+
+    header.onclick = () => {
 
         content.style.display =
             content.style.display === "block"
@@ -110,22 +114,24 @@ function createCard(model){
             : "block"
     }
 
-    document.getElementById("results")
-    .appendChild(div)
+    document
+        .getElementById("results")
+        .appendChild(div)
 
-    return div
+    return content
 }
 
 
-async function fetchWithTimeout(
+async function fetchJson(
     url,
-    options,
-    timeout = 90000
+    body,
+    timeout = 120000
 ){
 
-    const controller = new AbortController()
+    const controller =
+        new AbortController()
 
-    const id = setTimeout(
+    const timer = setTimeout(
         () => controller.abort(),
         timeout
     )
@@ -133,17 +139,21 @@ async function fetchWithTimeout(
     try{
 
         const response = await fetch(url,{
-            ...options,
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body: JSON.stringify(body),
             signal: controller.signal
         })
 
-        clearTimeout(id)
+        clearTimeout(timer)
 
-        return response
+        return await response.json()
 
     }catch(err){
 
-        clearTimeout(id)
+        clearTimeout(timer)
 
         throw err
     }
@@ -156,43 +166,52 @@ async function startAsk(){
     document.getElementById("final").innerHTML = ""
 
     const question =
-        document.getElementById("question").value
+        document.getElementById("question")
+        .value
+        .trim()
 
-    const sessionId =
-        Date.now().toString()
+    if(!question){
+        return
+    }
 
-    let successAnswers = 0
+    try{
 
-    for(let i=0;i<MODELS.length;i++){
-
-        const card = createCard(MODELS[i])
-
-        const content =
-            card.querySelector(".card-content")
-
-        try{
-
-            const r = await fetchWithTimeout(
-                "/ai/ask",
-                {
-                    method:"POST",
-                    headers:{
-                        "Content-Type":"application/json"
-                    },
-                    body: JSON.stringify({
-                        question: question,
-                        model_index: i,
-                        session_id: sessionId
-                    })
-                },
-                90000
+        const startData =
+            await fetchJson(
+                "/ai/start",
+                {question}
             )
 
-            const data = await r.json()
+        if(!startData.success){
+
+            alert(startData.error)
+
+            return
+        }
+
+        const sessionId =
+            startData.session_id
+
+        while(true){
+
+            const data =
+                await fetchJson(
+                    "/ai/next",
+                    {
+                        session_id: sessionId
+                    }
+                )
+
+            if(data.finished){
+                break
+            }
+
+            const content =
+                createCard(data.model)
+
+            content.style.display = "block"
 
             if(data.success){
-
-                successAnswers++
 
                 content.className =
                     "card-content success"
@@ -206,68 +225,41 @@ async function startAsk(){
                     "card-content error"
 
                 content.innerText =
-                    "失败:\n" + data.error
+                    data.error
             }
-
-        }catch(err){
-
-            content.className =
-                "card-content error"
-
-            content.innerText =
-                "超时或异常:\n" + err
         }
 
-        content.style.display = "block"
-    }
-
-    if(successAnswers === 0){
-
         document.getElementById("final")
-        .innerText = "全部失败"
+        .innerHTML =
+            "<div class='loading'>仲裁中...</div>"
 
-        return
-    }
-
-    document.getElementById("final")
-    .innerHTML = "<div class='loading'>仲裁中...</div>"
-
-    try{
-
-        const r = await fetchWithTimeout(
-            "/ai/arbiter",
-            {
-                method:"POST",
-                headers:{
-                    "Content-Type":"application/json"
-                },
-                body: JSON.stringify({
-                    question: question,
+        const finalData =
+            await fetchJson(
+                "/ai/final",
+                {
                     session_id: sessionId
-                })
-            },
-            120000
-        )
+                },
+                180000
+            )
 
-        const data = await r.json()
-
-        if(data.success){
+        if(finalData.success){
 
             document.getElementById("final")
-            .innerText = data.answer
+            .innerText =
+                finalData.answer
 
         }else{
 
             document.getElementById("final")
             .innerText =
-                "仲裁失败:\n" + data.error
+                finalData.error
         }
 
     }catch(err){
 
         document.getElementById("final")
         .innerText =
-            "仲裁超时:\n" + err
+            "请求失败:\n" + err
     }
 }
 
@@ -275,3 +267,4 @@ async function startAsk(){
 
 </body>
 </html>
+
