@@ -12,12 +12,7 @@
     <script src="/static/cdn/nprogress.min.js"></script>
 
     <style>
-        body { 
-            height: 100dvh; 
-            width: 100vw; 
-            margin: 0; 
-            overscroll-behavior-y: none;
-        }
+        body { height: 100dvh; width: 100vw; margin: 0; overscroll-behavior-y: none; }
         #nprogress .bar { background: #2563eb !important; height: 3px !important; }
         #nprogress .peg { box-shadow: 0 0 10px #2563eb, 0 0 5px #2563eb !important; }
         #nprogress .spinner { display: none !important; }
@@ -29,7 +24,6 @@
         .folder-action { opacity: 0; transition: opacity 0.2s; }
         .folder-row:hover .folder-action { opacity: 1; }
         @media (max-width: 768px) { .folder-action { opacity: 1; } }
-        #md-graph-container { width: 100%; height: 100%; min-height: 600px; background: white;}
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 flex overflow-hidden font-sans" id="app">
@@ -205,8 +199,8 @@
 
     <div class="flex-1 flex flex-col bg-slate-50 relative w-full overflow-hidden">
         
-        <template v-if="currentMode === 'graph'">
-            <div class="flex items-center p-3 bg-white border-b border-slate-200 z-10 shadow-sm shrink-0 justify-between">
+        <div v-show="currentMode === 'graph'" class="absolute inset-0 flex flex-col w-full h-full z-20 bg-slate-50">
+            <div class="flex items-center p-3 bg-white border-b border-slate-200 shadow-sm shrink-0 justify-between">
                 <div class="flex items-center">
                     <button @click="isSidebarOpen = !isSidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition md:hidden shrink-0">☰</button>
                     <div class="font-semibold text-lg text-slate-700">🕸️ 知识标签网络视图</div>
@@ -221,78 +215,77 @@
                     </button>
                 </div>
             </div>
-            <div class="flex-1 relative bg-white p-2 h-full">
-                <div id="md-graph-container"></div>
+            <div class="flex-1 relative bg-white p-2">
+                <div id="md-graph-container" class="w-full h-full min-h-[600px]"></div>
             </div>
-        </template>
+        </div>
         
-        <div v-else-if="!activeDoc && currentMode === 'view'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
-            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
-            <div class="text-5xl mb-4 opacity-20">📄</div>
-            <div class="text-sm md:text-base">选择左侧文档开始阅读</div>
+        <div v-show="currentMode !== 'graph'" class="absolute inset-0 flex flex-col w-full h-full z-10 bg-slate-50">
+            
+            <div v-if="!activeDoc && currentMode === 'view'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
+                <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+                <div class="text-5xl mb-4 opacity-20">📄</div>
+                <div class="text-sm md:text-base">选择左侧文档开始阅读</div>
+            </div>
+
+            <div v-else-if="!activeDoc && !isCreating && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
+                <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+                <div class="text-5xl mb-4 opacity-20">✍️</div>
+                <div class="text-sm md:text-base">选择左侧文档或新建开始编辑</div>
+            </div>
+
+            <template v-if="currentMode === 'view' && activeDoc">
+                <div class="flex items-center p-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
+                    <div class="flex items-center md:hidden mr-2 gap-2 shrink-0">
+                        <button @click="isSidebarOpen = true" class="w-9 h-9 rounded-lg flex items-center justify-center bg-white text-slate-700 text-xl border border-slate-200 hover:bg-slate-50 transition" title="打开侧边栏">☰</button>
+                        <button v-show="previousMode === 'graph'" @click="switchMode('graph')" class="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 text-xl border border-blue-100 hover:bg-blue-100 transition" title="返回网状图">🕸️</button>
+                    </div>
+                    <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap text-slate-700 flex-1">{{ getTitle(activeDoc) }}</div>
+                </div>
+                <div class="flex-1 overflow-y-auto scroll-smooth relative p-4 md:p-8" ref="viewScrollContainer">
+                    <div v-if="viewHtml" class="max-w-[880px] mx-auto bg-white px-6 md:px-10 py-8 md:py-12 rounded-2xl shadow-sm min-h-[calc(100vh-120px)] markdown-body" v-html="viewHtml"></div>
+                    <div v-else class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>
+                </div>
+            </template>
+
+            <template v-if="currentMode === 'edit' && (activeDoc || isCreating)">
+                <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0 justify-between">
+                    <div class="flex items-center gap-2 flex-1 min-w-[150px]">
+                        <div class="flex items-center md:hidden shrink-0 gap-1">
+                            <button @click="isSidebarOpen = true" class="p-1.5 text-slate-600 border border-slate-200 bg-white hover:bg-slate-100 rounded-md transition" title="打开目录">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                            </button>
+                            <button v-show="previousMode === 'graph'" @click="switchMode('graph')" class="p-1.5 text-blue-600 border border-blue-100 bg-blue-50 hover:bg-blue-100 rounded-md transition" title="返回网状图">🕸️</button>
+                        </div>
+                        <div class="flex-1 flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
+                            <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
+                            <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音">
+                        </div>
+                    </div>
+                    <div class="w-full md:w-auto flex justify-between md:justify-end gap-2 items-center mt-1 md:mt-0">
+                        <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4">删除</button>
+                        <div class="flex gap-2">
+                            <button @click="saveDoc" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
+                                    :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
+                                {{ saveSuccess ? '✅ 已保存' : '保存' }}
+                            </button>
+                            <button @click="togglePreview" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition border"
+                                    :class="isPreview ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
+                                {{ isPreview ? '关闭预览' : '预览' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-1 flex overflow-hidden bg-white">
+                    <textarea v-show="!isPreview" v-model="editContent" ref="editorRef"
+                              class="flex-1 p-4 md:p-8 border-none outline-none resize-none editor-font text-[15px] leading-relaxed bg-slate-50 text-slate-700 focus:ring-0" 
+                              placeholder="---&#10;tags: 默认标签&#10;---&#10;# 在这里输入 Markdown 标题..."></textarea>
+                    <div v-show="isPreview" class="flex-1 p-4 md:p-8 overflow-y-auto bg-white transition-opacity">
+                        <div class="max-w-[880px] mx-auto markdown-body" v-html="editPreviewHtml"></div>
+                    </div>
+                </div>
+            </template>
         </div>
-
-        <div v-else-if="!activeDoc && !isCreating && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
-            <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
-            <div class="text-5xl mb-4 opacity-20">✍️</div>
-            <div class="text-sm md:text-base">选择左侧文档或新建开始编辑</div>
-        </div>
-
-        <template v-if="currentMode === 'view' && activeDoc">
-            <div class="flex items-center p-3 bg-white border-b border-slate-200 z-10 shadow-sm shrink-0">
-                <div class="flex items-center md:hidden mr-2 gap-2 shrink-0">
-                    <button @click="isSidebarOpen = true" class="w-9 h-9 rounded-lg flex items-center justify-center bg-white text-slate-700 text-xl border border-slate-200 hover:bg-slate-50 transition" title="打开侧边栏">☰</button>
-                    <button v-show="previousMode === 'graph'" @click="switchMode('graph')" class="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 text-xl border border-blue-100 hover:bg-blue-100 transition" title="返回网状图">🕸️</button>
-                </div>
-                <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap text-slate-700 flex-1">{{ getTitle(activeDoc) }}</div>
-            </div>
-            <div class="flex-1 overflow-y-auto scroll-smooth relative p-4 md:p-8" ref="viewScrollContainer">
-                <div v-if="viewHtml" class="max-w-[880px] mx-auto bg-white px-6 md:px-10 py-8 md:py-12 rounded-2xl shadow-sm min-h-[calc(100vh-120px)] markdown-body" v-html="viewHtml"></div>
-                <div v-else class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>
-            </div>
-        </template>
-
-        <template v-if="currentMode === 'edit' && (activeDoc || isCreating)">
-            <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0 justify-between">
-                <div class="flex items-center gap-2 flex-1 min-w-[150px]">
-                    <div class="flex items-center md:hidden shrink-0 gap-1">
-                        <button @click="isSidebarOpen = true" class="p-1.5 text-slate-600 border border-slate-200 bg-white hover:bg-slate-100 rounded-md transition" title="打开目录">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                        </button>
-                        <button v-show="previousMode === 'graph'" @click="switchMode('graph')" class="p-1.5 text-blue-600 border border-blue-100 bg-blue-50 hover:bg-blue-100 rounded-md transition" title="返回网状图">🕸️</button>
-                    </div>
-
-                    <div class="flex-1 flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
-                        <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
-                        <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音">
-                    </div>
-                </div>
-                
-                <div class="w-full md:w-auto flex justify-between md:justify-end gap-2 items-center mt-1 md:mt-0">
-                    <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4">删除</button>
-                    <div class="flex gap-2">
-                        <button @click="saveDoc" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
-                                :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
-                            {{ saveSuccess ? '✅ 已保存' : '保存' }}
-                        </button>
-                        <button @click="togglePreview" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition border"
-                                :class="isPreview ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
-                            {{ isPreview ? '关闭预览' : '预览' }}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex-1 flex overflow-hidden bg-white">
-                <textarea v-show="!isPreview" v-model="editContent" ref="editorRef"
-                          class="flex-1 p-4 md:p-8 border-none outline-none resize-none editor-font text-[15px] leading-relaxed bg-slate-50 text-slate-700 focus:ring-0" 
-                          placeholder="---&#10;tags: 默认标签&#10;---&#10;# 在这里输入 Markdown 标题..."></textarea>
-                
-                <div v-show="isPreview" class="flex-1 p-4 md:p-8 overflow-y-auto bg-white transition-opacity">
-                    <div class="max-w-[880px] mx-auto markdown-body" v-html="editPreviewHtml"></div>
-                </div>
-            </div>
-        </template>
     </div>
 
     <script src="/static/doc.js"></script>
