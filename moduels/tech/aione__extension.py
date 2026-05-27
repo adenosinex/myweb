@@ -1,6 +1,11 @@
 
+import os
 import uuid
+import time
+import threading
 import requests
+
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import (
     Blueprint,
@@ -9,13 +14,17 @@ from flask import (
     request
 )
 
-import os
-
 ai_bp = Blueprint(
     "ai_aggregate",
     __name__,
     url_prefix="/ai"
 )
+
+executor = ThreadPoolExecutor(max_workers=16)
+
+LOCK = threading.Lock()
+
+SESSION_CACHE = {}
 
 AI_MODELS = [
     {
@@ -25,21 +34,26 @@ AI_MODELS = [
         "api_key": os.getenv("SI_API_KEY"),
     },
     {
-        "name": "qwen3.5-flash-02-23 silicom",
+        "name": "qwen3.5-flash-02-23 op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "qwen/qwen3.5-flash-02-23",
         "api_key": os.getenv("OP_API_KEY"),
     },
     {
-        "name": "mimo2.5pro",
-        "base_url": "https://api.xiaomimimo.com/v1/chat/completions",
-        "model": "mimo-v2.5-pro",
-        "api_key": os.getenv("MI_API_KEY"),
+       "name": "mimo2.5pr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "xiaomi/mimo-v2.5-pro",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+       "name": "deepseek-v3.2 op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "deepseek/deepseek-v3.2",
+        "api_key": os.getenv("OP_API_KEY"),
     },
 ]
 
-AI_MODELS_fast = [
-     
+AI_MODELS_FAST = [
     {
         "name": "glm4.5 air op",
         "base_url": os.getenv("MODEL_OP_URL"),
@@ -53,10 +67,16 @@ AI_MODELS_fast = [
         "api_key": os.getenv("OP_API_KEY"),
     },
     {
-        "name": "mimo2.5",
-        "base_url": "https://api.xiaomimimo.com/v1/chat/completions",
-        "model": "mimo-v2.5",
-        "api_key": os.getenv("MI_API_KEY"),
+         "name": "mimo2.5",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "xiaomi/mimo-v2.5",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+         "name": "deepseek-v4-flash ds",
+        "base_url": os.getenv("MODEL_DS_URL"),
+        "model": "deepseek-v4-flash",
+        "api_key": os.getenv("DS_API_KEY"), 
     },
 ]
 
@@ -67,15 +87,23 @@ ARBITER_MODEL = {
     "api_key": os.getenv("DS_API_KEY"),
 }
 
-SESSION_CACHE = {}
-
 
 @ai_bp.route("/")
 def index():
     return render_template("ai_aggregate.html")
 
 
+def estimate_tokens(text):
+
+    if not text:
+        return 0
+
+    return max(1, int(len(text) / 4))
+
+
 def request_ai(model_config, question):
+
+    start_time = time.time()
 
     headers = {
         "Authorization": f"Bearer {model_config['api_key']}",
@@ -97,14 +125,87 @@ def request_ai(model_config, question):
         model_config["base_url"],
         headers=headers,
         json=payload,
-        timeout=90
+        timeout=180
+    )
+
+    elapsed = round(
+        time.time() - start_time,
+        2
     )
 
     r.raise_for_status()
 
     data = r.json()
 
-    return data["choices"][0]["message"]["content"]
+    answer = (
+        data
+        .get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+    )
+
+    usage = data.get("usage", {})
+
+    prompt_tokens = usage.get(
+        "prompt_tokens",
+        estimate_tokens(question)
+    )
+
+    completion_tokens = usage.get(
+        "completion_tokens",
+        estimate_tokens(answer)
+    )
+
+    total_tokens = usage.get(
+        "total_tokens",
+        prompt_tokens + completion_tokens
+    )
+
+    return {
+        "success": True,
+        "model": model_config["name"],
+        "answer": answer,
+        "time": elapsed,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens
+    }
+
+
+def run_model(
+    session_id,
+    model_config
+):
+
+    session = SESSION_CACHE.get(session_id)
+
+    if not session:
+        return
+
+    try:
+
+        result = request_ai(
+            model_config,
+            session["question"]
+        )
+
+    except Exception as e:
+
+        result = {
+            "success": False,
+            "model": model_config["name"],
+            "error": str(e),
+            "time": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
+
+    with LOCK:
+
+        session["answers"].append(result)
+
+        session["completed"] += 1
 
 
 @ai_bp.route("/start", methods=["POST"])
@@ -112,31 +213,56 @@ def start():
 
     data = request.json
 
-    question = data.get("question", "").strip()
+    question = (
+        data.get("question", "")
+        .strip()
+    )
+
+    fast_mode = data.get(
+        "fast_mode",
+        False
+    )
 
     if not question:
+
         return jsonify({
             "success": False,
             "error": "question empty"
         })
 
+    models = (
+        AI_MODELS_FAST
+        if fast_mode
+        else AI_MODELS
+    )
+
     session_id = str(uuid.uuid4())
 
     SESSION_CACHE[session_id] = {
         "question": question,
-        "index": 0,
-        "answers": []
+        "answers": [],
+        "completed": 0,
+        "returned": 0,
+        "total": len(models),
+        "created_at": time.time()
     }
+
+    for model in models:
+
+        executor.submit(
+            run_model,
+            session_id,
+            model
+        )
 
     return jsonify({
         "success": True,
-        "session_id": session_id,
-        "total": len(AI_MODELS)
+        "session_id": session_id
     })
 
 
-@ai_bp.route("/next", methods=["POST"])
-def next_answer():
+@ai_bp.route("/poll", methods=["POST"])
+def poll():
 
     data = request.json
 
@@ -145,52 +271,29 @@ def next_answer():
     session = SESSION_CACHE.get(session_id)
 
     if not session:
+
         return jsonify({
             "success": False,
             "error": "invalid session"
         })
 
-    index = session["index"]
+    returned = session["returned"]
 
-    if index >= len(AI_MODELS):
+    answers = session["answers"]
 
-        return jsonify({
-            "success": True,
-            "finished": True
-        })
+    new_answers = answers[returned:]
 
-    model_config = AI_MODELS[index]
+    session["returned"] = len(answers)
 
-    session["index"] += 1
-
-    try:
-
-        answer = request_ai(
-            model_config,
-            session["question"]
-        )
-
-        result = {
-            "success": True,
-            "model": model_config["name"],
-            "answer": answer
-        }
-
-        session["answers"].append(result)
-
-        return jsonify(result)
-
-    except Exception as e:
-
-        result = {
-            "success": False,
-            "model": model_config["name"],
-            "error": str(e)
-        }
-
-        session["answers"].append(result)
-
-        return jsonify(result)
+    return jsonify({
+        "success": True,
+        "answers": new_answers,
+        "completed": session["completed"],
+        "total": session["total"],
+        "finished":
+            session["completed"]
+            >= session["total"]
+    })
 
 
 @ai_bp.route("/final", methods=["POST"])
@@ -203,6 +306,7 @@ def final():
     session = SESSION_CACHE.get(session_id)
 
     if not session:
+
         return jsonify({
             "success": False,
             "error": "invalid session"
@@ -220,19 +324,31 @@ def final():
             "error": "all models failed"
         })
 
-    merged_text = ""
+    merged = ""
+
+    total_time = 0
+    total_tokens = 0
 
     for item in valid_answers:
 
-        merged_text += f"""
+        total_time += item["time"]
+        total_tokens += item["total_tokens"]
+
+        merged += f"""
 
 模型:
 {item['model']}
 
+耗时:
+{item['time']} 秒
+
+tokens:
+{item['total_tokens']}
+
 回答:
 {item['answer']}
 
-====================
+=====================
 
 """
 
@@ -243,29 +359,33 @@ def final():
 
 以下是多个 AI 的回答:
 
-{merged_text}
+{merged}
 
-请:
+请完成:
 
 1. 提炼共识
-2. 分析冲突
+2. 分析分歧
 3. 判断可信度
 4. 给出最终综合结论
 5. 保留合理少数派观点
 
-输出清晰结构化结果。
+输出结构化结果。
 """
 
     try:
 
-        final_answer = request_ai(
+        result = request_ai(
             ARBITER_MODEL,
             prompt
         )
 
         return jsonify({
             "success": True,
-            "answer": final_answer
+            "answer": result["answer"],
+            "time": result["time"],
+            "tokens": result["total_tokens"],
+            "source_total_tokens": total_tokens,
+            "source_total_time": round(total_time, 2)
         })
 
     except Exception as e:
@@ -274,4 +394,3 @@ def final():
             "success": False,
             "error": str(e)
         })
-

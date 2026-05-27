@@ -3,49 +3,64 @@
 <html lang="zh">
 
 <head>
+
 <meta charset="UTF-8">
+
 <title>AI 聚合</title>
 
 <style>
 
 body{
-    max-width:1000px;
+    max-width:1200px;
     margin:auto;
     padding:20px;
     font-family:Arial;
+    background:#fafafa;
 }
 
 textarea{
     width:100%;
-    height:120px;
+    height:140px;
+    padding:12px;
+    font-size:15px;
 }
 
 button{
     padding:10px 20px;
+    cursor:pointer;
+}
+
+.topbar{
+    display:flex;
+    gap:15px;
     margin-top:10px;
+    align-items:center;
 }
 
 .card{
-    border:1px solid #ccc;
-    border-radius:8px;
-    margin-top:15px;
+    background:white;
+    border:1px solid #ddd;
+    border-radius:10px;
+    margin-top:16px;
+    overflow:hidden;
 }
 
 .card-header{
-    background:#f5f5f5;
-    padding:12px;
+    background:#f3f3f3;
+    padding:14px;
     cursor:pointer;
     font-weight:bold;
 }
 
 .card-content{
     display:none;
-    padding:15px;
+    padding:16px;
     white-space:pre-wrap;
+    line-height:1.6;
 }
 
 .success{
-    color:green;
+    color:#222;
 }
 
 .error{
@@ -56,27 +71,57 @@ button{
     color:orange;
 }
 
+.meta{
+    margin-top:10px;
+    font-size:13px;
+    color:#666;
+}
+
 #final{
     margin-top:30px;
+    background:white;
     border:2px solid #333;
+    border-radius:10px;
     padding:20px;
     white-space:pre-wrap;
+    line-height:1.7;
+}
+
+.progress{
+    margin-top:20px;
+    font-size:14px;
 }
 
 </style>
+
 </head>
 
 <body>
 
-<h2>AI 聚合问答</h2>
+<h2>AI 聚合系统</h2>
 
-<textarea id="question"></textarea>
+<textarea
+    id="question"
+    placeholder="输入问题"
+></textarea>
 
-<br>
+<div class="topbar">
 
-<button onclick="startAsk()">
-开始
-</button>
+    <button onclick="startAsk()">
+        开始
+    </button>
+
+    <label>
+        <input
+            type="checkbox"
+            id="fastMode"
+        >
+        Fast Mode
+    </label>
+
+</div>
+
+<div class="progress" id="progress"></div>
 
 <div id="results"></div>
 
@@ -84,27 +129,55 @@ button{
 
 <script>
 
-function createCard(title){
+let pollingTimer = null
+
+function createCard(answer){
 
     const div = document.createElement("div")
 
     div.className = "card"
 
-    div.innerHTML = `
-        <div class="card-header">
-            ${title}
-        </div>
+    const header = document.createElement("div")
 
-        <div class="card-content loading">
-            请求中...
-        </div>
-    `
+    header.className = "card-header"
 
-    const header =
-        div.querySelector(".card-header")
+    header.innerText =
+        answer.model
 
-    const content =
-        div.querySelector(".card-content")
+    const content = document.createElement("div")
+
+    content.className =
+        "card-content"
+
+    if(answer.success){
+
+        content.classList.add(
+            "success"
+        )
+
+        content.innerText =
+            answer.answer
+
+    }else{
+
+        content.classList.add(
+            "error"
+        )
+
+        content.innerText =
+            answer.error
+    }
+
+    const meta =
+        document.createElement("div")
+
+    meta.className = "meta"
+
+    meta.innerText =
+        `耗时: ${answer.time}s ｜ ` +
+        `tokens: ${answer.total_tokens}`
+
+    content.appendChild(meta)
 
     header.onclick = () => {
 
@@ -114,18 +187,22 @@ function createCard(title){
             : "block"
     }
 
+    div.appendChild(header)
+
+    div.appendChild(content)
+
     document
         .getElementById("results")
         .appendChild(div)
 
-    return content
+    content.style.display = "block"
 }
 
 
-async function fetchJson(
+async function postJson(
     url,
     body,
-    timeout = 120000
+    timeout = 180000
 ){
 
     const controller =
@@ -138,14 +215,16 @@ async function fetchJson(
 
     try{
 
-        const response = await fetch(url,{
-            method:"POST",
-            headers:{
-                "Content-Type":"application/json"
-            },
-            body: JSON.stringify(body),
-            signal: controller.signal
-        })
+        const response =
+            await fetch(url,{
+                method:"POST",
+                headers:{
+                    "Content-Type":
+                        "application/json"
+                },
+                body: JSON.stringify(body),
+                signal: controller.signal
+            })
 
         clearTimeout(timer)
 
@@ -162,11 +241,19 @@ async function fetchJson(
 
 async function startAsk(){
 
-    document.getElementById("results").innerHTML = ""
-    document.getElementById("final").innerHTML = ""
+    clearInterval(pollingTimer)
+
+    document
+        .getElementById("results")
+        .innerHTML = ""
+
+    document
+        .getElementById("final")
+        .innerHTML = ""
 
     const question =
-        document.getElementById("question")
+        document
+        .getElementById("question")
         .value
         .trim()
 
@@ -174,12 +261,20 @@ async function startAsk(){
         return
     }
 
+    const fastMode =
+        document
+        .getElementById("fastMode")
+        .checked
+
     try{
 
         const startData =
-            await fetchJson(
+            await postJson(
                 "/ai/start",
-                {question}
+                {
+                    question,
+                    fast_mode: fastMode
+                }
             )
 
         if(!startData.success){
@@ -192,74 +287,119 @@ async function startAsk(){
         const sessionId =
             startData.session_id
 
-        while(true){
+        pollingTimer =
+            setInterval(async () => {
 
-            const data =
-                await fetchJson(
-                    "/ai/next",
-                    {
-                        session_id: sessionId
+                try{
+
+                    const pollData =
+                        await postJson(
+                            "/ai/poll",
+                            {
+                                session_id:
+                                    sessionId
+                            },
+                            30000
+                        )
+
+                    if(!pollData.success){
+                        return
                     }
-                )
 
-            if(data.finished){
-                break
-            }
+                    document
+                        .getElementById(
+                            "progress"
+                        )
+                        .innerText =
+                            `完成 ${pollData.completed} / ${pollData.total}`
 
-            const content =
-                createCard(data.model)
+                    for(
+                        const item
+                        of pollData.answers
+                    ){
 
-            content.style.display = "block"
+                        createCard(item)
+                    }
 
-            if(data.success){
+                    if(pollData.finished){
 
-                content.className =
-                    "card-content success"
+                        clearInterval(
+                            pollingTimer
+                        )
 
-                content.innerText =
-                    data.answer
+                        await loadFinal(
+                            sessionId
+                        )
+                    }
 
-            }else{
+                }catch(err){
 
-                content.className =
-                    "card-content error"
+                    console.error(err)
+                }
 
-                content.innerText =
-                    data.error
-            }
-        }
+            }, 1000)
 
+    }catch(err){
+
+        alert(err)
+    }
+}
+
+
+async function loadFinal(
+    sessionId
+){
+
+    const finalDiv =
         document.getElementById("final")
-        .innerHTML =
-            "<div class='loading'>仲裁中...</div>"
 
-        const finalData =
-            await fetchJson(
+    finalDiv.innerHTML =
+        "<div class='loading'>仲裁中...</div>"
+
+    try{
+
+        const data =
+            await postJson(
                 "/ai/final",
                 {
-                    session_id: sessionId
+                    session_id:
+                        sessionId
                 },
-                180000
+                300000
             )
 
-        if(finalData.success){
+        if(data.success){
 
-            document.getElementById("final")
-            .innerText =
-                finalData.answer
+            finalDiv.innerText =
+`最终总结:
+
+${data.answer}
+
+======================
+
+仲裁耗时:
+${data.time}s
+
+仲裁 tokens:
+${data.tokens}
+
+源模型总耗时:
+${data.source_total_time}s
+
+源模型总 tokens:
+${data.source_total_tokens}
+`
 
         }else{
 
-            document.getElementById("final")
-            .innerText =
-                finalData.error
+            finalDiv.innerText =
+                data.error
         }
 
     }catch(err){
 
-        document.getElementById("final")
-        .innerText =
-            "请求失败:\n" + err
+        finalDiv.innerText =
+            "最终仲裁失败:\n" + err
     }
 }
 
@@ -267,4 +407,3 @@ async function startAsk(){
 
 </body>
 </html>
-
