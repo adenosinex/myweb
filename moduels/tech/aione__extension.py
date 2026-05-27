@@ -28,7 +28,7 @@ SESSION_CACHE = {}
 
 AI_MODELS = [
     {
-        "name": "glm4.5 air silicom",
+        "name": "glm4.5 air si",
         "base_url": os.getenv("MODEL_SI_URL"),
         "model": "zai-org/GLM-4.5-Air",
         "api_key": os.getenv("SI_API_KEY"),
@@ -46,18 +46,48 @@ AI_MODELS = [
         "api_key": os.getenv("OP_API_KEY"),
     },
     {
-       "name": "deepseek-v3.2 op",
+       "name": "owl-alpha tempfr op",
         "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "deepseek/deepseek-v3.2",
+        "model": "openrouter/owl-alpha",
         "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+       "name": "gpt-4o-mini op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "openai/gpt-4o-mini",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+       "name": "step-3.5-flash op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "stepfun/step-3.5-flash",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+       "name": "deepseek-v3.2 si",
+        "base_url": os.getenv("MODEL_SI_URL"),
+        "model": "Pro/deepseek-ai/DeepSeek-V3.2",
+        "api_key": os.getenv("SI_API_KEY"),
+    },
+    {
+       "name": "MiniMax-M2.5 si",
+        "base_url": os.getenv("MODEL_SI_URL"),
+        "model": "Pro/MiniMaxAI/MiniMax-M2.5",
+        "api_key": os.getenv("SI_API_KEY"),
     },
 ]
 
 AI_MODELS_FAST = [
     {
-        "name": "glm4.5 air op",
+        "name": "glm4.5 airfr op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "z-ai/glm-4.5-air:free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+        "name": "minimax-m2.5fr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "minimax/minimax-m2.5:free",
         "api_key": os.getenv("OP_API_KEY"),
     },
     {
@@ -67,9 +97,33 @@ AI_MODELS_FAST = [
         "api_key": os.getenv("OP_API_KEY"),
     },
     {
-         "name": "mimo2.5",
+         "name": "mimo2.5 op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "xiaomi/mimo-v2.5",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+         "name": "gpt-oss-120b:fr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "openai/gpt-oss-120b:free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+         "name": "laguna-m.1:fr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "poolside/laguna-m.1:free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+         "name": "nemotronfr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+         "name": "hy3-preview op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "tencent/hy3-preview",
         "api_key": os.getenv("OP_API_KEY"),
     },
     {

@@ -1,408 +1,1362 @@
-
 <!DOCTYPE html>
 <html lang="zh">
-
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 聚合</title>
 
-<meta charset="UTF-8">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<title>AI 聚合</title>
+    
+ 
+    <script src="/static/cdn/marked.min.js"></script>
+    <script src="/static/cdn/atom-one-dark.min.css"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
 
-<style>
+    <style>
+        :root {
+            --bg: #f5f2ec;
+            --surface: #ffffff;
+            --surface-alt: #f9f7f3;
+            --accent: #1a5c3a;
+            --accent-hover: #145030;
+            --accent-light: #e8f5ee;
+            --accent-border: #b8dcc8;
+            --red: #b33a3a;
+            --red-light: #fdeaea;
+            --gold: #a07830;
+            --gold-light: #fdf6e3;
+            --text: #1a1a1a;
+            --text-muted: #6b6560;
+            --text-light: #9a9490;
+            --border: #e5e0d8;
+            --shadow: 0 2px 16px rgba(0,0,0,0.06);
+            --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+            --radius: 10px;
+            --radius-sm: 6px;
+            --font-serif: 'Instrument Serif', Georgia, 'STSong', serif;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+        }
 
-body{
-    max-width:1200px;
-    margin:auto;
-    padding:20px;
-    font-family:Arial;
-    background:#fafafa;
-}
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-textarea{
-    width:100%;
-    height:140px;
-    padding:12px;
-    font-size:15px;
-}
+        body {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 32px 24px 80px;
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
 
-button{
-    padding:10px 20px;
-    cursor:pointer;
-}
+        h1 {
+            font-family: var(--font-serif);
+            font-size: 2rem;
+            font-weight: 400;
+            letter-spacing: -0.02em;
+            margin-bottom: 24px;
+        }
 
-.topbar{
-    display:flex;
-    gap:15px;
-    margin-top:10px;
-    align-items:center;
-}
+        h1 span {
+            font-style: italic;
+            color: var(--accent);
+        }
 
-.card{
-    background:white;
-    border:1px solid #ddd;
-    border-radius:10px;
-    margin-top:16px;
-    overflow:hidden;
-}
+        /* ── Input ── */
+        textarea {
+            width: 100%;
+            height: 140px;
+            padding: 14px 16px;
+            font-size: 15px;
+            font-family: var(--font-sans);
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            color: var(--text);
+            resize: vertical;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+        textarea:focus { border-color: var(--accent); }
 
-.card-header{
-    background:#f3f3f3;
-    padding:14px;
-    cursor:pointer;
-    font-weight:bold;
-}
+        /* ── Toolbar ── */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .toolbar-right {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+        }
 
-.card-content{
-    display:none;
-    padding:16px;
-    white-space:pre-wrap;
-    line-height:1.6;
-}
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: var(--font-sans);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn:active { transform: scale(0.97); }
 
-.success{
-    color:#222;
-}
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            color: #fff;
+        }
 
-.error{
-    color:red;
-}
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
 
-.loading{
-    color:orange;
-}
+        .btn-danger {
+            border-color: var(--red);
+            color: var(--red);
+        }
+        .btn-danger:hover { background: var(--red-light); }
 
-.meta{
-    margin-top:10px;
-    font-size:13px;
-    color:#666;
-}
+        /* ── Checkbox ── */
+        .toggle-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle-label input {
+            accent-color: var(--accent);
+            width: 15px;
+            height: 15px;
+        }
 
-#final{
-    margin-top:30px;
-    background:white;
-    border:2px solid #333;
-    border-radius:10px;
-    padding:20px;
-    white-space:pre-wrap;
-    line-height:1.7;
-}
+        /* ── Progress ── */
+        .progress-section {
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-section.active { display: block; }
+        .progress-bar-track {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 3px;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+        .progress-text {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
 
-.progress{
-    margin-top:20px;
-    font-size:14px;
-}
+        /* ── Cards ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-top: 14px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            animation: fadeUp 0.4s ease both;
+        }
+        .card:nth-child(2) { animation-delay: 0.05s; }
+        .card:nth-child(3) { animation-delay: 0.1s; }
+        .card:nth-child(4) { animation-delay: 0.15s; }
+        .card:nth-child(5) { animation-delay: 0.2s; }
 
-</style>
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
+        .card[data-status="success"] { border-left: 3px solid var(--accent); }
+        .card[data-status="error"]   { border-left: 3px solid var(--red); }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+        .card-header:hover { background: var(--surface-alt); }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .expand-arrow {
+            font-size: 11px;
+            color: var(--text-light);
+            transition: transform 0.2s;
+            display: inline-block;
+        }
+        .expand-arrow.open { transform: rotate(180deg); }
+
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-body {
+            display: none;
+            padding: 0 16px 16px;
+            border-top: 1px solid var(--border);
+        }
+        .card-body.open { display: block; }
+
+        .card-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* ── Token Badge ── */
+        .token-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .token-badge.response {
+            background: var(--accent-light);
+            color: var(--accent);
+            border: 1px solid var(--accent-border);
+        }
+        .token-badge.fallback {
+            background: var(--gold-light);
+            color: var(--gold);
+            border: 1px solid #e0d0a0;
+        }
+        .token-badge.unknown {
+            background: #f0eeea;
+            color: var(--text-light);
+            border: 1px solid var(--border);
+        }
+
+        .token-clickable {
+            cursor: pointer;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .token-clickable:hover { background: var(--surface-alt); }
+
+        /* ── Final Section ── */
+        .final-section {
+            margin-top: 28px;
+            background: var(--surface);
+            border: 2px solid var(--accent);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            display: none;
+        }
+        .final-section.active { display: block; animation: fadeUp 0.5s ease both; }
+
+        .final-header {
+            background: var(--accent);
+            color: #fff;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .final-header h3 {
+            font-family: var(--font-serif);
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+        .final-body {
+            padding: 20px;
+        }
+        .final-body.loading-text {
+            color: var(--gold);
+            font-weight: 500;
+        }
+        .final-meta {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .final-meta-item { display: flex; flex-direction: column; gap: 2px; }
+        .final-meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
+
+        /* ── Markdown Content ── */
+        .md-content {
+            font-size: 15px;
+            line-height: 1.75;
+            color: var(--text);
+            overflow-wrap: break-word;
+        }
+        .md-content h1 { font-size: 1.5rem; margin: 1.2em 0 0.5em; font-family: var(--font-serif); font-weight: 400; }
+        .md-content h2 { font-size: 1.3rem; margin: 1.1em 0 0.4em; font-family: var(--font-serif); font-weight: 400; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+        .md-content h3 { font-size: 1.1rem; margin: 1em 0 0.4em; font-weight: 600; }
+        .md-content h4, .md-content h5, .md-content h6 { font-size: 1rem; margin: 0.8em 0 0.3em; font-weight: 600; }
+        .md-content p { margin: 0.6em 0; }
+        .md-content ul, .md-content ol { padding-left: 1.6em; margin: 0.6em 0; }
+        .md-content li { margin: 0.3em 0; }
+        .md-content li > ul, .md-content li > ol { margin: 0.2em 0; }
+        .md-content blockquote {
+            margin: 0.8em 0;
+            padding: 0.5em 1em;
+            border-left: 3px solid var(--accent);
+            background: var(--surface-alt);
+            color: var(--text-muted);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        .md-content code {
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+            background: #f0eeea;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .md-content pre {
+            margin: 0.8em 0;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .md-content pre code {
+            display: block;
+            padding: 14px 16px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.6;
+            background: #282c34;
+            border-radius: var(--radius-sm);
+        }
+        .md-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.8em 0;
+            font-size: 14px;
+        }
+        .md-content th, .md-content td {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            text-align: left;
+        }
+        .md-content th { background: var(--surface-alt); font-weight: 600; }
+        .md-content a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+        .md-content hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
+        .md-content img { max-width: 100%; border-radius: var(--radius-sm); }
+        .md-content strong { font-weight: 600; }
+
+        /* ── Drawer ── */
+        .backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.25);
+            z-index: 900;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .backdrop.open { opacity: 1; pointer-events: auto; }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 400px;
+            max-width: 90vw;
+            height: 100vh;
+            background: var(--surface);
+            box-shadow: -4px 0 30px rgba(0,0,0,0.1);
+            z-index: 950;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer.open { transform: translateX(0); }
+
+        .drawer-header {
+            padding: 20px 20px 16px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .drawer-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .drawer-header h3 {
+            font-family: var(--font-serif);
+            font-size: 1.15rem;
+            font-weight: 400;
+        }
+        .drawer-storage {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .drawer-storage-bar {
+            margin-top: 6px;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .drawer-storage-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+        .drawer-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 20px 20px;
+        }
+
+        .session-item {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            transition: border-color 0.15s;
+        }
+        .session-item:hover { border-color: var(--accent); }
+        .session-question {
+            font-size: 14px;
+            font-weight: 500;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.5;
+        }
+        .session-meta-row {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--text-light);
+            display: flex;
+            gap: 10px;
+        }
+        .session-buttons {
+            margin-top: 8px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .drawer-empty {
+            text-align: center;
+            color: var(--text-light);
+            font-size: 14px;
+            padding: 40px 0;
+        }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .modal-overlay.open { opacity: 1; pointer-events: auto; }
+
+        .modal-box {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 0;
+            max-width: 460px;
+            width: 92%;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95) translateY(10px);
+            transition: transform 0.2s;
+        }
+        .modal-overlay.open .modal-box {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-head {
+            padding: 18px 22px 14px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-head h4 {
+            font-family: var(--font-serif);
+            font-size: 1.05rem;
+            font-weight: 400;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 4px;
+            line-height: 1;
+        }
+        .modal-close:hover { color: var(--text); }
+
+        .modal-body {
+            padding: 18px 22px 22px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .stat-card {
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+        }
+        .stat-card-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+        .stat-card-value {
+            font-size: 20px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            color: var(--text);
+        }
+        .stat-full {
+            grid-column: 1 / -1;
+        }
+
+        .source-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 14px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .source-indicator.response {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+        .source-indicator.fallback {
+            background: var(--gold-light);
+            color: var(--gold);
+        }
+        .source-indicator.unknown {
+            background: #f0eeea;
+            color: var(--text-light);
+        }
+
+        /* ── Toast ── */
+        .toast-area {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 10px 18px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            color: #fff;
+            background: #333;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast-success { background: var(--accent); }
+        .toast-error { background: var(--red); }
+        .toast-info { background: #444; }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            body { padding: 16px 12px 60px; }
+            h1 { font-size: 1.5rem; }
+            .toolbar-right { margin-left: 0; width: 100%; }
+            .stat-grid { grid-template-columns: 1fr; }
+            .final-meta { flex-direction: column; gap: 10px; }
+        }
+    </style>
 </head>
-
 <body>
 
-<h2>AI 聚合系统</h2>
+<h1>AI <span>聚合</span>系统</h1>
 
-<textarea
-    id="question"
-    placeholder="输入问题"
-></textarea>
+<textarea id="question" placeholder="输入你的问题..."></textarea>
 
-<div class="topbar">
-
-    <button onclick="startAsk()">
-        开始
-    </button>
-
-    <label>
-        <input
-            type="checkbox"
-            id="fastMode"
-        >
-        Fast Mode
+<div class="toolbar">
+    <button class="btn btn-primary" onclick="startAsk()">开始查询</button>
+    <label class="toggle-label">
+        <input type="checkbox" id="fastMode"> Fast Mode
     </label>
-
+    <div class="toolbar-right">
+        <button class="btn" onclick="copyAllAnswers()">复制所有回答</button>
+        <button class="btn" onclick="toggleDrawer()">历史记录</button>
+    </div>
 </div>
 
-<div class="progress" id="progress"></div>
+<div class="progress-section" id="progressSection">
+    <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">等待中...</div>
+</div>
 
 <div id="results"></div>
 
-<div id="final"></div>
+<div class="final-section" id="finalSection">
+    <div class="final-header">
+        <h3>最终仲裁结果</h3>
+        <button class="btn btn-sm" style="background:#fff;color:var(--accent);border-color:rgba(255,255,255,0.4)" onclick="copyFinalAnswer()">复制结果</button>
+    </div>
+    <div class="final-body" id="finalBody"></div>
+</div>
+
+<!-- Drawer Backdrop -->
+<div class="backdrop" id="backdrop" onclick="toggleDrawer(false)"></div>
+
+<!-- Saved Sessions Drawer -->
+<div class="drawer" id="drawer">
+    <div class="drawer-header">
+        <div class="drawer-header-row">
+            <h3>历史记录</h3>
+            <button class="modal-close" onclick="toggleDrawer(false)">&times;</button>
+        </div>
+        <div class="drawer-storage" id="drawerStorage"></div>
+        <div class="drawer-storage-bar">
+            <div class="drawer-storage-fill" id="drawerStorageFill"></div>
+        </div>
+        <div class="drawer-actions">
+            <button class="btn btn-sm btn-danger" onclick="deleteAllSessions()">清空全部</button>
+        </div>
+    </div>
+    <div class="drawer-content" id="savedList"></div>
+</div>
+
+<!-- Token Detail Modal -->
+<div class="modal-overlay" id="tokenModal" onclick="if(event.target===this)closeTokenModal()">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h4>Token 详细统计</h4>
+            <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="tokenDetailBody"></div>
+    </div>
+</div>
+
+<!-- Toast Area -->
+<div class="toast-area" id="toastArea"></div>
 
 <script>
+/* ========================================
+   Configuration
+======================================== */
 
-let pollingTimer = null
+marked.use({
+    gfm: true,
+    breaks: true
+});
 
-function createCard(answer){
+/* ========================================
+   State
+======================================== */
 
-    const div = document.createElement("div")
+let pollingTimer = null;
+const renderedModels = new Set();
+let currentSessionData = null;
 
-    div.className = "card"
+/* ========================================
+   Toast Notifications
+======================================== */
 
-    const header = document.createElement("div")
-
-    header.className = "card-header"
-
-    header.innerText =
-        answer.model
-
-    const content = document.createElement("div")
-
-    content.className =
-        "card-content"
-
-    if(answer.success){
-
-        content.classList.add(
-            "success"
-        )
-
-        content.innerText =
-            answer.answer
-
-    }else{
-
-        content.classList.add(
-            "error"
-        )
-
-        content.innerText =
-            answer.error
-    }
-
-    const meta =
-        document.createElement("div")
-
-    meta.className = "meta"
-
-    meta.innerText =
-        `耗时: ${answer.time}s ｜ ` +
-        `tokens: ${answer.total_tokens}`
-
-    content.appendChild(meta)
-
-    header.onclick = () => {
-
-        content.style.display =
-            content.style.display === "block"
-            ? "none"
-            : "block"
-    }
-
-    div.appendChild(header)
-
-    div.appendChild(content)
-
-    document
-        .getElementById("results")
-        .appendChild(div)
-
-    content.style.display = "block"
+function showToast(message, type = 'info') {
+    const area = document.getElementById('toastArea');
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    toast.textContent = message;
+    area.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 2200);
 }
 
+/* ========================================
+   Markdown Rendering
+======================================== */
 
-async function postJson(
-    url,
-    body,
-    timeout = 180000
-){
+function renderMd(element, text) {
+    element.innerHTML = marked.parse(text || '');
+    element.querySelectorAll('pre code').forEach(block => {
+        hljs.highlightElement(block);
+    });
+}
 
-    const controller =
-        new AbortController()
+/* ========================================
+   Token Helpers
+======================================== */
 
-    const timer = setTimeout(
-        () => controller.abort(),
-        timeout
-    )
+function getTokenSource(answer) {
+    const src = answer.token_source;
+    if (src === 'response') return { cls: 'response', label: '响应提取', icon: '✓' };
+    if (src === 'fallback') return { cls: 'fallback', label: '降级获取', icon: '~' };
+    return { cls: 'unknown', label: '未知来源', icon: '?' };
+}
 
-    try{
+function formatNumber(n) {
+    if (n == null) return '-';
+    return n.toLocaleString('zh-CN');
+}
 
-        const response =
-            await fetch(url,{
-                method:"POST",
-                headers:{
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify(body),
-                signal: controller.signal
-            })
+/* ========================================
+   Token Detail Modal
+======================================== */
 
-        clearTimeout(timer)
+function showTokenModal(data, modelName) {
+    const body = document.getElementById('tokenDetailBody');
+    const source = getTokenSource(data);
 
-        return await response.json()
+    const inputTokens = data.input_tokens;
+    const outputTokens = data.output_tokens;
+    const cachedTokens = data.cached_tokens;
+    const totalTokens = data.total_tokens ?? data.tokens;
 
-    }catch(err){
+    body.innerHTML = `
+        <div class="source-indicator ${source.cls}">
+            <span>${source.icon}</span>
+            <span>Token 数据来源：${source.label}</span>
+        </div>
+        ${modelName ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">模型：${modelName}</div>` : ''}
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-card-label">总 Tokens</div>
+                <div class="stat-card-value">${formatNumber(totalTokens)}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">响应耗时</div>
+                <div class="stat-card-value">${data.time ?? '-'}s</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">输入 Tokens</div>
+                <div class="stat-card-value">${formatNumber(inputTokens)}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">输出 Tokens</div>
+                <div class="stat-card-value">${formatNumber(outputTokens)}</div>
+            </div>
+            <div class="stat-card stat-full">
+                <div class="stat-card-label">缓存 Tokens</div>
+                <div class="stat-card-value">${formatNumber(cachedTokens)}</div>
+            </div>
+        </div>
+    `;
 
-        clearTimeout(timer)
+    document.getElementById('tokenModal').classList.add('open');
+}
 
-        throw err
+function closeTokenModal() {
+    document.getElementById('tokenModal').classList.remove('open');
+}
+
+/* ========================================
+   Card Creation
+======================================== */
+
+function createCard(answer) {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.setAttribute('data-model', answer.model);
+    div.setAttribute('data-status', answer.success ? 'success' : 'error');
+
+    const source = getTokenSource(answer);
+    const isSuccess = answer.success;
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML = `
+        <div class="card-title">
+            <span>${answer.model}</span>
+            <span class="token-badge ${source.cls}">${source.icon} ${source.label}</span>
+        </div>
+        <div class="card-actions">
+            <button class="btn btn-sm" onclick="event.stopPropagation();copyCardAnswer('${answer.model}')">复制</button>
+            <span class="expand-arrow open">▼</span>
+        </div>
+    `;
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'card-body open';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'md-content';
+
+    if (isSuccess) {
+        renderMd(contentDiv, answer.answer);
+    } else {
+        contentDiv.innerHTML = `<div style="color:var(--red)">${escapeHtml(answer.error)}</div>`;
+    }
+
+    // Meta
+    const meta = document.createElement('div');
+    meta.className = 'card-meta';
+    meta.innerHTML = `
+        <span>耗时：${answer.time}s</span>
+        <span class="token-clickable" title="点击查看详细 Token 统计">
+            Tokens：${formatNumber(answer.total_tokens)}
+            <span class="token-badge ${source.cls}" style="font-size:10px">${source.label}</span>
+        </span>
+    `;
+
+    meta.querySelector('.token-clickable').addEventListener('click', (e) => {
+        e.stopPropagation();
+        showTokenModal(answer, answer.model);
+    });
+
+    body.appendChild(contentDiv);
+    body.appendChild(meta);
+
+    // Toggle
+    const arrow = header.querySelector('.expand-arrow');
+    header.addEventListener('click', () => {
+        const isOpen = body.classList.toggle('open');
+        arrow.classList.toggle('open', isOpen);
+    });
+
+    div.appendChild(header);
+    div.appendChild(body);
+    document.getElementById('results').appendChild(div);
+}
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text || '';
+    return d.innerHTML;
+}
+
+/* ========================================
+   Copy Functions
+======================================== */
+
+function getCardAnswer(model) {
+    const card = document.querySelector(`.card[data-model="${model}"]`);
+    if (!card) return '';
+    const mdContent = card.querySelector('.md-content');
+    return mdContent ? mdContent.textContent : '';
+}
+
+function copyCardAnswer(model) {
+    const text = getCardAnswer(model);
+    if (text) {
+        copyText(text);
+        showToast('已复制 ' + model + ' 的回答', 'success');
     }
 }
 
-
-async function startAsk(){
-
-    clearInterval(pollingTimer)
-
-    document
-        .getElementById("results")
-        .innerHTML = ""
-
-    document
-        .getElementById("final")
-        .innerHTML = ""
-
-    const question =
-        document
-        .getElementById("question")
-        .value
-        .trim()
-
-    if(!question){
-        return
+function copyAllAnswers() {
+    const question = document.getElementById('question').value.trim();
+    const cards = document.querySelectorAll('.card');
+    if (cards.length === 0) {
+        showToast('没有可复制的回答', 'error');
+        return;
     }
 
-    const fastMode =
-        document
-        .getElementById("fastMode")
-        .checked
+    let text = '=== AI 聚合结果 ===\n\n';
+    text += '问题：' + question + '\n\n';
 
-    try{
+    cards.forEach(card => {
+        const model = card.getAttribute('data-model');
+        const content = card.querySelector('.md-content');
+        text += '--- ' + model + ' ---\n';
+        text += (content ? content.textContent : '') + '\n\n';
+    });
 
-        const startData =
-            await postJson(
-                "/ai/start",
-                {
-                    question,
-                    fast_mode: fastMode
-                }
-            )
+    const finalBody = document.getElementById('finalBody');
+    if (finalBody && finalBody.querySelector('.md-content')) {
+        text += '=== 最终仲裁 ===\n';
+        text += finalBody.querySelector('.md-content').textContent + '\n';
+    }
 
-        if(!startData.success){
+    copyText(text);
+    showToast('已复制所有回答', 'success');
+}
 
-            alert(startData.error)
+function copyFinalAnswer() {
+    const finalBody = document.getElementById('finalBody');
+    if (!finalBody) return;
+    const md = finalBody.querySelector('.md-content');
+    if (md) {
+        copyText(md.textContent);
+        showToast('已复制仲裁结果', 'success');
+    }
+}
 
-            return
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }
+}
+
+/* ========================================
+   API Communication
+======================================== */
+
+async function postJson(url, body, timeout = 180000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+        clearTimeout(timer);
+        return await response.json();
+    } catch (err) {
+        clearTimeout(timer);
+        throw err;
+    }
+}
+
+/* ========================================
+   Start & Polling
+======================================== */
+
+async function startAsk() {
+    clearInterval(pollingTimer);
+    renderedModels.clear();
+    currentSessionData = null;
+
+    document.getElementById('results').innerHTML = '';
+    const finalSection = document.getElementById('finalSection');
+    finalSection.classList.remove('active');
+    document.getElementById('finalBody').innerHTML = '';
+
+    const question = document.getElementById('question').value.trim();
+    if (!question) return;
+
+    const fastMode = document.getElementById('fastMode').checked;
+    const progressSection = document.getElementById('progressSection');
+    progressSection.classList.add('active');
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('progressText').textContent = '连接中...';
+
+    try {
+        const startData = await postJson('/ai/start', { question, fast_mode: fastMode });
+        if (!startData.success) {
+            alert(startData.error);
+            progressSection.classList.remove('active');
+            return;
         }
 
-        const sessionId =
-            startData.session_id
+        const sessionId = startData.session_id;
 
-        pollingTimer =
-            setInterval(async () => {
+        currentSessionData = {
+            question,
+            fastMode,
+            answers: [],
+            final: null,
+            startTime: Date.now()
+        };
 
-                try{
+        pollingTimer = setInterval(async () => {
+            try {
+                const pollData = await postJson('/ai/poll', { session_id: sessionId }, 30000);
+                if (!pollData.success) return;
 
-                    const pollData =
-                        await postJson(
-                            "/ai/poll",
-                            {
-                                session_id:
-                                    sessionId
-                            },
-                            30000
-                        )
+                const pct = pollData.total > 0
+                    ? Math.round((pollData.completed / pollData.total) * 100)
+                    : 0;
+                document.getElementById('progressFill').style.width = pct + '%';
+                document.getElementById('progressText').textContent =
+                    `完成 ${pollData.completed} / ${pollData.total}`;
 
-                    if(!pollData.success){
-                        return
+                for (const item of pollData.answers) {
+                    if (!renderedModels.has(item.model)) {
+                        renderedModels.add(item.model);
+                        createCard(item);
+                        currentSessionData.answers.push(item);
                     }
-
-                    document
-                        .getElementById(
-                            "progress"
-                        )
-                        .innerText =
-                            `完成 ${pollData.completed} / ${pollData.total}`
-
-                    for(
-                        const item
-                        of pollData.answers
-                    ){
-
-                        createCard(item)
-                    }
-
-                    if(pollData.finished){
-
-                        clearInterval(
-                            pollingTimer
-                        )
-
-                        await loadFinal(
-                            sessionId
-                        )
-                    }
-
-                }catch(err){
-
-                    console.error(err)
                 }
 
-            }, 1000)
+                if (pollData.finished) {
+                    clearInterval(pollingTimer);
+                    document.getElementById('progressText').textContent =
+                        `全部完成：${pollData.total} 个模型`;
+                    await loadFinal(sessionId);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }, 1000);
 
-    }catch(err){
-
-        alert(err)
+    } catch (err) {
+        alert(err);
+        progressSection.classList.remove('active');
     }
 }
 
+/* ========================================
+   Final Answer
+======================================== */
 
-async function loadFinal(
-    sessionId
-){
+async function loadFinal(sessionId) {
+    const finalSection = document.getElementById('finalSection');
+    const finalBody = document.getElementById('finalBody');
+    finalSection.classList.add('active');
+    finalBody.className = 'final-body';
+    finalBody.innerHTML = '<div style="color:var(--gold);font-weight:500">仲裁分析中，请稍候...</div>';
 
-    const finalDiv =
-        document.getElementById("final")
+    try {
+        const data = await postJson('/ai/final', { session_id: sessionId }, 300000);
 
-    finalDiv.innerHTML =
-        "<div class='loading'>仲裁中...</div>"
+        if (data.success) {
+            const source = getTokenSource(data);
 
-    try{
+            finalBody.innerHTML = '';
 
-        const data =
-            await postJson(
-                "/ai/final",
-                {
-                    session_id:
-                        sessionId
-                },
-                300000
-            )
+            const mdDiv = document.createElement('div');
+            mdDiv.className = 'md-content';
+            renderMd(mdDiv, data.answer);
+            finalBody.appendChild(mdDiv);
 
-        if(data.success){
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'final-meta';
+            metaDiv.innerHTML = `
+                <div class="final-meta-item">
+                    <span class="final-meta-label">仲裁耗时</span>
+                    <span>${data.time}s</span>
+                </div>
+                <div class="final-meta-item">
+                    <span class="final-meta-label">仲裁 Tokens</span>
+                    <span class="token-clickable" title="点击查看详细统计" style="margin:-3px -8px;padding:3px 8px;border-radius:4px;cursor:pointer">
+                        ${formatNumber(data.tokens ?? data.total_tokens)}
+                        <span class="token-badge ${source.cls}" style="font-size:10px">${source.label}</span>
+                    </span>
+                </div>
+                <div class="final-meta-item">
+                    <span class="final-meta-label">源模型总耗时</span>
+                    <span>${data.source_total_time}s</span>
+                </div>
+                <div class="final-meta-item">
+                    <span class="final-meta-label">源模型总 Tokens</span>
+                    <span>${formatNumber(data.source_total_tokens)}</span>
+                </div>
+            `;
 
-            finalDiv.innerText =
-`最终总结:
+            metaDiv.querySelector('.token-clickable').addEventListener('click', () => {
+                showTokenModal({
+                    total_tokens: data.tokens ?? data.total_tokens,
+                    input_tokens: data.input_tokens,
+                    output_tokens: data.output_tokens,
+                    cached_tokens: data.cached_tokens,
+                    time: data.time,
+                    token_source: data.token_source
+                }, '仲裁模型');
+            });
 
-${data.answer}
+            finalBody.appendChild(metaDiv);
 
-======================
-
-仲裁耗时:
-${data.time}s
-
-仲裁 tokens:
-${data.tokens}
-
-源模型总耗时:
-${data.source_total_time}s
-
-源模型总 tokens:
-${data.source_total_tokens}
-`
-
-        }else{
-
-            finalDiv.innerText =
-                data.error
+            // Save session
+            currentSessionData.final = data;
+            autoSaveSession();
+        } else {
+            finalBody.innerHTML = `<div style="color:var(--red)">${escapeHtml(data.error)}</div>`;
         }
-
-    }catch(err){
-
-        finalDiv.innerText =
-            "最终仲裁失败:\n" + err
+    } catch (err) {
+        finalBody.innerHTML = `<div style="color:var(--red)">仲裁失败：${escapeHtml(String(err))}</div>`;
     }
 }
 
+/* ========================================
+   LocalStorage — Save / Load / Delete
+======================================== */
+
+const STORAGE_PREFIX = 'ai_session_';
+const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5 MB reference
+
+function autoSaveSession() {
+    if (!currentSessionData) return;
+    try {
+        const id = Date.now();
+        const record = {
+            id,
+            question: currentSessionData.question,
+            fastMode: currentSessionData.fastMode,
+            answers: currentSessionData.answers,
+            final: currentSessionData.final,
+            savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(record));
+        showToast('已自动保存', 'success');
+    } catch (e) {
+        showToast('保存失败：' + e.message, 'error');
+    }
+}
+
+function getAllSessions() {
+    const sessions = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(STORAGE_PREFIX)) {
+            try {
+                sessions.push(JSON.parse(localStorage.getItem(key)));
+            } catch (e) { /* skip corrupted */ }
+        }
+    }
+    sessions.sort((a, b) => b.id - a.id);
+    return sessions;
+}
+
+function getStorageSize() {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(STORAGE_PREFIX)) {
+            const val = localStorage.getItem(key) || '';
+            total += (key.length + val.length) * 2; // UTF-16
+        }
+    }
+    return total;
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function loadSession(id) {
+    const raw = localStorage.getItem(STORAGE_PREFIX + id);
+    if (!raw) { showToast('记录不存在', 'error'); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch { showToast('数据损坏', 'error'); return; }
+
+    document.getElementById('question').value = data.question || '';
+    renderedModels.clear();
+
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '';
+
+    if (data.answers && data.answers.length > 0) {
+        data.answers.forEach(a => {
+            renderedModels.add(a.model);
+            createCard(a);
+        });
+    }
+
+    const finalSection = document.getElementById('finalSection');
+    const finalBody = document.getElementById('finalBody');
+
+    if (data.final && data.final.success) {
+        finalSection.classList.add('active');
+        finalBody.innerHTML = '';
+        const mdDiv = document.createElement('div');
+        mdDiv.className = 'md-content';
+        renderMd(mdDiv, data.final.answer);
+        finalBody.appendChild(mdDiv);
+    } else {
+        finalSection.classList.remove('active');
+        finalBody.innerHTML = '';
+    }
+
+    document.getElementById('progressSection').classList.remove('active');
+    toggleDrawer(false);
+    showToast('已加载历史记录', 'success');
+
+    // Restore session data for potential re-save
+    currentSessionData = {
+        question: data.question,
+        fastMode: data.fastMode,
+        answers: data.answers || [],
+        final: data.final
+    };
+}
+
+function deleteSession(id) {
+    localStorage.removeItem(STORAGE_PREFIX + id);
+    showToast('已删除', 'info');
+    renderSavedList();
+}
+
+function deleteAllSessions() {
+    const sessions = getAllSessions();
+    if (sessions.length === 0) return;
+    if (!confirm(`确定清空全部 ${sessions.length} 条记录？`)) return;
+    sessions.forEach(s => localStorage.removeItem(STORAGE_PREFIX + s.id));
+    showToast('已清空全部记录', 'info');
+    renderSavedList();
+}
+
+/* ========================================
+   Drawer UI
+======================================== */
+
+function toggleDrawer(forceState) {
+    const drawer = document.getElementById('drawer');
+    const backdrop = document.getElementById('backdrop');
+    const shouldOpen = forceState !== undefined ? forceState : !drawer.classList.contains('open');
+
+    if (shouldOpen) {
+        renderSavedList();
+        drawer.classList.add('open');
+        backdrop.classList.add('open');
+    } else {
+        drawer.classList.remove('open');
+        backdrop.classList.remove('open');
+    }
+}
+
+function renderSavedList() {
+    const list = document.getElementById('savedList');
+    const sessions = getAllSessions();
+    const size = getStorageSize();
+
+    // Storage info
+    const storageEl = document.getElementById('drawerStorage');
+    storageEl.textContent = `已用 ${formatBytes(size)}，共 ${sessions.length} 条记录`;
+
+    const fillEl = document.getElementById('drawerStorageFill');
+    const pct = Math.min((size / MAX_STORAGE_BYTES) * 100, 100);
+    fillEl.style.width = pct + '%';
+    fillEl.style.background = pct > 80 ? 'var(--red)' : 'var(--accent)';
+
+    if (sessions.length === 0) {
+        list.innerHTML = '<div class="drawer-empty">暂无保存的记录</div>';
+        return;
+    }
+
+    list.innerHTML = sessions.map(s => {
+        const date = new Date(s.savedAt);
+        const dateStr = date.toLocaleDateString('zh-CN') + ' ' +
+            date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const count = (s.answers || []).length;
+        const hasFinal = s.final && s.final.success;
+        const sizeBytes = ((localStorage.getItem(STORAGE_PREFIX + s.id) || '').length * 2);
+        const questionPreview = escapeHtml(s.question || '').substring(0, 200);
+
+        return `
+            <div class="session-item">
+                <div class="session-question">${questionPreview}</div>
+                <div class="session-meta-row">
+                    <span>${dateStr}</span>
+                    <span>${count} 个模型${hasFinal ? ' + 仲裁' : ''}</span>
+                    <span>${formatBytes(sizeBytes)}</span>
+                </div>
+                <div class="session-buttons">
+                    <button class="btn btn-sm" onclick="loadSession(${s.id})">加载</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSession(${s.id})">删除</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/* ========================================
+   Keyboard shortcut
+======================================== */
+
+document.getElementById('question').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        startAsk();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeTokenModal();
+        toggleDrawer(false);
+    }
+});
 </script>
 
 </body>
