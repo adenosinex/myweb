@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>骑行备忘录</title>
+    <style>
+        body { font-family: sans-serif; background: #eef2f3; padding: 20px; }
+        .note-card { background: #fff; border-left: 8px solid #ff9800; padding: 15px; margin: 10px 0; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .input-area { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        input, textarea, button { width: 100%; margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px; display: block; }
+        button { background: #ff9800; color: white; border: none; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <a href="/" style="text-decoration: none; color: #666;">← 返回主面板</a>
+    <h2>🏍️ 骑行心得记录</h2>
+
+    <div class="input-area">
+        <input type="text" id="route" placeholder="骑行路线 (如: 巫山-恩施)">
+        <textarea id="feeling" placeholder="此时此刻的感受..."></textarea>
+        <button onclick="postNote()">发布笔记</button>
+    </div>
+
+    <div id="notesContainer"></div>
+
+    <script>
+        async function postNote() {
+            const route = document.getElementById('route').value;
+            const feeling = document.getElementById('feeling').value;
+            await fetch('/api/notes/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ route, feeling })
+            });
+            location.reload();
+        }
+
+        async function loadNotes() {
+            const res = await fetch('/api/notes/list');
+            const data = await res.json();
+            document.getElementById('notesContainer').innerHTML = data.map(n => `
+                <div class="note-card">
+                    <strong>📍 ${n.route}</strong>
+                    <p>${n.feeling}</p>
+                    <small style="color:#999">${n.time}</small>
+                </div>
+            `).join('');
+        }
+        loadNotes();
+    </script>
+</body>
+</html>

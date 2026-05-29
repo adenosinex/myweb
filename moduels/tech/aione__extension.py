@@ -34,25 +34,39 @@ AI_MODELS = [
         # $0.30 /M output tokens
         "api_key": os.getenv("OP_API_KEY"),
     },
-    # {
-    #     "name": "glm4.5 air si",
-    #     "base_url": os.getenv("MODEL_SI_URL"),
-    #     "model": "zai-org/GLM-4.5-Air",
-    #     # 6.000/ M Tokens 
-    #     # glm4.5 air si：备用降级/轻度雷同。该模型最大的亮点是纠正了常识性错误（明确指出 CVT 踏板无链条需检查），且流程清晰。但其在数据深度和龙骨专项分析上，分别被 step-3.5-flash op 和 qwen3.5-flash-02-23 op 压制，只能作为边缘备用。
-    #     "api_key": os.getenv("SI_API_KEY"),
-    # },
-    {
-        "name": "qwen3.5-flash-02-23 op",
+     {
+       "name": "gpt-4o-mini op",
         "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "qwen/qwen3.5-flash-02-23",
-        # $0.26 /M output tokens
+        "model": "openai/gpt-4o-mini",
+        # $0.30 /M output tokens
         "api_key": os.getenv("OP_API_KEY"),
     },
+     {
+       "name": "glm-5.1 al",
+        "base_url": os.getenv("MODEL_AL_URL"),
+        "model": "glm-5.1",
+        # $0.30 /M output tokens
+        "api_key": os.getenv("AL_API_KEY"),
+    },
+     {
+       "name": "qwen3.7-max al", 
+        "base_url": os.getenv("MODEL_AL_URL"),
+        "model": "qwen3.7-max",
+        # $0.30 /M output tokens
+        "api_key": os.getenv("AL_API_KEY"),
+    },
+    
     {
        "name": "mimo2.5pr op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "xiaomi/mimo-v2.5-pro",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+       "name": "qwen3.6-plus op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "qwen/qwen3.6-plus",
+        # 14
         "api_key": os.getenv("OP_API_KEY"),
     },
    
@@ -64,18 +78,16 @@ AI_MODELS = [
     #     "api_key": os.getenv("OP_API_KEY"),
     # },
    
+  
     {
-       "name": "deepseek-v3.2 si",
+       "name": "DeepSeek-V4-Flash si",
         "base_url": os.getenv("MODEL_SI_URL"),
-        "model": "Pro/deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-ai/DeepSeek-V4-Flash",
         "api_key": os.getenv("SI_API_KEY"),
     },
-    {
-       "name": "MiniMax-M2.5 si",
-        "base_url": os.getenv("MODEL_SI_URL"),
-        "model": "Pro/MiniMaxAI/MiniMax-M2.5",
-        "api_key": os.getenv("SI_API_KEY"),
-    },
+  
+     
+     
 ]
 
 AI_MODELS_FAST = [
@@ -85,32 +97,19 @@ AI_MODELS_FAST = [
         "model": "z-ai/glm-4.5-air:free",
         "api_key": os.getenv("OP_API_KEY"),
     },
+      {
+       "name": "Step-3.5-Flash si",
+        "base_url": os.getenv("MODEL_SI_URL"),
+        "model": "stepfun-ai/Step-3.5-Flash",
+        "api_key": os.getenv("SI_API_KEY"),
+    },
      {
        "name": "owl-alpha tempfr op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "openrouter/owl-alpha",
         "api_key": os.getenv("OP_API_KEY"),
     },
-    {
-        "name": "minimax-m2.5fr op",
-        "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "minimax/minimax-m2.5:free",
-        "api_key": os.getenv("OP_API_KEY"),
-    },
-    # {
-    #     "name": "qwen3-235b-a22b-2507 op",
-    #     "base_url": os.getenv("MODEL_OP_URL"),
-    #     "model": "qwen/qwen3-235b-a22b-2507",
-    # 被 deepseek-v4-flash ds 和 glm4.5 airfr op 完全覆盖
-    #     "api_key": os.getenv("OP_API_KEY"),
-    # },
-    # {
-    #      "name": "mimo2.5 op",
-    #     "base_url": os.getenv("MODEL_OP_URL"),
-    #     "model": "xiaomi/mimo-v2.5",
-    #     # $0.28 /M output tokens "hy3-preview op备用
-    #     "api_key": os.getenv("OP_API_KEY"),
-    # },
+    
       {
          "name": "hy3-preview op",
         "base_url": os.getenv("MODEL_OP_URL"),
@@ -119,12 +118,7 @@ AI_MODELS_FAST = [
         "api_key": os.getenv("OP_API_KEY"),
     },
 
-    {
-         "name": "gpt-oss-120b:fr op",
-        "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "openai/gpt-oss-120b:free",
-        "api_key": os.getenv("OP_API_KEY"),
-    },
+     
     
     {
          "name": "nemotronfr op",
@@ -132,13 +126,14 @@ AI_MODELS_FAST = [
         "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "api_key": os.getenv("OP_API_KEY"),
     },
-  
-    {
-         "name": "deepseek-v4-flash ds",
-        "base_url": os.getenv("MODEL_DS_URL"),
-        "model": "deepseek-v4-flash",
-        "api_key": os.getenv("DS_API_KEY"), 
+      {
+       "name": "DeepSeek-V4-Flash si",
+        "base_url": os.getenv("MODEL_SI_URL"),
+        "model": "deepseek-ai/DeepSeek-V4-Flash",
+        "api_key": os.getenv("SI_API_KEY"),
     },
+  
+    
 ]
 
 
@@ -200,7 +195,6 @@ def request_ai(model_config, question):
             data = r.json()
             break
         except requests.exceptions.Timeout as e:
-            # 捕获到超时，直接抛出，拒绝重试
             raise e
         except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
@@ -267,8 +261,13 @@ def run_model(
         time.sleep(delay_seconds)
 
     session = SESSION_CACHE.get(session_id)
-
     if not session:
+        return
+
+    model_name = model_config["name"]
+
+    # 若请求还没发出就被用户终止，直接跳过
+    if session.get("model_status", {}).get(model_name) != "pending":
         return
 
     try:
@@ -280,7 +279,7 @@ def run_model(
     except Exception as e:
         result = {
             "success": False,
-            "model": model_config["name"],
+            "model": model_name,
             "error": str(e),
             "time": 0,
             "prompt_tokens": 0,
@@ -293,8 +292,11 @@ def run_model(
         }
 
     with LOCK:
-        session["answers"].append(result)
-        session["completed"] += 1
+        # 双重校验：避免正在请求中途被用户终止，回来后再次追加答案
+        if session["model_status"].get(model_name) == "pending":
+            session["model_status"][model_name] = "completed"
+            session["answers"].append(result)
+            session["completed"] += 1
 
 
 @ai_bp.route("/start", methods=["POST"])
@@ -318,6 +320,7 @@ def start():
         "completed": 0,
         "returned": 0,
         "total": len(models),
+        "model_status": {m["name"]: "pending" for m in models},
         "created_at": time.time()
     }
 
@@ -340,8 +343,41 @@ def start():
 
     return jsonify({
         "success": True,
-        "session_id": session_id
+        "session_id": session_id,
+        "models": [m["name"] for m in models]
     })
+
+
+@ai_bp.route("/abort", methods=["POST"])
+def abort():
+    data = request.json
+    session_id = data.get("session_id")
+    model_name = data.get("model")
+
+    session = SESSION_CACHE.get(session_id)
+    if not session:
+        return jsonify({"success": False, "error": "invalid session"})
+
+    with LOCK:
+        if session["model_status"].get(model_name) == "pending":
+            session["model_status"][model_name] = "aborted"
+            # 插入虚假错误记录以促使完成度+1，进入仲裁节点
+            session["answers"].append({
+                "success": False,
+                "model": model_name,
+                "error": "已由用户手动终止",
+                "time": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "finish_reason": "abort",
+                "token_source": "unknown"
+            })
+            session["completed"] += 1
+
+    return jsonify({"success": True})
 
 
 @ai_bp.route("/poll", methods=["POST"])

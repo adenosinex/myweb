@@ -21,7 +21,7 @@ executor = ThreadPoolExecutor(max_workers=5)
 OCR_CONFIG = {
     "base_url": "https://api.siliconflow.cn/v1/chat/completions",
     "api_key": os.getenv("SILICONFLOW_API_KEY"),
-    "model": "Qwen/Qwen3-VL-8B-Instruct"
+    "model": "Qwen/Qwen3-VL-30B-A3B-Instruct"
 }
 
 NLP_CONFIG = {
