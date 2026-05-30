@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>本地软件索引站</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 850px; margin: 0 auto; padding: 40px 20px; color: #222; background: #fafafa; }
+        .search-container { text-align: center; margin: 50px 0 30px 0; }
+        .search-title { font-size: 30px; font-weight: 700; margin-bottom: 20px; color: #111; }
+        input[type="text"].main-search { width: 100%; padding: 14px 20px; font-size: 16px; border: 1px solid #dfe1e5; border-radius: 28px; box-sizing: border-box; outline: none; box-shadow: 0 1px 6px rgba(0,0,0,0.04); }
+        
+        /* 列表与卡片 */
+        .software-card { background: #fff; border: 1px solid #eef0f2; border-radius: 8px; padding: 20px; margin-bottom: 12px; cursor: pointer; position: relative; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }
+        .title-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .sw-title { font-size: 17px; font-weight: 600; margin: 0; color: #007bff; word-break: break-all; }
+        .sw-size { font-size: 12px; color: #888; background: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+        .tag { background: #e8f0fe; padding: 2px 8px; border-radius: 12px; font-size: 11.5px; color: #1a73e8; }
+        .sw-desc { margin: 10px 0 0 0; color: #444; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+        .empty-desc { color: #aaa; font-style: italic; font-size: 13px; }
+        
+        /* 交互及操作 */
+        .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+        button { padding: 5px 12px; font-size: 12.5px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px; outline: none; }
+        button.btn-dl { background: #28a745; color: white; border-color: #28a745; }
+        button.btn-ai { background: #f8f9fa; color: #333; }
+        .path-info { font-family: monospace; font-size: 11.5px; color: #666; margin-left: flex-end; }
+
+        /* 分页组件 */
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 30px 0; }
+        .page-info { font-size: 14px; color: #555; }
+
+        /* 收纳折叠的后台工具 */
+        details.admin-panel { background: #fff; border: 1px solid #ddd; border-radius: 6px; margin-top: 50px; padding: 12px; }
+        details.admin-panel summary { cursor: pointer; font-size: 13.5px; color: #666; outline: none; }
+        .admin-content { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; }
+        .drop-zone { border: 2px dashed #b4d5ff; background: #fbfdff; padding: 30px; text-align: center; border-radius: 6px; color: #0056b3; font-size: 13.5px; }
+        .drop-zone.dragover { background: #e1f0ff; border-color: #007bff; }
+    </style>
+</head>
+<body>
+
+    <div class="search-container">
+        <div class="search-title">本地软件索引中心</div>
+        <input type="text" id="searchInp" class="main-search" placeholder="输入关键词、标签或简介内容检索软件..." oninput="resetAndSearch()" autofocus>
+    </div>
+
+    <div id="softwareList"></div>
+
+    <div class="pagination" id="paginationCtrl"></div>
+
+    <details class="admin-panel">
+        <summary>高级管理与维护箱</summary>
+        <div class="admin-content">
+            <div style="border-right: 1px solid #eee; padding-right: 15px;">
+                <h5 style="margin:0 0 10px 0;">资源拖拽多选上传</h5>
+                <div id="dropZone" class="drop-zone">支持单个/多个软件安装包直接拖至此处上传</div>
+                <div id="uploadLog" style="font-size:11px; color:#555; margin-top:5px; max-height:80px; overflow-y:auto;"></div>
+            </div>
+            <div style="display:flex; flex-direction:column; justify-content: space-between; padding-left: 5px;">
+                <div>
+                    <h5 style="margin:0 0 10px 0;">CSV 元数据批改</h5>
+                    <button onclick="window.location.href='/app/export_csv'" style="margin-bottom:8px;">导出数据 CSV</button>
+                    <br>
+                    <span style="font-size:12px;">导入批改:</span>
+                    <input type="file" id="csvFile" accept=".csv" style="font-size:12px; width:120px;">
+                    <button onclick="importCsv()">提交</button>
+                </div>
+                <div style="border-top: 1px solid #eee; padding-top: 10px;">
+                    <button onclick="scanNode()" style="width:100%; background:#f8f9fa;">同步资源节点目录 (自动增删对齐)</button>
+                    <div id="scanStatus" style="font-size:12px; color:green; margin-top:4px;"></div>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <script>
+        const API_BASE = '/app';
+        let currentPage = 1;
+
+        window.onload = () => { searchData(); initDragDrop(); };
+
+        function resetAndSearch() {
+            currentPage = 1;
+            searchData();
+        }
+// 全局保存后端返回的资源节点地址
+let globalNodeUrl = '';
+
+async function searchData() {
+    const q = document.getElementById('searchInp').value;
+    const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}&page=${currentPage}`);
+    const data = await res.json();
+    
+    // 捕获节点直连地址
+    globalNodeUrl = data.resource_node_url;
+    
+    const container = document.getElementById('softwareList');
+    container.innerHTML = '';
+
+    if (data.results.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:#999; padding:40px; background:#fff; border-radius:6px; border:1px solid #eee;">暂无相关软件记录</div>`;
+        document.getElementById('paginationCtrl').innerHTML = '';
+        return;
+    }
+
+    data.results.forEach(item => {
+        const tagsHtml = item.tags.map(t => `<span class="tag">${t}</span>`).join(' ');
+        const card = document.createElement('div');
+        card.className = 'software-card';
+        card.innerHTML = `
+            <div class="card-header">
+                <div style="flex:1;">
+                    <div class="title-line">
+                        <h3 class="sw-title">${item.name}</h3>
+                        <span class="sw-size">${item.size}</span>
+                        ${tagsHtml}
+                    </div>
+                    <div class="sw-desc" id="desc_${item.id}">${item.description || '<span class="empty-desc">暂无简介与翻译背景，请点击下方 AI 按钮自动生成</span>'}</div>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn-dl" onclick="event.stopPropagation(); executeSmartDownload(${item.id}, '${item.filename}')">下载资源</button>
+                <button class="btn-ai" id="ai_btn_${item.id}" onclick="event.stopPropagation(); triggerAi(${item.id})">AI 智能完善</button>
+                <div style="flex:1;"></div>
+                <span class="path-info">位置: ${item.filename}</span>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    renderPagination(data.total_pages, data.page);
+}
+
+// 【升级】：前端核心智能双轨切换下载器
+async function executeSmartDownload(id, filename) {
+    const directUrl = `${globalNodeUrl}/download?filename=${encodeURIComponent(filename)}`;
+    const fallbackUrl = `${API_BASE}/download/${id}`;
+    
+    console.log(`[探测] 正在尝试高速直连客户端: ${directUrl}`);
+    
+    try {
+        const controller = new AbortController();
+        // 1.5秒超时设置，如果局域网内无法连通该节点则迅速切断
+        const timeoutSignal = setTimeout(() => controller.abort(), 1500);
+        
+        const response = await fetch(directUrl, { 
+            method: 'HEAD', 
+            signal: controller.signal 
+        });
+        
+        clearTimeout(timeoutSignal);
+        
+        if (response.ok) {
+            console.log("[成功] 资源节点响应正常，执行本地高宽带直连下载。");
+            window.location.href = directUrl;
+        } else {
+            throw new Error("Node returned status error");
+        }
+    } catch (err) {
+        console.warn("[降级] 无法直连资源节点（可能跨网段或节点离线），切换为主程序服务器流式转发...", err);
+        window.location.href = fallbackUrl;
+    }
+}
+        function renderPagination(totalPages, activePage) {
+            const ctrl = document.getElementById('paginationCtrl');
+            if (totalPages <= 1) { ctrl.innerHTML = ''; return; }
+
+            let html = `<button ${activePage === 1 ? 'disabled' : ''} onclick="changePage(${activePage - 1})">上一页</button>`;
+            html += `<span class="page-info">第 ${activePage} / ${totalPages} 页</span>`;
+            html += `<button ${activePage === totalPages ? 'disabled' : ''} onclick="changePage(${activePage + 1})">下一页</button>`;
+            ctrl.innerHTML = html;
+        }
+
+        function changePage(targetPage) {
+            currentPage = targetPage;
+            searchData();
+            window.scrollTo(0,0);
+        }
+
+        // 按钮触发单条记录的 AI 自动化分析
+        async function triggerAi(id) {
+            const btn = document.getElementById(`ai_btn_${id}`);
+            const descBox = document.getElementById(`desc_${id}`);
+            btn.disabled = true;
+            btn.innerText = "AI 分析完善中...";
+
+            try {
+                const res = await fetch(`${API_BASE}/ai_enhance/${id}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    btn.innerText = "完善成功";
+                    searchData(); // 刷新列表渲染新标签
+                } else {
+                    btn.innerText = "配置受限";
+                    alert("智能完善失败: " + data.message + "。请确认 routes.py 顶部的 API_KEY 是否配置正确。");
+                    btn.disabled = false;
+                }
+            } catch {
+                btn.innerText = "网络异常";
+                btn.disabled = false;
+            }
+        }
+
+        // 多文件拖拽模块
+        function initDragDrop() {
+            const zone = document.getElementById('dropZone');
+            const log = document.getElementById('uploadLog');
+
+            zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length === 0) return;
+
+                for (let i = 0; i < files.length; i++) {
+                    const row = document.createElement('div');
+                    row.innerText = `正在中转 [${i+1}/${files.length}] ${files[i].name}...`;
+                    log.appendChild(row);
+
+                    const fd = new FormData();
+                    fd.append('file', files[i]);
+                    try {
+                        const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: fd });
+                        row.style.color = res.ok ? "green" : "red";
+                        row.innerText = res.ok ? `✓ ${files[i].name} 入库成功` : `✗ ${files[i].name} 失败`;
+                    } catch {
+                        row.style.color = "red";
+                        row.innerText = `✗ ${files[i].name} 网络断开`;
+                    }
+                }
+                resetAndSearch();
+            });
+        }
+
+        async function importCsv() {
+            const csvInput = document.getElementById('csvFile');
+            if (csvInput.files.length === 0) return alert('请选择数据文件');
+            const fd = new FormData();
+            fd.append('file', csvInput.files[0]);
+            try {
+                const res = await fetch(`${API_BASE}/import_csv`, { method: 'POST', body: fd });
+                const data = await res.json();
+                alert(`批处理同步完成，更新了 ${data.updated_rows} 条高级属性。`);
+                searchData();
+            } catch { alert("数据格式解析异常"); }
+        }
+
+        async function scanNode() {
+            const status = document.getElementById('scanStatus');
+            status.innerText = "物理存储同步中...";
+            try {
+                const res = await fetch(`${API_BASE}/scan`);
+                const data = await res.json();
+                status.innerText = data.message;
+                resetAndSearch();
+            } catch { status.innerText = "无法接通物理节点"; }
+        }
+    </script>
+</body>
+</html>

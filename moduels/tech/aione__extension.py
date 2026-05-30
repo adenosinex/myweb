@@ -4,7 +4,7 @@ import time
 import threading
 import requests
 import random
-import re
+import re 
 import json
 
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +21,12 @@ AI_MODELS = [
        "name": "step-3.5-flash op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "stepfun/step-3.5-flash",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+     {
+       "name": "owl-alpha tempfr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "openrouter/owl-alpha",
         "api_key": os.getenv("OP_API_KEY"),
     },
      {
@@ -75,24 +81,14 @@ AI_MODELS_FAST = [
         "model": "stepfun-ai/Step-3.5-Flash",
         "api_key": os.getenv("SI_API_KEY"),
     },
-     {
-       "name": "owl-alpha tempfr op",
-        "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "openrouter/owl-alpha",
-        "api_key": os.getenv("OP_API_KEY"),
-    },
+    
      {
          "name": "hy3-preview op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "tencent/hy3-preview",
         "api_key": os.getenv("OP_API_KEY"),
     },
-    {
-         "name": "nemotronfr op",
-        "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "api_key": os.getenv("OP_API_KEY"),
-    },
+    
      {
        "name": "DeepSeek-V4-Flash si",
         "base_url": os.getenv("MODEL_SI_URL"),
