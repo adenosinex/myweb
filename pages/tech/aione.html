@@ -59,344 +59,148 @@
             letter-spacing: -0.02em;
             margin-bottom: 24px;
         }
+        h1 span { font-style: italic; color: var(--accent); }
 
-        h1 span {
-            font-style: italic;
-            color: var(--accent);
-        }
-
-        /* ── Input ── */
         textarea {
-            width: 100%;
-            height: 140px;
-            padding: 14px 16px;
-            font-size: 15px;
-            font-family: var(--font-sans);
-            border: 2px solid var(--border);
-            border-radius: var(--radius);
-            background: var(--surface);
-            color: var(--text);
-            resize: vertical;
-            transition: border-color 0.2s;
-            outline: none;
+            width: 100%; height: 140px; padding: 14px 16px;
+            font-size: 15px; font-family: var(--font-sans);
+            border: 2px solid var(--border); border-radius: var(--radius);
+            background: var(--surface); color: var(--text);
+            resize: vertical; transition: border-color 0.2s; outline: none;
         }
         textarea:focus { border-color: var(--accent); }
 
-        /* ── Toolbar ── */
-        .toolbar {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 12px;
-            flex-wrap: wrap;
-        }
-        .toolbar-right {
-            margin-left: auto;
-            display: flex;
-            gap: 8px;
-        }
+        .toolbar { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+        .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
 
-        /* ── Buttons ── */
         .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 9px 18px;
-            font-size: 14px;
-            font-weight: 500;
-            font-family: var(--font-sans);
-            border: 1.5px solid var(--border);
-            border-radius: var(--radius-sm);
-            background: var(--surface);
-            color: var(--text);
-            cursor: pointer;
-            transition: all 0.15s;
-            white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 18px; font-size: 14px; font-weight: 500; font-family: var(--font-sans);
+            border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--surface); color: var(--text);
+            cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
         .btn:hover { border-color: var(--accent); color: var(--accent); }
         .btn:active { transform: scale(0.97); }
-
-        .btn-primary {
-            background: var(--accent);
-            color: #fff;
-            border-color: var(--accent);
-        }
-        .btn-primary:hover {
-            background: var(--accent-hover);
-            color: #fff;
-        }
-
-        .btn-sm {
-            padding: 5px 10px;
-            font-size: 12px;
-        }
-
-        .btn-danger {
-            border-color: var(--red);
-            color: var(--red);
-        }
+        .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent-hover); color: #fff; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn-danger { border-color: var(--red); color: var(--red); }
         .btn-danger:hover { background: var(--red-light); }
 
-        /* ── Checkbox ── */
         .toggle-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 14px;
-            color: var(--text-muted);
-            cursor: pointer;
-            user-select: none;
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; color: var(--text-muted); cursor: pointer; user-select: none;
         }
-        .toggle-label input {
-            accent-color: var(--accent);
-            width: 15px;
-            height: 15px;
-        }
+        .toggle-label input { accent-color: var(--accent); width: 15px; height: 15px; }
 
-        /* ── Progress ── */
-        .progress-section {
-            margin-top: 20px;
-            display: none;
-        }
+        .progress-section { margin-top: 20px; display: none; }
         .progress-section.active { display: block; }
-        .progress-bar-track {
-            height: 6px;
-            background: var(--border);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        .progress-bar-fill {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 3px;
-            transition: width 0.4s ease;
-            width: 0%;
-        }
-        .progress-meta-row {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 8px;
-        }
-        .progress-text {
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-        .progress-time {
-            font-size: 13px;
-            color: var(--text-muted);
-            font-family: var(--font-mono);
-        }
+        .progress-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; width: 0%; }
+        .progress-meta-row { display: flex; justify-content: space-between; margin-top: 8px; }
+        .progress-text { font-size: 13px; color: var(--text-muted); }
+        .progress-time { font-size: 13px; color: var(--text-muted); font-family: var(--font-mono); }
 
-        /* ── Cards & Utilities ── */
         .spinner {
-            display: inline-block;
-            width: 14px; 
-            height: 14px;
-            border: 2px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            display: inline-block; width: 14px; height: 14px;
+            border: 2px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .card-timer {
-            font-family: var(--font-mono);
-            font-size: 13px;
-            color: var(--accent);
-            margin-right: 8px;
-        }
+        .card-timer { font-family: var(--font-mono); font-size: 13px; color: var(--accent); margin-right: 8px; }
 
         .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            margin-top: 14px;
-            overflow: hidden;
-            box-shadow: var(--shadow);
+            background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+            margin-top: 14px; overflow: hidden; box-shadow: var(--shadow);
             animation: fadeUp 0.4s ease both;
         }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
         .card[data-status="success"] { border-left: 3px solid var(--accent); }
         .card[data-status="error"]   { border-left: 3px solid var(--red); }
         .card[data-status="pending"] { border-left: 3px solid var(--border); }
 
         .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
-            cursor: pointer;
-            user-select: none;
-            transition: background 0.15s;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; cursor: pointer; user-select: none; transition: background 0.15s;
         }
         .card-header:hover { background: var(--surface-alt); }
+        .card-title { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
 
-        .card-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 600;
-            font-size: 15px;
-        }
-
-        .expand-arrow {
-            font-size: 11px;
-            color: var(--text-light);
-            transition: transform 0.2s;
-            display: inline-block;
-        }
+        .expand-arrow { font-size: 11px; color: var(--text-light); transition: transform 0.2s; display: inline-block; }
         .expand-arrow.open { transform: rotate(180deg); }
+        .card-actions { display: flex; align-items: center; gap: 8px; }
 
-        .card-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .card-body {
-            display: none;
-            padding: 16px;
-            border-top: 1px solid var(--border);
-        }
+        .card-body { display: none; padding: 16px; border-top: 1px solid var(--border); }
         .card-body.open { display: block; }
-
         .card-meta {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-            padding: 12px 16px;
-            border-top: 1px solid var(--border);
-            background: var(--surface-alt);
-            font-size: 13px;
-            color: var(--text-muted);
+            display: flex; align-items: center; flex-wrap: wrap; gap: 16px;
+            padding: 12px 16px; border-top: 1px solid var(--border);
+            background: var(--surface-alt); font-size: 13px; color: var(--text-muted);
         }
 
-        /* ── Token Badge ── */
         .token-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
+            display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+            border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
         }
-        .token-badge.response {
-            background: var(--accent-light);
-            color: var(--accent);
-            border: 1px solid var(--accent-border);
-        }
-        .token-badge.fallback {
-            background: var(--gold-light);
-            color: var(--gold);
-            border: 1px solid #e0d0a0;
-        }
-        .token-badge.unknown {
-            background: #f0eeea;
-            color: var(--text-light);
-            border: 1px solid var(--border);
-        }
+        .token-badge.response { background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent-border); }
+        .token-badge.fallback { background: var(--gold-light); color: var(--gold); border: 1px solid #e0d0a0; }
+        .token-badge.unknown { background: #f0eeea; color: var(--text-light); border: 1px solid var(--border); }
 
         .token-clickable {
-            cursor: pointer;
-            padding: 3px 8px;
-            border-radius: var(--radius-sm);
-            transition: background 0.15s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+            cursor: pointer; padding: 3px 8px; border-radius: var(--radius-sm);
+            transition: background 0.15s; display: inline-flex; align-items: center; gap: 8px;
         }
         .token-clickable:hover { background: var(--surface); }
 
-        /* ── Final Section ── */
         .final-section {
-            margin-top: 28px;
-            background: var(--surface);
-            border: 2px solid var(--accent);
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
-            display: none;
+            margin-top: 28px; background: var(--surface); border: 2px solid var(--accent);
+            border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); display: none;
         }
         .final-section.active { display: block; animation: fadeUp 0.5s ease both; }
-
-        .final-header {
-            background: var(--accent);
-            color: #fff;
-            padding: 14px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .final-header h3 {
-            font-family: var(--font-serif);
-            font-size: 1.1rem;
-            font-weight: 400;
-        }
-        .final-body {
-            padding: 20px;
-        }
+        .final-header { background: var(--accent); color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+        .final-header h3 { font-family: var(--font-serif); font-size: 1.1rem; font-weight: 400; }
+        .final-body { padding: 20px; }
         .final-meta {
-            display: flex;
-            gap: 24px;
-            flex-wrap: wrap;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border);
-            font-size: 13px;
-            color: var(--text-muted);
+            display: flex; gap: 24px; flex-wrap: wrap; margin-top: 16px;
+            padding-top: 16px; border-top: 1px solid var(--border);
+            font-size: 13px; color: var(--text-muted);
         }
         .final-meta-item { display: flex; flex-direction: column; gap: 2px; }
         .final-meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
 
-        /* ── Markdown Content ── */
-        .md-content {
-            font-size: 15px;
-            line-height: 1.75;
-            color: var(--text);
-            overflow-wrap: break-word;
+        .model-highlight {
+            color: var(--accent); cursor: pointer; text-decoration: underline; text-decoration-style: dashed;
+            text-underline-offset: 3px; font-weight: 600; transition: color 0.2s, background 0.2s;
+            border-radius: 4px; padding: 0 4px;
         }
+        .model-highlight:hover { background: var(--accent-light); color: var(--accent-hover); }
+
+        details { outline: none; }
+        details summary { cursor:pointer; color:var(--text-light); font-size:13px; outline:none; user-select:none; list-style:none; margin-top: 12px; }
+        details summary::-webkit-details-marker { display: none; }
+        details summary::before { content: '▶ '; font-size: 10px; display: inline-block; transition: transform 0.2s; }
+        details[open] summary::before { transform: rotate(90deg); }
+
+        .md-content { font-size: 15px; line-height: 1.75; color: var(--text); overflow-wrap: break-word; }
         .md-content h1 { font-size: 1.5rem; margin: 1.2em 0 0.5em; font-family: var(--font-serif); font-weight: 400; }
         .md-content h2 { font-size: 1.3rem; margin: 1.1em 0 0.4em; font-family: var(--font-serif); font-weight: 400; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
         .md-content h3 { font-size: 1.1rem; margin: 1em 0 0.4em; font-weight: 600; }
-        .md-content h4, .md-content h5, .md-content h6 { font-size: 1rem; margin: 0.8em 0 0.3em; font-weight: 600; }
         .md-content p { margin: 0.6em 0; }
         .md-content ul, .md-content ol { padding-left: 1.6em; margin: 0.6em 0; }
         .md-content li { margin: 0.3em 0; }
-        .md-content blockquote {
-            margin: 0.8em 0;
-            padding: 0.5em 1em;
-            border-left: 3px solid var(--accent);
-            background: var(--surface-alt);
-            color: var(--text-muted);
-            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-        }
-        .md-content code {
-            font-family: var(--font-mono);
-            font-size: 0.88em;
-            background: #f0eeea;
-            padding: 2px 5px;
-            border-radius: 3px;
-        }
+        .md-content blockquote { margin: 0.8em 0; padding: 0.5em 1em; border-left: 3px solid var(--accent); background: var(--surface-alt); color: var(--text-muted); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+        .md-content code { font-family: var(--font-mono); font-size: 0.88em; background: #f0eeea; padding: 2px 5px; border-radius: 3px; }
         .md-content pre { margin: 0.8em 0; border-radius: var(--radius-sm); overflow: hidden; }
-        .md-content pre code {
-            display: block; padding: 14px 16px; overflow-x: auto;
-            font-size: 13px; line-height: 1.6; background: #282c34; color: #abb2bf;
-        }
+        .md-content pre code { display: block; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; background: #282c34; color: #abb2bf; }
         .md-content table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 14px; }
         .md-content th, .md-content td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
         .md-content th { background: var(--surface-alt); font-weight: 600; }
         .md-content a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
         .md-content hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
 
-        /* ── Drawer & Modals (省略无改动的部分以节约篇幅，保留原样式) ── */
         .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 900; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .backdrop.open { opacity: 1; pointer-events: auto; }
         .drawer { position: fixed; top: 0; right: 0; width: 400px; max-width: 90vw; height: 100vh; background: var(--surface); box-shadow: -4px 0 30px rgba(0,0,0,0.1); z-index: 950; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
@@ -531,35 +335,31 @@ function showToast(message, type = 'info') {
     toast.textContent = message;
     area.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('show'));
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 2200);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2200);
 }
 
 function renderMd(element, text) {
     element.innerHTML = marked.parse(text || '');
-    element.querySelectorAll('pre code').forEach(block => {
-        hljs.highlightElement(block);
-    });
+    element.querySelectorAll('pre code').forEach(block => { hljs.highlightElement(block); });
 }
 
 function getTokenSource(answer) {
     const src = answer.token_source;
     if (src === 'response') return { cls: 'response', label: '响应提取', icon: '✓' };
     if (src === 'fallback') return { cls: 'fallback', label: '降级获取', icon: '~' };
+    if (src === 'arbitration') return { cls: 'response', label: '仲裁解析', icon: '⚖' };
     return { cls: 'unknown', label: '未知来源', icon: '?' };
 }
 
-function formatNumber(n) {
-    if (n == null) return '-';
-    return n.toLocaleString('zh-CN');
+function formatNumber(n) { return (n == null) ? '-' : n.toLocaleString('zh-CN'); }
+
+function encodeQueryForCache(str) {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
 }
 
 function showTokenModal(data, modelName) {
     const body = document.getElementById('tokenDetailBody');
     const source = getTokenSource(data);
-    
     const inputTokens = data.prompt_tokens || data.input_tokens;
     const outputTokens = data.completion_tokens || data.output_tokens;
     const cachedTokens = data.cached_tokens || 0;
@@ -576,8 +376,7 @@ function showTokenModal(data, modelName) {
 
     body.innerHTML = `
         <div class="source-indicator ${source.cls}">
-            <span>${source.icon}</span>
-            <span>Token 数据来源：${source.label}</span>
+            <span>${source.icon}</span><span>Token 数据来源：${source.label}</span>
         </div>
         <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">
             <div>请求模型：<strong>${modelName || '仲裁节点'}</strong></div>
@@ -611,93 +410,104 @@ function showTokenModal(data, modelName) {
 
 function closeTokenModal() { document.getElementById('tokenModal').classList.remove('open'); }
 
-/* ========================================
-   Card / UI Dynamics
-======================================== */
+function showModelAnswerPopup(modelName) {
+    if(!currentSessionData || !currentSessionData.answers) return;
+    const ans = currentSessionData.answers.find(a => a.model === modelName);
+    if(!ans) {
+        showToast("未找到该模型的回答记录", "error");
+        return;
+    }
+    const contentHtml = marked.parse(ans.full_answer || ans.answer || '');
+    
+    const popup = document.createElement('div');
+    popup.className = 'modal-overlay open';
+    popup.style.zIndex = '3000';
+    popup.innerHTML = `
+        <div class="modal-box" style="max-height:85vh; width:96%; max-width:800px; display:flex; flex-direction:column;">
+            <div class="modal-head">
+                <h4>${modelName} - 完整回答</h4>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto; flex:1; padding:20px;">
+                <div class="md-content">${contentHtml}</div>
+            </div>
+        </div>
+    `;
+    popup.querySelector('.modal-close').onclick = () => popup.remove();
+    popup.onclick = (e) => { if(e.target === popup) popup.remove(); };
+    
+    popup.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+    document.body.appendChild(popup);
+}
 
-// 预渲染等待中的卡片
+// 一键折叠所有展开的模型卡片
+window.collapseAllCards = function() {
+    document.querySelectorAll('.card-body.open').forEach(body => {
+        body.classList.remove('open');
+    });
+    document.querySelectorAll('.expand-arrow.open').forEach(arrow => {
+        arrow.classList.remove('open');
+    });
+};
+
 function createPendingCard(modelName, sessionId) {
     const div = document.createElement('div');
-    div.className = 'card';
-    div.setAttribute('data-model', modelName);
-    div.setAttribute('data-status', 'pending');
-    
+    div.className = 'card'; div.setAttribute('data-model', modelName); div.setAttribute('data-status', 'pending');
     div.innerHTML = `
         <div class="card-header" style="cursor:default">
-            <div class="card-title">
-                <div class="spinner"></div>
-                <span>${modelName}</span>
-            </div>
+            <div class="card-title"><div class="spinner"></div><span>${modelName}</span></div>
             <div class="card-actions">
                 <span class="card-timer">0s</span>
                 <button class="btn btn-sm btn-danger abort-btn" onclick="event.stopPropagation(); abortModel('${modelName}', '${sessionId}', this)">终止</button>
             </div>
         </div>
-        <div class="card-body open" style="color:var(--text-muted); font-size:13px; text-align:center; padding: 24px;">
-            正在请求，请稍候...
-        </div>
+        <div class="card-body open" style="color:var(--text-muted); font-size:13px; text-align:center; padding: 24px;">正在请求，请稍候...</div>
     `;
     document.getElementById('results').appendChild(div);
 }
 
-// 用户手动终止请求
 async function abortModel(modelName, sessionId, btnEl) {
-    btnEl.disabled = true;
-    btnEl.textContent = '终止中...';
-    try {
-        await postJson('/ai/abort', { session_id: sessionId, model: modelName });
-    } catch (e) {
-        console.error("Abort failed", e);
-        btnEl.disabled = false;
-        btnEl.textContent = '终止';
-    }
+    btnEl.disabled = true; btnEl.textContent = '终止中...';
+    try { await postJson('/ai/abort', { session_id: sessionId, model: modelName }); } 
+    catch (e) { btnEl.disabled = false; btnEl.textContent = '终止'; }
 }
 
-// 得到结果后（无论是成功、报错还是被中止）更新已有的卡片结构
 function updateCardWithResult(answer) {
     let div = document.querySelector(`.card[data-model="${answer.model}"]`);
     let isNew = false;
-    
-    // 如果因刷新或加载历史记录找不到原占位卡片，则全新创建
     if (!div) {
-        div = document.createElement('div');
-        div.className = 'card';
-        div.setAttribute('data-model', answer.model);
-        isNew = true;
+        div = document.createElement('div'); div.className = 'card';
+        div.setAttribute('data-model', answer.model); isNew = true;
     }
-
     div.setAttribute('data-status', answer.success ? 'success' : 'error');
     const source = getTokenSource(answer);
-    const isSuccess = answer.success;
 
-    const header = document.createElement('div');
-    header.className = 'card-header';
+    const header = document.createElement('div'); header.className = 'card-header';
     header.innerHTML = `
-        <div class="card-title">
-            <span>${answer.model}</span>
-            <span class="token-badge ${source.cls}">${source.icon} ${source.label}</span>
-        </div>
-        <div class="card-actions">
-            <button class="btn btn-sm" onclick="event.stopPropagation();copyCardAnswer('${answer.model}')">复制</button>
-            <span class="expand-arrow">▼</span>
-        </div>
+        <div class="card-title"><span>${answer.model}</span><span class="token-badge ${source.cls}">${source.icon} ${source.label}</span></div>
+        <div class="card-actions"><button class="btn btn-sm" onclick="event.stopPropagation();copyCardAnswer('${answer.model}')">复制</button><span class="expand-arrow">▼</span></div>
     `;
 
-    const body = document.createElement('div');
-    body.className = 'card-body';
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'md-content';
-    if (isSuccess) {
-        renderMd(contentDiv, answer.answer);
+    const body = document.createElement('div'); body.className = 'card-body';
+    if (answer.success) {
+        body.innerHTML = `
+            <div class="md-content" style="margin-bottom: 10px;">
+                <div style="font-size:12px;color:var(--accent);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">[核心观点摘要]</div>
+                ${marked.parse(answer.summary || '无有效摘要返回')}
+            </div>
+            <details>
+                <summary>查看完整回答</summary>
+                <div class="md-content" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
+                    ${marked.parse(answer.full_answer || answer.answer || '')}
+                </div>
+            </details>
+        `;
+        body.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
     } else {
-        contentDiv.innerHTML = `<div style="color:var(--red)">${escapeHtml(answer.error)}</div>`;
+        body.innerHTML = `<div class="md-content" style="color:var(--red)">${escapeHtml(answer.error)}</div>`;
     }
-    body.appendChild(contentDiv);
 
-    const meta = document.createElement('div');
-    meta.className = 'card-meta';
-    
+    const meta = document.createElement('div'); meta.className = 'card-meta';
     let subHtml = '';
     if (answer.cached_tokens > 0 || answer.reasoning_tokens > 0) {
         let tags = [];
@@ -705,76 +515,53 @@ function updateCardWithResult(answer) {
         if (answer.reasoning_tokens > 0) tags.push(`<span style="color:var(--gold)">思考 ${formatNumber(answer.reasoning_tokens)}</span>`);
         subHtml = `<span style="font-size:12px;margin-left:4px;">(${tags.join(', ')})</span>`;
     }
-
+    
+    // 增加了一键折叠所有按钮，通过 margin-left: auto 将其推到最右侧
     meta.innerHTML = `
-        <span>耗时：${answer.time}s</span>
-        <span class="token-clickable" title="点击查看详细统计">
-            Tokens：${formatNumber(answer.total_tokens)} ${subHtml}
-            <span class="token-badge ${source.cls}" style="font-size:10px">${source.label}</span>
-        </span>
+        <div style="display:flex; align-items:center; gap:16px;">
+            <span>耗时：${answer.time}s</span>
+            <span class="token-clickable" title="点击查看详细统计">Tokens：${formatNumber(answer.total_tokens)} ${subHtml}<span class="token-badge ${source.cls}" style="font-size:10px">${source.label}</span></span>
+        </div>
+        <button class="btn btn-sm" style="margin-left:auto; background:transparent; border-color:var(--border); color:var(--text-muted);" onclick="event.stopPropagation(); collapseAllCards();">一键折叠所有</button>
     `;
-
-    meta.querySelector('.token-clickable').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showTokenModal(answer, answer.model);
-    });
+    
+    meta.querySelector('.token-clickable').addEventListener('click', (e) => { e.stopPropagation(); showTokenModal(answer, answer.model); });
 
     const arrow = header.querySelector('.expand-arrow');
-    header.addEventListener('click', () => {
-        const isOpen = body.classList.toggle('open');
-        arrow.classList.toggle('open', isOpen);
-    });
+    header.addEventListener('click', () => { const isOpen = body.classList.toggle('open'); arrow.classList.toggle('open', isOpen); });
 
-    div.innerHTML = '';
-    div.appendChild(header);
-    div.appendChild(body);
-    div.appendChild(meta);
-    
-    if (isNew) {
-        document.getElementById('results').appendChild(div);
-    }
+    div.innerHTML = ''; div.appendChild(header); div.appendChild(body); div.appendChild(meta);
+    if (isNew) document.getElementById('results').appendChild(div);
 }
 
-function escapeHtml(text) {
-    const d = document.createElement('div');
-    d.textContent = text || '';
-    return d.innerHTML;
-}
+function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text || ''; return d.innerHTML; }
 
 function getCardAnswer(model) {
     const card = document.querySelector(`.card[data-model="${model}"]`);
     if (!card) return '';
-    const mdContent = card.querySelector('.md-content');
-    return mdContent ? mdContent.textContent : '';
+    const details = card.querySelector('details .md-content');
+    return details ? details.textContent : card.querySelector('.md-content').textContent;
 }
 
 function copyCardAnswer(model) {
     const text = getCardAnswer(model);
-    if (text) {
-        copyText(text);
-        showToast('已复制 ' + model + ' 的回答', 'success');
-    }
+    if (text) { copyText(text); showToast('已复制 ' + model + ' 的回答', 'success'); }
 }
 
 function copyAllAnswers() {
     const question = document.getElementById('question').value.trim();
     const cards = document.querySelectorAll('.card');
     if (cards.length === 0) { showToast('没有可复制的回答', 'error'); return; }
-
     let text = '=== AI 聚合结果 ===\n\n问题：' + question + '\n\n';
     cards.forEach(card => {
         const model = card.getAttribute('data-model');
-        const content = card.querySelector('.md-content');
-        text += '--- ' + model + ' ---\n' + (content ? content.textContent : '') + '\n\n';
+        text += '--- ' + model + ' ---\n' + getCardAnswer(model) + '\n\n';
     });
-
     const finalBody = document.getElementById('finalBody');
     if (finalBody && finalBody.querySelector('.md-content')) {
         text += '=== 最终仲裁 ===\n' + finalBody.querySelector('.md-content').textContent + '\n';
     }
-
-    copyText(text);
-    showToast('已复制所有回答', 'success');
+    copyText(text); showToast('已复制所有回答', 'success');
 }
 
 function copyFinalAnswer() {
@@ -798,97 +585,63 @@ async function postJson(url, body, timeout = 180000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-            signal: controller.signal
-        });
-        clearTimeout(timer);
-        return await response.json();
-    } catch (err) {
-        clearTimeout(timer);
-        throw err;
-    }
+        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+        clearTimeout(timer); return await response.json();
+    } catch (err) { clearTimeout(timer); throw err; }
 }
 
-/* ========================================
-   Start & Polling
-======================================== */
-
 async function startAsk() {
-    clearInterval(pollingTimer);
-    clearInterval(liveTimerInterval);
-    renderedModels.clear();
-    currentSessionData = null;
+    clearInterval(pollingTimer); clearInterval(liveTimerInterval);
+    renderedModels.clear(); currentSessionData = null;
 
     document.getElementById('results').innerHTML = '';
-    const finalSection = document.getElementById('finalSection');
-    finalSection.classList.remove('active');
+    const finalSection = document.getElementById('finalSection'); finalSection.classList.remove('active');
     document.getElementById('finalBody').innerHTML = '';
 
     const question = document.getElementById('question').value.trim();
     if (!question) return;
 
     const fastMode = document.getElementById('fastMode').checked;
-    const progressSection = document.getElementById('progressSection');
-    progressSection.classList.add('active');
+    const progressSection = document.getElementById('progressSection'); progressSection.classList.add('active');
     document.getElementById('progressFill').style.width = '0%';
     document.getElementById('progressText').textContent = '连接中...';
 
-    // 记录发出消息的时间及开始计时
     const startTimestamp = Date.now();
-    const startDate = new Date(startTimestamp);
-    const timeString = startDate.toLocaleTimeString('zh-CN', { hour12: false });
-    
+    const timeString = new Date(startTimestamp).toLocaleTimeString('zh-CN', { hour12: false });
     const timeDisplay = document.getElementById('progressTime');
     timeDisplay.textContent = `开始: ${timeString} | 耗时: 0s`;
 
     liveTimerInterval = setInterval(() => {
         const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
         timeDisplay.textContent = `开始: ${timeString} | 耗时: ${elapsedSeconds}s`;
-        
-        // 动态更新尚未完成的单模型卡片上的倒计时
-        document.querySelectorAll('.card[data-status="pending"] .card-timer').forEach(el => {
-            el.textContent = `${elapsedSeconds}s`;
-        });
+        document.querySelectorAll('.card[data-status="pending"] .card-timer').forEach(el => { el.textContent = `${elapsedSeconds}s`; });
     }, 1000);
 
     try {
-        const startData = await postJson('/ai/start', { question, fast_mode: fastMode });
+        const cacheKey = "QA_CACHE_" + encodeQueryForCache(question).substring(0, 40) + "_" + fastMode;
+        let cachedAnswers = [];
+        try { const c = localStorage.getItem(cacheKey); if(c) cachedAnswers = JSON.parse(c); } catch(e){}
+
+        const startData = await postJson('/ai/start', { question, fast_mode: fastMode, cached_answers: cachedAnswers });
         if (!startData.success) {
-            alert(startData.error);
-            progressSection.classList.remove('active');
-            clearInterval(liveTimerInterval);
-            return;
+            alert(startData.error); progressSection.classList.remove('active'); clearInterval(liveTimerInterval); return;
         }
 
         const sessionId = startData.session_id;
         const models = startData.models;
 
-        // 预先渲染所有占位卡片
-        models.forEach(modelName => {
-            createPendingCard(modelName, sessionId);
-        });
+        models.forEach(modelName => { createPendingCard(modelName, sessionId); });
 
-        currentSessionData = {
-            question,
-            fastMode,
-            answers: [],
-            final: null,
-            startTime: startTimestamp
-        };
+        currentSessionData = { question, fastMode, answers: [], final: null, startTime: startTimestamp };
 
         pollingTimer = setInterval(async () => {
             try {
                 const pollData = await postJson('/ai/poll', { session_id: sessionId }, 30000);
                 if (!pollData.success) return;
 
-                const pct = pollData.total > 0
-                    ? Math.round((pollData.completed / pollData.total) * 100) : 0;
+                const pct = pollData.total > 0 ? Math.round((pollData.completed / pollData.total) * 100) : 0;
                 document.getElementById('progressFill').style.width = pct + '%';
-                document.getElementById('progressText').textContent =
-                    `完成 ${pollData.completed} / ${pollData.total}`;
+                document.getElementById('progressText').textContent = `完成 ${pollData.completed} / ${pollData.total}`;
 
                 for (const item of pollData.answers) {
                     if (!renderedModels.has(item.model)) {
@@ -899,30 +652,25 @@ async function startAsk() {
                 }
 
                 if (pollData.finished) {
-                    clearInterval(pollingTimer);
-                    clearInterval(liveTimerInterval); 
-                    document.getElementById('progressText').textContent =
-                        `全部完成：${pollData.total} 个模型`;
+                    clearInterval(pollingTimer); clearInterval(liveTimerInterval); 
+                    document.getElementById('progressText').textContent = `全部完成：${pollData.total} 个模型`;
+                    
+                    const successList = currentSessionData.answers.filter(a => a.success);
+                    if(successList.length > 0) localStorage.setItem(cacheKey, JSON.stringify(successList));
+                    
                     await loadFinal(sessionId);
                 }
-            } catch (err) {
-                console.error(err);
-            }
+            } catch (err) { console.error(err); }
         }, 1000);
 
-    } catch (err) {
-        alert(err);
-        progressSection.classList.remove('active');
-        clearInterval(liveTimerInterval);
-    }
+    } catch (err) { alert(err); progressSection.classList.remove('active'); clearInterval(liveTimerInterval); }
 }
 
 async function loadFinal(sessionId) {
     const finalSection = document.getElementById('finalSection');
     const finalBody = document.getElementById('finalBody');
-    finalSection.classList.add('active');
-    finalBody.className = 'final-body';
-    finalBody.innerHTML = '<div style="color:var(--gold);font-weight:500">仲裁分析中，请稍候...</div>';
+    finalSection.classList.add('active'); finalBody.className = 'final-body';
+    finalBody.innerHTML = '<div style="color:var(--gold);font-weight:500">仲裁分析中，这可能需要稍作等待...</div>';
 
     try {
         const data = await postJson('/ai/final', { session_id: sessionId }, 300000);
@@ -930,18 +678,43 @@ async function loadFinal(sessionId) {
             const source = getTokenSource(data);
             finalBody.innerHTML = '';
 
-            const mdDiv = document.createElement('div');
-            mdDiv.className = 'md-content';
-            renderMd(mdDiv, data.answer);
-            finalBody.appendChild(mdDiv);
+            const tempDiv = document.createElement('div');
+            tempDiv.className = 'md-content';
+            tempDiv.innerHTML = marked.parse(data.answer);
 
-            const metaDiv = document.createElement('div');
+            if(data.participating_models && data.participating_models.length > 0) {
+                data.participating_models.forEach(m => {
+                    const regex = new RegExp(m.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
+                    const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+                    let n; const nodes = []; while(n = walk.nextNode()) nodes.push(n);
+                    nodes.forEach(node => {
+                        if(node.parentNode && (node.parentNode.tagName === 'A' || node.parentNode.tagName === 'CODE')) return;
+                        if(regex.test(node.nodeValue)) {
+                            const fragment = document.createDocumentFragment(); let lastIdx = 0;
+                            node.nodeValue.replace(regex, (match, offset) => {
+                                fragment.appendChild(document.createTextNode(node.nodeValue.substring(lastIdx, offset)));
+                                const hl = document.createElement('span'); hl.className = 'model-highlight'; hl.textContent = match;
+                                hl.onclick = () => showModelAnswerPopup(m); fragment.appendChild(hl);
+                                lastIdx = offset + match.length;
+                            });
+                            fragment.appendChild(document.createTextNode(node.nodeValue.substring(lastIdx)));
+                            node.parentNode.replaceChild(fragment, node);
+                        }
+                    });
+                });
+            }
+
+            tempDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+            finalBody.appendChild(tempDiv);
+
+            const detailsFetchedInfo = (data.details_fetched && data.details_fetched.length > 0) 
+                                       ? data.details_fetched.join(', ') : '无 (仅基于摘要)';
+
+            // 修正了之前漏掉声明 metaDiv 变量的致命错误
+            const metaDiv = document.createElement('div'); 
             metaDiv.className = 'final-meta';
             metaDiv.innerHTML = `
-                <div class="final-meta-item">
-                    <span class="final-meta-label">仲裁耗时</span>
-                    <span>${data.time}s</span>
-                </div>
+                <div class="final-meta-item"><span class="final-meta-label">仲裁耗时</span><span>${data.time}s</span></div>
                 <div class="final-meta-item">
                     <span class="final-meta-label">仲裁 Tokens</span>
                     <span class="token-clickable" title="点击查看详细统计" style="margin:-3px -8px;padding:3px 8px;border-radius:4px;cursor:pointer">
@@ -949,30 +722,21 @@ async function loadFinal(sessionId) {
                         <span class="token-badge ${source.cls}" style="font-size:10px">${source.label}</span>
                     </span>
                 </div>
-                <div class="final-meta-item">
-                    <span class="final-meta-label">源模型总耗时</span>
-                    <span>${data.source_total_time}s</span>
-                </div>
-                <div class="final-meta-item">
-                    <span class="final-meta-label">源模型总 Tokens</span>
-                    <span>${formatNumber(data.source_total_tokens)}</span>
-                </div>
+                <div class="final-meta-item"><span class="final-meta-label">二次展开</span><span>${detailsFetchedInfo}</span></div>
+                <div class="final-meta-item"><span class="final-meta-label">源模型总耗时</span><span>${data.source_total_time}s</span></div>
+                <div class="final-meta-item"><span class="final-meta-label">源模型总 Tokens</span><span>${formatNumber(data.source_total_tokens)}</span></div>
             `;
 
             metaDiv.querySelector('.token-clickable').addEventListener('click', () => {
                 showTokenModal({
-                    total_tokens: data.tokens ?? data.total_tokens,
-                    input_tokens: data.input_tokens,
-                    output_tokens: data.output_tokens,
-                    cached_tokens: data.cached_tokens,
-                    time: data.time,
-                    token_source: data.token_source
-                }, '仲裁模型');
+                    total_tokens: data.tokens ?? data.total_tokens, input_tokens: data.input_tokens,
+                    output_tokens: data.output_tokens, cached_tokens: data.cached_tokens,
+                    time: data.time, token_source: data.token_source
+                }, '仲裁核心调度器');
             });
 
             finalBody.appendChild(metaDiv);
-            currentSessionData.final = data;
-            autoSaveSession();
+            currentSessionData.final = data; autoSaveSession();
         } else {
             finalBody.innerHTML = `<div style="color:var(--red)">${escapeHtml(data.error)}</div>`;
         }
@@ -982,7 +746,7 @@ async function loadFinal(sessionId) {
 }
 
 /* ========================================
-   LocalStorage
+   LocalStorage Storage & Drawer Flow
 ======================================== */
 const STORAGE_PREFIX = 'ai_session_';
 const MAX_STORAGE_BYTES = 5 * 1024 * 1024; 
@@ -993,36 +757,27 @@ function autoSaveSession() {
         const id = Date.now();
         const record = {
             id, question: currentSessionData.question, fastMode: currentSessionData.fastMode,
-            answers: currentSessionData.answers, final: currentSessionData.final,
-            savedAt: new Date().toISOString()
+            answers: currentSessionData.answers, final: currentSessionData.final, savedAt: new Date().toISOString()
         };
         localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(record));
         showToast('已自动保存', 'success');
-    } catch (e) {
-        showToast('保存失败：' + e.message, 'error');
-    }
+    } catch (e) { showToast('保存失败：' + e.message, 'error'); }
 }
 
 function getAllSessions() {
     const sessions = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(STORAGE_PREFIX)) {
-            try { sessions.push(JSON.parse(localStorage.getItem(key))); } catch (e) {}
-        }
+        if (key && key.startsWith(STORAGE_PREFIX)) { try { sessions.push(JSON.parse(localStorage.getItem(key))); } catch (e) {} }
     }
-    sessions.sort((a, b) => b.id - a.id);
-    return sessions;
+    return sessions.sort((a, b) => b.id - a.id);
 }
 
 function getStorageSize() {
     let total = 0;
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(STORAGE_PREFIX)) {
-            const val = localStorage.getItem(key) || '';
-            total += (key.length + val.length) * 2; 
-        }
+        if (key && key.startsWith(STORAGE_PREFIX)) { const val = localStorage.getItem(key) || ''; total += (key.length + val.length) * 2; }
     }
     return total;
 }
@@ -1036,129 +791,127 @@ function formatBytes(bytes) {
 function loadSession(id) {
     const raw = localStorage.getItem(STORAGE_PREFIX + id);
     if (!raw) { showToast('记录不存在', 'error'); return; }
-    let data;
-    try { data = JSON.parse(raw); } catch { showToast('数据损坏', 'error'); return; }
+    let data; try { data = JSON.parse(raw); } catch { showToast('数据损坏', 'error'); return; }
 
     document.getElementById('question').value = data.question || '';
-    renderedModels.clear();
-    document.getElementById('results').innerHTML = '';
+    renderedModels.clear(); document.getElementById('results').innerHTML = '';
 
     if (data.answers && data.answers.length > 0) {
-        data.answers.forEach(a => {
-            renderedModels.add(a.model);
-            updateCardWithResult(a);
-        });
+        data.answers.forEach(a => { renderedModels.add(a.model); updateCardWithResult(a); });
     }
 
     const finalSection = document.getElementById('finalSection');
     const finalBody = document.getElementById('finalBody');
     if (data.final && data.final.success) {
-        finalSection.classList.add('active');
-        finalBody.innerHTML = '';
-        const mdDiv = document.createElement('div');
-        mdDiv.className = 'md-content';
-        renderMd(mdDiv, data.final.answer);
-        finalBody.appendChild(mdDiv);
+        finalSection.classList.add('active'); finalBody.innerHTML = '';
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.className = 'md-content';
+        tempDiv.innerHTML = marked.parse(data.final.answer);
+        if(data.final.participating_models) {
+             data.final.participating_models.forEach(m => {
+                const regex = new RegExp(m.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
+                const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+                let n; const nodes = []; while(n = walk.nextNode()) nodes.push(n);
+                nodes.forEach(node => {
+                    if(node.parentNode && (node.parentNode.tagName === 'A' || node.parentNode.tagName === 'CODE')) return;
+                    if(regex.test(node.nodeValue)) {
+                        const fragment = document.createDocumentFragment(); let lastIdx = 0;
+                        node.nodeValue.replace(regex, (match, offset) => {
+                            fragment.appendChild(document.createTextNode(node.nodeValue.substring(lastIdx, offset)));
+                            const hl = document.createElement('span'); hl.className = 'model-highlight'; hl.textContent = match;
+                            hl.onclick = () => showModelAnswerPopup(m); fragment.appendChild(hl);
+                            lastIdx = offset + match.length;
+                        });
+                        fragment.appendChild(document.createTextNode(node.nodeValue.substring(lastIdx)));
+                        node.parentNode.replaceChild(fragment, node);
+                    }
+                });
+            });
+        }
+        tempDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        finalBody.appendChild(tempDiv);
+
+        // 重新组装底栏统计
+        const source = getTokenSource(data.final);
+        const detailsFetchedInfo = (data.final.details_fetched && data.final.details_fetched.length > 0) 
+                                   ? data.final.details_fetched.join(', ') : '无 (仅基于摘要)';
+
+        const metaDiv = document.createElement('div'); 
+        metaDiv.className = 'final-meta';
+        metaDiv.innerHTML = `
+            <div class="final-meta-item"><span class="final-meta-label">仲裁耗时</span><span>${data.final.time}s</span></div>
+            <div class="final-meta-item">
+                <span class="final-meta-label">仲裁 Tokens</span>
+                <span class="token-clickable" title="点击查看详细统计" style="margin:-3px -8px;padding:3px 8px;border-radius:4px;cursor:pointer">
+                    ${formatNumber(data.final.tokens ?? data.final.total_tokens)}
+                    <span class="token-badge ${source.cls}" style="font-size:10px">${source.label}</span>
+                </span>
+            </div>
+            <div class="final-meta-item"><span class="final-meta-label">二次展开</span><span>${detailsFetchedInfo}</span></div>
+            <div class="final-meta-item"><span class="final-meta-label">源模型总耗时</span><span>${data.final.source_total_time}s</span></div>
+            <div class="final-meta-item"><span class="final-meta-label">源模型总 Tokens</span><span>${formatNumber(data.final.source_total_tokens)}</span></div>
+        `;
+        metaDiv.querySelector('.token-clickable').addEventListener('click', () => {
+            showTokenModal({
+                total_tokens: data.final.tokens ?? data.final.total_tokens, input_tokens: data.final.input_tokens,
+                output_tokens: data.final.output_tokens, cached_tokens: data.final.cached_tokens,
+                time: data.final.time, token_source: data.final.token_source
+            }, '仲裁核心调度器');
+        });
+        finalBody.appendChild(metaDiv);
+
     } else {
-        finalSection.classList.remove('active');
-        finalBody.innerHTML = '';
+        finalSection.classList.remove('active'); finalBody.innerHTML = '';
     }
 
     document.getElementById('progressSection').classList.remove('active');
-    toggleDrawer(false);
-    showToast('已加载历史记录', 'success');
-
-    currentSessionData = {
-        question: data.question, fastMode: data.fastMode,
-        answers: data.answers || [], final: data.final
-    };
+    toggleDrawer(false); showToast('已加载历史记录', 'success');
+    currentSessionData = { question: data.question, fastMode: data.fastMode, answers: data.answers || [], final: data.final };
 }
 
-function deleteSession(id) {
-    localStorage.removeItem(STORAGE_PREFIX + id);
-    showToast('已删除', 'info');
-    renderSavedList();
-}
-
+function deleteSession(id) { localStorage.removeItem(STORAGE_PREFIX + id); showToast('已删除', 'info'); renderSavedList(); }
 function deleteAllSessions() {
-    const sessions = getAllSessions();
-    if (sessions.length === 0) return;
+    const sessions = getAllSessions(); if (sessions.length === 0) return;
     if (!confirm(`确定清空全部 ${sessions.length} 条记录？`)) return;
     sessions.forEach(s => localStorage.removeItem(STORAGE_PREFIX + s.id));
-    showToast('已清空全部记录', 'info');
-    renderSavedList();
+    showToast('已清空全部记录', 'info'); renderSavedList();
 }
 
 function toggleDrawer(forceState) {
-    const drawer = document.getElementById('drawer');
-    const backdrop = document.getElementById('backdrop');
+    const drawer = document.getElementById('drawer'); const backdrop = document.getElementById('backdrop');
     const shouldOpen = forceState !== undefined ? forceState : !drawer.classList.contains('open');
-
-    if (shouldOpen) {
-        renderSavedList();
-        drawer.classList.add('open');
-        backdrop.classList.add('open');
-    } else {
-        drawer.classList.remove('open');
-        backdrop.classList.remove('open');
-    }
+    if (shouldOpen) { renderSavedList(); drawer.classList.add('open'); backdrop.classList.add('open'); } 
+    else { drawer.classList.remove('open'); backdrop.classList.remove('open'); }
 }
 
 function renderSavedList() {
-    const list = document.getElementById('savedList');
-    const sessions = getAllSessions();
-    const size = getStorageSize();
-
+    const list = document.getElementById('savedList'); const sessions = getAllSessions(); const size = getStorageSize();
     document.getElementById('drawerStorage').textContent = `已用 ${formatBytes(size)}，共 ${sessions.length} 条记录`;
     const fillEl = document.getElementById('drawerStorageFill');
     const pct = Math.min((size / MAX_STORAGE_BYTES) * 100, 100);
-    fillEl.style.width = pct + '%';
-    fillEl.style.background = pct > 80 ? 'var(--red)' : 'var(--accent)';
+    fillEl.style.width = pct + '%'; fillEl.style.background = pct > 80 ? 'var(--red)' : 'var(--accent)';
 
-    if (sessions.length === 0) {
-        list.innerHTML = '<div class="drawer-empty">暂无保存的记录</div>';
-        return;
-    }
-
+    if (sessions.length === 0) { list.innerHTML = '<div class="drawer-empty">暂无保存的记录</div>'; return; }
     list.innerHTML = sessions.map(s => {
         const date = new Date(s.savedAt);
-        const dateStr = date.toLocaleDateString('zh-CN') + ' ' +
-            date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        const count = (s.answers || []).length;
-        const hasFinal = s.final && s.final.success;
+        const dateStr = date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const count = (s.answers || []).length; const hasFinal = s.final && s.final.success;
         const sizeBytes = ((localStorage.getItem(STORAGE_PREFIX + s.id) || '').length * 2);
         const questionPreview = escapeHtml(s.question || '').substring(0, 200);
 
         return `
             <div class="session-item">
                 <div class="session-question">${questionPreview}</div>
-                <div class="session-meta-row">
-                    <span>${dateStr}</span>
-                    <span>${count} 个模型${hasFinal ? ' + 仲裁' : ''}</span>
-                    <span>${formatBytes(sizeBytes)}</span>
-                </div>
-                <div class="session-buttons">
-                    <button class="btn btn-sm" onclick="loadSession(${s.id})">加载</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteSession(${s.id})">删除</button>
-                </div>
+                <div class="session-meta-row"><span>${dateStr}</span><span>${count} 个模型${hasFinal ? ' + 仲裁' : ''}</span><span>${formatBytes(sizeBytes)}</span></div>
+                <div class="session-buttons"><button class="btn btn-sm" onclick="loadSession(${s.id})">加载</button><button class="btn btn-sm btn-danger" onclick="deleteSession(${s.id})">删除</button></div>
             </div>
         `;
     }).join('');
 }
 
-document.getElementById('question').addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        startAsk();
-    }
-});
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeTokenModal();
-        toggleDrawer(false);
-    }
-});
+document.getElementById('question').addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); startAsk(); }});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeTokenModal(); toggleDrawer(false); document.querySelectorAll('.modal-overlay.open').forEach(el=>el.remove()); }});
 </script>
 
 </body>
