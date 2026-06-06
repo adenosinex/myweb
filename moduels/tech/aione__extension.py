@@ -4,7 +4,7 @@ import time
 import threading
 import requests
 import random
-import re 
+import re
 import json
 
 from concurrent.futures import ThreadPoolExecutor
@@ -15,7 +15,6 @@ ai_bp = Blueprint("ai_aggregate", __name__, url_prefix="/ai")
 executor = ThreadPoolExecutor(max_workers=16)
 LOCK = threading.Lock()
 SESSION_CACHE = {}
-
 AI_MODELS = [
      {
        "name": "step-3.5-flash op",
@@ -53,12 +52,7 @@ AI_MODELS = [
         "model": "xiaomi/mimo-v2.5-pro",
         "api_key": os.getenv("OP_API_KEY"),
     },
-    {
-       "name": "qwen3.6-plus op",
-        "base_url": os.getenv("MODEL_OP_URL"),
-        "model": "qwen/qwen3.6-plus",
-        "api_key": os.getenv("OP_API_KEY"),
-    },
+    
     {
        "name": "DeepSeek-V4-Pro si",
         "base_url": os.getenv("MODEL_SI_URL"),
@@ -73,6 +67,24 @@ AI_MODELS_FAST = [
         "name": "glm4.5 airfr op",
         "base_url": os.getenv("MODEL_OP_URL"),
         "model": "z-ai/glm-4.5-air:free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+        "name": "opfr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "openrouter/free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+        "name": "qwen3-coderfr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "qwen/qwen3-coder:free",
+        "api_key": os.getenv("OP_API_KEY"),
+    },
+    {
+        "name": "k2.6fr op",
+        "base_url": os.getenv("MODEL_OP_URL"),
+        "model": "moonshotai/kimi-k2.6:free",
         "api_key": os.getenv("OP_API_KEY"),
     },
      {

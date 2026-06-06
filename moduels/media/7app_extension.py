@@ -13,10 +13,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'db/app_data.db')
 RESOURCE_NODE_URL = 'http://15x4.su7.dpdns.org:5001'  # 设定资源节点地址
 
+AI_API_URL = os.getenv("MODEL_AL_URL")  
+                                
 AI_API_URL = os.getenv("MODEL_SI_URL")  
 AI_API_KEY = os.getenv("SI_API_KEY")               
 AI_MODEL = "deepseek-ai/DeepSeek-V4-Flash"                                  
-
+ 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
