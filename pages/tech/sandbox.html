@@ -3,23 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <title>我的自定义沙盒</title>
-    <!-- 引入 ECharts 用于渲染网状图 -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
+        :root { --default-icon: '📄'; }
         body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 40px auto; background: #f4f5f7; color: #333; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .header-actions { display: flex; gap: 10px; }
-        .btn { padding: 8px 16px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 14px;}
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 8px 16px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 14px; white-space: nowrap; }
         .btn:hover { background: #0043a6; }
-        .btn-success { background: #28a745; }
-        .btn-success:hover { background: #218838; }
-        .btn-outline { background: transparent; border: 1px solid #0052cc; color: #0052cc; }
-        .btn-outline:hover { background: #e6f0ff; }
-        .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; }
-        .back-link:hover { text-decoration: underline; }
-        
-        .view-container { display: none; }
-        .view-container.active { display: block; animation: fadeIn 0.3s ease; }
+        .btn-success { background: #28a745; } .btn-success:hover { background: #218838; }
+        .btn-outline { background: transparent; border: 1px solid #0052cc; color: #0052cc; } .btn-outline:hover { background: #e6f0ff; }
+        .btn-warning { background: #ffc107; color: #333; } .btn-warning:hover { background: #e0a800; }
+        .btn-toolbox { background: #6f42c1; } .btn-toolbox:hover { background: #5a32a3; }
+        .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; } .back-link:hover { text-decoration: underline; }
+
+        .view-container { display: none; } .view-container.active { display: block; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
@@ -27,25 +25,29 @@
         .card { background: white; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s; border: 1px solid #eaeaea; display: block; height: 100%; box-sizing: border-box; }
         .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
         .card .icon { font-size: 36px; margin-bottom: 12px; }
-        .card .title { font-size: 15px; font-weight: bold; margin-bottom: 8px;}
+        .card .title { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
         .card .tags { font-size: 12px; color: #888; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; display: inline-block; margin: 2px; }
-        
-        .card-edit-btn { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; display: none; border: none; }
-        .card-wrapper:hover .card-edit-btn { display: block; }
-        .card-edit-btn:hover { background: #28a745; color: white; }
+
+        .card-edit-btn { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; display: none; border: none; z-index: 2; }
+        .card-wrapper:hover .card-edit-btn { display: block; } .card-edit-btn:hover { background: #28a745; color: white; }
 
         .form-panel { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px;}
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
         input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
         textarea { width: 100%; height: 400px; padding: 15px; font-family: 'Consolas', monospace; background: #1e1e1e; color: #d4d4d4; border: none; border-radius: 5px; box-sizing: border-box; resize: vertical; }
 
         #graph-container { width: 100%; height: 650px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: none; }
+
+        .toolbox-panel { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; display: none; }
+        .toolbox-panel.active { display: block; }
+        .toolbox-row { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; }
+        .toolbox-divider { border-top: 1px solid #eee; margin: 15px 0; }
+
+        .icon-hint { font-size: 12px; color: #888; margin-top: 4px; }
     </style>
 </head>
 <body>
-
-    <!-- 视图 1：列表 / 关系图 -->
     <div id="view-list" class="view-container active">
         <div class="header">
             <h2>🛠️ 个人工具箱 & HTML沙盒</h2>
@@ -53,38 +55,52 @@
                 <button class="btn btn-outline" onclick="exportCSV()">⬇️ 导出未标记(CSV)</button>
                 <button class="btn btn-outline" onclick="document.getElementById('csv-file').click()">⬆️ 导入标记(CSV)</button>
                 <input type="file" id="csv-file" style="display:none" accept=".csv" onchange="importCSV(event)">
+                <button class="btn btn-toolbox" onclick="toggleToolbox()">🧰 工具箱</button>
                 <button class="btn btn-success" id="toggle-view-btn" onclick="toggleViewMode()">🕸️ 切换网状图</button>
                 <button class="btn" onclick="switchView('upload')">+ 新建项目</button>
             </div>
         </div>
-        
-        <!-- 列表展现 -->
+
+        <!-- 工具箱面板 (折叠) -->
+        <div id="toolbox-panel" class="toolbox-panel">
+            <h3 style="margin-top:0;">🔧 批量图标管理</h3>
+            <div class="toolbox-row">
+                <button class="btn btn-warning" onclick="exportIconCSV()">📤 导出图标CSV (含预览)</button>
+                <span style="color:#666;">导出项目标题、当前图标、HTML前200字预览</span>
+            </div>
+            <div class="toolbox-divider"></div>
+            <div class="toolbox-row">
+                <button class="btn btn-success" onclick="document.getElementById('icon-csv-file').click()">📥 导入图标CSV并更新</button>
+                <input type="file" id="icon-csv-file" style="display:none" accept=".csv" onchange="importIconCSV(event)">
+                <span style="color:#666;">CSV需包含 id(或title)、icon 列，将批量更新图标</span>
+            </div>
+        </div>
+
         <div class="grid" id="pages-grid"></div>
-        
-        <!-- ECharts 展现 -->
         <div id="graph-container"></div>
     </div>
 
-    <!-- 视图 2：新建 -->
+    <!-- 新建视图 -->
     <div id="view-upload" class="view-container">
         <div class="form-panel">
             <h2>🚀 部署新项目</h2>
             <form id="upload-form">
                 <div class="form-group">
                     <label>标题</label>
-                    <input type="text" id="upload-title" required>
+                    <input type="text" id="upload-title" required placeholder="请输入项目标题">
                 </div>
                 <div class="form-group">
-                    <label>图标 (Emoji或URL)</label>
-                    <input type="text" id="upload-icon">
+                    <label>图标 (留空将自动生成专属图标并注入HTML)</label>
+                    <input type="text" id="upload-icon" placeholder="自动分配，每个项目不同">
+                    <div class="icon-hint">✨ 不填则根据标题生成固定emoji，同时注入到HTML的&lt;title&gt;中</div>
                 </div>
                 <div class="form-group">
-                    <label>标签 (逗号分隔，便于图谱归类)</label>
+                    <label>标签 (逗号分隔)</label>
                     <input type="text" id="upload-tags" placeholder="例如: 工具, 游戏, 数据可视化">
                 </div>
                 <div class="form-group">
                     <label>完整 HTML 代码</label>
-                    <textarea id="upload-html" required></textarea>
+                    <textarea id="upload-html" required placeholder="在此粘贴或编写HTML代码..."></textarea>
                 </div>
                 <button type="submit" class="btn">保存</button>
                 <span class="back-link" onclick="switchView('list')">返回</span>
@@ -92,7 +108,7 @@
         </div>
     </div>
 
-    <!-- 视图 3：编辑 -->
+    <!-- 编辑视图 -->
     <div id="view-edit" class="view-container">
         <div class="form-panel">
             <h2>✏️ 编辑项目</h2>
@@ -100,19 +116,20 @@
                 <input type="hidden" id="edit-id">
                 <div class="form-group">
                     <label>标题</label>
-                    <input type="text" id="edit-title" required>
+                    <input type="text" id="edit-title" required placeholder="请输入项目标题">
                 </div>
                 <div class="form-group">
-                    <label>图标</label>
-                    <input type="text" id="edit-icon">
+                    <label>图标 (留空将重新生成专属图标并注入HTML)</label>
+                    <input type="text" id="edit-icon" placeholder="清空后自动生成专属图标">
+                    <div class="icon-hint">✨ 不填则根据ID生成固定emoji，同时注入到HTML的&lt;title&gt;中</div>
                 </div>
                 <div class="form-group">
                     <label>标签 (逗号分隔)</label>
-                    <input type="text" id="edit-tags">
+                    <input type="text" id="edit-tags" placeholder="例如: 工具, 游戏, 数据可视化">
                 </div>
                 <div class="form-group">
                     <label>完整 HTML 代码</label>
-                    <textarea id="edit-html" required></textarea>
+                    <textarea id="edit-html" required placeholder="在此粘贴或编写HTML代码..."></textarea>
                 </div>
                 <button type="submit" class="btn btn-success">更新</button>
                 <span class="back-link" onclick="switchView('list')">取消</span>
@@ -122,66 +139,96 @@
 
     <script>
         const API_BASE = '/sandbox';
+        const EMOJI_POOL = ['🔧','📌','🚀','🎯','📊','💡','🎮','📁','🖼️','📝','🔗','🗂️','📈','🔍','🧩','🎨','📦','⚙️','🌟','💎'];
+
+        function getDefaultIcon(seed) {
+            if (!seed) return EMOJI_POOL[0];
+            let hash = 0;
+            for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) & 0xffffffff;
+            return EMOJI_POOL[Math.abs(hash) % EMOJI_POOL.length];
+        }
+
+        function resolveIcon(page) {
+            if (page.icon && page.icon.trim() !== '') return page.icon.trim();
+            return getDefaultIcon(page.id || page.title || 'default');
+        }
+
+        // 注入默认图标到HTML代码中：修改<title>标签内容，添加emoji前缀
+        function injectIconToHtml(htmlContent, iconEmoji, title) {
+            if (!htmlContent) return htmlContent;
+            const titleText = title || '项目';
+            const emojiPrefix = iconEmoji + ' ';
+            // 检查是否存在<title>标签
+            const titleRegex = /<title[^>]*>([\s\S]*?)<\/title>/i;
+            if (titleRegex.test(htmlContent)) {
+                return htmlContent.replace(titleRegex, (match, p1) => {
+                    return match.replace(p1, emojiPrefix + p1);
+                });
+            } else {
+                // 无<title>，尝试插入到<head>中，若无<head>则添加到最前面
+                const headRegex = /<head[^>]*>/i;
+                if (headRegex.test(htmlContent)) {
+                    return htmlContent.replace(headRegex, (match) => {
+                        return match + `<title>${emojiPrefix}${titleText}</title>`;
+                    });
+                } else {
+                    return `<title>${emojiPrefix}${titleText}</title>` + htmlContent;
+                }
+            }
+        }
+
         let currentPagesData = [];
         let isGraphMode = false;
         let chartInstance = null;
+        let toolboxVisible = false;
+
+        function toggleToolbox() {
+            toolboxVisible = !toolboxVisible;
+            document.getElementById('toolbox-panel').classList.toggle('active', toolboxVisible);
+        }
 
         function switchView(viewName, param = null) {
             document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
             document.getElementById(`view-${viewName}`).classList.add('active');
-
-            if (viewName === 'list') {
-                loadPages();
-            } else if (viewName === 'upload') {
-                document.getElementById('upload-form').reset();
-            } else if (viewName === 'edit' && param) {
-                loadEditData(param);
-            }
+            if (viewName === 'list') loadPages();
+            else if (viewName === 'upload') document.getElementById('upload-form').reset();
+            else if (viewName === 'edit' && param) loadEditData(param);
         }
 
-        // 数据请求
         function loadPages() {
             fetch(`${API_BASE}/api/pages`)
                 .then(res => res.json())
                 .then(data => {
                     currentPagesData = data;
-                    if (isGraphMode) {
-                        renderGraph();
-                    } else {
-                        renderGrid();
-                    }
+                    if (isGraphMode) renderGraph();
+                    else renderGrid();
                 }).catch(err => console.error("加载列表失败", err));
         }
 
-        // 渲染宫格列表
         function renderGrid() {
             const grid = document.getElementById('pages-grid');
-            grid.innerHTML = ''; 
+            grid.innerHTML = '';
             currentPagesData.forEach(page => {
+                const displayIcon = resolveIcon(page);
                 let tagsHtml = '';
-                if(page.tags) {
-                    tagsHtml = page.tags.split(/[,，]/).map(t => `<span class="tags">${t.trim()}</span>`).join('');
-                }
+                if (page.tags) tagsHtml = page.tags.split(/[,，]/).map(t => `<span class="tags">${t.trim()}</span>`).join('');
                 grid.innerHTML += `
                     <div class="card-wrapper">
                         <a href="${API_BASE}/view/${page.id}" target="_blank" class="card">
-                            <div class="icon">${page.icon || '📄'}</div>
+                            <div class="icon">${displayIcon}</div>
                             <div class="title">${page.title}</div>
                             <div>${tagsHtml}</div>
                         </a>
-                        <button class="card-edit-btn" onclick="switchView('edit', '${page.id}')">编辑</button>
-                    </div>
-                `;
+                        <button class="card-edit-btn" onclick="event.preventDefault(); event.stopPropagation(); switchView('edit', '${page.id}')">编辑</button>
+                    </div>`;
             });
         }
 
-        // 视图切换逻辑
         function toggleViewMode() {
             isGraphMode = !isGraphMode;
             const btn = document.getElementById('toggle-view-btn');
             const grid = document.getElementById('pages-grid');
             const graph = document.getElementById('graph-container');
-
             if (isGraphMode) {
                 btn.innerHTML = '🔲 切换列表视图';
                 grid.style.display = 'none';
@@ -195,142 +242,118 @@
             }
         }
 
-        // ECharts 网状力导向图渲染
-// ECharts 网状力导向图渲染 (带统计数据与动态大小缩放)
         function renderGraph() {
             const container = document.getElementById('graph-container');
             if (!chartInstance) chartInstance = echarts.init(container);
-
-            const nodes = [];
-            const links = [];
-            const categoriesSet = new Set();
-            const tagMap = new Map(); 
-            const tagCounts = {}; // 新增：用于统计每个标签下的文件数量
-
-            // 第一次遍历：统计每个 tag 的数量
+            const nodes = [], links = [];
+            const categoriesSet = new Set(), tagMap = new Map(), tagCounts = {};
             currentPagesData.forEach(page => {
                 let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
-                if(pTags.length === 0) pTags = ['未分类'];
-                pTags.forEach(tag => {
-                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-                });
+                if (pTags.length === 0) pTags = ['未分类'];
+                pTags.forEach(tag => tagCounts[tag] = (tagCounts[tag] || 0) + 1);
             });
-
-            // 第二次遍历：构建节点和连线
             currentPagesData.forEach(page => {
                 let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
-                if(pTags.length === 0) pTags = ['未分类'];
-                
+                if (pTags.length === 0) pTags = ['未分类'];
                 pTags.forEach(tag => {
                     categoriesSet.add(tag);
                     if (!tagMap.has(tag)) {
-                        // 创建标签主节点，动态计算大小并添加数量数据
                         const count = tagCounts[tag];
-                        // 基础大小为 40，每个文件增加 5 的大小，最大体积封顶限制在 100 避免图谱失衡
-                        const nodeSize = Math.min(100, 40 + count * 5); 
-                        
-                        nodes.push({
-                            id: 'TAG_' + tag,
-                            name: tag, 
-                            value: count, // 设为 value 以供 formatter 读取
-                            symbolSize: nodeSize,
-                            category: tag,
-                            itemStyle: { borderWidth: 3, borderColor: '#fff', shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' },
-                            // 使用 formatter 显示 标签名 和 (数量)
-                            label: { show: true, formatter: '{b}\n({c})', fontSize: 15, fontWeight: 'bold' }
-                        });
+                        nodes.push({ id:'TAG_'+tag, name:tag, value:count, symbolSize:Math.min(100,40+count*5), category:tag, itemStyle:{ borderWidth:3, borderColor:'#fff', shadowBlur:10, shadowColor:'rgba(0,0,0,0.3)' }, label:{ show:true, formatter:'{b}\n({c})', fontSize:15, fontWeight:'bold' } });
                         tagMap.set(tag, true);
                     }
-
-                    // 建立连接
-                    links.push({
-                        source: page.id,
-                        target: 'TAG_' + tag
-                    });
+                    links.push({ source:page.id, target:'TAG_'+tag });
                 });
-
-                // 创建文件子节点
-                nodes.push({
-                    id: page.id,
-                    name: page.title,
-                    symbolSize: 18,
-                    category: pTags[0], // 文件颜色以其第一个标签为准
-                    url: `${API_BASE}/view/${page.id}`,
-                    // 文件节点仅显示名称，屏蔽 value 值
-                    label: { show: true, position: 'right', formatter: '{b}' }
-                });
+                nodes.push({ id:page.id, name:page.title, symbolSize:18, category:pTags[0], url:`${API_BASE}/view/${page.id}`, label:{ show:true, position:'right', formatter:'{b}' } });
             });
-
             const categories = Array.from(categoriesSet).map(name => ({ name }));
-
             const option = {
-                tooltip: { 
-                    formatter: function(params) {
-                        // 如果是标签主节点，提示框显示统计信息
-                        if(params.data.id && params.data.id.startsWith('TAG_')) {
-                            return `🏷️ <b>${params.data.name}</b><br/>共聚集了 ${params.data.value} 个项目`;
-                        }
-                        return `📄 ${params.data.name}`;
-                    } 
-                },
-                legend: { data: categories.map(c => c.name), type: 'scroll', bottom: 10 },
-                animationDurationUpdate: 1500,
-                animationEasingUpdate: 'quinticInOut',
-                series: [{
-                    type: 'graph',
-                    layout: 'force',
-                    force: { repulsion: 400, edgeLength: [50, 100] },
-                    data: nodes,
-                    links: links,
-                    categories: categories,
-                    roam: true,
-                    label: { position: 'right' },
-                    lineStyle: { color: 'source', curveness: 0.1 }
-                }]
+                tooltip: { formatter: function(p) {
+                    if (p.data.id && p.data.id.startsWith('TAG_')) return `🏷️ <b>${p.data.name}</b><br/>共聚集了 ${p.data.value} 个项目`;
+                    const page = currentPagesData.find(pp => pp.id === p.data.id);
+                    return `${page ? resolveIcon(page) : '📄'} ${p.data.name}`;
+                }},
+                legend: { data: categories.map(c=>c.name), type:'scroll', bottom:10 },
+                animationDurationUpdate:1500, animationEasingUpdate:'quinticInOut',
+                series:[{ type:'graph', layout:'force', force:{ repulsion:400, edgeLength:[50,100] }, data:nodes, links:links, categories:categories, roam:true, label:{ position:'right' }, lineStyle:{ color:'source', curveness:0.1 } }]
             };
-
             chartInstance.setOption(option);
-            
-            // 点击节点跳转
-            chartInstance.off('click');
-            chartInstance.on('click', function (params) {
-                if (params.data && params.data.url) {
-                    window.open(params.data.url, '_blank');
-                }
-            });
-        }
-        // CSV 离线处理相关
-        function exportCSV() {
-            window.location.href = `${API_BASE}/api/export_untagged`;
-            showToast('开始下载 CSV 文件');
+            chartInstance.off('click'); chartInstance.on('click', function(p) { if (p.data && p.data.url) window.open(p.data.url, '_blank'); });
         }
 
+        function exportCSV() { window.location.href = `${API_BASE}/api/export_untagged`; showToast('开始下载 CSV 文件'); }
         function importCSV(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            fetch(`${API_BASE}/api/import_tags`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showToast(`✅ 成功更新了 ${data.updated} 个项目`);
-                    loadPages();
-                } else {
-                    alert(data.error);
-                }
-            }).catch(err => alert("上传处理失败"));
-            
-            // 重置 input 以便连续上传同一文件
+            const file = event.target.files[0]; if (!file) return;
+            const formData = new FormData(); formData.append('file', file);
+            fetch(`${API_BASE}/api/import_tags`, { method:'POST', body:formData })
+                .then(r=>r.json()).then(d=>{ if(d.status==='success'){ showToast(`✅ 成功更新了 ${d.updated} 个项目`); loadPages(); } else alert(d.error); })
+                .catch(err=>alert("上传处理失败"));
             event.target.value = '';
         }
 
-        // 编辑数据回填
+        // 导出图标CSV：包含 id, title, icon, html_preview
+        function exportIconCSV() {
+            if (!currentPagesData.length) { alert('暂无数据'); return; }
+            let csv = 'id,title,icon,html_preview\n';
+            currentPagesData.forEach(page => {
+                const preview = (page.html_content || '').replace(/\n/g, ' ').replace(/,/g, '，').substring(0, 200);
+                const id = page.id || '';
+                const title = (page.title || '').replace(/,/g, '，');
+                const icon = page.icon || '';
+                csv += `"${id}","${title}","${icon}","${preview}"\n`;
+            });
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'icon_export.csv';
+            link.click();
+            showToast('图标CSV已导出');
+        }
+
+        // 导入图标CSV：按id或title匹配，批量更新icon
+        async function importIconCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const text = await file.text();
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) { alert('CSV格式错误'); event.target.value = ''; return; }
+            const header = lines[0].split(',');
+            const idIdx = header.findIndex(h => h.trim().toLowerCase() === 'id');
+            const iconIdx = header.findIndex(h => h.trim().toLowerCase() === 'icon');
+            if (idIdx === -1 || iconIdx === -1) { alert('CSV需包含id和icon列'); event.target.value = ''; return; }
+            
+            let updatedCount = 0;
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                if (cols.length <= Math.max(idIdx, iconIdx)) continue;
+                const csvId = cols[idIdx].replace(/^"|"$/g, '').trim();
+                const csvIcon = cols[iconIdx].replace(/^"|"$/g, '').trim();
+                if (!csvId) continue;
+                
+                // 根据id或title查找本地页面
+                const page = currentPagesData.find(p => p.id == csvId || p.title === csvId);
+                if (!page) continue;
+                
+                try {
+                    const resp = await fetch(`${API_BASE}/api/pages/${page.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: page.title,
+                            icon: csvIcon,
+                            tags: page.tags,
+                            html_content: page.html_content
+                        })
+                    });
+                    const result = await resp.json();
+                    if (result.status === 'success') updatedCount++;
+                } catch (e) { console.error('更新失败:', page.id); }
+            }
+            showToast(`✅ 成功更新了 ${updatedCount} 个图标`);
+            loadPages();
+            event.target.value = '';
+        }
+
         function loadEditData(pageId) {
             fetch(`${API_BASE}/api/pages/${pageId}`)
                 .then(res => res.json())
@@ -344,67 +367,67 @@
                 }).catch(err => alert("读取失败"));
         }
 
-        // 提交逻辑
+        // 新建提交
         document.getElementById('upload-form').addEventListener('submit', function(e) {
             e.preventDefault();
+            const titleValue = document.getElementById('upload-title').value.trim();
+            let iconValue = document.getElementById('upload-icon').value.trim();
+            let htmlValue = document.getElementById('upload-html').value;
+            
+            if (!iconValue) {
+                const defaultIcon = getDefaultIcon(titleValue || 'new');
+                iconValue = defaultIcon;
+                htmlValue = injectIconToHtml(htmlValue, defaultIcon, titleValue);
+            }
+            
             fetch(`${API_BASE}/api/pages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    title: document.getElementById('upload-title').value,
-                    icon: document.getElementById('upload-icon').value,
+                    title: titleValue,
+                    icon: iconValue,
                     tags: document.getElementById('upload-tags').value,
-                    html_content: document.getElementById('upload-html').value
+                    html_content: htmlValue
                 })
-            }).then(res => res.json()).then(data => {
-                if (data.status === 'success') switchView('list');
-                else alert(data.error);
-            });
+            }).then(r=>r.json()).then(d=>{ if(d.status==='success') switchView('list'); else alert(d.error); });
         });
 
+        // 编辑提交
         document.getElementById('edit-form').addEventListener('submit', function(e) {
             e.preventDefault();
             const pageId = document.getElementById('edit-id').value;
+            const titleValue = document.getElementById('edit-title').value.trim();
+            let iconValue = document.getElementById('edit-icon').value.trim();
+            let htmlValue = document.getElementById('edit-html').value;
+            
+            if (!iconValue) {
+                const defaultIcon = getDefaultIcon(pageId || titleValue || 'edit');
+                iconValue = defaultIcon;
+                htmlValue = injectIconToHtml(htmlValue, defaultIcon, titleValue);
+            }
+            
             fetch(`${API_BASE}/api/pages/${pageId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    title: document.getElementById('edit-title').value,
-                    icon: document.getElementById('edit-icon').value,
+                    title: titleValue,
+                    icon: iconValue,
                     tags: document.getElementById('edit-tags').value,
-                    html_content: document.getElementById('edit-html').value
+                    html_content: htmlValue
                 })
-            }).then(res => res.json()).then(data => {
-                if (data.status === 'success') {
-                    showToast('✅ 已保存');
-                    switchView('list'); // 保存后返回列表
-                } else alert(data.error);
-            });
+            }).then(r=>r.json()).then(d=>{ if(d.status==='success'){ showToast('✅ 已保存'); switchView('list'); } else alert(d.error); });
         });
 
         function showToast(msg) {
-            const t = document.createElement('div');
-            t.textContent = msg;
-            Object.assign(t.style, {
-                position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)',
-                background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px',
-                fontWeight:'bold', fontSize:'15px', zIndex:9999,
-                boxShadow:'0 4px 12px rgba(0,0,0,0.15)',
-                animation:'fadeIn 0.3s ease'
-            });
+            const t = document.createElement('div'); t.textContent = msg;
+            Object.assign(t.style, { position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)', background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px', fontWeight:'bold', fontSize:'15px', zIndex:9999, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', animation:'fadeIn 0.3s ease' });
             document.body.appendChild(t);
-            setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800);
-            setTimeout(() => t.remove(), 2200);
+            setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800);
+            setTimeout(()=>t.remove(), 2200);
         }
 
-        // 响应窗口大小变化，重绘图表
-        window.addEventListener('resize', () => {
-            if (chartInstance && isGraphMode) {
-                chartInstance.resize();
-            }
-        });
-
-        window.onload = () => switchView('list');
+        window.addEventListener('resize', ()=>{ if(chartInstance && isGraphMode) chartInstance.resize(); });
+        window.onload = ()=> switchView('list');
     </script>
-</body> 
+</body>
 </html>
