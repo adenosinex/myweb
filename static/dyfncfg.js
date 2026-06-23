@@ -40,6 +40,11 @@ const TagPanel = {
                         <div v-else-if="item === 'tags'">
                             <div class="group-title" style="margin-bottom:12px;">3. 人工预设 Tag 分区 (长按拖拽)</div>
 
+                            <div class="tag-input-row" style="margin-bottom:12px;">
+                                <input type="text" v-model="oneOffTagInput" placeholder="输入一次性 Tag (仅当前文件，不入分区)..." @keyup.enter="addOneOffTag" />
+                                <van-button type="primary" size="small" @click="addOneOffTag" style="background:#8e44ad; border-color:#8e44ad;">添加一次性</van-button>
+                            </div>
+
                             <div style="background: rgba(25, 137, 250, 0.08); border: 1px solid rgba(25, 137, 250, 0.3); border-radius: 6px; padding: 10px; margin-bottom: 12px; min-height: 30px;">
                                 <span style="font-size: 12px; color: #1989fa; font-weight: bold; margin-bottom: 6px; display: block;">即将保存的 Tag 预览:</span>
                                 <span v-if="activeAutoTags.length === 0 && currentCustomTags.length === 0" class="empty-hint" style="color:#1989fa; opacity: 0.6;">暂无标签...</span>
@@ -67,8 +72,8 @@ const TagPanel = {
                             </div>
 
                             <div class="tag-input-row" style="margin-top:12px; margin-bottom:12px;">
-                                <input type="text" v-model="globalTagInput" placeholder="输入新 Tag (首区)..." @keyup.enter="addGlobalTag" />
-                                <van-button type="primary" size="small" @click="addGlobalTag">添加</van-button>
+                                <input type="text" v-model="globalTagInput" placeholder="输入新预设 Tag (首区)..." @keyup.enter="addGlobalTag" />
+                                <van-button type="primary" size="small" @click="addGlobalTag">添加首区</van-button>
                                 <van-button type="default" size="small" @click="addEmptyGroup" style="padding: 0 10px;">+ 新区</van-button>
                             </div>
 
@@ -280,7 +285,6 @@ const TagPanel = {
         const archiveMaxPer = ref(parseInt(localStorage.getItem('dy_archive_max_per')) || 50);
         const forceRearchive = ref(localStorage.getItem('dy_force_rearchive') === 'true');
         
-        // 🌟 初始化为默认提取首词正则
         const storedRegex = localStorage.getItem('dy_archive_person_regex');
         const archivePersonRegex = ref(storedRegex !== null ? storedRegex : '^(\\S+)');
         
@@ -392,7 +396,7 @@ const TagPanel = {
         }
 
         function createNewProfile() {
-            const name = prompt('请输入新模板名称：\\n(将创建一个干净的空模板)', '新模板');
+            const name = prompt('请输入新模板名称：\n(将创建一个干净的空模板)', '新模板');
             if (name && name.trim()) {
                 const cleanName = name.trim();
                 if (tagProfiles.value[cleanName]) {
@@ -429,7 +433,7 @@ const TagPanel = {
         }
 
         const tagGroups = ref([]);
-        const globalTagInput = ref(''), dragGroupEnabledId = ref(null);
+        const globalTagInput = ref(''), oneOffTagInput = ref(''), dragGroupEnabledId = ref(null);
         const filenameTokens = ref([]), currentCustomTags = ref([]), quickBlacklistInput = ref('');
         const autoTags = ref([]); 
         const autoSaveStatus = ref(''); 
@@ -661,6 +665,18 @@ const TagPanel = {
 
         function addEmptyGroup() { tagGroups.value.push({ id: 'g_' + Date.now(), tags: [], is_person: false }); }
         function removeTagGroup(idx) { if (confirm('确定删除此分区及内部所有Tag吗？')) { tagGroups.value.splice(idx, 1); } }
+        
+        // 🌟 新增：处理一次性 Tag
+        function addOneOffTag() {
+            const tag = oneOffTagInput.value.replace(/#/g, '').trim();
+            if (!tag) return;
+            if (!currentCustomTags.value.includes(tag)) {
+                currentCustomTags.value.push(tag);
+                recordSyncAction(tag, 'add');
+            }
+            oneOffTagInput.value = '';
+        }
+
         function addGlobalTag() { const tag = globalTagInput.value.replace(/#/g, '').trim(); if (!tag) return; if (!currentCustomTags.value.includes(tag)) currentCustomTags.value.push(tag); if (tagGroups.value.length === 0) tagGroups.value.push({ id: 'g_' + Date.now(), tags: [], is_person: false }); let exists = false; for(let g of tagGroups.value) { if(g.tags.includes(tag)) { exists = true; break; } } if(!exists) { tagGroups.value[0].tags.push(tag); } globalTagInput.value = ''; recordSyncAction(tag, 'add'); }
         function removeSavedTagFromGroup(gIdx, tIdx) { const tag = tagGroups.value[gIdx].tags[tIdx]; tagGroups.value[gIdx].tags.splice(tIdx, 1); const cIdx = currentCustomTags.value.indexOf(tag); if (cIdx > -1) { currentCustomTags.value.splice(cIdx, 1); recordSyncAction(tag, 'remove'); } }
 
@@ -795,8 +811,8 @@ const TagPanel = {
 
         return {
             panelOrder, dragEnabledId, onDragStart, onDragEnd, onDrop, enableDrag, disableDrag,
-            autoTags, toggleAutoTag, tagGroups, globalTagInput, dragGroupEnabledId, filenameTokens, currentCustomTags, quickBlacklistInput, autoSaveStatus, dragType, draggedGroupIdx, dragOverGroupIdx, dragOverTagInfo, dragDropPosition,
-            generatedFilename, setAsOnlyToken, toggleToken, restoreOriginalName, addQuickBlacklist, quickBlacklistToken, enableGroupDrag, disableGroupDrag, onGroupDragStart, onGroupDragEnd, onTagDragStart, onTagDragEnd, onTagDragOver, onGroupDragOver, onTagDragEnter, onTagDragLeave, onGroupDrop, onTagDrop, addEmptyGroup, removeTagGroup, addGlobalTag, removeSavedTagFromGroup, 
+            autoTags, toggleAutoTag, tagGroups, globalTagInput, oneOffTagInput, dragGroupEnabledId, filenameTokens, currentCustomTags, quickBlacklistInput, autoSaveStatus, dragType, draggedGroupIdx, dragOverGroupIdx, dragOverTagInfo, dragDropPosition,
+            generatedFilename, setAsOnlyToken, toggleToken, restoreOriginalName, addQuickBlacklist, quickBlacklistToken, enableGroupDrag, disableGroupDrag, onGroupDragStart, onGroupDragEnd, onTagDragStart, onTagDragEnd, onTagDragOver, onGroupDragOver, onTagDragEnter, onTagDragLeave, onGroupDrop, onTagDrop, addEmptyGroup, removeTagGroup, addGlobalTag, addOneOffTag, removeSavedTagFromGroup, 
             isTagActive, handlePresetTagClick,
             showConfig, showHistory, renameHistory, handleRestore, newPath, newBlacklistWord, exportLimit, exportLogLimit, isExecuting, executeSuccess, executeMsg,
             addPathLocal, indexPath, indexPath_del, addBlacklistWord, removeBlacklistWord, executeRenameQueue, retryFailedQueue, triggerImportTags, importTags, exportCSV, triggerImportCSV, importCSVFile, exportRenameLogCSV,

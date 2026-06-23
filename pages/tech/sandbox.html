@@ -4,32 +4,68 @@
     <meta charset="UTF-8">
     <title>我的自定义沙盒</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <style>
         :root { --default-icon: '📄'; }
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 40px auto; background: #f4f5f7; color: #333; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 40px auto; background: #f4f5f7; color: #333; padding-bottom: 80px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
         .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
         .btn { padding: 8px 16px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 14px; white-space: nowrap; }
         .btn:hover { background: #0043a6; }
-        .btn-success { background: #28a745; } .btn-success:hover { background: #218838; }
+        .btn-success { background: #28a745; border: 1px solid #28a745; color: white; } .btn-success:hover { background: #218838; }
         .btn-outline { background: transparent; border: 1px solid #0052cc; color: #0052cc; } .btn-outline:hover { background: #e6f0ff; }
         .btn-warning { background: #ffc107; color: #333; } .btn-warning:hover { background: #e0a800; }
-        .btn-toolbox { background: #6f42c1; } .btn-toolbox:hover { background: #5a32a3; }
-        .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; } .back-link:hover { text-decoration: underline; }
+        .btn-toolbox { background: #6f42c1; color: white; } .btn-toolbox:hover { background: #5a32a3; }
+        .btn-danger { background: #dc3545; color: white; } .btn-danger:hover { background: #c82333; }
+        .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; } .back-link:hover { text-decoration: underline; }
 
         .view-container { display: none; } .view-container.active { display: block; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
-        .card-wrapper { position: relative; }
-        .card { background: white; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s; border: 1px solid #eaeaea; display: block; height: 100%; box-sizing: border-box; }
-        .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
-        .card .icon { font-size: 36px; margin-bottom: 12px; }
-        .card .title { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
-        .card .tags { font-size: 12px; color: #888; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; display: inline-block; margin: 2px; }
+        /* 分组容器基础样式 */
+        .group-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 25px; transition: all 0.3s ease; border: 2px solid transparent; }
+        .group-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; border-bottom: 1px solid #eaeaea; padding-bottom: 10px; color: #444; }
+        .group-header .group-icon { margin-right: 8px; font-size: 22px; }
+        
+        /* 虚拟与合并分组样式 */
+        .group-merged { border: 2px dashed #ccc; background: #fafafa; }
+        .group-virtual { border: 2px dashed #0052cc; background: #f8faff; }
 
-        .card-edit-btn { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; display: none; border: none; z-index: 2; }
-        .card-wrapper:hover .card-edit-btn { display: block; } .card-edit-btn:hover { background: #28a745; color: white; }
+        /* 沉浸式高亮选择模式 */
+        .group-container.has-selection { background: #f0f6ff; border: 2px solid #0052cc; box-shadow: 0 4px 15px rgba(0,82,204,0.15); }
+        .group-container.has-selection .card-checkbox { opacity: 1; transform: scale(1.4); }
+        .group-container.has-selection .card-wrapper:not(.selected) .card { border-color: #b5d0ff; } 
+
+        .group-drag-handle { cursor: grab; margin-right: 12px; font-size: 16px; color: #999; padding: 4px; border-radius: 4px; transition: background 0.2s; }
+        .group-drag-handle:hover { background: #eee; color: #333; }
+        .group-drag-handle:active { cursor: grabbing; }
+        .group-action-btn { margin-left: auto; font-size: 13px; font-weight: normal; color: #666; background: #f0f0f0; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .group-action-btn:hover { background: #0052cc; color: white; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; min-height: 120px; padding-bottom: 10px; }
+        .card-wrapper { position: relative; cursor: grab; }
+        .card-wrapper:active { cursor: grabbing; }
+        .card { background: #fff; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; transition: all 0.2s; border: 1px solid #eaeaea; display: block; height: 100%; box-sizing: border-box; }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
+        
+        /* 低调的复选框 */
+        .card-checkbox { position: absolute; top: 12px; left: 12px; z-index: 5; transform: scale(1.1); cursor: pointer; accent-color: #0052cc; opacity: 0.15; transition: all 0.2s; }
+        .card-wrapper:hover .card-checkbox { opacity: 0.8; }
+        .card-checkbox:checked { opacity: 1 !important; transform: scale(1.4) !important; }
+        .card-wrapper.selected .card { border-color: #0052cc; background-color: #f4f8ff; box-shadow: 0 0 0 2px rgba(0,82,204,0.2); }
+        
+        .card .icon { font-size: 36px; margin-bottom: 12px; }
+        .card .title { font-size: 15px; font-weight: bold; margin-bottom: 8px; line-height: 1.3; }
+        .card .tags { font-size: 12px; color: #888; background: #f0f0f0; padding: 3px 8px; border-radius: 4px; display: inline-block; margin: 2px; }
+        .card .tag-folder { background: #d1e2ff; color: #0052cc; font-weight: bold; border: 1px solid #b5d0ff; }
+
+        /* 卡片右上方悬浮按钮组 */
+        .card-action-btns { position: absolute; top: 10px; right: 10px; display: none; gap: 6px; z-index: 2; }
+        .card-wrapper:hover .card-action-btns { display: flex; }
+        .card-btn { font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; transition: all 0.2s; }
+        .card-btn:hover { background: #28a745; color: white; }
+        .card-btn-move { color: #0052cc; background: #e6f0ff; }
+        .card-btn-move:hover { background: #0052cc; color: white; }
 
         .form-panel { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 20px; }
@@ -45,6 +81,26 @@
         .toolbox-divider { border-top: 1px solid #eee; margin: 15px 0; }
 
         .icon-hint { font-size: 12px; color: #888; margin-top: 4px; }
+        .sortable-ghost { opacity: 0.4; background: #f8f9fa; border: 2px dashed #0052cc; border-radius: 10px; }
+        
+        /* 批量操作悬浮栏 */
+        .batch-bar { position: fixed; bottom: -80px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: white; padding: 12px 24px; border-radius: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 15px; z-index: 1000; transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; }
+        .batch-bar.visible { bottom: 30px; }
+        .batch-btn { background: #0052cc; color: white; border: none; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        .batch-btn:hover { background: #0043a6; }
+        .batch-btn-cancel { background: transparent; border: 1px solid #666; color: #ddd; }
+        .batch-btn-cancel:hover { background: #333; }
+
+        /* 移动弹窗选择器样式 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; opacity: 0; transition: opacity 0.2s; backdrop-filter: blur(2px); }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        .modal-box { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: translateY(20px); transition: transform 0.2s; max-height: 80vh; display: flex; flex-direction: column; }
+        .modal-overlay.active .modal-box { transform: translateY(0); }
+        .modal-box h3 { margin-top: 0; margin-bottom: 15px; color: #333; }
+        .folder-list { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; margin-bottom: 20px; padding-bottom: 5px; }
+        .folder-option { background: #f0f6ff; border: 1px solid #b5d0ff; color: #0052cc; padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: all 0.2s; font-weight: bold; font-size: 14px; user-select: none; }
+        .folder-option:hover { background: #0052cc; color: white; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,82,204,0.2); }
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 15px; border-top: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -52,16 +108,16 @@
         <div class="header">
             <h2>🛠️ 个人工具箱 & HTML沙盒</h2>
             <div class="header-actions">
-                <button class="btn btn-outline" onclick="exportCSV()">⬇️ 导出未标记(CSV)</button>
-                <button class="btn btn-outline" onclick="document.getElementById('csv-file').click()">⬆️ 导入标记(CSV)</button>
+                <button class="btn btn-outline" onclick="exportCSV()">⬇️ 导出未标记</button>
+                <button class="btn btn-outline" onclick="document.getElementById('csv-file').click()">⬆️ 导入标记</button>
                 <input type="file" id="csv-file" style="display:none" accept=".csv" onchange="importCSV(event)">
                 <button class="btn btn-toolbox" onclick="toggleToolbox()">🧰 工具箱</button>
-                <button class="btn btn-success" id="toggle-view-btn" onclick="toggleViewMode()">🕸️ 切换网状图</button>
+                <button class="btn btn-success" id="toggle-view-btn" onclick="toggleViewMode()" style="color: white">🕸️ 切换网状图</button>
+                <button class="btn" onclick="createNewGroupUI()">📁 新建分组</button>
                 <button class="btn" onclick="switchView('upload')">+ 新建项目</button>
             </div>
         </div>
 
-        <!-- 工具箱面板 (折叠) -->
         <div id="toolbox-panel" class="toolbox-panel">
             <h3 style="margin-top:0;">🔧 批量图标管理</h3>
             <div class="toolbox-row">
@@ -76,11 +132,27 @@
             </div>
         </div>
 
-        <div class="grid" id="pages-grid"></div>
+        <div id="pages-grid"></div>
         <div id="graph-container"></div>
     </div>
 
-    <!-- 新建视图 -->
+    <div id="batch-bar" class="batch-bar">
+        <span>已选择 <b id="batch-count">0</b> 项</span>
+        <button class="batch-btn" onclick="executeBatchMove()">📁 批量移动至...</button>
+        <button class="batch-btn batch-btn-cancel" onclick="clearBatchSelection()">✖ 取消选择</button>
+    </div>
+
+    <div id="move-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="move-modal-title">移动至分类...</h3>
+            <div id="move-modal-list" class="folder-list"></div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeMoveModal()">取消</button>
+                <button class="btn btn-success" onclick="moveModalCreateNew()">+ 新分类并移入</button>
+            </div>
+        </div>
+    </div>
+
     <div id="view-upload" class="view-container">
         <div class="form-panel">
             <h2>🚀 部署新项目</h2>
@@ -95,8 +167,12 @@
                     <div class="icon-hint">✨ 不填则根据标题生成固定emoji，同时注入到HTML的&lt;title&gt;中</div>
                 </div>
                 <div class="form-group">
-                    <label>标签 (逗号分隔)</label>
-                    <input type="text" id="upload-tags" placeholder="例如: 工具, 游戏, 数据可视化">
+                    <label>物理分组文件夹 (严格单分类，如输入逗号将自动取第一个词)</label>
+                    <input type="text" id="upload-folder" placeholder="例如: 工具箱">
+                </div>
+                <div class="form-group">
+                    <label>标签 Tags (文档多属性分类，支持逗号分隔)</label>
+                    <input type="text" id="upload-tags" placeholder="例如: 效率, 数据">
                 </div>
                 <div class="form-group">
                     <label>完整 HTML 代码</label>
@@ -108,7 +184,6 @@
         </div>
     </div>
 
-    <!-- 编辑视图 -->
     <div id="view-edit" class="view-container">
         <div class="form-panel">
             <h2>✏️ 编辑项目</h2>
@@ -121,25 +196,31 @@
                 <div class="form-group">
                     <label>图标 (留空将重新生成专属图标并注入HTML)</label>
                     <input type="text" id="edit-icon" placeholder="清空后自动生成专属图标">
-                    <div class="icon-hint">✨ 不填则根据ID生成固定emoji，同时注入到HTML的&lt;title&gt;中</div>
                 </div>
                 <div class="form-group">
-                    <label>标签 (逗号分隔)</label>
-                    <input type="text" id="edit-tags" placeholder="例如: 工具, 游戏, 数据可视化">
+                    <label>物理分组文件夹 (严格单分类，如输入逗号将自动取第一个词)</label>
+                    <input type="text" id="edit-folder" placeholder="修改将移动文档所在文件夹">
+                </div>
+                <div class="form-group">
+                    <label>标签 Tags (文档多属性分类，支持逗号分隔)</label>
+                    <input type="text" id="edit-tags" placeholder="例如: 效率, 数据">
                 </div>
                 <div class="form-group">
                     <label>完整 HTML 代码</label>
                     <textarea id="edit-html" required placeholder="在此粘贴或编写HTML代码..."></textarea>
                 </div>
-                <button type="submit" class="btn btn-success">更新</button>
-                <span class="back-link" onclick="switchView('list')">取消</span>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <button type="submit" class="btn btn-success">更新</button>
+                    <button type="button" class="btn btn-danger" onclick="deletePage()">🗑️ 删除项目</button>
+                    <span class="back-link" onclick="switchView('list')">取消</span>
+                </div>
             </form>
         </div>
     </div>
 
     <script>
         const API_BASE = '/sandbox';
-        const EMOJI_POOL = ['🔧','📌','🚀','🎯','📊','💡','🎮','📁','🖼️','📝','🔗','🗂️','📈','🔍','🧩','🎨','📦','⚙️','🌟','💎'];
+        const EMOJI_POOL = ['🔧','📌','🚀','🎯','📊','💡','🎮','📁','🖼️','📝','🔗','🗂️','📈','🔍','🧩','🎨','📦','⚙️','🌟','💎','🏢','🌐','📡','🔋'];
 
         function getDefaultIcon(seed) {
             if (!seed) return EMOJI_POOL[0];
@@ -153,24 +234,17 @@
             return getDefaultIcon(page.id || page.title || 'default');
         }
 
-        // 注入默认图标到HTML代码中：修改<title>标签内容，添加emoji前缀
         function injectIconToHtml(htmlContent, iconEmoji, title) {
             if (!htmlContent) return htmlContent;
             const titleText = title || '项目';
             const emojiPrefix = iconEmoji + ' ';
-            // 检查是否存在<title>标签
             const titleRegex = /<title[^>]*>([\s\S]*?)<\/title>/i;
             if (titleRegex.test(htmlContent)) {
-                return htmlContent.replace(titleRegex, (match, p1) => {
-                    return match.replace(p1, emojiPrefix + p1);
-                });
+                return htmlContent.replace(titleRegex, (match, p1) => match.replace(p1, emojiPrefix + p1));
             } else {
-                // 无<title>，尝试插入到<head>中，若无<head>则添加到最前面
                 const headRegex = /<head[^>]*>/i;
                 if (headRegex.test(htmlContent)) {
-                    return htmlContent.replace(headRegex, (match) => {
-                        return match + `<title>${emojiPrefix}${titleText}</title>`;
-                    });
+                    return htmlContent.replace(headRegex, (match) => match + `<title>${emojiPrefix}${titleText}</title>`);
                 } else {
                     return `<title>${emojiPrefix}${titleText}</title>` + htmlContent;
                 }
@@ -178,9 +252,12 @@
         }
 
         let currentPagesData = [];
+        let backendOrder = { group_order: [], item_order: [] };
         let isGraphMode = false;
         let chartInstance = null;
         let toolboxVisible = false;
+        let selectedIds = new Set();
+        let currentMoveCallback = null;
 
         function toggleToolbox() {
             toolboxVisible = !toolboxVisible;
@@ -199,29 +276,398 @@
             fetch(`${API_BASE}/api/pages`)
                 .then(res => res.json())
                 .then(data => {
-                    currentPagesData = data;
+                    currentPagesData = data.pages;
+                    backendOrder = data.order || { group_order: [], item_order: [] };
+                    clearBatchSelection(); 
                     if (isGraphMode) renderGraph();
                     else renderGrid();
                 }).catch(err => console.error("加载列表失败", err));
         }
 
-        function renderGrid() {
-            const grid = document.getElementById('pages-grid');
-            grid.innerHTML = '';
-            currentPagesData.forEach(page => {
-                const displayIcon = resolveIcon(page);
-                let tagsHtml = '';
-                if (page.tags) tagsHtml = page.tags.split(/[,，]/).map(t => `<span class="tags">${t.trim()}</span>`).join('');
-                grid.innerHTML += `
-                    <div class="card-wrapper">
-                        <a href="${API_BASE}/view/${page.id}" target="_blank" class="card">
-                            <div class="icon">${displayIcon}</div>
-                            <div class="title">${page.title}</div>
-                            <div>${tagsHtml}</div>
-                        </a>
-                        <button class="card-edit-btn" onclick="event.preventDefault(); event.stopPropagation(); switchView('edit', '${page.id}')">编辑</button>
-                    </div>`;
+        function syncOrderToBackend() {
+            const container = document.getElementById('pages-grid');
+            const newGroupOrder = Array.from(container.children).map(el => el.getAttribute('data-group-name'));
+            const newItemOrder = Array.from(document.querySelectorAll('.card-wrapper')).map(el => el.getAttribute('data-id'));
+            
+            fetch(`${API_BASE}/api/order`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ group_order: newGroupOrder, item_order: newItemOrder })
             });
+        }
+
+        function toggleCheck(checkbox, pageId) {
+            const wrapper = checkbox.closest('.card-wrapper');
+            const group = checkbox.closest('.group-container');
+
+            if (checkbox.checked) {
+                selectedIds.add(pageId);
+                wrapper.classList.add('selected');
+            } else {
+                selectedIds.delete(pageId);
+                wrapper.classList.remove('selected');
+            }
+            
+            const hasChecked = group.querySelector('.card-checkbox:checked');
+            if (hasChecked) group.classList.add('has-selection');
+            else group.classList.remove('has-selection');
+
+            updateBatchBar();
+        }
+
+        function updateBatchBar() {
+            const bar = document.getElementById('batch-bar');
+            const countSpan = document.getElementById('batch-count');
+            countSpan.textContent = selectedIds.size;
+            if (selectedIds.size > 0) bar.classList.add('visible');
+            else bar.classList.remove('visible');
+        }
+
+        function clearBatchSelection() {
+            selectedIds.clear();
+            document.querySelectorAll('.card-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.card-wrapper.selected').forEach(w => w.classList.remove('selected'));
+            document.querySelectorAll('.group-container.has-selection').forEach(g => g.classList.remove('has-selection'));
+            updateBatchBar();
+        }
+
+        // --- 移动选择器弹窗核心逻辑 ---
+        function showMoveModal(title, callback) {
+            currentMoveCallback = callback;
+            document.getElementById('move-modal-title').innerText = title;
+            
+            // 提取现有分类，包含物理目录和曾用过的标签
+            let folders = new Set(['未分类']);
+            currentPagesData.forEach(p => {
+                if (p.folder && p.folder.trim() !== '') folders.add(p.folder.trim());
+                if (p.tags) {
+                    p.tags.split(/[,，]/).forEach(t => {
+                        let cleanTag = t.trim();
+                        if (cleanTag) folders.add(cleanTag);
+                    });
+                }
+            });
+            
+            const listEl = document.getElementById('move-modal-list');
+            listEl.innerHTML = '';
+            
+            Array.from(folders).sort().forEach(f => {
+                const btn = document.createElement('div');
+                btn.className = 'folder-option';
+                btn.innerText = f;
+                btn.onclick = () => {
+                    closeMoveModal();
+                    if (currentMoveCallback) currentMoveCallback(f);
+                };
+                listEl.appendChild(btn);
+            });
+            
+            document.getElementById('move-modal').classList.add('active');
+        }
+
+        function closeMoveModal() {
+            document.getElementById('move-modal').classList.remove('active');
+            currentMoveCallback = null;
+        }
+
+        function moveModalCreateNew() {
+            const newFolder = prompt("请输入新分类名称 (输入逗号将自动取首词):");
+            if (newFolder && newFolder.trim() !== '') {
+                closeMoveModal();
+                if (currentMoveCallback) currentMoveCallback(newFolder.split(/[,，]/)[0].trim());
+            }
+        }
+        // --- 结束弹窗逻辑 ---
+
+        // 卡片右上角快捷移动单个文件
+        function openMoveModal(pageId, currentFolder) {
+            showMoveModal(`将项目移出 [${currentFolder}]`, (targetFolder) => {
+                if (targetFolder === currentFolder) {
+                    showToast(`项目已经在 [${targetFolder}] 中`);
+                    return;
+                }
+                
+                fetch(`${API_BASE}/api/pages/${pageId}/move`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_folder: targetFolder })
+                }).then(r => r.json()).then(d => {
+                    if (d.status === 'success') { 
+                        showToast(`✅ 已移动至 [${targetFolder}]`); 
+                        loadPages(); 
+                    } else { 
+                        alert('移动失败: ' + d.error); 
+                    }
+                }).catch(err => alert("请求失败: " + err));
+            });
+        }
+
+        // 底部工具栏批量移动
+        function executeBatchMove() {
+            if (selectedIds.size === 0) return;
+            
+            showMoveModal(`移动选中的 ${selectedIds.size} 项`, async (targetFolder) => {
+                showToast(`正在批量移动至 [${targetFolder}]...`);
+                let successCount = 0;
+                const idArray = Array.from(selectedIds);
+                
+                const promises = idArray.map(pid => 
+                    fetch(`${API_BASE}/api/pages/${pid}/move`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_folder: targetFolder })
+                    }).then(r => r.json()).then(d => { if(d.status === 'success') successCount++; })
+                );
+                
+                await Promise.all(promises);
+                showToast(`✅ 成功移动 ${successCount} 项到 ${targetFolder}`);
+                clearBatchSelection();
+                loadPages();
+            });
+        }
+
+        // 建立纯视觉新分组
+        function createNewGroupUI() {
+            const groupName = prompt("请输入新分类名称 (纯建立视觉框，拖入文件后方可真正在硬盘生成):");
+            if (!groupName || groupName.trim() === '') return;
+            const gn = groupName.trim().split(/[,，]/)[0]; 
+            
+            if (document.querySelector(`[data-group-name="REAL_${gn}"]`)) {
+                return alert("该分组在当前视图中已存在！");
+            }
+            
+            const groupIcon = getDefaultIcon('GROUP_' + gn);
+            const html = `
+                <div class="group-container" data-group-name="REAL_${gn}">
+                    <div class="group-header">
+                        <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
+                        <span class="group-icon">${groupIcon}</span>
+                        <span>${gn}</span>
+                        <button class="group-action-btn" onclick="renameGroup('${gn}')">✏️ 重命名物理文件夹</button>
+                    </div>
+                    <div class="grid group-grid" data-folder="${gn}"></div>
+                </div>`;
+            
+            const container = document.getElementById('pages-grid');
+            container.insertAdjacentHTML('afterbegin', html);
+            
+            const newGrid = container.querySelector(`[data-group-name="REAL_${gn}"] .group-grid`);
+            Sortable.create(newGrid, {
+                group: { name: 'shared', put: true },
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: handleCardDragEnd
+            });
+            syncOrderToBackend();
+        }
+
+        // 统一的卡片拖拽结束处理
+        function handleCardDragEnd(evt) {
+            const itemEl = evt.item;
+            const pageId = itemEl.getAttribute('data-id');
+            const originalPhysicalFolder = itemEl.getAttribute('data-physical-folder'); 
+            const targetPhysicalFolder = evt.to.getAttribute('data-folder');
+            
+            syncOrderToBackend();
+
+            if (evt.from !== evt.to) {
+                if (targetPhysicalFolder !== originalPhysicalFolder) {
+                    fetch(`${API_BASE}/api/pages/${pageId}/move`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_folder: targetPhysicalFolder })
+                    }).then(r => r.json()).then(d => {
+                        if (d.status === 'success') { 
+                            showToast(`✅ 已移动至物理目录 [${targetPhysicalFolder}]`); 
+                            itemEl.setAttribute('data-physical-folder', targetPhysicalFolder);
+                        } else { 
+                            alert('移动失败: ' + d.error); 
+                            loadPages(); 
+                        }
+                    });
+                }
+            }
+        }
+
+        function renderGrid() {
+            const container = document.getElementById('pages-grid');
+            container.innerHTML = '';
+            
+            const grouped = {};
+            currentPagesData.forEach(page => {
+                let folder = page.folder && page.folder !== '' && page.folder !== '未分类' ? page.folder : '未分类';
+                let tags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+
+                page._physicalFolder = folder; 
+
+                if (folder === '未分类' && tags.length > 0) {
+                    let primaryTag = tags[0];
+                    let vKey = `VIRTUAL_${primaryTag}`;
+                    if (!grouped[vKey]) grouped[vKey] = { isVirtual: true, name: primaryTag, pages: [] };
+                    grouped[vKey].pages.push(page);
+                } else {
+                    let fKey = `REAL_${folder}`;
+                    if (!grouped[fKey]) grouped[fKey] = { isVirtual: false, name: folder, pages: [] };
+                    grouped[fKey].pages.push(page);
+                }
+            });
+
+            const finalGrouped = {};
+            const mergedGroup = { isVirtual: true, isMerged: true, name: '🧩 零星聚合', pages: [] };
+
+            Object.keys(grouped).forEach(key => {
+                if (grouped[key].pages.length <= 2) {
+                    grouped[key].pages.forEach(p => { p._displayName = grouped[key].name; });
+                    mergedGroup.pages.push(...grouped[key].pages);
+                } else {
+                    finalGrouped[key] = grouped[key];
+                }
+            });
+
+            mergedGroup.pages.sort((a, b) => {
+                let cmp = a._displayName.localeCompare(b._displayName);
+                return cmp !== 0 ? cmp : (a.id || '').localeCompare(b.id || '');
+            });
+
+            if (mergedGroup.pages.length > 0) {
+                finalGrouped['VIRTUAL_MERGED'] = mergedGroup;
+            }
+
+            const sortedKeys = Object.keys(finalGrouped).sort((a, b) => {
+                if (a === 'VIRTUAL_MERGED') return 1;
+                if (b === 'VIRTUAL_MERGED') return -1;
+                let groupA = finalGrouped[a], groupB = finalGrouped[b];
+                if (groupA.isVirtual !== groupB.isVirtual) return groupA.isVirtual ? 1 : -1;
+                let idxA = backendOrder.group_order.indexOf(a);
+                let idxB = backendOrder.group_order.indexOf(b);
+                if (idxA === -1) idxA = 999; if (idxB === -1) idxB = 999;
+                return idxA - idxB;
+            });
+
+            sortedKeys.forEach(key => {
+                const groupData = finalGrouped[key];
+                const isVirtual = groupData.isVirtual;
+                const isMerged = groupData.isMerged;
+                const groupName = groupData.name;
+                const pages = groupData.pages;
+                
+                if (!isMerged) {
+                    pages.sort((a, b) => {
+                        let idxA = backendOrder.item_order.indexOf(a.id);
+                        let idxB = backendOrder.item_order.indexOf(b.id);
+                        if (idxA === -1) idxA = 999999; if (idxB === -1) idxB = 999999;
+                        return idxA - idxB;
+                    });
+                }
+
+                const groupIcon = getDefaultIcon('GROUP_' + groupName);
+                let cardsHtml = pages.map(page => {
+                    const displayIcon = resolveIcon(page);
+                    let badgeText = isMerged ? page._displayName : groupName;
+                    let folderBadge = `<span class="tags tag-folder">${badgeText}</span>`;
+                    let tagsHtml = page.tags ? page.tags.split(/[,，]/).map(t => `<span class="tags">${t.trim()}</span>`).join('') : '';
+                    
+                    // 注意：这里的 onclick 逻辑使用了防事件冒泡的独立弹窗开启机制
+                    return `
+                        <div class="card-wrapper" data-id="${page.id}" data-physical-folder="${page._physicalFolder}">
+                            <input type="checkbox" class="card-checkbox" value="${page.id}" onclick="event.stopPropagation(); toggleCheck(this, '${page.id}')">
+                            <a href="${API_BASE}/view/${page.id}" target="_blank" class="card" draggable="false">
+                                <div class="icon">${displayIcon}</div>
+                                <div class="title">${page.title}</div>
+                                <div>${folderBadge} ${tagsHtml}</div>
+                            </a>
+                            <div class="card-action-btns">
+                                <button class="card-btn card-btn-move" onclick="event.preventDefault(); event.stopPropagation(); openMoveModal('${page.id}', '${badgeText}')">移动</button>
+                                <button class="card-btn" onclick="event.preventDefault(); event.stopPropagation(); switchView('edit', '${page.id}')">编辑</button>
+                            </div>
+                        </div>`;
+                }).join('');
+
+                let headerActions = '';
+                if (isMerged) {
+                    headerActions = `<span style="font-size: 13px; color: #888; background: #eee; padding: 4px 8px; border-radius: 4px; margin-left: auto;">数量 ≤ 2 自动聚合 (手动刷新页面后重算)</span>`;
+                } else if (isVirtual) {
+                    headerActions = `<button class="group-action-btn btn-success" onclick="confirmVirtualGroup('${groupName}', '${pages.map(p=>p.id).join(',')}')">✨ 确认为新文件夹</button>`;
+                } else {
+                    headerActions = `<button class="group-action-btn" onclick="renameGroup('${groupName}')">✏️ 重命名物理文件夹</button>`;
+                }
+
+                let groupClasses = ['group-container'];
+                if (isMerged) groupClasses.push('group-merged');
+                else if (isVirtual) groupClasses.push('group-virtual');
+
+                let subTitle = isMerged ? '' : (isVirtual ? '<span style="color:#0052cc;font-size:12px;margin-left:5px;">(标签提取虚拟呈现)</span>' : '');
+                let targetFolderData = isMerged ? '未分类' : (isVirtual ? '未分类' : groupName);
+
+                const groupHtml = `
+                    <div class="${groupClasses.join(' ')}" data-group-name="${key}">
+                        <div class="group-header">
+                            <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
+                            <span class="group-icon">${isMerged ? '📦' : groupIcon}</span>
+                            <span>${groupName} ${subTitle}</span>
+                            ${headerActions}
+                        </div>
+                        <div class="grid group-grid" data-folder="${targetFolderData}" data-is-merged="${isMerged}">
+                            ${cardsHtml}
+                        </div>
+                    </div>`;
+                container.innerHTML += groupHtml;
+            });
+
+            Sortable.create(container, {
+                handle: '.group-drag-handle',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: syncOrderToBackend
+            });
+
+            document.querySelectorAll('.group-grid').forEach(el => {
+                const isMergedEl = el.getAttribute('data-is-merged') === 'true';
+                Sortable.create(el, {
+                    group: { name: 'shared', put: !isMergedEl }, 
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: handleCardDragEnd
+                });
+            });
+        }
+
+        async function confirmVirtualGroup(newFolderName, pageIdsStr) {
+            const pageIds = pageIdsStr.split(',');
+            if (pageIds.length === 0) return;
+            showToast(`正在将 ${pageIds.length} 个项目转正至 [${newFolderName}] 目录...`);
+            let successCount = 0;
+            for (let pid of pageIds) {
+                try {
+                    const r = await fetch(`${API_BASE}/api/pages/${pid}/move`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_folder: newFolderName }) });
+                    if ((await r.json()).status === 'success') successCount++;
+                } catch(e) {}
+            }
+            showToast(`✅ 成功创建文件夹并移入 ${successCount} 个项目`);
+            loadPages();
+        }
+
+        function renameGroup(oldName) {
+            if (oldName === '未分类') return alert('未分类不可重命名');
+            const newName = prompt(`将物理分组文件夹 "${oldName}" 重命名为:`, oldName);
+            if (!newName || newName.trim() === '' || newName === oldName) return;
+            fetch(`${API_BASE}/api/groups/rename`, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ old_name: oldName, new_name: newName.trim() })
+            }).then(r => r.json()).then(d => {
+                if(d.status === 'success') { showToast(`✅ 文件夹重命名完成`); loadPages(); }
+                else { alert('重命名失败: ' + d.error); loadPages(); }
+            });
+        }
+
+        function deletePage() {
+            const pageId = document.getElementById('edit-id').value;
+            if (!pageId) return;
+            if (!confirm('⚠️ 确定要彻底删除该项目文件吗？此操作不可恢复。')) return;
+            fetch(`${API_BASE}/api/pages/${pageId}`, { method: 'DELETE' })
+            .then(r => r.json()).then(d => {
+                if (d.status === 'success') { showToast('🗑️ 物理文件已删除'); switchView('list'); }
+                else { alert('删除失败: ' + d.error); }
+            }).catch(err => alert("请求失败"));
         }
 
         function toggleViewMode() {
@@ -231,13 +677,11 @@
             const graph = document.getElementById('graph-container');
             if (isGraphMode) {
                 btn.innerHTML = '🔲 切换列表视图';
-                grid.style.display = 'none';
-                graph.style.display = 'block';
+                grid.style.display = 'none'; graph.style.display = 'block';
                 renderGraph();
             } else {
                 btn.innerHTML = '🕸️ 切换网状图';
-                graph.style.display = 'none';
-                grid.style.display = 'grid';
+                graph.style.display = 'none'; grid.style.display = 'block';
                 renderGrid();
             }
         }
@@ -246,30 +690,27 @@
             const container = document.getElementById('graph-container');
             if (!chartInstance) chartInstance = echarts.init(container);
             const nodes = [], links = [];
-            const categoriesSet = new Set(), tagMap = new Map(), tagCounts = {};
+            const categoriesSet = new Set(), tagCounts = {};
+            
             currentPagesData.forEach(page => {
-                let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
-                if (pTags.length === 0) pTags = ['未分类'];
-                pTags.forEach(tag => tagCounts[tag] = (tagCounts[tag] || 0) + 1);
+                let folder = page.folder || '未分类';
+                tagCounts[folder] = (tagCounts[folder] || 0) + 1;
             });
+            
             currentPagesData.forEach(page => {
-                let pTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : ['未分类'];
-                if (pTags.length === 0) pTags = ['未分类'];
-                pTags.forEach(tag => {
-                    categoriesSet.add(tag);
-                    if (!tagMap.has(tag)) {
-                        const count = tagCounts[tag];
-                        nodes.push({ id:'TAG_'+tag, name:tag, value:count, symbolSize:Math.min(100,40+count*5), category:tag, itemStyle:{ borderWidth:3, borderColor:'#fff', shadowBlur:10, shadowColor:'rgba(0,0,0,0.3)' }, label:{ show:true, formatter:'{b}\n({c})', fontSize:15, fontWeight:'bold' } });
-                        tagMap.set(tag, true);
-                    }
-                    links.push({ source:page.id, target:'TAG_'+tag });
-                });
-                nodes.push({ id:page.id, name:page.title, symbolSize:18, category:pTags[0], url:`${API_BASE}/view/${page.id}`, label:{ show:true, position:'right', formatter:'{b}' } });
+                let folder = page.folder || '未分类';
+                categoriesSet.add(folder);
+                if (!nodes.find(n => n.id === 'TAG_'+folder)) {
+                    const count = tagCounts[folder];
+                    nodes.push({ id:'TAG_'+folder, name:folder, value:count, symbolSize:Math.min(100,40+count*5), category:folder, itemStyle:{ borderWidth:3, borderColor:'#fff', shadowBlur:10, shadowColor:'rgba(0,0,0,0.3)' }, label:{ show:true, formatter:'{b}\n({c})', fontSize:15, fontWeight:'bold' } });
+                }
+                links.push({ source:page.id, target:'TAG_'+folder });
+                nodes.push({ id:page.id, name:page.title, symbolSize:18, category:folder, url:`${API_BASE}/view/${page.id}`, label:{ show:true, position:'right', formatter:'{b}' } });
             });
             const categories = Array.from(categoriesSet).map(name => ({ name }));
             const option = {
                 tooltip: { formatter: function(p) {
-                    if (p.data.id && p.data.id.startsWith('TAG_')) return `🏷️ <b>${p.data.name}</b><br/>共聚集了 ${p.data.value} 个项目`;
+                    if (p.data.id && p.data.id.startsWith('TAG_')) return `📁 <b>${p.data.name}</b><br/>共聚集了 ${p.data.value} 个项目`;
                     const page = currentPagesData.find(pp => pp.id === p.data.id);
                     return `${page ? resolveIcon(page) : '📄'} ${p.data.name}`;
                 }},
@@ -291,31 +732,21 @@
             event.target.value = '';
         }
 
-        // 导出图标CSV：包含 id, title, icon, html_preview
         function exportIconCSV() {
             if (!currentPagesData.length) { alert('暂无数据'); return; }
             let csv = 'id,title,icon,html_preview\n';
             currentPagesData.forEach(page => {
                 const preview = (page.html_content || '').replace(/\n/g, ' ').replace(/,/g, '，').substring(0, 200);
-                const id = page.id || '';
-                const title = (page.title || '').replace(/,/g, '，');
-                const icon = page.icon || '';
-                csv += `"${id}","${title}","${icon}","${preview}"\n`;
+                csv += `"${page.id || ''}","${(page.title || '').replace(/,/g, '，')}","${page.icon || ''}","${preview}"\n`;
             });
             const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'icon_export.csv';
-            link.click();
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'icon_export.csv'; link.click();
             showToast('图标CSV已导出');
         }
 
-        // 导入图标CSV：按id或title匹配，批量更新icon
         async function importIconCSV(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const text = await file.text();
-            const lines = text.split('\n').filter(line => line.trim() !== '');
+            const file = event.target.files[0]; if (!file) return;
+            const text = await file.text(); const lines = text.split('\n').filter(line => line.trim() !== '');
             if (lines.length < 2) { alert('CSV格式错误'); event.target.value = ''; return; }
             const header = lines[0].split(',');
             const idIdx = header.findIndex(h => h.trim().toLowerCase() === 'id');
@@ -324,34 +755,21 @@
             
             let updatedCount = 0;
             for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(',');
-                if (cols.length <= Math.max(idIdx, iconIdx)) continue;
-                const csvId = cols[idIdx].replace(/^"|"$/g, '').trim();
-                const csvIcon = cols[iconIdx].replace(/^"|"$/g, '').trim();
+                const cols = lines[i].split(','); if (cols.length <= Math.max(idIdx, iconIdx)) continue;
+                const csvId = cols[idIdx].replace(/^"|"$/g, '').trim(); const csvIcon = cols[iconIdx].replace(/^"|"$/g, '').trim();
                 if (!csvId) continue;
                 
-                // 根据id或title查找本地页面
-                const page = currentPagesData.find(p => p.id == csvId || p.title === csvId);
-                if (!page) continue;
-                
+                const page = currentPagesData.find(p => p.id == csvId || p.title === csvId); if (!page) continue;
                 try {
-                    const resp = await fetch(`${API_BASE}/api/pages/${page.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            title: page.title,
-                            icon: csvIcon,
-                            tags: page.tags,
-                            html_content: page.html_content
-                        })
-                    });
-                    const result = await resp.json();
-                    if (result.status === 'success') updatedCount++;
-                } catch (e) { console.error('更新失败:', page.id); }
+                    const res = await fetch(`${API_BASE}/api/pages/${page.id}`);
+                    const pageDetail = await res.json();
+                    if (!pageDetail.error) {
+                        const resp = await fetch(`${API_BASE}/api/pages/${page.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: pageDetail.title, icon: csvIcon, folder: pageDetail.folder, tags: pageDetail.tags, html_content: pageDetail.html_content }) });
+                        if ((await resp.json()).status === 'success') updatedCount++;
+                    }
+                } catch (e) {}
             }
-            showToast(`✅ 成功更新了 ${updatedCount} 个图标`);
-            loadPages();
-            event.target.value = '';
+            showToast(`✅ 成功更新了 ${updatedCount} 个图标`); loadPages(); event.target.value = '';
         }
 
         function loadEditData(pageId) {
@@ -359,71 +777,45 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.error) return alert(data.error);
-                    document.getElementById('edit-id').value = data.id;
-                    document.getElementById('edit-title').value = data.title || '';
-                    document.getElementById('edit-icon').value = data.icon || '';
-                    document.getElementById('edit-tags').value = data.tags || '';
-                    document.getElementById('edit-html').value = data.html_content || '';
+                    document.getElementById('edit-id').value = data.id; document.getElementById('edit-title').value = data.title || '';
+                    document.getElementById('edit-icon').value = data.icon || ''; document.getElementById('edit-folder').value = data.folder || '';
+                    document.getElementById('edit-tags').value = data.tags || ''; document.getElementById('edit-html').value = data.html_content || '';
                 }).catch(err => alert("读取失败"));
         }
 
-        // 新建提交
         document.getElementById('upload-form').addEventListener('submit', function(e) {
             e.preventDefault();
             const titleValue = document.getElementById('upload-title').value.trim();
-            let iconValue = document.getElementById('upload-icon').value.trim();
-            let htmlValue = document.getElementById('upload-html').value;
+            let iconValue = document.getElementById('upload-icon').value.trim(), htmlValue = document.getElementById('upload-html').value;
             
             if (!iconValue) {
-                const defaultIcon = getDefaultIcon(titleValue || 'new');
-                iconValue = defaultIcon;
-                htmlValue = injectIconToHtml(htmlValue, defaultIcon, titleValue);
+                iconValue = getDefaultIcon(titleValue || 'new');
+                htmlValue = injectIconToHtml(htmlValue, iconValue, titleValue);
             }
             
-            fetch(`${API_BASE}/api/pages`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: titleValue,
-                    icon: iconValue,
-                    tags: document.getElementById('upload-tags').value,
-                    html_content: htmlValue
-                })
-            }).then(r=>r.json()).then(d=>{ if(d.status==='success') switchView('list'); else alert(d.error); });
+            fetch(`${API_BASE}/api/pages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleValue, icon: iconValue, folder: document.getElementById('upload-folder').value, tags: document.getElementById('upload-tags').value, html_content: htmlValue }) })
+                .then(r=>r.json()).then(d=>{ if(d.status==='success') switchView('list'); else alert(d.error); });
         });
 
-        // 编辑提交
         document.getElementById('edit-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            const pageId = document.getElementById('edit-id').value;
-            const titleValue = document.getElementById('edit-title').value.trim();
-            let iconValue = document.getElementById('edit-icon').value.trim();
-            let htmlValue = document.getElementById('edit-html').value;
+            const pageId = document.getElementById('edit-id').value, titleValue = document.getElementById('edit-title').value.trim();
+            let iconValue = document.getElementById('edit-icon').value.trim(), htmlValue = document.getElementById('edit-html').value;
             
             if (!iconValue) {
-                const defaultIcon = getDefaultIcon(pageId || titleValue || 'edit');
-                iconValue = defaultIcon;
-                htmlValue = injectIconToHtml(htmlValue, defaultIcon, titleValue);
+                iconValue = getDefaultIcon(pageId || titleValue || 'edit');
+                htmlValue = injectIconToHtml(htmlValue, iconValue, titleValue);
             }
             
-            fetch(`${API_BASE}/api/pages/${pageId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: titleValue,
-                    icon: iconValue,
-                    tags: document.getElementById('edit-tags').value,
-                    html_content: htmlValue
-                })
-            }).then(r=>r.json()).then(d=>{ if(d.status==='success'){ showToast('✅ 已保存'); switchView('list'); } else alert(d.error); });
+            fetch(`${API_BASE}/api/pages/${pageId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleValue, icon: iconValue, folder: document.getElementById('edit-folder').value, tags: document.getElementById('edit-tags').value, html_content: htmlValue }) })
+                .then(r=>r.json()).then(d=>{ if(d.status==='success'){ showToast('✅ 已保存'); switchView('list'); } else alert(d.error); });
         });
 
         function showToast(msg) {
             const t = document.createElement('div'); t.textContent = msg;
             Object.assign(t.style, { position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)', background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px', fontWeight:'bold', fontSize:'15px', zIndex:9999, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', animation:'fadeIn 0.3s ease' });
             document.body.appendChild(t);
-            setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800);
-            setTimeout(()=>t.remove(), 2200);
+            setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800); setTimeout(()=>t.remove(), 2200);
         }
 
         window.addEventListener('resize', ()=>{ if(chartInstance && isGraphMode) chartInstance.resize(); });
