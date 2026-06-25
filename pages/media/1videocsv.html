@@ -76,8 +76,9 @@
         <button onclick="downloadFilteredCsv(false)">下载数据原始格式 (纯数值)</button>
     </div>
 </div>
-
+  <div class="status-bar" id="statusMsg">就绪。</div>
 <div class="table-container">
+
     <table>
         <thead>
             <tr>
@@ -95,7 +96,7 @@
         </tbody>
     </table>
     <div class="pagination">
-        <div class="status-bar" id="statusMsg">就绪。</div>
+      
         <div class="page-controls">
             <button onclick="changePage(-1)" id="btnPrev" disabled>上一页</button>
             <span id="pageIndicator">0 / 0</span>
@@ -200,61 +201,73 @@
 
     // 下载当前前端筛选/查询到的结果
   // 下载当前前端筛选/查询到的结果
-    function downloadFilteredCsv(isOptimized) {
-        if (allData.length === 0) {
-            alert('当前没有可导出的数据');
-            return;
-        }
-        
-        let csvContent = '\uFEFF';
-        const headers = ['文件名', '完整路径', '大小', '修改时间', '分辨率', '编码', '码率', '时长', 'FPS'];
-        csvContent += headers.join(',') + '\n';
-        
-        allData.forEach(row => {
-            const rowData = [
-                extractFilename(row.path),
-                row.path,
-                isOptimized ? formatSize(row.size) : (row.size || ''),
-                isOptimized ? formatDate(row.mtime) : (row.mtime || ''),
-                (row.width && row.height) ? `${row.width}x${row.height}` : '',
-                row.codec || '',
-                isOptimized ? formatBitrate(row.bitrate) : (row.bitrate || ''),
-                isOptimized ? formatDuration(row.duration) : (row.duration || ''),
-                isOptimized ? formatFps(row.fps) : (row.fps || '')
-            ];
-            
-            const safeRowData = rowData.map(item => String(item).replace(/\t|\n|\r/g, ' '));
-            csvContent += safeRowData.join(',') + '\n';
-        });
-        
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-
-        // ===== 动态命名逻辑 =====
-        const selector = document.getElementById('csvSelector');
-        let baseName = "全局数据";
-        if (selector.selectedIndex > 0) {
-            // 获取下拉框文本并去除括号里的日期部分
-            const optionText = selector.options[selector.selectedIndex].text;
-            baseName = optionText.substring(0, optionText.lastIndexOf(' (')) || optionText;
-            // 移除可能存在的原有后缀名（如 .csv）
-            baseName = baseName.replace(/\.[^/.]+$/, ""); 
-        }
-        
-        const query = document.getElementById('searchInput').value.trim();
-        const querySuffix = query ? `_筛选[${query}]` : "";
-        const typeSuffix = isOptimized ? "_优化版" : "_原始数据";
-        
-        link.setAttribute("download", `${baseName}${querySuffix}${typeSuffix}.csv`);
-        // ==========================
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+ // 下载当前前端筛选/查询到的结果
+function downloadFilteredCsv(isOptimized) {
+    if (allData.length === 0) {
+        alert('当前没有可导出的数据');
+        return;
     }
     
+    // 增加 BOM 头，确保 Excel 识别为 UTF-8
+    let csvContent = '\uFEFF'; 
+    const headers = ['文件名', '完整路径', '大小', '修改时间', '分辨率', '编码', '码率', '时长', 'FPS'];
+    
+    // 核心转义函数：RFC 4180 标准
+    // 1. 将字段内的双引号 " 替换为 ""
+    // 2. 将整个字段用双引号 " 包裹起来
+    const escapeCsv = (val) => {
+        const s = String(val == null ? '' : val);
+        return `"${s.replace(/"/g, '""')}"`;
+    };
+    
+    // 写入表头，使用逗号连接
+    csvContent += headers.map(escapeCsv).join(',') + '\n';
+    
+    // 写入数据
+    allData.forEach(row => {
+        const rowData = [
+            extractFilename(row.path),
+            row.path,
+            isOptimized ? formatSize(row.size) : (row.size || ''),
+            isOptimized ? formatDate(row.mtime) : (row.mtime || ''),
+            (row.width && row.height) ? `${row.width}x${row.height}` : '',
+            row.codec || '',
+            isOptimized ? formatBitrate(row.bitrate) : (row.bitrate || ''),
+            isOptimized ? formatDuration(row.duration) : (row.duration || ''),
+            isOptimized ? formatFps(row.fps) : (row.fps || '')
+        ];
+        
+        // 使用标准的 escapeCsv 处理每一项，然后 join
+        csvContent += rowData.map(escapeCsv).join(',') + '\n';
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+
+    // 动态命名逻辑
+    const selector = document.getElementById('csvSelector');
+    let baseName = "全局数据";
+    if (selector.selectedIndex > 0) {
+        const optionText = selector.options[selector.selectedIndex].text;
+        baseName = optionText.substring(0, optionText.lastIndexOf(' (')) || optionText;
+        baseName = baseName.replace(/\.[^/.]+$/, ""); 
+    }
+    
+    const query = document.getElementById('searchInput').value.trim();
+    // 过滤掉文件名不支持的特殊字符
+    const cleanQuery = query.replace(/[\\/:*?"<>|]/g, '-');
+    const querySuffix = cleanQuery ? `_筛选[${cleanQuery}]` : "";
+    const typeSuffix = isOptimized ? "_优化版" : "_原始数据";
+    
+    link.setAttribute("download", `${baseName}${querySuffix}${typeSuffix}.csv`);
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
     // ================= 数据查询与分页 =================
     function debounceSearch() {
         clearTimeout(searchTimeout);
@@ -365,8 +378,31 @@
         const num = parseFloat(fpsStr);
         return isNaN(num) ? fpsStr : num.toFixed(2);
     }
+function formatResolution(width, height) {
+    if (!width || !height || isNaN(width) || isNaN(height)) return '-';
+    
+    const w = parseInt(width);
+    const h = parseInt(height);
+    const area = w * h; // 计算像素总量
+    const isVertical = h > w; // 是否为竖屏
 
-    // ================= 渲染视图 =================
+    let label = '';
+
+    // 基于像素总量的分级阈值 (参考标准视频规格)
+    if (area >= 8294400)      label = '4K';      // 约 830万像素
+    else if (area >= 3686400) label = '2K';      // 约 370万像素
+    else if (area >= 2073600) label = '1080p';   // 约 200万像素
+    else if (area >= 921600)  label = '720p';    // 约 90万像素
+    else if (area >= 409600)  label = '480p';    // 约 40万像素
+    else if (area >= 230400)  label = '360p'; // 新增：360p 档位
+    else if (area >= 76800)   label = '240p'; // 新增：240p 档位
+    else                      label = `${w}x${h}`;
+
+    return isVertical ? `${label} (竖)` : label;
+}
+
+
+// ================= 渲染视图 =================
     function renderTable() {
         const tbody = document.getElementById('dataTable');
         tbody.innerHTML = '';
@@ -378,8 +414,8 @@
         
         pageData.forEach(row => {
             const filename = extractFilename(row.path);
-            const resolution = (row.width && row.height) ? `${row.width}x${row.height}` : '-';
             
+            const resolution = formatResolution(row.width, row.height);
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="filename-cell" title="完整路径: ${row.path}">${filename}</td>
