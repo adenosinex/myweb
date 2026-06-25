@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mac Mini M4 — Disk Health Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f1eb;
+    --surface: #ffffff;
+    --surface-alt: #eae6de;
+    --accent: #d4622a;
+    --accent-light: #f0dcc8;
+    --accent-glow: rgba(212, 98, 42, 0.12);
+    --good: #2a8c4a;
+    --good-bg: #e0f5e8;
+    --warn: #c7882a;
+    --warn-bg: #fef3dc;
+    --bad: #c0392b;
+    --bad-bg: #fde8e6;
+    --text-primary: #1a1714;
+    --text-secondary: #5c554d;
+    --text-muted: #9a948c;
+    --border: #e0dbd3;
+    --shadow-sm: 0 1px 3px rgba(26,23,20,0.04);
+    --shadow-md: 0 4px 16px rgba(26,23,20,0.06);
+    --shadow-lg: 0 12px 40px rgba(26,23,20,0.08);
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Mono', 'Noto Sans SC', monospace;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Top Bar ── */
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(244, 241, 235, 0.85);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .apple-logo {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+  }
+
+  .top-bar h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 17px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+  }
+
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--good);
+    animation: pulse-dot 2s ease infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(42,140,74,0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(42,140,74,0); }
+  }
+
+  .status-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .refresh-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.05em;
+  }
+
+  .refresh-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* ── Main Container ── */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 36px 40px 60px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Hero Health Score ── */
+  .hero-section {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 28px;
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease 0.1s forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .score-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    padding: 36px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .score-card::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: var(--accent-glow);
+    filter: blur(40px);
+  }
+
+  .score-ring {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin-bottom: 20px;
+  }
+
+  .score-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .score-ring-bg {
+    fill: none;
+    stroke: var(--surface-alt);
+    stroke-width: 8;
+  }
+
+  .score-ring-fill {
+    fill: none;
+    stroke: var(--good);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 502;
+    stroke-dashoffset: 502;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s ease;
+  }
+
+  .score-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .score-number {
+    font-family: 'DM Serif Display', serif;
+    font-size: 48px;
+    line-height: 1;
+    color: var(--text-primary);
+  }
+
+  .score-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .health-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .health-badge.good { background: var(--good-bg); color: var(--good); }
+  .health-badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .health-badge.bad  { background: var(--bad-bg);  color: var(--bad);  }
+
+  .health-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* ── Info Panels Right Side ── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .info-tile {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .info-tile:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .info-tile-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-bottom: 14px;
+  }
+
+  .icon-temp   { background: #fff0e8; color: #e06820; }
+  .icon-spare  { background: #e8f5ee; color: #2a8c4a; }
+  .icon-usage  { background: #f0ecff; color: #6b5ce7; }
+  .icon-hours  { background: #e8f0ff; color: #2a6bc7; }
+
+  .info-tile-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .info-tile-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    line-height: 1.1;
+    color: var(--text-primary);
+  }
+
+  .info-tile-unit {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-left: 2px;
+  }
+
+  .info-tile-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  /* ── Detail Sections ── */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards;
+  }
+
+  .detail-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    padding: 28px;
+  }
+
+  .detail-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-card-header-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--accent-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .detail-card-header-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .detail-card-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(224,219,211,0.5);
+  }
+
+  .info-row:last-child { border-bottom: none; }
+
+  .info-row-key {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+
+  .info-row-val {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: right;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Progress Bars ── */
+  .progress-group {
+    margin-bottom: 18px;
+  }
+
+  .progress-group:last-child { margin-bottom: 0; }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .progress-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .progress-value {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 6px;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease;
+  }
+
+  .progress-fill.good { background: linear-gradient(90deg, #2a8c4a, #4ade80); }
+  .progress-fill.warn { background: linear-gradient(90deg, #c7882a, #f5b041); }
+  .progress-fill.bad  { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+
+  /* ── Write Stats Bar Chart ── */
+  .write-stats {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    padding: 12px 0;
+    margin-top: 4px;
+  }
+
+  .write-stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .write-stat-bar-track {
+    width: 100%;
+    height: 120px;
+    background: var(--surface-alt);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .write-stat-bar-fill {
+    width: 100%;
+    height: 0%;
+    border-radius: 8px;
+    transition: height 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .write-stat-bar-fill.read  { background: linear-gradient(180deg, #2a6bc7, #4a9eff); }
+  .write-stat-bar-fill.write { background: linear-gradient(180deg, var(--accent), #f09050); }
+
+  .write-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+  }
+
+  .write-stat-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  /* ── Full Width Section ── */
+  .full-section {
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards;
+  }
+
+  .raw-toggle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 20px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    letter-spacing: 0.04em;
+    margin-top: 28px;
+  }
+
+  .raw-toggle:hover {
+    background: var(--surface-alt);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .raw-toggle-arrow {
+    transition: transform 0.3s ease;
+    font-size: 10px;
+  }
+
+  .raw-toggle-arrow.open {
+    transform: rotate(180deg);
+  }
+
+  .raw-output {
+    margin-top: 12px;
+    background: #1a1714;
+    border-radius: var(--radius-sm);
+    padding: 24px;
+    max-height: 400px;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .raw-output.visible {
+    display: block;
+    animation: fadeUp 0.3s ease forwards;
+  }
+
+  .raw-output pre {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    color: #c8c0b8;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .raw-output::-webkit-scrollbar { width: 6px; }
+  .raw-output::-webkit-scrollbar-track { background: transparent; }
+  .raw-output::-webkit-scrollbar-thumb { background: rgba(200,192,184,0.2); border-radius: 3px; }
+
+  /* ── Loading State ── */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease;
+  }
+
+  .loading-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loader-ring {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loader-text {
+    margin-top: 18px;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ── Error Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: var(--surface);
+    border: 1px solid var(--bad);
+    border-radius: var(--radius-sm);
+    padding: 14px 22px;
+    font-size: 12px;
+    color: var(--bad);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.4s ease;
+    z-index: 200;
+    max-width: 360px;
+  }
+
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .hero-section {
+      grid-template-columns: 1fr;
+    }
+    .detail-grid {
+      grid-template-columns: 1fr;
+    }
+    .container {
+      padding: 24px 20px 40px;
+    }
+    .top-bar {
+      padding: 0 20px;
+    }
+    .info-tile-value {
+      font-size: 26px;
+    }
+    .score-ring {
+      width: 150px;
+      height: 150px;
+    }
+    .score-number {
+      font-size: 38px;
+    }
+  }
+
+  /* ── Smooth scroll ── */
+  html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loader-ring"></div>
+  <div class="loader-text">Reading Disk Health Data…</div>
+</div>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <svg class="apple-logo" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+    </svg>
+    <h1>Disk Health Monitor</h1>
+  </div>
+  <div class="top-bar-right">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-text" id="statusText">Connected</span>
+    <button class="refresh-btn" onclick="loadAllData()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="hero-section">
+    <div class="score-card">
+      <div class="score-ring">
+        <svg viewBox="0 0 180 180">
+          <circle class="score-ring-bg" cx="90" cy="90" r="80"/>
+          <circle class="score-ring-fill" id="scoreRing" cx="90" cy="90" r="80"/>
+        </svg>
+        <div class="score-value">
+          <div class="score-number" id="scoreNumber">—</div>
+          <div class="score-label">Health Score</div>
+        </div>
+      </div>
+      <div class="health-badge" id="healthBadge">
+        <span class="health-badge-dot"></span>
+        <span id="healthStatus">—</span>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-tile">
+        <div class="info-tile-icon icon-temp">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        </div>
+        <div>
+          <div class="info-tile-label">Temperature</div>
+          <div><span class="info-tile-value" id="tileTemp">—</span><span class="info-tile-unit">°C</span></div>
+        </div>
+        <div class="info-tile-sub" id="tileTempNote">NVMe Sensor</div>
+      </div>
+      <div class="info-tile">
+        <div class="info-tile-icon icon-spare">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div>
+          <div class="info-tile-label">Available Spare</div>
+          <div><span class="info-tile-value" id="tileSpare">—</span><span class="info-tile-unit">%</span></div>
+        </div>
+        <div class="info-tile-sub" id="tileSpareNote">Threshold: —%</div>
+      </div>
+      <div class="info-tile">
+        <div class="info-tile-icon icon-usage">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <div>
+          <div class="info-tile-label">Lifetime Used</div>
+          <div><span class="info-tile-value" id="tileUsed">—</span><span class="info-tile-unit">%</span></div>
+        </div>
+        <div class="info-tile-sub">Wear Indicator</div>
+      </div>
+      <div class="info-tile">
+        <div class="info-tile-icon icon-hours">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div>
+          <div class="info-tile-label">Power-On Hours</div>
+          <div><span class="info-tile-value" id="tileHours">—</span><span class="info-tile-unit"> hrs</span></div>
+        </div>
+        <div class="info-tile-sub" id="tileCyclesNote">— Cycles</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-grid" style="animation-delay: 0.3s;">
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="12" cy="12" r="3"/><path d="M12 2v20M2 12h20"/></svg>
+        </div>
+        <div class="detail-card-title">Disk Information</div>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Model</span>
+        <span class="info-row-val" id="infoModel">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Capacity</span>
+        <span class="info-row-val" id="infoCapacity">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Firmware</span>
+        <span class="info-row-val" id="infoFirmware">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">TRIM Support</span>
+        <span class="info-row-val" id="infoTrim">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">SMART Status</span>
+        <span class="info-row-val" id="infoSmart">—</span>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="detail-card-title">SMART Health</div>
+      </div>
+
+      <div class="progress-group">
+        <div class="progress-header">
+          <span class="progress-label">Life Used</span>
+          <span class="progress-value" id="smartLifeUsed">—%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="smartLifeBar"></div>
+        </div>
+      </div>
+
+      <div class="progress-group">
+        <div class="progress-header">
+          <span class="progress-label">Available Spare</span>
+          <span class="progress-value" id="smartSpare">—%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="smartSpareBar"></div>
+        </div>
+      </div>
+
+      <div class="info-row" style="margin-top: 14px;">
+        <span class="info-row-key">Critical Warning</span>
+        <span class="info-row-val" id="smartCritical">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Media Errors</span>
+        <span class="info-row-val" id="smartErrors">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Error Log Entries</span>
+        <span class="info-row-val" id="smartLogEntries">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Unsafe Shutdowns</span>
+        <span class="info-row-val" id="smartShutdowns">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-grid" style="animation-delay: 0.45s;">
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="detail-card-title">Data Transfer Volume</div>
+      </div>
+      <div class="write-stats">
+        <div class="write-stat-item">
+          <div class="write-stat-bar-track">
+            <div class="write-stat-bar-fill read" id="readBar"></div>
+          </div>
+          <div class="write-stat-label">READ</div>
+          <div class="write-stat-value" id="readVal">— TB</div>
+        </div>
+        <div class="write-stat-item">
+          <div class="write-stat-bar-track">
+            <div class="write-stat-bar-fill write" id="writeBar"></div>
+          </div>
+          <div class="write-stat-label">WRITE</div>
+          <div class="write-stat-value" id="writeVal">— TB</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </div>
+        <div class="detail-card-title">Operational Summary</div>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Power Cycles</span>
+        <span class="info-row-val" id="sumCycles">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Power-On Hours</span>
+        <span class="info-row-val" id="sumHours">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Unsafe Shutdowns</span>
+        <span class="info-row-val" id="sumUnsafe">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Overall Health</span>
+        <span class="info-row-val" id="sumHealth">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Overall Assessment</span>
+        <span class="info-row-val" id="sumAssessment">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-grid" style="animation-delay: 0.6s;">
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M3 21l6-6 4 4 8-8"/></svg>
+        </div>
+        <div class="detail-card-title">Linear Lifetime Model</div>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Model Base</span>
+        <span class="info-row-val" id="linModelBase">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Written Data</span>
+        <span class="info-row-val" id="linWritten">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">TBW Estimate</span>
+        <span class="info-row-val" id="linTbw">—</span>
+      </div>
+      <div class="progress-group" style="margin-top: 14px;">
+        <div class="progress-header">
+          <span class="progress-label">Linear Health Score</span>
+          <span class="progress-value" id="linHealthVal">—%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="linHealthBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="detail-card-title">Advanced Risk Model</div>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">WAF Estimate</span>
+        <span class="info-row-val" id="advWaf">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Risk Level</span>
+        <span class="info-row-val" id="advRiskLevel">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row-key">Life Multiplier</span>
+        <span class="info-row-val" id="advLifeMult">—</span>
+      </div>
+      <div class="progress-group" style="margin-top: 14px;">
+        <div class="progress-header">
+          <span class="progress-label">Non-linear Health Score</span>
+          <span class="progress-value" id="advHealthVal">—%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="advHealthBar"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-grid" style="grid-template-columns: 1fr; animation-delay: 0.7s;">
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        </div>
+        <div class="detail-card-title">Storage Capacity (APFS)</div>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+        <div>
+          <div class="info-row">
+            <span class="info-row-key">Total Capacity</span>
+            <span class="info-row-val" id="spaceTotal">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-key">Used Space</span>
+            <span class="info-row-val" id="spaceUsed">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-key">Available (df)</span>
+            <span class="info-row-val" id="spaceAvail">—</span>
+          </div>
+        </div>
+        <div>
+          <div class="info-row">
+            <span class="info-row-key">APFS Free Space</span>
+            <span class="info-row-val" id="spaceApfs">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-key">Space Pressure</span>
+            <span class="info-row-val" id="spacePressure">—</span>
+          </div>
+          <div class="progress-group" style="margin-top: 14px;">
+            <div class="progress-header">
+              <span class="progress-label">Usage Percent</span>
+              <span class="progress-value" id="spaceUsageVal">—</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="spaceUsageBar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="full-section" style="animation-delay: 0.8s;">
+    <button class="raw-toggle" onclick="toggleRaw()">
+      <span>View Raw Output (system_profiler + smartctl)</span>
+      <span class="raw-toggle-arrow" id="rawArrow">▼</span>
+    </button>
+    <div class="raw-output" id="rawOutput">
+      <pre id="rawContent">Loading…</pre>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ─── State ───
+  let healthData = null;
+  let smartData  = null;
+  let infoData   = null;
+  let rawData    = null;
+
+  // ─── Utilities ───
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  function setNumber(el, val, suffix) {
+    if (val === null || val === undefined || val === -1) {
+      el.textContent = '—';
+    } else {
+      el.textContent = val;
+    }
+  }
+
+  function formatHours(h) {
+    if (!h || h === -1) return '—';
+    return h.toLocaleString();
+  }
+
+  function formatTB(v) {
+    if (v === null || v === undefined) return '—';
+    return v.toFixed(2) + ' TB';
+  }
+
+  // ─── Fetch Helpers ───
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  // ─── Render Functions ───
+  function renderHealth(data) {
+    healthData = data;
+    const score = data.health_score || 0;
+    const circumference = 2 * Math.PI * 80; // 502.65
+    const offset = circumference - (score / 100) * circumference;
+
+    const ring = document.getElementById('scoreRing');
+    const scoreEl = document.getElementById('scoreNumber');
+    const badge = document.getElementById('healthBadge');
+    const statusEl = document.getElementById('healthStatus');
+
+    // Animate score number
+    let current = 0;
+    const step = score / 40;
+    const interval = setInterval(() => {
+      current += step;
+      if (current >= score) {
+        current = score;
+        clearInterval(interval);
+      }
+      scoreEl.textContent = Math.round(current);
+    }, 30);
+
+    // Ring
+    ring.style.strokeDashoffset = offset;
+
+    // Color based on status
+    if (data.status === 'GOOD') {
+      ring.style.stroke = '#2a8c4a';
+      badge.className = 'health-badge good';
+      statusEl.textContent = 'Excellent';
+      document.getElementById('statusDot').style.background = '#2a8c4a';
+    } else if (data.status === 'WARN') {
+      ring.style.stroke = '#c7882a';
+      badge.className = 'health-badge warn';
+      statusEl.textContent = 'Warning';
+      document.getElementById('statusDot').style.background = '#c7882a';
+    } else {
+      ring.style.stroke = '#c0392b';
+      badge.className = 'health-badge bad';
+      statusEl.textContent = 'Critical';
+      document.getElementById('statusDot').style.background = '#c0392b';
+    }
+  }
+
+  function renderSmart(data) {
+    smartData = data;
+
+    // Temperature
+    document.getElementById('tileTemp').textContent =
+      (data.temperature_c && data.temperature_c !== -1) ? data.temperature_c : '—';
+
+    // Available Spare
+    document.getElementById('tileSpare').textContent =
+      (data.available_spare >= 0) ? data.available_spare : '—';
+    document.getElementById('tileSpareNote').textContent =
+      'Threshold: ' + ((data.available_spare_threshold >= 0) ? data.available_spare_threshold + '%' : '—');
+
+    // Lifetime Used
+    document.getElementById('tileUsed').textContent =
+      (data.percentage_used >= 0) ? data.percentage_used : '—';
+
+    // Power On Hours
+    document.getElementById('tileHours').textContent = formatHours(data.power_on_hours);
+    document.getElementById('tileCyclesNote').textContent =
+      (data.power_cycles >= 0) ? data.power_cycles.toLocaleString() + ' Power Cycles' : '— Cycles';
+
+    // Smart Life Bar
+    const lifeUsed = data.percentage_used >= 0 ? data.percentage_used : 0;
+    const lifeBar = document.getElementById('smartLifeBar');
+    document.getElementById('smartLifeUsed').textContent = lifeUsed + '%';
+    setTimeout(() => {
+      lifeBar.style.width = Math.min(lifeUsed, 100) + '%';
+      lifeBar.className = 'progress-fill ' + (lifeUsed < 60 ? 'good' : lifeUsed < 80 ? 'warn' : 'bad');
+    }, 200);
+
+    // Smart Spare Bar
+    const spare = data.available_spare >= 0 ? data.available_spare : 0;
+    const spareBar = document.getElementById('smartSpareBar');
+    document.getElementById('smartSpare').textContent = spare + '%';
+    setTimeout(() => {
+      spareBar.style.width = spare + '%';
+      spareBar.className = 'progress-fill ' + (spare > 40 ? 'good' : spare > 20 ? 'warn' : 'bad');
+    }, 300);
+
+    // Critical Warning
+    const critEl = document.getElementById('smartCritical');
+    critEl.textContent = data.critical_warning || '—';
+    if (data.critical_warning && data.critical_warning !== '0x00') {
+      critEl.style.color = 'var(--bad)';
+    } else {
+      critEl.style.color = 'var(--good)';
+    }
+
+    // Media Errors
+    const errEl = document.getElementById('smartErrors');
+    errEl.textContent = (data.media_errors >= 0) ? data.media_errors : '—';
+    errEl.style.color = (data.media_errors > 0) ? 'var(--bad)' : 'var(--good)';
+
+    // Error Log Entries
+    document.getElementById('smartLogEntries').textContent =
+      (data.error_log_entries >= 0) ? data.error_log_entries : '—';
+
+    // Unsafe Shutdowns
+    const unsafeEl = document.getElementById('smartShutdowns');
+    unsafeEl.textContent = (data.unsafe_shutdowns >= 0) ? data.unsafe_shutdowns : '—';
+    unsafeEl.style.color = (data.unsafe_shutdowns > 0) ? 'var(--warn)' : 'var(--text-primary)';
+
+    // Write/Read bars
+    const readTB = data.data_units_read_tb || 0;
+    const writeTB = data.data_units_written_tb || 0;
+    const maxTB = Math.max(readTB, writeTB, 1);
+
+    document.getElementById('readVal').textContent = formatTB(readTB);
+    document.getElementById('writeVal').textContent = formatTB(writeTB);
+
+    setTimeout(() => {
+      document.getElementById('readBar').style.height = Math.min((readTB / maxTB) * 100, 100) + '%';
+      document.getElementById('writeBar').style.height = Math.min((writeTB / maxTB) * 100, 100) + '%';
+    }, 400);
+
+    // Operational Summary
+    document.getElementById('sumCycles').textContent =
+      (data.power_cycles >= 0) ? data.power_cycles.toLocaleString() : '—';
+    document.getElementById('sumHours').textContent = formatHours(data.power_on_hours);
+    document.getElementById('sumUnsafe').textContent =
+      (data.unsafe_shutdowns >= 0) ? data.unsafe_shutdowns : '—';
+    document.getElementById('sumHealth').textContent =
+      (data.health) ? data.health : '—';
+    document.getElementById('sumAssessment').textContent =
+      (healthData && healthData.status) ? healthData.status : '—';
+  }
+
+  function renderInfo(data) {
+    infoData = data;
+    document.getElementById('infoModel').textContent = data.model || '—';
+    document.getElementById('infoCapacity').textContent =
+      data.capacity_gb ? data.capacity_gb + ' GB' : '—';
+    document.getElementById('infoFirmware').textContent = data.firmware || '—';
+    document.getElementById('infoTrim').textContent = data.trim_support || '—';
+
+    const smartEl = document.getElementById('infoSmart');
+    smartEl.textContent = data.smart_status || '—';
+    if (data.smart_status && data.smart_status.toLowerCase().includes('passed')) {
+      smartEl.style.color = 'var(--good)';
+    }
+  }
+
+  function renderRaw(data) {
+    rawData = data;
+    document.getElementById('rawContent').textContent =
+      '=== system_profiler SPNVMeDataType ===\n\n' +
+      (data.system_profiler || '(empty)') +
+      '\n\n=== smartctl -a /dev/disk0 ===\n\n' +
+      (data.smartctl || '(empty)');
+  }
+
+  function renderLinear(data) {
+    document.getElementById('linModelBase').textContent = data.model || '—';
+    document.getElementById('linWritten').textContent = formatTB(data.written_tb);
+    document.getElementById('linTbw').textContent = data.tbw_estimate ? data.tbw_estimate + ' TB' : '—';
+
+    const health = data.health_score >= 0 ? data.health_score : 0;
+    const bar = document.getElementById('linHealthBar');
+    document.getElementById('linHealthVal').textContent = health.toFixed(2) + '%';
+    setTimeout(() => {
+      bar.style.width = Math.min(health, 100) + '%';
+      bar.className = 'progress-fill ' + (health > 60 ? 'good' : health > 20 ? 'warn' : 'bad');
+    }, 500);
+  }
+
+  function renderAdvanced(data) {
+    document.getElementById('advWaf').textContent = data.waf_estimate ? data.waf_estimate.toFixed(2) + 'x' : '—';
+
+    const riskEl = document.getElementById('advRiskLevel');
+    riskEl.textContent = data.risk_level || '—';
+    if (data.risk_level === 'LOW') riskEl.style.color = 'var(--good)';
+    else if (data.risk_level === 'MID') riskEl.style.color = 'var(--warn)';
+    else if (data.risk_level === 'HIGH') riskEl.style.color = 'var(--bad)';
+
+    document.getElementById('advLifeMult').textContent = data.life_multiplier ? data.life_multiplier.toFixed(2) + 'x' : '—';
+
+    const health = data.nonlinear_health >= 0 ? data.nonlinear_health : 0;
+    const bar = document.getElementById('advHealthBar');
+    document.getElementById('advHealthVal').textContent = health.toFixed(2) + '%';
+    setTimeout(() => {
+      bar.style.width = Math.min(health, 100) + '%';
+      bar.className = 'progress-fill ' + (health > 60 ? 'good' : health > 20 ? 'warn' : 'bad');
+    }, 600);
+  }
+
+  function renderSpace(data) {
+    document.getElementById('spaceTotal').textContent = data.total || '—';
+    document.getElementById('spaceUsed').textContent = data.used || '—';
+    document.getElementById('spaceAvail').textContent = data.available || '—';
+    document.getElementById('spaceApfs').textContent = data.apfs_free_space || '—';
+
+    const pressureEl = document.getElementById('spacePressure');
+    pressureEl.textContent = data.space_pressure || '—';
+    if (data.space_pressure === 'LOW') pressureEl.style.color = 'var(--good)';
+    else if (data.space_pressure === 'MID') pressureEl.style.color = 'var(--warn)';
+    else if (data.space_pressure === 'HIGH') pressureEl.style.color = 'var(--bad)';
+
+    let usageVal = 0;
+    if (data.usage_percent) {
+       usageVal = parseFloat(data.usage_percent);
+    }
+    
+    const bar = document.getElementById('spaceUsageBar');
+    document.getElementById('spaceUsageVal').textContent = data.usage_percent || '—';
+    
+    setTimeout(() => {
+      bar.style.width = Math.min(usageVal, 100) + '%';
+      // 注意：占用率越高，颜色越偏向危险色
+      bar.className = 'progress-fill ' + (usageVal < 60 ? 'good' : usageVal < 80 ? 'warn' : 'bad');
+    }, 700);
+  }
+
+  // ─── Raw Toggle ───
+  function toggleRaw() {
+    const output = document.getElementById('rawOutput');
+    const arrow = document.getElementById('rawArrow');
+    output.classList.toggle('visible');
+    arrow.classList.toggle('open');
+  }
+
+  // ─── Main Loader ───
+  async function loadAllData() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.remove('hidden');
+
+    const results = await Promise.allSettled([
+      fetchJSON('/disk/health'),
+      fetchJSON('/disk/smart'),
+      fetchJSON('/disk/info'),
+      fetchJSON('/disk/raw'),
+      fetchJSON('/disk/lifetime_linear'),
+      fetchJSON('/disk/lifetime_advanced'),
+      fetchJSON('/disk/space')
+    ]);
+
+    const [healthRes, smartRes, infoRes, rawRes, linRes, advRes, spaceRes] = results;
+
+    if (healthRes.status === 'fulfilled') renderHealth(healthRes.value);
+    else showToast('Failed to load health score: ' + (healthRes.reason?.message || 'Unknown'));
+
+    if (smartRes.status === 'fulfilled') renderSmart(smartRes.value);
+    else showToast('Failed to load SMART data: ' + (smartRes.reason?.message || 'Unknown'));
+
+    if (infoRes.status === 'fulfilled') renderInfo(infoRes.value);
+    else showToast('Failed to load disk info: ' + (infoRes.reason?.message || 'Unknown'));
+
+    if (rawRes.status === 'fulfilled') renderRaw(rawRes.value);
+    else showToast('Failed to load raw data: ' + (rawRes.reason?.message || 'Unknown'));
+
+    if (linRes.status === 'fulfilled') renderLinear(linRes.value);
+    else console.warn('Failed to load linear model data', linRes.reason);
+
+    if (advRes.status === 'fulfilled') renderAdvanced(advRes.value);
+    else console.warn('Failed to load advanced model data', advRes.reason);
+
+    if (spaceRes.status === 'fulfilled') renderSpace(spaceRes.value);
+    else console.warn('Failed to load space data', spaceRes.reason);
+
+    setTimeout(() => overlay.classList.add('hidden'), 600);
+  }
+
+  // ─── Init ───
+  window.addEventListener('DOMContentLoaded', loadAllData);
+</script>
+</body>
+</html>

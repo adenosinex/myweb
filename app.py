@@ -161,6 +161,164 @@ def login():
 
 
 # ================= 5. 核心 API 接口 =================
+import requests
+from datetime import datetime
+@app.route('/api2/oil/minline', methods=['GET'])
+def get_oil_summary():
+    """
+    获取国际原油当日关键价格摘要（基于新浪分时数据）
+    返回：最新价、均价、最高、最低、开盘、昨收等
+    """
+    sina_url = (
+        "https://stock2.finance.sina.com.cn/futures/api/openapi.php/"
+        "GlobalFuturesService.getGlobalFuturesMinLine"
+        "?symbol=OIL&callback=var%20t1hf_OIL="
+    )
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Referer": "https://finance.sina.com.cn/futures/quotes/OIL.shtml",
+    }
+
+    try:
+        resp = requests.get(sina_url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        raw_text = resp.text
+
+        # 提取 JSONP 中的 JSON 对象
+        match = re.search(r'\(\s*({.*?})\s*\)', raw_text, re.DOTALL)
+        if not match:
+            return jsonify({"error": "无法解析新浪返回数据"}), 502
+
+        data = json.loads(match.group(1))
+        minline = data.get("result", {}).get("data", {}).get("minLine_1d", [])
+
+        if not minline:
+            return jsonify({"error": "无分时数据"}), 502
+
+        # 第一条数据通常包含日期和开盘信息
+        first = minline[0]
+        last = minline[-1]
+
+        # 提取价格序列（每分钟的最新价，在第一个字段后的第1个位置）
+        # 注意：第一个元素格式与后面不同
+        prices = []
+        for point in minline:
+            try:
+                # 跳过第一条的日期部分，取价格（索引1）
+                price = float(point[1])
+                prices.append(price)
+            except (ValueError, IndexError):
+                continue
+
+        if not prices:
+            return jsonify({"error": "无法提取价格数据"}), 502
+
+        trade_date = first[0] if len(first) > 0 else ""
+        open_price = float(first[5]) if len(first) > 5 else prices[0]
+        latest_price = prices[-1]
+        avg_price = round(sum(prices) / len(prices), 3)
+        high_price = max(prices)
+        low_price = min(prices)
+        yesterday_close = float(first[1]) if len(first) > 1 else None
+        change_pct = round((latest_price - yesterday_close) / yesterday_close * 100, 2) if yesterday_close else None
+
+        return jsonify({
+            "code": 0,
+            "data": {
+                "trade_date": trade_date,
+                "latest_price": latest_price,
+                "avg_price": avg_price,
+                "high_price": high_price,
+                "low_price": low_price,
+                "open_price": open_price,
+                "yesterday_close": yesterday_close,
+                "change_pct": change_pct,
+                "data_count": len(prices)
+            },
+            "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "请求新浪接口超时"}), 504
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"请求失败: {str(e)}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"数据处理异常: {str(e)}"}), 500
+
+import requests
+import json
+import re
+from datetime import datetime, timedelta
+
+@app.route('/api2/oil/domestic/latest', methods=['GET'])
+def get_chongqing_oil():
+    """
+    获取重庆最新油价（绕过 filter 解析风险）
+    """
+    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+    params = {
+        "reportName": "RPTA_WEB_YJ_JH",
+        "columns": "ALL",
+        # 不传 filter，只排序和分页
+        "sortColumns": "DIM_DATE",
+        "sortTypes": "-1",
+        "pageNumber": "1",
+        "pageSize": "50",  # 足够覆盖所有省份
+        "source": "WEB",
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://data.eastmoney.com/",
+    }
+
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        raw_text = resp.text
+
+        # 提取 JSON（处理可能的 JSONP）
+        json_str = raw_text
+        match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+
+        data = json.loads(json_str)
+
+        if not data.get('success'):
+            return jsonify({"code": -1, "msg": data.get('message', '接口失败')}), 502
+
+        items = data.get('result', {}).get('data', [])
+        if not items:
+            return jsonify({"code": -1, "msg": "暂无数据"}), 404
+
+        # 筛选重庆
+        cq = None
+        for item in items:
+            if item.get('CITYNAME') == '重庆':
+                cq = item
+                break
+
+        if not cq:
+            return jsonify({"code": -1, "msg": "未找到重庆数据"}), 404
+
+        return jsonify({
+            "code": 0,
+            "data": {
+                "city": "重庆",
+                "date": cq.get('DIM_DATE', '')[:10],
+                "gasoline_92": float(cq.get('V92', 0)),
+                "gasoline_95": float(cq.get('V95', 0)),
+                "gasoline_89": float(cq.get('V89', 0)),
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"code": -1, "msg": str(e)}), 500
+
+
 @app.route('/api2/_sys/pages', methods=['GET'])
 def get_pages_list():
     

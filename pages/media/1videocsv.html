@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CSV 视频数据检索系统</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background: #f5f6fa; }
+        
+        /* 顶部控制栏 */
+        .header-controls { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
+        .search-box { flex-grow: 1; display: flex; gap: 10px; }
+        .search-box input { flex-grow: 1; padding: 10px 15px; font-size: 16px; border: 1px solid #ddd; border-radius: 6px; outline: none; }
+        .search-box input:focus { border-color: #007bff; }
+        
+        button, select { padding: 8px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; cursor: pointer; background: white; transition: 0.2s; }
+        button:hover { background: #f0f0f0; }
+        .btn-primary { background: #007bff; color: white; border: none; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-success { background: #28a745; color: white; border: none; }
+        .btn-success:hover { background: #218838; }
+        
+        /* 通用二级折叠面板 */
+        .collapsible-panel { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; text-align: center; }
+        .collapsible-panel.active { display: block; }
+        .panel-actions { margin-top: 15px; display: flex; justify-content: center; gap: 15px; align-items: center; }
+        
+        /* 数据管理面板特有拖拽样式 */
+        #managementPanel { border: 2px dashed #ddd; transition: border-color 0.3s; }
+        #managementPanel.dragover { border-color: #007bff; background: #f8fbff; }
+        
+        /* 表格与分页 */
+        .table-container { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-x: auto; min-height: 400px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; }
+        th { background: #f8f9fa; font-weight: 600; color: #333; position: sticky; top: 0; }
+        
+        .filename-cell { max-width: 350px; overflow: hidden; text-overflow: ellipsis; cursor: help; font-weight: 500; color: #333; }
+        
+        .pagination { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #fff; border-top: 1px solid #eee; }
+        .page-controls { display: flex; gap: 10px; align-items: center; }
+        .status-bar { font-size: 13px; color: #666; }
+    </style>
+</head>
+<body>
+
+<div class="header-controls">
+    <button class="btn-primary" onclick="togglePanel('managementPanel')">数据管理 (上传 / 原始下载)</button>
+    <button class="btn-success" onclick="togglePanel('exportPanel')">导出当前筛选</button>
+    
+    <div class="search-box">
+        <select id="csvSelector" onchange="triggerSearch()">
+            <option value="">全局搜索 (所有文件)</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="输入关键字自动搜索..." oninput="debounceSearch()">
+    </div>
+</div>
+
+<div id="managementPanel" class="collapsible-panel">
+    <div style="font-size: 16px; color: #555; margin-bottom: 10px;">
+        将 CSV 文件拖拽到此处进行上传，或点击下方按钮选择
+    </div>
+    <div class="panel-actions">
+        <input type="file" id="csvFile" accept=".csv, .tsv, .txt" style="display: none" onchange="handleFileSelect(this)">
+        <button onclick="document.getElementById('csvFile').click()">选择文件上传</button>
+        <div style="width: 1px; height: 20px; background: #ddd;"></div>
+        <button onclick="downloadCsv()">下载选定范围的原始 CSV 文档 (全量)</button>
+    </div>
+</div>
+
+<div id="exportPanel" class="collapsible-panel" style="border: 1px solid #eee;">
+    <div style="font-size: 16px; color: #555; margin-bottom: 10px;">
+        导出下方表格中当前查询到的数据结果
+    </div>
+    <div class="panel-actions">
+        <button class="btn-success" onclick="downloadFilteredCsv(true)">下载前端优化格式 (易读)</button>
+        <button onclick="downloadFilteredCsv(false)">下载数据原始格式 (纯数值)</button>
+    </div>
+</div>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>文件名 (悬停看路径)</th>
+                <th>大小</th>
+                <th>修改时间</th>
+                <th>分辨率</th>
+                <th>编码</th>
+                <th>码率</th>
+                <th>时长</th>
+                <th>FPS</th>
+            </tr>
+        </thead>
+        <tbody id="dataTable">
+        </tbody>
+    </table>
+    <div class="pagination">
+        <div class="status-bar" id="statusMsg">就绪。</div>
+        <div class="page-controls">
+            <button onclick="changePage(-1)" id="btnPrev" disabled>上一页</button>
+            <span id="pageIndicator">0 / 0</span>
+            <button onclick="changePage(1)" id="btnNext" disabled>下一页</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ================= 全局状态 =================
+    let allData = [];
+    let currentPage = 1;
+    const pageSize = 100;
+    let searchTimeout = null;
+
+    // ================= 初始化与面板交互 =================
+    // 面板互斥切换逻辑
+    function togglePanel(panelId) {
+        const panels = ['managementPanel', 'exportPanel'];
+        panels.forEach(id => {
+            const el = document.getElementById(id);
+            if (id === panelId) {
+                el.classList.toggle('active');
+            } else {
+                el.classList.remove('active');
+            }
+        });
+    }
+
+    async function loadFileList() {
+        try {
+            const res = await fetch('/csv/files');
+            const files = await res.json();
+            const selector = document.getElementById('csvSelector');
+            const currentValue = selector.value;
+            
+            selector.innerHTML = '<option value="">全局搜索 (所有文件)</option>';
+            files.forEach(f => {
+                const date = new Date(f.upload_time * 1000).toLocaleString('zh-CN', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                selector.innerHTML += `<option value="${f.id}">${f.filename} (${date})</option>`;
+            });
+            selector.value = currentValue; 
+        } catch(e) {
+            console.error('加载文件列表失败');
+        }
+    }
+
+    // ================= 拖拽与上传逻辑 =================
+    const mPanel = document.getElementById('managementPanel');
+    
+    mPanel.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        mPanel.classList.add('dragover');
+    });
+    
+    mPanel.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        mPanel.classList.remove('dragover');
+    });
+    
+    mPanel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        mPanel.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            uploadFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    function handleFileSelect(input) {
+        if (input.files.length > 0) {
+            uploadFile(input.files[0]);
+            input.value = ''; 
+        }
+    }
+
+    async function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        document.getElementById('statusMsg').innerText = `正在上传并解析 ${file.name} ...`;
+        try {
+            const res = await fetch('/csv/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(res.ok) {
+                document.getElementById('statusMsg').innerText = `上传成功！解析 ${data.total_parsed} 条，更新入库 ${data.inserted_or_updated} 条。`;
+                loadFileList();
+                triggerSearch();
+            } else {
+                alert('上传失败: ' + data.error);
+                document.getElementById('statusMsg').innerText = '上传失败。';
+            }
+        } catch(e) {
+            alert('网络或服务端异常');
+        }
+    }
+
+    // 原始接口下载
+    function downloadCsv() {
+        const csv_id = document.getElementById('csvSelector').value;
+        window.location.href = `/csv/download?csv_id=${csv_id}`;
+    }
+
+    // 下载当前前端筛选/查询到的结果
+  // 下载当前前端筛选/查询到的结果
+    function downloadFilteredCsv(isOptimized) {
+        if (allData.length === 0) {
+            alert('当前没有可导出的数据');
+            return;
+        }
+        
+        let csvContent = '\uFEFF';
+        const headers = ['文件名', '完整路径', '大小', '修改时间', '分辨率', '编码', '码率', '时长', 'FPS'];
+        csvContent += headers.join(',') + '\n';
+        
+        allData.forEach(row => {
+            const rowData = [
+                extractFilename(row.path),
+                row.path,
+                isOptimized ? formatSize(row.size) : (row.size || ''),
+                isOptimized ? formatDate(row.mtime) : (row.mtime || ''),
+                (row.width && row.height) ? `${row.width}x${row.height}` : '',
+                row.codec || '',
+                isOptimized ? formatBitrate(row.bitrate) : (row.bitrate || ''),
+                isOptimized ? formatDuration(row.duration) : (row.duration || ''),
+                isOptimized ? formatFps(row.fps) : (row.fps || '')
+            ];
+            
+            const safeRowData = rowData.map(item => String(item).replace(/\t|\n|\r/g, ' '));
+            csvContent += safeRowData.join(',') + '\n';
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+
+        // ===== 动态命名逻辑 =====
+        const selector = document.getElementById('csvSelector');
+        let baseName = "全局数据";
+        if (selector.selectedIndex > 0) {
+            // 获取下拉框文本并去除括号里的日期部分
+            const optionText = selector.options[selector.selectedIndex].text;
+            baseName = optionText.substring(0, optionText.lastIndexOf(' (')) || optionText;
+            // 移除可能存在的原有后缀名（如 .csv）
+            baseName = baseName.replace(/\.[^/.]+$/, ""); 
+        }
+        
+        const query = document.getElementById('searchInput').value.trim();
+        const querySuffix = query ? `_筛选[${query}]` : "";
+        const typeSuffix = isOptimized ? "_优化版" : "_原始数据";
+        
+        link.setAttribute("download", `${baseName}${querySuffix}${typeSuffix}.csv`);
+        // ==========================
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    // ================= 数据查询与分页 =================
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(triggerSearch, 300);
+    }
+
+    async function triggerSearch() {
+        const q = document.getElementById('searchInput').value.trim();
+        const csv_id = document.getElementById('csvSelector').value;
+        
+        document.getElementById('statusMsg').innerText = '查询中...';
+        
+        try {
+            const res = await fetch(`/csv/search?q=${encodeURIComponent(q)}&csv_id=${csv_id}&limit=5000`);
+            const data = await res.json();
+            
+            allData = data.results;
+            currentPage = 1;
+            renderTable();
+            
+            document.getElementById('statusMsg').innerText = 
+                `查询完成。共找到 ${data.count} 条记录，耗时 ${data.cost_time} 秒。`;
+        } catch (e) {
+            document.getElementById('statusMsg').innerText = '查询失败。';
+        }
+    }
+
+    function changePage(delta) {
+        const maxPage = Math.ceil(allData.length / pageSize) || 1;
+        currentPage += delta;
+        if (currentPage < 1) currentPage = 1;
+        if (currentPage > maxPage) currentPage = maxPage;
+        renderTable();
+    }
+
+    // ================= 格式化工具函数 =================
+    function extractFilename(path) {
+        if (!path) return '-';
+        return path.split(/[/\\]/).pop();
+    }
+
+    function formatSize(bytes) {
+        if (!bytes || isNaN(bytes)) return '-';
+        const b = parseFloat(bytes);
+        if (b === 0) return '0 B';
+        if (b < 1024) return b + ' B';
+        if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+        if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+        return (b / 1073741824).toFixed(2) + ' GB';
+    }
+
+    function formatDate(timestamp) {
+        if (!timestamp || isNaN(timestamp)) return '-';
+        const targetDate = new Date(timestamp * 1000);
+        const now = new Date();
+        
+        const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+        
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        
+        const timeStr = targetDate.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'});
+        const monthDay = `${targetDate.getMonth() + 1}月${targetDate.getDate()}日`;
+        
+        if (isSameDay(targetDate, now)) {
+            return `今天 ${timeStr}`;
+        } else if (isSameDay(targetDate, yesterday)) {
+            return `昨天 ${timeStr}`;
+        } else if (targetDate.getFullYear() === now.getFullYear()) {
+            return `${monthDay}`;
+        } else if (targetDate.getFullYear() === now.getFullYear() - 1) {
+            return `去年 ${monthDay}`;
+        } else {
+            return `${targetDate.getFullYear()}年 ${monthDay}`;
+        }
+    }
+
+    function formatDuration(secStr) {
+        if (!secStr || isNaN(secStr)) return '-';
+        const s = parseFloat(secStr);
+        if (s === 0) return '0s';
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = Math.floor(s % 60);
+        let res = '';
+        if (h > 0) res += `${h}h `;
+        if (m > 0) res += `${m}m `;
+        if (sec > 0 || res === '') res += `${sec}s`;
+        return res;
+    }
+
+    function formatBitrate(bps) {
+        if (!bps || isNaN(bps)) return '-';
+        const b = parseFloat(bps);
+        if (b < 1000) return b + ' bps';
+        if (b < 1000000) return (b / 1000).toFixed(0) + ' kbps';
+        return (b / 1000000).toFixed(1) + ' Mbps';
+    }
+
+    function formatFps(fpsStr) {
+        if (!fpsStr) return '-';
+        if (fpsStr.includes('/')) {
+            const parts = fpsStr.split('/');
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[1] !== '0') {
+                return (parseFloat(parts[0]) / parseFloat(parts[1])).toFixed(2);
+            }
+        }
+        const num = parseFloat(fpsStr);
+        return isNaN(num) ? fpsStr : num.toFixed(2);
+    }
+
+    // ================= 渲染视图 =================
+    function renderTable() {
+        const tbody = document.getElementById('dataTable');
+        tbody.innerHTML = '';
+        
+        const totalRecords = allData.length;
+        const maxPage = Math.ceil(totalRecords / pageSize) || 1;
+        const startIndex = (currentPage - 1) * pageSize;
+        const pageData = allData.slice(startIndex, startIndex + pageSize);
+        
+        pageData.forEach(row => {
+            const filename = extractFilename(row.path);
+            const resolution = (row.width && row.height) ? `${row.width}x${row.height}` : '-';
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="filename-cell" title="完整路径: ${row.path}">${filename}</td>
+                <td>${formatSize(row.size)}</td>
+                <td>${formatDate(row.mtime)}</td>
+                <td>${resolution}</td>
+                <td>${row.codec || '-'}</td>
+                <td>${formatBitrate(row.bitrate)}</td>
+                <td>${formatDuration(row.duration)}</td>
+                <td>${formatFps(row.fps)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (totalRecords === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">暂无数据</td></tr>';
+        }
+
+        document.getElementById('pageIndicator').innerText = `第 ${currentPage} / ${maxPage} 页`;
+        document.getElementById('btnPrev').disabled = (currentPage === 1);
+        document.getElementById('btnNext').disabled = (currentPage === maxPage);
+    }
+
+    loadFileList();
+    triggerSearch();
+</script>
+</body>
+</html>

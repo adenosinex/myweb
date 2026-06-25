@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>认知索引层</title>
       <script src="/static/cdn/tailwindcss3.4.17.js"></script>
-    <!-- <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script> -->
     <script src="/static/cdn/echarts.min.js"></script>
     <script>
         tailwind.config = { darkMode: 'class' }
@@ -84,13 +83,19 @@
     <div id="editModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4" onclick="closeOnBg(event, 'editModal')">
         <div class="bg-gray-800 w-full max-w-md rounded-xl shadow-2xl flex flex-col transition-transform duration-200">
             <div class="p-5 border-b border-gray-700 bg-gray-900/30">
-                <h3 class="text-xl font-bold">快速编辑标签</h3>
+                <h3 class="text-xl font-bold">快速编辑</h3>
             </div>
             <div class="p-6 flex flex-col gap-4">
                 <input type="hidden" id="editCardId">
-                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700/50">
-                    <label class="block text-base font-bold text-green-400 mb-2">🏷️ 重新分配标签 (任意分隔符)</label>
-                    <input type="text" id="editTagsInput" class="w-full px-4 py-3 text-lg font-medium text-white bg-gray-900 border-2 border-gray-600 rounded-lg focus:outline-none focus:border-green-500 transition shadow-inner placeholder-gray-600">
+                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700/50 flex flex-col gap-4">
+                    <div>
+                        <label class="block text-base font-bold text-blue-400 mb-2">🔑 检索 Key (主标题)</label>
+                        <input type="text" id="editQueryInput" placeholder="用空格分割多个key代表同一个对象" class="w-full px-4 py-3 text-lg font-medium text-white bg-gray-900 border-2 border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition shadow-inner placeholder-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-base font-bold text-green-400 mb-2">🏷️ 重新分配标签 (任意分隔符)</label>
+                        <input type="text" id="editTagsInput" class="w-full px-4 py-3 text-lg font-medium text-white bg-gray-900 border-2 border-gray-600 rounded-lg focus:outline-none focus:border-green-500 transition shadow-inner placeholder-gray-600">
+                    </div>
                 </div>
             </div>
             <div class="p-4 border-t border-gray-700 flex justify-end gap-3 bg-gray-900/30">
@@ -265,18 +270,22 @@
             hint.classList.add('hidden');
         }
 
-        async function fetchTags() {
+async function fetchTags() {
             try {
-                const res = await fetch(`${API_BASE}api/tags`);
-                const tags = await res.json();
-                if (!Array.isArray(tags)) return;
+                // 替换为调用频次统计接口
+                const res = await fetch(`${API_BASE}api/tags_freq`);
+                const data = await res.json();
+                const tagsList = data.tag_frequencies || []; 
+                
                 const container = document.getElementById('tagContainer');
-                container.innerHTML = tags.map(tag => `
-                    <button onclick="toggleTag('${tag}')" id="tag-${tag}" 
-                        class="px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm">
-                        ${tag}
+                container.innerHTML = tagsList.map(item => `
+                    <button onclick="toggleTag('${item.tag}')" id="tag-${item.tag}" 
+                        class="px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm flex items-center gap-1.5">
+                        <span>${item.tag}</span>
+                        <span class="count-badge text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full font-sans">${item.count}</span>
                     </button>
                 `).join('');
+                
                 currentTags.forEach(t => updateTagStyle(t, true));
             } catch (err) { console.error(err); }
         }
@@ -290,13 +299,19 @@
         function updateTagStyle(tag, isActive) {
             const el = document.getElementById(`tag-${tag}`);
             if(!el) return;
+            
+            const badge = el.querySelector('.count-badge');
+            
             if (isActive) {
-                el.className = "px-4 py-2 text-sm md:text-base font-bold rounded-full border-2 border-green-500 bg-green-500/20 text-green-400 transition cursor-pointer shadow-md shadow-green-900/30 scale-105 transform";
+                // 激活状态：容器变绿，数字角标同步变亮绿色
+                el.className = "px-4 py-2 text-sm md:text-base font-bold rounded-full border-2 border-green-500 bg-green-500/20 text-green-400 transition cursor-pointer shadow-md shadow-green-900/30 scale-105 transform flex items-center gap-1.5";
+                if (badge) badge.className = "count-badge text-xs bg-green-500/30 text-green-300 px-1.5 py-0.5 rounded-full font-sans";
             } else {
-                el.className = "px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm";
+                // 默认状态：恢复暗灰
+                el.className = "px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm flex items-center gap-1.5";
+                if (badge) badge.className = "count-badge text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full font-sans";
             }
         }
-
         function resetHome() {
             document.getElementById('searchInput').value = '';
             currentTags.clear();
@@ -340,6 +355,7 @@
                 let coverUrl = card.cover ? card.cover.replace(/^\.\/covers\//, '') : '';
                 if(coverUrl && !coverUrl.startsWith('http')) coverUrl = `${API_BASE}covers/${coverUrl}`;
                 let tagsStr = card.tags.join(' ').replace(/'/g, "\\'");
+                let queryStr = card.query ? card.query.replace(/'/g, "\\'") : '';
                 const safeCardInfo = escapeHTML(JSON.stringify(card));
                 
                 return `
@@ -358,7 +374,7 @@
                                 ${card.tags.map(t => `<span onclick="event.stopPropagation(); toggleTag('${t}')" class="bg-gray-900 border border-gray-600 hover:border-green-500 hover:text-green-400 text-gray-300 px-2.5 py-1 rounded text-xs font-medium z-10 relative transition shadow-sm">${escapeHTML(t)}</span>`).join('')}
                             </div>
                             <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-2 z-10">
-                                <button onclick="event.stopPropagation(); openEditModal('${card.id}', '${tagsStr}')" class="px-2.5 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">编辑</button>
+                                <button onclick="event.stopPropagation(); openEditModal('${card.id}', '${queryStr}', '${tagsStr}')" class="px-2.5 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">编辑</button>
                                 <button onclick="event.stopPropagation(); openUploadWithTags('${tagsStr}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">+ 同类</button>
                             </div>
                         </div>
@@ -477,7 +493,7 @@
             }
             document.getElementById(id).classList.replace('hidden', 'flex');
             if (id === 'uploadModal') setTimeout(() => document.getElementById('upQuery').focus(), 100);
-            if (id === 'editModal') setTimeout(() => document.getElementById('editTagsInput').focus(), 100);
+            if (id === 'editModal') setTimeout(() => document.getElementById('editQueryInput').focus(), 100);
         }
 
         function openUploadWithTags(tagsStr) {
@@ -485,8 +501,10 @@
             document.getElementById('upTags').value = tagsStr; 
         }
 
-        function openEditModal(cardId, tagsStr) {
+        // 修改此处：增加 query 参数支持
+        function openEditModal(cardId, queryStr, tagsStr) {
             document.getElementById('editCardId').value = cardId;
+            document.getElementById('editQueryInput').value = queryStr;
             document.getElementById('editTagsInput').value = tagsStr;
             openModal('editModal');
         }
@@ -507,9 +525,11 @@
             } 
         }
 
+        // 修改此处：提交时同时传输 tags 和 query
         async function submitEdit() {
             const cardId = document.getElementById('editCardId').value;
             const fd = new FormData();
+            fd.append('query', document.getElementById('editQueryInput').value);
             fd.append('tags', document.getElementById('editTagsInput').value);
 
             try {
@@ -519,6 +539,7 @@
                 } else alert('修改失败');
             } catch (e) { alert('网络异常'); }
         }
+
 // ================= 重写：接入压缩流程的上传函数 =================
         async function submitUpload() {
             const files = document.getElementById('upCover').files;

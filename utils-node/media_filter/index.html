@@ -9,13 +9,8 @@
     <link rel="icon" type="image/svg" href="http://192.168.31.197:8100/static/svg/dy.svg">
     <style>
         .step-input::-webkit-outer-spin-button,
-        .step-input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        .step-input {
-            -moz-appearance: textfield;
-        }
+        .step-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .step-input { -moz-appearance: textfield; }
     </style>
 </head>
 <body>
@@ -26,25 +21,25 @@
                 <img src="/static/logo.png" alt="LOGO" style="height:40px;">
             </a>
         </div>
-        
+
         <div v-show="!isLoading" style="position:absolute;top:18px;right:18px;z-index:10;">
             <van-button type="info" icon="clipboard" size="small" style="margin-left:8px;" @click="searchFromClipboard">剪贴板</van-button>
             <van-button type="primary" icon="search" size="small" style="margin-left:8px;" @click="showSearch = true">搜索</van-button>
             <van-button type="default" icon="setting" size="small" style="margin-left:8px;" @click="showConfig = true">配置</van-button>
-            <van-button type="default" icon="replay" size="small" style="margin-left:8px;" @click="indexPathq( )">更新</van-button>
+            <van-button type="default" icon="replay" size="small" style="margin-left:8px;" @click="indexPathq()">更新</van-button>
         </div>
 
         <div v-if="isLoading" class="loading-screen">
             <img src="/static/logo.png" alt="LOGO" style="height:80px;margin-bottom:30px;">
             <div style="color:#fff;font-size:18px;">加载中...</div>
         </div>
-        
+
         <div class="video-box" v-show="!isLoading && state.videos.length">
             <div v-if="searchTimeMsg" style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.7);color:#fff;text-align:center;z-index:20;padding:8px;">
                 {{ searchTimeMsg }}
             </div>
             <div class="video-title" @click="toggleDetail">{{ videoIndex ? videoIndex + '. ' : '' }}/{{state.totalpage}}  {{ currentVideo.filename }}</div>
-              
+
             <div class="video-container">
                 <video
                     v-for="(video, index) in videoQueue"
@@ -61,7 +56,7 @@
                     @canplaythrough="onVideoReady(index)"
                 ></video>
             </div>
-            
+
             <div class="video-actions">
                 <div style="display:flex; justify-content:center; gap:8px; margin-bottom:12px;">
                     <van-button id="dislike-button" title="不喜欢" type="default" size="small" :class="{ 'btn-active': lastLikeType === 'dislike' }" @click="toggleDislike" style="font-size:22px;padding:0 18px;">
@@ -76,7 +71,7 @@
                         <span v-else style="color:#888;">&#x2764;</span>
                     </van-button>
                 </div>
-               
+
                 <div style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:12px;">
                     <div style="display:flex; align-items:center; background:rgba(0,0,0,0.6); padding:6px 12px; border-radius:8px;">
                         <div style="display:flex; flex-direction:column; gap:4px; color:#fff; font-size:13px; margin-right:8px;">
@@ -92,26 +87,26 @@
                         <button @click="skipStep++" style="width:36px;height:36px;font-size:22px;font-weight:bold;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:12px;line-height:1;">+</button>
                         <van-button type="success" size="normal" @click="executeSkip" style="height:36px;padding:0 16px;font-size:16px;">GO ❯</van-button>
                     </div>
-                    
+
                     <div style="display:flex; align-items:center; gap:10px;">
                         <label style="color:#fff; font-size:14px; background:rgba(0,0,0,0.6); padding:4px 8px; border-radius:4px; display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" v-model="autoSeekMiddle" style="margin:0; width:16px; height:16px;">
                             切换后从中间播放
                         </label>
                         <div style="display:flex; gap:6px;" v-if="jumpMode === 'skip' && recentSkipSteps.length > 0">
-                            <van-button 
-                                v-for="num in recentSkipSteps" 
-                                :key="num" 
-                                size="small" 
-                                plain 
-                                type="primary" 
+                            <van-button
+                                v-for="num in recentSkipSteps"
+                                :key="num"
+                                size="small"
+                                plain
+                                type="primary"
                                 @click="skipStep = num"
                                 style="min-width:36px; height:26px; background:rgba(0,0,0,0.4); color:#4fc08d; border-color:#4fc08d; padding:0 4px;"
                             >{{ num }}</van-button>
                         </div>
                     </div>
                 </div>
-                
+
                 <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:8px; background:rgba(0,0,0,0.4); padding:8px; border-radius:8px;">
                     <van-button @click="previewBackward" type="primary" size="small" plain>快退</van-button>
                     <van-button @click="seekTo(0.3)" type="primary" size="small" plain>30%</van-button>
@@ -120,7 +115,7 @@
                     <van-button @click="previewForward" type="primary" size="small" plain>快进</van-button>
                 </div>
             </div>
-            
+
             <van-popup v-model:show="showDetail" position="bottom" round>
                 <div style="padding:20px;">
                     <h4>视频详情</h4>
@@ -146,7 +141,7 @@
                     <input type="text" v-model="excludeKeyword" placeholder="排除关键词 (多词空格分隔)" class="search-input" @keyup.enter="doSearch" style="margin-top:8px;" />
                     <div style="text-align:right; margin-top:4px;"><a href="/?search=random" style="font-size:12px;color:#007bff;">使用 random 随机打乱</a></div>
                 </div>
-                
+
                 <div style="margin:10px 0;">
                     <span>排序方式：</span>
                     <select v-model="sortBy" class="search-select">
@@ -209,8 +204,8 @@
 
 <script>
 async function fetchLatestVideos(state) {
-    const params = { 
-        latest: state.pageSize, page: state.page, 
+    const params = {
+        latest: state.pageSize, page: state.page,
         page_size: state.pageSize, search: state.searchKeyword,
         score: state.searchScore
     }
@@ -269,7 +264,7 @@ class VideoPlayer {
         const totalVideos = this.state.videos.length;
         const currentGlobalIndex = this.refs.currentIndex.value;
         this.refs.videoQueue.value = [];
-        this.refs.activeVideoIndex.value = 1; 
+        this.refs.activeVideoIndex.value = 1;
         this.refs.videoLoadStates.value = [false, false, false];
         for (let i = -1; i <= 1; i++) {
             let targetIndex = (currentGlobalIndex + i + totalVideos) % totalVideos;
@@ -388,19 +383,19 @@ class VideoPlayer {
     }
     setLoadMoreVideos(callback) { this.loadMoreVideos = callback; }
     exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
-    
-    previewForward() { 
-        const v = this.getCurrentlyPlayingVideo(); 
+
+    previewForward() {
+        const v = this.getCurrentlyPlayingVideo();
         if (v && v.duration) {
             const step = Math.max(5, v.duration * 0.05);
-            v.currentTime = Math.min(v.duration, v.currentTime + step); 
+            v.currentTime = Math.min(v.duration, v.currentTime + step);
         }
     }
-    previewBackward() { 
-        const v = this.getCurrentlyPlayingVideo(); 
+    previewBackward() {
+        const v = this.getCurrentlyPlayingVideo();
         if (v && v.duration) {
             const step = Math.max(5, v.duration * 0.05);
-            v.currentTime = Math.max(0, v.currentTime - step); 
+            v.currentTime = Math.max(0, v.currentTime - step);
         }
     }
     seekTo(ratio) {
@@ -412,10 +407,6 @@ class VideoPlayer {
         window.addEventListener('wheel', (e) => {
             if (this.isSwitching || Math.abs(e.deltaY) < 30) return;
             if (e.deltaY > 0) this.nextVideo(); else if (e.deltaY < 0) this.prevVideo();
-        });
-        window.addEventListener('keydown', (e) => {
-            if (this.isSwitching) return;
-            if (e.key === 'ArrowDown') this.nextVideo(); else if (e.key === 'ArrowUp') this.prevVideo();
         });
         window.addEventListener('dblclick', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
@@ -437,19 +428,20 @@ class SearchManager {
         this.state.excludeKeyword = this.refs.excludeKeyword.value.trim()
         this.state.searchScore = this.refs.searchScore.value
         this.state.sortBy = this.refs.sortBy.value
-        this.state.searchSize = (this.refs.sizeValue.value && this.refs.sizeValue.value > 0) 
+        this.state.searchSize = (this.refs.sizeValue.value && this.refs.sizeValue.value > 0)
             ? `${this.refs.sizeOperator.value}:${this.refs.sizeValue.value}` : 0
         this.state.page = 1; this.refs.currentIndex.value = 0; this.refs.showSearch.value = false;
-        
+        localStorage.removeItem('dy_currentIndex');  // ★ 新增：搜索时清除旧位置
+
         const params = []
         if (this.state.searchKeyword) params.push(`search=${encodeURIComponent(this.state.searchKeyword)}`)
         if (this.state.excludeKeyword) params.push(`exclude=${encodeURIComponent(this.state.excludeKeyword)}`)
         if (this.state.searchScore > 0) params.push(`score=${this.state.searchScore}`)
         if (this.state.searchSize !== 0) params.push(`size=${this.state.searchSize}`)
-        
+
         const resp = await axios.get(`/dy/videos/count${params.length ? '?' + params.join('&') : ''}`)
         this.state.totalVideos = resp.data.total || 0; this.state.totalpage = this.state.totalVideos;
-        
+
         this.updateUrlParams(); this.showSearchHint();
         await this.loadVideosCallback(false);
         this.refs.searchTimeMsg.value = '筛选完成，用时 ' + ((performance.now() - start) / 1000).toFixed(2) + ' 秒'
@@ -470,19 +462,10 @@ class SearchManager {
     }
     updateUrlParams() {
         const url = new URL(window.location);
-        const mapping = {
-            'search': 'searchKeyword',
-            'exclude': 'excludeKeyword',
-            'score': 'searchScore',
-            'size': 'searchSize',
-            'sort_by': 'sortBy'
-        };
+        const mapping = { 'search': 'searchKeyword', 'exclude': 'excludeKeyword', 'score': 'searchScore', 'size': 'searchSize', 'sort_by': 'sortBy' };
         for (let [k, stateKey] of Object.entries(mapping)) {
-            if (this.state[stateKey] && this.state[stateKey] !== 0) {
-                url.searchParams.set(k, this.state[stateKey]);
-            } else {
-                url.searchParams.delete(k);
-            }
+            if (this.state[stateKey] && this.state[stateKey] !== 0) url.searchParams.set(k, this.state[stateKey]);
+            else url.searchParams.delete(k);
         }
         window.history.pushState({}, '', url);
     }
@@ -514,6 +497,7 @@ class SearchManager {
         this.refs.sortBy.value = this.state.sortBy = '';
         this.refs.sizeOperator.value = 'lte'; this.refs.sizeValue.value = '';
         this.state.searchSize = 0; this.state.page = 1; this.refs.currentIndex.value = 0;
+        localStorage.removeItem('dy_currentIndex');  // ★ 新增
         const url = new URL(window.location);
         ['search', 'exclude', 'score', 'size', 'sort_by'].forEach(k => url.searchParams.delete(k));
         window.history.pushState({}, '', url);
@@ -549,11 +533,6 @@ class ConfigManager {
     }
 }
 
-class UrlParamsManager {
-    constructor() { this.params = new URLSearchParams(window.location.search); }
-    updateUrl() { const url = new URL(window.location); url.search = this.params.toString(); window.history.pushState({}, '', url); }
-}
-
 const { createApp, reactive, onMounted, computed, ref, watch } = Vue
 
 createApp({
@@ -564,16 +543,24 @@ createApp({
         const newPath = ref(''), pathList = ref([]), searchTimeMsg = ref(''), videoQueue = ref([])
         const activeVideoIndex = ref(1), videoLoadStates = ref([false, false, false]), isLoading = ref(true)
         const videoClass = ref('video-portrait')
-        
+
         const jumpMode = ref(localStorage.getItem('dy_jumpMode') || 'skip')
         const autoSeekMiddle = ref(localStorage.getItem('dy_autoSeekMiddle') === 'true')
         const skipStep = ref(parseInt(localStorage.getItem('dy_skipStep')) || 5)
         const recentSkipSteps = ref(JSON.parse(localStorage.getItem('dy_recentSkips')) || [5, 10, 20])
 
+        // ★ 持久化存储 key
+        const POS_KEY = 'dy_currentIndex';
+
         watch(jumpMode, (newVal) => localStorage.setItem('dy_jumpMode', newVal))
         watch(autoSeekMiddle, (newVal) => localStorage.setItem('dy_autoSeekMiddle', newVal))
         watch(skipStep, (newVal) => {
             if (newVal > 0) localStorage.setItem('dy_skipStep', newVal)
+        })
+
+        // ★ 新增：自动保存播放位置
+        watch(currentIndex, (v) => {
+            localStorage.setItem(POS_KEY, String(v));
         })
 
         function saveRecentSkip(step) {
@@ -586,10 +573,10 @@ createApp({
 
         const refs = { currentIndex, videoQueue, activeVideoIndex, videoLoadStates, videoClass, showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, searchTimeMsg, newPath, pathList, autoSeekMiddle, jumpMode }
         const videoPlayer = new VideoPlayer(state, refs), searchManager = new SearchManager(state, refs), configManager = new ConfigManager(refs)
-        
+
         const currentVideo = computed(() => (videoQueue.value.length > 0 && activeVideoIndex.value < videoQueue.value.length) ? videoQueue.value[activeVideoIndex.value] || {} : state.videos[currentIndex.value] || {})
         const videoIndex = computed(() => (searchKeyword.value || state.videos.length > 0) ? currentIndex.value + 1 : null)
-        
+
         const searchFromClipboard = async () => {
             if (!navigator.clipboard || !window.isSecureContext) { alert('当前环境不支持或未授权 HTTPS'); return; }
             try {
@@ -598,7 +585,7 @@ createApp({
                 searchKeyword.value = text.trim(); showSearch.value = false; await doSearch();
             } catch (err) { alert('读取失败，检查权限'); }
         };
-        
+
         async function loadVideos(append = false) {
             const newVideos = await fetchLatestVideos(state);
             if (append) state.videos.push(...newVideos); else { state.videos = newVideos; currentIndex.value = 0; }
@@ -606,7 +593,8 @@ createApp({
         }
         videoPlayer.setLoadMoreVideos(async () => { await loadVideos(true); })
         searchManager.setLoadVideosCallback(loadVideos)
-        
+
+        // ★ 修改：加载完成后自动恢复上次位置
         async function initialLoad() {
             try {
                 isLoading.value = true;
@@ -622,20 +610,42 @@ createApp({
                 }
                 await loadVideos(false);
                 showSearch.value = false; showConfig.value = false;
-                setTimeout(() => { isLoading.value = false; setTimeout(() => { videoPlayer.playActiveVideo(); }, 500); }, 1500);
+
+                // ★ 恢复上次播放位置
+                const savedIdx = parseInt(localStorage.getItem(POS_KEY)) || 0;
+                if (savedIdx > 0 && savedIdx < state.totalVideos) {
+                    currentIndex.value = savedIdx;
+                    // 补加载缺失的页
+                    while (savedIdx >= state.videos.length && state.page * state.pageSize < state.totalVideos) {
+                        state.page++;
+                        const more = await fetchLatestVideos(state);
+                        state.videos.push(...more);
+                    }
+                    videoPlayer.refreshQueue();
+                    setTimeout(() => {
+                        isLoading.value = false;
+                        setTimeout(() => { videoPlayer.playActiveVideo(); }, 300);
+                    }, 800);
+                } else {
+                    // 正常流程
+                    setTimeout(() => {
+                        isLoading.value = false;
+                        setTimeout(() => { videoPlayer.playActiveVideo(); }, 500);
+                    }, 1500);
+                }
             } catch (error) { isLoading.value = false; }
         }
-        
+
         const prevVideo = () => videoPlayer.prevVideo(), nextVideo = () => videoPlayer.nextVideo()
         function toggleDetail() { showDetail.value = !showDetail.value }
         function searchDouyin(kw) { window.open(`https://www.douyin.com/search/${encodeURIComponent(kw)}`, '_blank'); }
         function searchDouyin2(kw) { window.open(`http://one4.zin6.site/?search=${encodeURIComponent(kw)}`, '_blank'); }
-        
+
         const handleTouchStart = (e) => videoPlayer.handleTouchStart(e), handleTouchEnd = (e) => videoPlayer.handleTouchEnd(e)
         const onVideoLoaded = (index) => videoPlayer.onVideoLoaded(index), onVideoReady = (index) => videoPlayer.onVideoReady(index)
-        
+
         async function updateScoreHandler(newScore) { if (currentVideo.value.id) { await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore; } }
-        
+
         const doSearch = () => searchManager.doSearch(), lastLikeType = ref('')
         async function toggleLike() {
             if (!currentVideo.value.id) return;
@@ -649,11 +659,10 @@ createApp({
             await updateScore(currentVideo.value.id, newScore); currentVideo.value.score = newScore;
             lastLikeType.value = newScore === 1 ? 'dislike' : ''; setTimeout(() => lastLikeType.value = '', 600);
         }
-        
+
         async function executeSkip() {
             const stepOrTarget = skipStep.value;
             if(stepOrTarget < 1) return;
-            
             if (jumpMode.value === 'skip') {
                 saveRecentSkip(stepOrTarget);
                 await skipVideos(stepOrTarget, 'skip');
@@ -661,7 +670,7 @@ createApp({
                 await skipVideos(stepOrTarget, 'jump');
             }
         }
-        
+
         async function skipVideos(value, mode) {
             if (videoPlayer.isSwitching || state.videos.length === 0) return;
             videoPlayer.isSwitching = true;
@@ -670,7 +679,7 @@ createApp({
 
             let targetIndex;
             if (mode === 'jump') {
-                targetIndex = value - 1; // 1-based 转 0-based
+                targetIndex = value - 1;
                 if (targetIndex < 0) targetIndex = 0;
                 if (state.totalVideos > 0 && targetIndex >= state.totalVideos) targetIndex = state.totalVideos - 1;
             } else {
@@ -682,36 +691,50 @@ createApp({
                 const newVids = await fetchLatestVideos(state);
                 state.videos.push(...newVids);
             }
-            
+
             if (targetIndex >= state.videos.length) {
                 targetIndex = state.videos.length > 0 ? state.videos.length - 1 : 0;
             }
-            
+
             currentIndex.value = targetIndex;
             videoPlayer.refreshQueue();
-            
+
             setTimeout(() => {
                 videoPlayer.playActiveVideo();
                 videoPlayer.isSwitching = false;
             }, 250);
         }
-        
+
         const fetchPaths = () => configManager.fetchPaths(), addPath = () => configManager.addPath()
         const indexPath = (path) => configManager.indexPath(path), indexPathq = () => configManager.indexPathq(), indexPath_del = (path) => configManager.indexPath_del(path)
-        
+
         function previewForward() { videoPlayer.previewForward(); }
         function previewBackward() { videoPlayer.previewBackward(); }
         function seekTo(ratio) { videoPlayer.seekTo(ratio); }
-        
+
         window.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-            
-            if (e.key === 'ArrowLeft') previewBackward(); 
+
+            if (e.key === 'ArrowLeft') previewBackward();
             else if (e.key === 'ArrowRight') previewForward();
             else if (e.key === 'Z' || e.key === 'z') document.getElementById('like-button').click();
             else if (e.key === 'X' || e.key === 'x') document.getElementById('dislike-button').click();
-            else if (e.key === ' ') { const v = document.querySelectorAll('video')[activeVideoIndex.value]; v.paused ? v.play() : v.pause(); }
+            else if (e.key === ' ') { e.preventDefault(); const v = document.querySelectorAll('video')[activeVideoIndex.value]; v.paused ? v.play() : v.pause(); }
             else if (e.key === '`' || e.key === '·') seekTo(0.5);
+            // ★ ESC 只退出全屏
+            else if (e.key === 'Escape') {
+                if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+            }
+            // ★ F 键切换全屏
+            else if (e.key === 'f' || e.key === 'F') {
+                e.preventDefault();
+                if (document.fullscreenElement) {
+                    document.exitFullscreen().catch(() => {});
+                } else {
+                    const v = document.querySelectorAll('video')[activeVideoIndex.value];
+                    if (v && v.requestFullscreen) v.requestFullscreen().catch(() => {});
+                }
+            }
         })
 
         onMounted(() => {
@@ -719,12 +742,12 @@ createApp({
             setTimeout(() => videoPlayer.updateVideoClass(), 1000);
         })
 
-        return { 
-            state, currentIndex, currentVideo, videoIndex, showDetail, getVideoUrl, prevVideo, nextVideo, toggleDetail, 
-            searchDouyin, searchDouyin2, handleTouchStart, handleTouchEnd, updateScore: updateScoreHandler, 
-            showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue, 
-            doSearch, lastLikeType, toggleLike, toggleDislike, showConfig, newPath, pathList, addPath, indexPath, indexPathq, indexPath_del, 
-            searchTimeMsg, videoClass, videoQueue, activeVideoIndex, onVideoLoaded, onVideoReady, isLoading, 
+        return {
+            state, currentIndex, currentVideo, videoIndex, showDetail, getVideoUrl, prevVideo, nextVideo, toggleDetail,
+            searchDouyin, searchDouyin2, handleTouchStart, handleTouchEnd, updateScore: updateScoreHandler,
+            showSearch, searchKeyword, excludeKeyword, searchScore, sortBy, searchSize, sizeOperator, sizeValue,
+            doSearch, lastLikeType, toggleLike, toggleDislike, showConfig, newPath, pathList, addPath, indexPath, indexPathq, indexPath_del,
+            searchTimeMsg, videoClass, videoQueue, activeVideoIndex, onVideoLoaded, onVideoReady, isLoading,
             previewForward, previewBackward, seekTo, searchFromClipboard, skipStep, executeSkip, recentSkipSteps,
             jumpMode, autoSeekMiddle
         }

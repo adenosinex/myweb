@@ -22,13 +22,15 @@
         .view-container { display: none; } .view-container.active { display: block; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* 强制分组容器只能纵向多行排列，避免拖拽时变多列 */
+        #pages-grid { display: flex; flex-direction: column; }
+
         /* 分组容器基础样式 */
         .group-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 25px; transition: all 0.3s ease; border: 2px solid transparent; }
         .group-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; border-bottom: 1px solid #eaeaea; padding-bottom: 10px; color: #444; }
         .group-header .group-icon { margin-right: 8px; font-size: 22px; }
         
-        /* 虚拟与合并分组样式 */
-        .group-merged { border: 2px dashed #ccc; background: #fafafa; }
+        /* 虚拟分组样式 */
         .group-virtual { border: 2px dashed #0052cc; background: #f8faff; }
 
         /* 沉浸式高亮选择模式 */
@@ -48,6 +50,9 @@
         .card { background: #fff; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; transition: all 0.2s; border: 1px solid #eaeaea; display: block; height: 100%; box-sizing: border-box; }
         .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
         
+        /* 绝对定位的置顶标记 */
+        .pin-badge { position: absolute; top: -8px; right: -8px; background: #dc3545; color: white; font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 2px 5px rgba(220,53,69,0.4); z-index: 10; pointer-events: none; }
+
         /* 低调的复选框 */
         .card-checkbox { position: absolute; top: 12px; left: 12px; z-index: 5; transform: scale(1.1); cursor: pointer; accent-color: #0052cc; opacity: 0.15; transition: all 0.2s; }
         .card-wrapper:hover .card-checkbox { opacity: 0.8; }
@@ -60,12 +65,14 @@
         .card .tag-folder { background: #d1e2ff; color: #0052cc; font-weight: bold; border: 1px solid #b5d0ff; }
 
         /* 卡片右上方悬浮按钮组 */
-        .card-action-btns { position: absolute; top: 10px; right: 10px; display: none; gap: 6px; z-index: 2; }
+        .card-action-btns { position: absolute; top: 10px; right: 10px; display: none; gap: 6px; z-index: 2; flex-wrap: wrap; justify-content: flex-end; }
         .card-wrapper:hover .card-action-btns { display: flex; }
         .card-btn { font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; transition: all 0.2s; }
         .card-btn:hover { background: #28a745; color: white; }
         .card-btn-move { color: #0052cc; background: #e6f0ff; }
         .card-btn-move:hover { background: #0052cc; color: white; }
+        .card-btn-pin { color: #dc3545; background: #ffe6e6; }
+        .card-btn-pin:hover { background: #dc3545; color: white; }
 
         .form-panel { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 20px; }
@@ -100,7 +107,7 @@
         .folder-list { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; margin-bottom: 20px; padding-bottom: 5px; }
         .folder-option { background: #f0f6ff; border: 1px solid #b5d0ff; color: #0052cc; padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: all 0.2s; font-weight: bold; font-size: 14px; user-select: none; }
         .folder-option:hover { background: #0052cc; color: white; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,82,204,0.2); }
-        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 15px; border-top: 1px solid #eee; }
+        .modal-actions { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 15px; border-top: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -147,8 +154,9 @@
             <h3 id="move-modal-title">移动至分类...</h3>
             <div id="move-modal-list" class="folder-list"></div>
             <div class="modal-actions">
+                <input type="text" id="new-folder-input" placeholder="输入新物理分类名称..." style="flex:1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+                <button class="btn btn-success" onclick="moveModalCreateFromInput()">+ 创建并移入</button>
                 <button class="btn btn-outline" onclick="closeMoveModal()">取消</button>
-                <button class="btn btn-success" onclick="moveModalCreateNew()">+ 新分类并移入</button>
             </div>
         </div>
     </div>
@@ -178,8 +186,8 @@
                     <label>完整 HTML 代码</label>
                     <textarea id="upload-html" required placeholder="在此粘贴或编写HTML代码..."></textarea>
                 </div>
-                <button type="submit" class="btn">保存</button>
-                <span class="back-link" onclick="switchView('list')">返回</span>
+                <button type="submit" class="btn">部署/保存</button>
+                <span class="back-link" onclick="switchView('list')">返回上一页</span>
             </form>
         </div>
     </div>
@@ -210,9 +218,9 @@
                     <textarea id="edit-html" required placeholder="在此粘贴或编写HTML代码..."></textarea>
                 </div>
                 <div style="display: flex; gap: 15px; align-items: center;">
-                    <button type="submit" class="btn btn-success">更新</button>
+                    <button type="submit" class="btn btn-success">更新并保留页面</button>
                     <button type="button" class="btn btn-danger" onclick="deletePage()">🗑️ 删除项目</button>
-                    <span class="back-link" onclick="switchView('list')">取消</span>
+                    <span class="back-link" onclick="switchView('list')">返回上一页</span>
                 </div>
             </form>
         </div>
@@ -335,17 +343,11 @@
         function showMoveModal(title, callback) {
             currentMoveCallback = callback;
             document.getElementById('move-modal-title').innerText = title;
+            document.getElementById('new-folder-input').value = ''; 
             
-            // 提取现有分类，包含物理目录和曾用过的标签
             let folders = new Set(['未分类']);
             currentPagesData.forEach(p => {
                 if (p.folder && p.folder.trim() !== '') folders.add(p.folder.trim());
-                if (p.tags) {
-                    p.tags.split(/[,，]/).forEach(t => {
-                        let cleanTag = t.trim();
-                        if (cleanTag) folders.add(cleanTag);
-                    });
-                }
             });
             
             const listEl = document.getElementById('move-modal-list');
@@ -356,8 +358,9 @@
                 btn.className = 'folder-option';
                 btn.innerText = f;
                 btn.onclick = () => {
-                    closeMoveModal();
-                    if (currentMoveCallback) currentMoveCallback(f);
+                    const cb = currentMoveCallback; 
+                    closeMoveModal();               
+                    if (cb) cb(f);                  
                 };
                 listEl.appendChild(btn);
             });
@@ -370,14 +373,66 @@
             currentMoveCallback = null;
         }
 
-        function moveModalCreateNew() {
-            const newFolder = prompt("请输入新分类名称 (输入逗号将自动取首词):");
-            if (newFolder && newFolder.trim() !== '') {
+        function moveModalCreateFromInput() {
+            const inputVal = document.getElementById('new-folder-input').value;
+            if (inputVal && inputVal.trim() !== '') {
+                const cb = currentMoveCallback;
                 closeMoveModal();
-                if (currentMoveCallback) currentMoveCallback(newFolder.split(/[,，]/)[0].trim());
+                if (cb) cb(inputVal.split(/[,，]/)[0].trim());
+            } else {
+                alert('请输入新分类名称');
             }
         }
-        // --- 结束弹窗逻辑 ---
+
+        // --- 置顶功能 ---
+        async function togglePin(pageId) {
+            const page = currentPagesData.find(p => p.id === pageId);
+            if (!page) return;
+            
+            let tagsArray = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+            const isPinned = tagsArray.includes('置顶');
+            
+            if (isPinned) {
+                // 取消置顶
+                tagsArray = tagsArray.filter(t => t !== '置顶');
+                
+                // 将该ID放到后端排序数组最前列，实现“排在不置顶的最前列”
+                backendOrder.item_order = backendOrder.item_order.filter(id => id !== pageId);
+                backendOrder.item_order.unshift(pageId); 
+            } else {
+                // 置顶
+                tagsArray.push('置顶');
+            }
+            
+            page.tags = tagsArray.join(', ');
+            
+            try {
+                // 将新tags存储到后端
+                await fetch(`${API_BASE}/api/pages/${pageId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        title: page.title, 
+                        icon: page.icon, 
+                        folder: page.folder, 
+                        tags: page.tags, 
+                        html_content: page.html_content 
+                    })
+                });
+                
+                // 基于最新数据直接刷新当前视图
+                renderGrid();
+                
+                // 如果是取消置顶，视图更新后顺带将调整好的 DOM 排序同步给后端固化
+                if (isPinned) {
+                    syncOrderToBackend();
+                }
+                
+                showToast(isPinned ? '已取消置顶' : '📌 已置顶');
+            } catch (e) {
+                alert('操作失败');
+            }
+        }
 
         // 卡片右上角快捷移动单个文件
         function openMoveModal(pageId, currentFolder) {
@@ -512,30 +567,9 @@
                 }
             });
 
-            const finalGrouped = {};
-            const mergedGroup = { isVirtual: true, isMerged: true, name: '🧩 零星聚合', pages: [] };
-
-            Object.keys(grouped).forEach(key => {
-                if (grouped[key].pages.length <= 2) {
-                    grouped[key].pages.forEach(p => { p._displayName = grouped[key].name; });
-                    mergedGroup.pages.push(...grouped[key].pages);
-                } else {
-                    finalGrouped[key] = grouped[key];
-                }
-            });
-
-            mergedGroup.pages.sort((a, b) => {
-                let cmp = a._displayName.localeCompare(b._displayName);
-                return cmp !== 0 ? cmp : (a.id || '').localeCompare(b.id || '');
-            });
-
-            if (mergedGroup.pages.length > 0) {
-                finalGrouped['VIRTUAL_MERGED'] = mergedGroup;
-            }
+            const finalGrouped = grouped;
 
             const sortedKeys = Object.keys(finalGrouped).sort((a, b) => {
-                if (a === 'VIRTUAL_MERGED') return 1;
-                if (b === 'VIRTUAL_MERGED') return -1;
                 let groupA = finalGrouped[a], groupB = finalGrouped[b];
                 if (groupA.isVirtual !== groupB.isVirtual) return groupA.isVirtual ? 1 : -1;
                 let idxA = backendOrder.group_order.indexOf(a);
@@ -547,29 +581,41 @@
             sortedKeys.forEach(key => {
                 const groupData = finalGrouped[key];
                 const isVirtual = groupData.isVirtual;
-                const isMerged = groupData.isMerged;
                 const groupName = groupData.name;
                 const pages = groupData.pages;
                 
-                if (!isMerged) {
-                    pages.sort((a, b) => {
-                        let idxA = backendOrder.item_order.indexOf(a.id);
-                        let idxB = backendOrder.item_order.indexOf(b.id);
-                        if (idxA === -1) idxA = 999999; if (idxB === -1) idxB = 999999;
-                        return idxA - idxB;
-                    });
-                }
+                pages.sort((a, b) => {
+                    const aPinned = (a.tags || '').includes('置顶');
+                    const bPinned = (b.tags || '').includes('置顶');
+                    
+                    // 置顶规则：置顶卡片排在组内最前面
+                    if (aPinned && !bPinned) return -1;
+                    if (!aPinned && bPinned) return 1;
+
+                    // 非置顶卡片按拖拽历史排列
+                    let idxA = backendOrder.item_order.indexOf(a.id);
+                    let idxB = backendOrder.item_order.indexOf(b.id);
+                    if (idxA === -1) idxA = 999999; if (idxB === -1) idxB = 999999;
+                    return idxA - idxB;
+                });
 
                 const groupIcon = getDefaultIcon('GROUP_' + groupName);
                 let cardsHtml = pages.map(page => {
                     const displayIcon = resolveIcon(page);
-                    let badgeText = isMerged ? page._displayName : groupName;
+                    let badgeText = groupName;
                     let folderBadge = `<span class="tags tag-folder">${badgeText}</span>`;
-                    let tagsHtml = page.tags ? page.tags.split(/[,，]/).map(t => `<span class="tags">${t.trim()}</span>`).join('') : '';
                     
-                    // 注意：这里的 onclick 逻辑使用了防事件冒泡的独立弹窗开启机制
+                    // 过滤掉控制排名的置顶标签，避免在普通标签里二次展示
+                    let rawTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+                    let displayTags = rawTags.filter(t => t !== '置顶');
+                    let isPinned = rawTags.includes('置顶');
+                    
+                    let tagsHtml = displayTags.map(t => `<span class="tags">${t}</span>`).join('');
+                    let pinBadgeHtml = isPinned ? `<div class="pin-badge">📌 置顶</div>` : '';
+                    
                     return `
                         <div class="card-wrapper" data-id="${page.id}" data-physical-folder="${page._physicalFolder}">
+                            ${pinBadgeHtml}
                             <input type="checkbox" class="card-checkbox" value="${page.id}" onclick="event.stopPropagation(); toggleCheck(this, '${page.id}')">
                             <a href="${API_BASE}/view/${page.id}" target="_blank" class="card" draggable="false">
                                 <div class="icon">${displayIcon}</div>
@@ -577,6 +623,7 @@
                                 <div>${folderBadge} ${tagsHtml}</div>
                             </a>
                             <div class="card-action-btns">
+                                <button class="card-btn card-btn-pin" onclick="event.preventDefault(); event.stopPropagation(); togglePin('${page.id}')">${isPinned ? '取消置顶' : '📌 置顶'}</button>
                                 <button class="card-btn card-btn-move" onclick="event.preventDefault(); event.stopPropagation(); openMoveModal('${page.id}', '${badgeText}')">移动</button>
                                 <button class="card-btn" onclick="event.preventDefault(); event.stopPropagation(); switchView('edit', '${page.id}')">编辑</button>
                             </div>
@@ -584,30 +631,27 @@
                 }).join('');
 
                 let headerActions = '';
-                if (isMerged) {
-                    headerActions = `<span style="font-size: 13px; color: #888; background: #eee; padding: 4px 8px; border-radius: 4px; margin-left: auto;">数量 ≤ 2 自动聚合 (手动刷新页面后重算)</span>`;
-                } else if (isVirtual) {
+                if (isVirtual) {
                     headerActions = `<button class="group-action-btn btn-success" onclick="confirmVirtualGroup('${groupName}', '${pages.map(p=>p.id).join(',')}')">✨ 确认为新文件夹</button>`;
                 } else {
                     headerActions = `<button class="group-action-btn" onclick="renameGroup('${groupName}')">✏️ 重命名物理文件夹</button>`;
                 }
 
                 let groupClasses = ['group-container'];
-                if (isMerged) groupClasses.push('group-merged');
-                else if (isVirtual) groupClasses.push('group-virtual');
+                if (isVirtual) groupClasses.push('group-virtual');
 
-                let subTitle = isMerged ? '' : (isVirtual ? '<span style="color:#0052cc;font-size:12px;margin-left:5px;">(标签提取虚拟呈现)</span>' : '');
-                let targetFolderData = isMerged ? '未分类' : (isVirtual ? '未分类' : groupName);
+                let subTitle = isVirtual ? '<span style="color:#0052cc;font-size:12px;margin-left:5px;">(标签提取虚拟呈现)</span>' : '';
+                let targetFolderData = isVirtual ? '未分类' : groupName;
 
                 const groupHtml = `
                     <div class="${groupClasses.join(' ')}" data-group-name="${key}">
                         <div class="group-header">
                             <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
-                            <span class="group-icon">${isMerged ? '📦' : groupIcon}</span>
+                            <span class="group-icon">${groupIcon}</span>
                             <span>${groupName} ${subTitle}</span>
                             ${headerActions}
                         </div>
-                        <div class="grid group-grid" data-folder="${targetFolderData}" data-is-merged="${isMerged}">
+                        <div class="grid group-grid" data-folder="${targetFolderData}">
                             ${cardsHtml}
                         </div>
                     </div>`;
@@ -622,9 +666,8 @@
             });
 
             document.querySelectorAll('.group-grid').forEach(el => {
-                const isMergedEl = el.getAttribute('data-is-merged') === 'true';
                 Sortable.create(el, {
-                    group: { name: 'shared', put: !isMergedEl }, 
+                    group: { name: 'shared', put: true }, 
                     animation: 150,
                     ghostClass: 'sortable-ghost',
                     onEnd: handleCardDragEnd
@@ -794,7 +837,10 @@
             }
             
             fetch(`${API_BASE}/api/pages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleValue, icon: iconValue, folder: document.getElementById('upload-folder').value, tags: document.getElementById('upload-tags').value, html_content: htmlValue }) })
-                .then(r=>r.json()).then(d=>{ if(d.status==='success') switchView('list'); else alert(d.error); });
+                .then(r=>r.json()).then(d=>{ 
+                    if(d.status==='success') showToast('✅ 项目已部署 (可在上方返回列表)'); 
+                    else alert(d.error); 
+                });
         });
 
         document.getElementById('edit-form').addEventListener('submit', function(e) {
@@ -808,7 +854,11 @@
             }
             
             fetch(`${API_BASE}/api/pages/${pageId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleValue, icon: iconValue, folder: document.getElementById('edit-folder').value, tags: document.getElementById('edit-tags').value, html_content: htmlValue }) })
-                .then(r=>r.json()).then(d=>{ if(d.status==='success'){ showToast('✅ 已保存'); switchView('list'); } else alert(d.error); });
+                .then(r=>r.json()).then(d=>{ 
+                    if(d.status==='success'){ 
+                        showToast('✅ 代码已更新并保存');
+                    } else alert(d.error); 
+                });
         });
 
         function showToast(msg) {

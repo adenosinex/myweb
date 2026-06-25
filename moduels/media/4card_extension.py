@@ -26,7 +26,6 @@ def handle_exception(e):
     return jsonify({"status": "error", "message": f"服务器内部错误: {str(e)}"}), 500
 
 # ================= 核心引擎层 =================
-# ================= 核心引擎层 =================
 class CardIndexEngine:
     def __init__(self, cards_dir: str, db_path: str):
         self.cards_dir = cards_dir
@@ -112,15 +111,21 @@ class CardIndexEngine:
             conn.commit()
 
     def search(self, query_text: str = "", tags: List[str] = None) -> List[Dict]:
-        sql = "SELECT id, type, query, tags, cover, stats_data, content_body FROM cards WHERE 1=1 ORDER BY id DESC"
+        # 1. 基础语句去掉了 ORDER BY
+        sql = "SELECT id, type, query, tags, cover, stats_data, content_body FROM cards WHERE 1=1"
         params = []
+        
         if query_text:
             sql += " AND query LIKE ?"
             params.append(f"%{query_text}%")
+            
         if tags:
             for tag in tags:
                 sql += " AND tags LIKE ?"
                 params.append(f'%"{tag}"%')
+                
+        # 2. 拼接完所有条件后，再在末尾追加排序
+        sql += " ORDER BY id DESC"
         
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -143,7 +148,6 @@ class CardIndexEngine:
                     
                 results.append(res)
             return results
-
     def get_all_tags(self) -> List[str]:
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -184,7 +188,6 @@ class CardIndexEngine:
         with self._get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT tags FROM cards")
-            from collections import Counter
             counter = Counter()
             total_tag_instances = 0
             for row in cursor.fetchall():
@@ -203,14 +206,13 @@ class CardIndexEngine:
             }
 
 engine = CardIndexEngine(cards_dir=CARDS_DIR, db_path=DB_FILE)
-engine = CardIndexEngine(cards_dir=CARDS_DIR, db_path=DB_FILE)
 
 # ================= 蓝图路由层 =================
 
 @card_bp.route('/')
 def index():
     return render_template('index.html')
-CardIndexEngine
+
 @card_bp.route('/tags_dashboard')
 def tags_dashboard():
     return render_template('tags_dashboard.html')
@@ -251,7 +253,10 @@ def edit_card(card_id):
     if not os.path.exists(md_path):
         return jsonify({"status": "error", "message": "卡片文件不存在"}), 404
 
+    # 接收更新的标签和主标题
+    query_str = request.form.get('query', '').strip()
     tags_str = request.form.get('tags', '')
+    
     tags_list = [t.strip() for t in re.split(r'[,\s;，；、]+', tags_str) if t.strip()]
     tags_fm = json.dumps(tags_list, ensure_ascii=False)
 
@@ -262,18 +267,28 @@ def edit_card(card_id):
     if len(parts) >= 3:
         fm_lines = parts[1].strip().split('\n')
         new_fm_lines = []
+        has_query_field = False
+        
         for line in fm_lines:
             if line.startswith('tags:'):
                 new_fm_lines.append(f"tags: {tags_fm}")
+            elif line.startswith('query:') and query_str:
+                new_fm_lines.append(f'query: "{query_str}"')
+                has_query_field = True
             else:
                 new_fm_lines.append(line)
+                
+        # 兜底：如果原文件没有 query 字段且本次传了值，主动追加
+        if not has_query_field and query_str:
+            new_fm_lines.append(f'query: "{query_str}"')
+
         new_content = f"---\n{chr(10).join(new_fm_lines)}\n---{parts[2]}"
         
         with open(md_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
             
         engine._sync_cards()
-        return jsonify({"status": "success", "message": "标签更新成功"})
+        return jsonify({"status": "success", "message": "内容修改成功"})
     else:
         return jsonify({"status": "error", "message": "Markdown Frontmatter 格式损坏"}), 500
 
@@ -318,11 +333,9 @@ cover: "./covers/{cover_filename}"
     engine._sync_cards()
     return jsonify({"status": "success", "message": "卡片录入成功"})
 
-# ================= 接收客户端推送的统计数据并更新 MD 卡片 =================
 # ================= 接收客户端推送的统计数据 (隐藏至 YAML 头部) =================
 @card_bp.route('/api/skip/update_stats/<card_id>', methods=['POST'])
 @card_bp.route('/api/update_stats/<card_id>', methods=['POST'])
-# ================= 接收客户端推送的统计数据 (隐藏至 YAML 头部) =================
 def update_card_stats(card_id):
     stats = request.json
     print(stats)
