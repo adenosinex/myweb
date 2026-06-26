@@ -2,87 +2,365 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CSV 视频数据检索系统</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background: #f5f6fa; }
-        
-        /* 顶部控制栏 */
-        .header-controls { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
-        .search-box { flex-grow: 1; display: flex; gap: 10px; }
-        .search-box input { flex-grow: 1; padding: 10px 15px; font-size: 16px; border: 1px solid #ddd; border-radius: 6px; outline: none; }
-        .search-box input:focus { border-color: #007bff; }
-        
-        button, select { padding: 8px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; cursor: pointer; background: white; transition: 0.2s; }
-        button:hover { background: #f0f0f0; }
-        .btn-primary { background: #007bff; color: white; border: none; }
-        .btn-primary:hover { background: #0056b3; }
-        .btn-success { background: #28a745; color: white; border: none; }
-        .btn-success:hover { background: #218838; }
-        
-        /* 通用二级折叠面板 */
-        .collapsible-panel { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; text-align: center; }
+        *, *::before, *::after { box-sizing: border-box; }
+
+        :root {
+            --bg: #f5f6fa;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --t1: #111827;
+            --t2: #6b7280;
+            --t3: #9ca3af;
+            --blue: #2563eb;
+            --blue-h: #1d4ed8;
+            --green: #16a34a;
+            --green-h: #15803d;
+            --gap: 12px;
+            --radius: 10px;
+            --safe-b: env(safe-area-inset-bottom, 0px);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+            margin: 0;
+            padding: var(--gap);
+            padding-bottom: calc(var(--gap) + var(--safe-b));
+            background: var(--bg);
+            color: var(--t1);
+            -webkit-tap-highlight-color: transparent;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* ====== 顶部控制栏 ====== */
+        .header-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: var(--gap);
+            align-items: stretch;
+        }
+
+        .header-controls .btn-row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .header-controls .btn-row button,
+        .header-controls .btn-row .btn-primary,
+        .header-controls .btn-row .btn-success {
+            flex: 1;
+        }
+
+        .search-box {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .search-box select {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 15px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            color: var(--t1);
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%236b7280' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 36px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 16px; /* 防止 iOS 自动缩放 */
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            outline: none;
+            background: var(--card);
+            color: var(--t1);
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus { border-color: var(--blue); }
+
+        button, select {
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 14px;
+            cursor: pointer;
+            background: var(--card);
+            color: var(--t1);
+            transition: all 0.15s;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            min-height: 44px;
+        }
+
+        button:active { transform: scale(0.97); }
+
+        .btn-primary { background: var(--blue); color: #fff; border: none; font-weight: 600; }
+        .btn-primary:active { background: var(--blue-h); }
+        .btn-success { background: var(--green); color: #fff; border: none; font-weight: 600; }
+        .btn-success:active { background: var(--green-h); }
+
+        /* ====== 状态条 ====== */
+        .status-bar {
+            font-size: 12px;
+            color: var(--t2);
+            padding: 8px 12px;
+            background: var(--card);
+            border-radius: var(--radius);
+            margin-bottom: var(--gap);
+            border: 1px solid var(--border);
+            line-height: 1.5;
+        }
+
+        /* ====== 折叠面板 ====== */
+        .collapsible-panel {
+            display: none;
+            background: var(--card);
+            padding: 20px 16px;
+            border-radius: var(--radius);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            margin-bottom: var(--gap);
+            text-align: center;
+            border: 1px solid var(--border);
+        }
         .collapsible-panel.active { display: block; }
-        .panel-actions { margin-top: 15px; display: flex; justify-content: center; gap: 15px; align-items: center; }
-        
-        /* 数据管理面板特有拖拽样式 */
-        #managementPanel { border: 2px dashed #ddd; transition: border-color 0.3s; }
-        #managementPanel.dragover { border-color: #007bff; background: #f8fbff; }
-        
-        /* 表格与分页 */
-        .table-container { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-x: auto; min-height: 400px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; }
-        th { background: #f8f9fa; font-weight: 600; color: #333; position: sticky; top: 0; }
-        
-        .filename-cell { max-width: 350px; overflow: hidden; text-overflow: ellipsis; cursor: help; font-weight: 500; color: #333; }
-        
-        .pagination { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #fff; border-top: 1px solid #eee; }
-        .page-controls { display: flex; gap: 10px; align-items: center; }
-        .status-bar { font-size: 13px; color: #666; }
+        .panel-actions {
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+        }
+        .panel-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+
+        #managementPanel { border-style: dashed; transition: all 0.2s; }
+        #managementPanel.dragover { border-color: var(--blue); background: #eff6ff; }
+
+        .panel-hint { font-size: 14px; color: var(--t2); line-height: 1.6; }
+
+        /* ====== 卡片式数据视图（移动端） ====== */
+        .data-container {
+            background: var(--card);
+            border-radius: var(--radius);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .data-list { min-height: 200px; }
+
+        .data-card {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            gap: 6px 10px;
+        }
+        .data-card:last-child { border-bottom: none; }
+
+        .card-filename {
+            grid-column: 1 / -1;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--t1);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        }
+
+        .card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            grid-column: 1 / -1;
+        }
+
+        .card-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--t2);
+            background: #f3f4f6;
+            padding: 3px 8px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .card-tag .label {
+            color: var(--t3);
+            font-size: 11px;
+        }
+        .card-tag .value {
+            font-weight: 500;
+            color: var(--t2);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .card-tag.highlight {
+            background: #eff6ff;
+            color: var(--blue);
+        }
+        .card-tag.highlight .label { color: #93c5fd; }
+        .card-tag.highlight .value { color: var(--blue); }
+
+        /* 分辨率标签色块 */
+        .res-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .res-4k  { background: #fef3c7; color: #92400e; }
+        .res-2k  { background: #fce7f3; color: #9d174d; }
+        .res-1080 { background: #dbeafe; color: #1e40af; }
+        .res-720  { background: #d1fae5; color: #065f46; }
+        .res-low  { background: #f3f4f6; color: #6b7280; }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--t3);
+            font-size: 14px;
+        }
+
+        /* ====== 分页栏 ====== */
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+        }
+        .page-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .page-controls button {
+            min-height: 38px;
+            padding: 6px 16px;
+            font-size: 14px;
+        }
+        .page-indicator {
+            font-size: 13px;
+            color: var(--t2);
+            font-variant-numeric: tabular-nums;
+        }
+        .total-info {
+            font-size: 12px;
+            color: var(--t3);
+        }
+
+        /* ====== 桌面端适配 ====== */
+        @media (min-width: 769px) {
+            body { padding: 24px 32px; }
+
+            .header-controls {
+                flex-wrap: nowrap;
+                align-items: center;
+            }
+            .header-controls .btn-row {
+                width: auto;
+                flex: 0 0 auto;
+            }
+            .search-box {
+                flex-direction: row;
+                flex: 1;
+                min-width: 0;
+            }
+            .search-box select {
+                width: auto;
+                flex: 0 0 220px;
+            }
+            .search-box input { flex: 1; min-width: 0; }
+
+            .panel-actions {
+                flex-direction: row;
+                justify-content: center;
+            }
+            .panel-divider { width: 1px; height: 20px; margin: 0; }
+
+            /* 桌面端表格模式 */
+            .data-card { display: none; }
+            .data-container table { display: table; }
+
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; }
+            th { background: #f8f9fa; font-weight: 600; color: #333; position: sticky; top: 0; }
+            .filename-cell { max-width: 380px; overflow: hidden; text-overflow: ellipsis; cursor: help; font-weight: 500; color: #333; }
+        }
+
+        /* 移动端隐藏表格 */
+        @media (max-width: 768px) {
+            table { display: none; }
+            .data-container table { display: none; }
+        }
     </style>
 </head>
 <body>
 
 <div class="header-controls">
-    <button class="btn-primary" onclick="togglePanel('managementPanel')">数据管理 (上传 / 原始下载)</button>
-    <button class="btn-success" onclick="togglePanel('exportPanel')">导出当前筛选</button>
-    
+    <div class="btn-row">
+        <button class="btn-primary" onclick="togglePanel('managementPanel')">数据管理</button>
+        <button class="btn-success" onclick="togglePanel('exportPanel')">导出筛选</button>
+    </div>
     <div class="search-box">
         <select id="csvSelector" onchange="triggerSearch()">
             <option value="">全局搜索 (所有文件)</option>
         </select>
-        <input type="text" id="searchInput" placeholder="输入关键字自动搜索..." oninput="debounceSearch()">
+        <input type="text" id="searchInput" placeholder="输入关键字搜索..." oninput="debounceSearch()" enterkeyhint="search">
     </div>
 </div>
 
 <div id="managementPanel" class="collapsible-panel">
-    <div style="font-size: 16px; color: #555; margin-bottom: 10px;">
-        将 CSV 文件拖拽到此处进行上传，或点击下方按钮选择
-    </div>
+    <div class="panel-hint">将 CSV 文件拖拽到此处，或点击按钮选择文件上传</div>
     <div class="panel-actions">
-        <input type="file" id="csvFile" accept=".csv, .tsv, .txt" style="display: none" onchange="handleFileSelect(this)">
-        <button onclick="document.getElementById('csvFile').click()">选择文件上传</button>
-        <div style="width: 1px; height: 20px; background: #ddd;"></div>
-        <button onclick="downloadCsv()">下载选定范围的原始 CSV 文档 (全量)</button>
+        <input type="file" id="csvFile" accept=".csv, .tsv, .txt" style="display:none" onchange="handleFileSelect(this)">
+        <button class="btn-primary" onclick="document.getElementById('csvFile').click()">选择文件上传</button>
+        <div class="panel-divider"></div>
+        <button onclick="downloadCsv()">下载原始 CSV 文档</button>
     </div>
 </div>
 
-<div id="exportPanel" class="collapsible-panel" style="border: 1px solid #eee;">
-    <div style="font-size: 16px; color: #555; margin-bottom: 10px;">
-        导出下方表格中当前查询到的数据结果
-    </div>
+<div id="exportPanel" class="collapsible-panel">
+    <div class="panel-hint">导出当前查询到的数据结果</div>
     <div class="panel-actions">
-        <button class="btn-success" onclick="downloadFilteredCsv(true)">下载前端优化格式 (易读)</button>
-        <button onclick="downloadFilteredCsv(false)">下载数据原始格式 (纯数值)</button>
+        <button class="btn-success" onclick="downloadFilteredCsv(true)">下载优化格式 (易读)</button>
+        <button onclick="downloadFilteredCsv(false)">下载原始格式 (纯数值)</button>
     </div>
 </div>
-  <div class="status-bar" id="statusMsg">就绪。</div>
-<div class="table-container">
 
+<div class="status-bar" id="statusMsg">就绪。</div>
+
+<div class="data-container">
+    <!-- 桌面端表格 -->
     <table>
         <thead>
             <tr>
-                <th>文件名 (悬停看路径)</th>
+                <th>文件名</th>
                 <th>大小</th>
                 <th>修改时间</th>
                 <th>分辨率</th>
@@ -92,14 +370,17 @@
                 <th>FPS</th>
             </tr>
         </thead>
-        <tbody id="dataTable">
-        </tbody>
+        <tbody id="tableBody"></tbody>
     </table>
+
+    <!-- 移动端卡片列表 -->
+    <div class="data-list" id="cardList"></div>
+
     <div class="pagination">
-      
+        <div class="total-info" id="totalInfo">共 0 条</div>
         <div class="page-controls">
             <button onclick="changePage(-1)" id="btnPrev" disabled>上一页</button>
-            <span id="pageIndicator">0 / 0</span>
+            <span class="page-indicator" id="pageIndicator">0 / 0</span>
             <button onclick="changePage(1)" id="btnNext" disabled>下一页</button>
         </div>
     </div>
@@ -112,207 +393,129 @@
     const pageSize = 100;
     let searchTimeout = null;
 
-    // ================= 初始化与面板交互 =================
-    // 面板互斥切换逻辑
+    // ================= 面板交互 =================
     function togglePanel(panelId) {
         const panels = ['managementPanel', 'exportPanel'];
         panels.forEach(id => {
             const el = document.getElementById(id);
-            if (id === panelId) {
-                el.classList.toggle('active');
-            } else {
-                el.classList.remove('active');
-            }
+            if (id === panelId) el.classList.toggle('active');
+            else el.classList.remove('active');
         });
     }
 
+    // ================= 文件列表 =================
     async function loadFileList() {
         try {
             const res = await fetch('/csv/files');
             const files = await res.json();
             const selector = document.getElementById('csvSelector');
             const currentValue = selector.value;
-            
             selector.innerHTML = '<option value="">全局搜索 (所有文件)</option>';
             files.forEach(f => {
-                const date = new Date(f.upload_time * 1000).toLocaleString('zh-CN', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                const date = new Date(f.upload_time * 1000).toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
                 selector.innerHTML += `<option value="${f.id}">${f.filename} (${date})</option>`;
             });
-            selector.value = currentValue; 
-        } catch(e) {
-            console.error('加载文件列表失败');
-        }
+            selector.value = currentValue;
+        } catch(e) { console.error('加载文件列表失败'); }
     }
 
-    // ================= 拖拽与上传逻辑 =================
+    // ================= 拖拽与上传 =================
     const mPanel = document.getElementById('managementPanel');
-    
-    mPanel.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        mPanel.classList.add('dragover');
-    });
-    
-    mPanel.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        mPanel.classList.remove('dragover');
-    });
-    
-    mPanel.addEventListener('drop', (e) => {
-        e.preventDefault();
-        mPanel.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) {
-            uploadFile(e.dataTransfer.files[0]);
-        }
+    mPanel.addEventListener('dragover', e => { e.preventDefault(); mPanel.classList.add('dragover'); });
+    mPanel.addEventListener('dragleave', e => { e.preventDefault(); mPanel.classList.remove('dragover'); });
+    mPanel.addEventListener('drop', e => {
+        e.preventDefault(); mPanel.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) uploadFile(e.dataTransfer.files[0]);
     });
 
     function handleFileSelect(input) {
-        if (input.files.length > 0) {
-            uploadFile(input.files[0]);
-            input.value = ''; 
-        }
+        if (input.files.length > 0) { uploadFile(input.files[0]); input.value = ''; }
     }
 
     async function uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
-        
-        document.getElementById('statusMsg').innerText = `正在上传并解析 ${file.name} ...`;
+        document.getElementById('statusMsg').innerText = `正在上传 ${file.name} ...`;
         try {
             const res = await fetch('/csv/upload', { method: 'POST', body: formData });
             const data = await res.json();
-            if(res.ok) {
-                document.getElementById('statusMsg').innerText = `上传成功！解析 ${data.total_parsed} 条，更新入库 ${data.inserted_or_updated} 条。`;
-                loadFileList();
-                triggerSearch();
-            } else {
-                alert('上传失败: ' + data.error);
-                document.getElementById('statusMsg').innerText = '上传失败。';
-            }
-        } catch(e) {
-            alert('网络或服务端异常');
-        }
+            if (res.ok) {
+                document.getElementById('statusMsg').innerText = `成功！解析 ${data.total_parsed} 条，入库 ${data.inserted_or_updated} 条。`;
+                loadFileList(); triggerSearch();
+            } else { alert('上传失败: ' + data.error); }
+        } catch(e) { alert('网络或服务端异常'); }
     }
 
-    // 原始接口下载
     function downloadCsv() {
         const csv_id = document.getElementById('csvSelector').value;
         window.location.href = `/csv/download?csv_id=${csv_id}`;
     }
 
-    // 下载当前前端筛选/查询到的结果
-  // 下载当前前端筛选/查询到的结果
- // 下载当前前端筛选/查询到的结果
-function downloadFilteredCsv(isOptimized) {
-    if (allData.length === 0) {
-        alert('当前没有可导出的数据');
-        return;
+    // ================= 导出 =================
+    function downloadFilteredCsv(isOptimized) {
+        if (allData.length === 0) { alert('当前没有可导出的数据'); return; }
+        let csvContent = '\uFEFF';
+        const headers = ['文件名','完整路径','大小','修改时间','分辨率','编码','码率','时长','FPS'];
+        const escapeCsv = (val) => { const s = String(val == null ? '' : val); return `"${s.replace(/"/g, '""')}"`; };
+        csvContent += headers.map(escapeCsv).join(',') + '\n';
+        allData.forEach(row => {
+            const rowData = [
+                extractFilename(row.path), row.path,
+                isOptimized ? formatSize(row.size) : (row.size || ''),
+                isOptimized ? formatDate(row.mtime) : (row.mtime || ''),
+                (row.width && row.height) ? `${row.width}x${row.height}` : '',
+                row.codec || '',
+                isOptimized ? formatBitrate(row.bitrate) : (row.bitrate || ''),
+                isOptimized ? formatDuration(row.duration) : (row.duration || ''),
+                isOptimized ? formatFps(row.fps) : (row.fps || '')
+            ];
+            csvContent += rowData.map(escapeCsv).join(',') + '\n';
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const selector = document.getElementById('csvSelector');
+        let baseName = "全局数据";
+        if (selector.selectedIndex > 0) {
+            const t = selector.options[selector.selectedIndex].text;
+            baseName = (t.substring(0, t.lastIndexOf(' (')) || t).replace(/\.[^/.]+$/, "");
+        }
+        const q = document.getElementById('searchInput').value.trim().replace(/[\\/:*?"<>|]/g, '-');
+        link.download = `${baseName}${q ? '_筛选['+q+']' : ''}${isOptimized ? '_优化版' : '_原始数据'}.csv`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
     }
-    
-    // 增加 BOM 头，确保 Excel 识别为 UTF-8
-    let csvContent = '\uFEFF'; 
-    const headers = ['文件名', '完整路径', '大小', '修改时间', '分辨率', '编码', '码率', '时长', 'FPS'];
-    
-    // 核心转义函数：RFC 4180 标准
-    // 1. 将字段内的双引号 " 替换为 ""
-    // 2. 将整个字段用双引号 " 包裹起来
-    const escapeCsv = (val) => {
-        const s = String(val == null ? '' : val);
-        return `"${s.replace(/"/g, '""')}"`;
-    };
-    
-    // 写入表头，使用逗号连接
-    csvContent += headers.map(escapeCsv).join(',') + '\n';
-    
-    // 写入数据
-    allData.forEach(row => {
-        const rowData = [
-            extractFilename(row.path),
-            row.path,
-            isOptimized ? formatSize(row.size) : (row.size || ''),
-            isOptimized ? formatDate(row.mtime) : (row.mtime || ''),
-            (row.width && row.height) ? `${row.width}x${row.height}` : '',
-            row.codec || '',
-            isOptimized ? formatBitrate(row.bitrate) : (row.bitrate || ''),
-            isOptimized ? formatDuration(row.duration) : (row.duration || ''),
-            isOptimized ? formatFps(row.fps) : (row.fps || '')
-        ];
-        
-        // 使用标准的 escapeCsv 处理每一项，然后 join
-        csvContent += rowData.map(escapeCsv).join(',') + '\n';
-    });
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
 
-    // 动态命名逻辑
-    const selector = document.getElementById('csvSelector');
-    let baseName = "全局数据";
-    if (selector.selectedIndex > 0) {
-        const optionText = selector.options[selector.selectedIndex].text;
-        baseName = optionText.substring(0, optionText.lastIndexOf(' (')) || optionText;
-        baseName = baseName.replace(/\.[^/.]+$/, ""); 
-    }
-    
-    const query = document.getElementById('searchInput').value.trim();
-    // 过滤掉文件名不支持的特殊字符
-    const cleanQuery = query.replace(/[\\/:*?"<>|]/g, '-');
-    const querySuffix = cleanQuery ? `_筛选[${cleanQuery}]` : "";
-    const typeSuffix = isOptimized ? "_优化版" : "_原始数据";
-    
-    link.setAttribute("download", `${baseName}${querySuffix}${typeSuffix}.csv`);
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-    // ================= 数据查询与分页 =================
-    function debounceSearch() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(triggerSearch, 300);
-    }
+    // ================= 搜索与分页 =================
+    function debounceSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(triggerSearch, 300); }
 
     async function triggerSearch() {
         const q = document.getElementById('searchInput').value.trim();
         const csv_id = document.getElementById('csvSelector').value;
-        
         document.getElementById('statusMsg').innerText = '查询中...';
-        
         try {
             const res = await fetch(`/csv/search?q=${encodeURIComponent(q)}&csv_id=${csv_id}&limit=5000`);
             const data = await res.json();
-            
             allData = data.results;
             currentPage = 1;
-            renderTable();
-            
-            document.getElementById('statusMsg').innerText = 
-                `查询完成。共找到 ${data.count} 条记录，耗时 ${data.cost_time} 秒。`;
-        } catch (e) {
-            document.getElementById('statusMsg').innerText = '查询失败。';
-        }
+            renderView();
+            document.getElementById('statusMsg').innerText = `共 ${data.count} 条，耗时 ${data.cost_time}s`;
+        } catch (e) { document.getElementById('statusMsg').innerText = '查询失败。'; }
     }
 
     function changePage(delta) {
         const maxPage = Math.ceil(allData.length / pageSize) || 1;
-        currentPage += delta;
-        if (currentPage < 1) currentPage = 1;
-        if (currentPage > maxPage) currentPage = maxPage;
-        renderTable();
+        currentPage = Math.max(1, Math.min(maxPage, currentPage + delta));
+        renderView();
+        document.querySelector('.data-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // ================= 格式化工具函数 =================
-    function extractFilename(path) {
-        if (!path) return '-';
-        return path.split(/[/\\]/).pop();
-    }
+    // ================= 格式化 =================
+    function extractFilename(path) { return path ? path.split(/[/\\]/).pop() : '-'; }
 
     function formatSize(bytes) {
         if (!bytes || isNaN(bytes)) return '-';
         const b = parseFloat(bytes);
-        if (b === 0) return '0 B';
         if (b < 1024) return b + ' B';
         if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
         if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
@@ -321,42 +524,25 @@ function downloadFilteredCsv(isOptimized) {
 
     function formatDate(timestamp) {
         if (!timestamp || isNaN(timestamp)) return '-';
-        const targetDate = new Date(timestamp * 1000);
-        const now = new Date();
-        
-        const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-        
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        
-        const timeStr = targetDate.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'});
-        const monthDay = `${targetDate.getMonth() + 1}月${targetDate.getDate()}日`;
-        
-        if (isSameDay(targetDate, now)) {
-            return `今天 ${timeStr}`;
-        } else if (isSameDay(targetDate, yesterday)) {
-            return `昨天 ${timeStr}`;
-        } else if (targetDate.getFullYear() === now.getFullYear()) {
-            return `${monthDay}`;
-        } else if (targetDate.getFullYear() === now.getFullYear() - 1) {
-            return `去年 ${monthDay}`;
-        } else {
-            return `${targetDate.getFullYear()}年 ${monthDay}`;
-        }
+        const d = new Date(timestamp * 1000), now = new Date();
+        const same = (a, b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+        const t = d.toLocaleTimeString('zh-CN', {hour12:false, hour:'2-digit', minute:'2-digit'});
+        const md = `${d.getMonth()+1}月${d.getDate()}日`;
+        const yd = new Date(now); yd.setDate(now.getDate()-1);
+        if (same(d, now)) return `今天 ${t}`;
+        if (same(d, yd)) return `昨天 ${t}`;
+        if (d.getFullYear() === now.getFullYear()) return md;
+        return `${d.getFullYear()}年 ${md}`;
     }
 
     function formatDuration(secStr) {
         if (!secStr || isNaN(secStr)) return '-';
-        const s = parseFloat(secStr);
-        if (s === 0) return '0s';
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const sec = Math.floor(s % 60);
-        let res = '';
-        if (h > 0) res += `${h}h `;
-        if (m > 0) res += `${m}m `;
-        if (sec > 0 || res === '') res += `${sec}s`;
-        return res;
+        const s = parseFloat(secStr), h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = Math.floor(s%60);
+        let r = '';
+        if (h > 0) r += `${h}h `;
+        if (m > 0) r += `${m}m `;
+        if (sec > 0 || r === '') r += `${sec}s`;
+        return r;
     }
 
     function formatBitrate(bps) {
@@ -370,75 +556,87 @@ function downloadFilteredCsv(isOptimized) {
     function formatFps(fpsStr) {
         if (!fpsStr) return '-';
         if (fpsStr.includes('/')) {
-            const parts = fpsStr.split('/');
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[1] !== '0') {
-                return (parseFloat(parts[0]) / parseFloat(parts[1])).toFixed(2);
-            }
+            const p = fpsStr.split('/');
+            if (p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]) && p[1] !== '0')
+                return (parseFloat(p[0]) / parseFloat(p[1])).toFixed(2);
         }
-        const num = parseFloat(fpsStr);
-        return isNaN(num) ? fpsStr : num.toFixed(2);
+        const n = parseFloat(fpsStr);
+        return isNaN(n) ? fpsStr : n.toFixed(2);
     }
-function formatResolution(width, height) {
-    if (!width || !height || isNaN(width) || isNaN(height)) return '-';
-    
-    const w = parseInt(width);
-    const h = parseInt(height);
-    const area = w * h; // 计算像素总量
-    const isVertical = h > w; // 是否为竖屏
 
-    let label = '';
+    function getResInfo(w, h) {
+        if (!w || !h) return { label: '-', cls: 'res-low', short: '-' };
+        const area = parseInt(w) * parseInt(h);
+        const vert = parseInt(h) > parseInt(w);
+        let label, cls;
+      if (area >= 8294400)      { label = '4K';    cls = 'res-4k';   }  // 3840×2160
+    else if (area >= 3686400) { label = '2K';    cls = 'res-2k';   }  // 2560×1440
+    else if (area >= 2073600) { label = '1080p'; cls = 'res-1080'; }  // 1920×1080
+    else if (area >= 921600)  { label = '720p';  cls = 'res-720';  }  // 1280×720
+    else if (area >= 307200)  { label = '480p';  cls = 'res-480';  }  // 640×480
+    else if (area >= 129600)  { label = '360p';  cls = 'res-360';  }  // 480×360
+    else if (area >= 50400)   { label = '240p';  cls = 'res-240';  }  // 320×240 → 252×200
+    else                      { label = `${w}×${h}`; cls = 'res-tiny'; }
+        const orient = vert ? ' 竖' : '';
+        return { label: label + orient, cls, short: label + orient };
+    }
 
-    // 基于像素总量的分级阈值 (参考标准视频规格)
-    if (area >= 8294400)      label = '4K';      // 约 830万像素
-    else if (area >= 3686400) label = '2K';      // 约 370万像素
-    else if (area >= 2073600) label = '1080p';   // 约 200万像素
-    else if (area >= 921600)  label = '720p';    // 约 90万像素
-    else if (area >= 409600)  label = '480p';    // 约 40万像素
-    else if (area >= 230400)  label = '360p'; // 新增：360p 档位
-    else if (area >= 76800)   label = '240p'; // 新增：240p 档位
-    else                      label = `${w}x${h}`;
-
-    return isVertical ? `${label} (竖)` : label;
-}
-
-
-// ================= 渲染视图 =================
-    function renderTable() {
-        const tbody = document.getElementById('dataTable');
-        tbody.innerHTML = '';
-        
+    // ================= 渲染（双模式） =================
+    function renderView() {
         const totalRecords = allData.length;
         const maxPage = Math.ceil(totalRecords / pageSize) || 1;
-        const startIndex = (currentPage - 1) * pageSize;
-        const pageData = allData.slice(startIndex, startIndex + pageSize);
-        
+        const start = (currentPage - 1) * pageSize;
+        const pageData = allData.slice(start, start + pageSize);
+
+        // --- 桌面表格 ---
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
         pageData.forEach(row => {
-            const filename = extractFilename(row.path);
-            
-            const resolution = formatResolution(row.width, row.height);
+            const res = getResInfo(row.width, row.height);
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="filename-cell" title="完整路径: ${row.path}">${filename}</td>
+                <td class="filename-cell" title="${row.path}">${extractFilename(row.path)}</td>
                 <td>${formatSize(row.size)}</td>
                 <td>${formatDate(row.mtime)}</td>
-                <td>${resolution}</td>
+                <td><span class="res-badge ${res.cls}">${res.short}</span></td>
                 <td>${row.codec || '-'}</td>
                 <td>${formatBitrate(row.bitrate)}</td>
                 <td>${formatDuration(row.duration)}</td>
-                <td>${formatFps(row.fps)}</td>
-            `;
+                <td>${formatFps(row.fps)}</td>`;
             tbody.appendChild(tr);
         });
+        if (totalRecords === 0) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:40px">暂无数据</td></tr>';
 
-        if (totalRecords === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">暂无数据</td></tr>';
-        }
+        // --- 移动端卡片 ---
+        const cardList = document.getElementById('cardList');
+        cardList.innerHTML = '';
+        pageData.forEach(row => {
+            const res = getResInfo(row.width, row.height);
+            const card = document.createElement('div');
+            card.className = 'data-card';
+            card.innerHTML = `
+                <div class="card-filename" title="${row.path}">${extractFilename(row.path)}</div>
+                <div class="card-meta">
+                    <span class="card-tag highlight"><span class="label">分辨率</span><span class="res-badge ${res.cls}">${res.short}</span></span>
+                    <span class="card-tag"><span class="label">大小</span><span class="value">${formatSize(row.size)}</span></span>
+                    <span class="card-tag"><span class="label">时长</span><span class="value">${formatDuration(row.duration)}</span></span>
+                    <span class="card-tag"><span class="label">编码</span><span class="value">${row.codec || '-'}</span></span>
+                    <span class="card-tag"><span class="label">码率</span><span class="value">${formatBitrate(row.bitrate)}</span></span>
+                    <span class="card-tag"><span class="label">FPS</span><span class="value">${formatFps(row.fps)}</span></span>
+                    <span class="card-tag"><span class="label">时间</span><span class="value">${formatDate(row.mtime)}</span></span>
+                </div>`;
+            cardList.appendChild(card);
+        });
+        if (totalRecords === 0) cardList.innerHTML = '<div class="empty-state">暂无数据</div>';
 
-        document.getElementById('pageIndicator').innerText = `第 ${currentPage} / ${maxPage} 页`;
-        document.getElementById('btnPrev').disabled = (currentPage === 1);
-        document.getElementById('btnNext').disabled = (currentPage === maxPage);
+        // --- 分页 ---
+        document.getElementById('pageIndicator').innerText = `${currentPage} / ${maxPage}`;
+        document.getElementById('totalInfo').innerText = `共 ${totalRecords} 条`;
+        document.getElementById('btnPrev').disabled = (currentPage <= 1);
+        document.getElementById('btnNext').disabled = (currentPage >= maxPage);
     }
 
+    // ================= 初始化 =================
     loadFileList();
     triggerSearch();
 </script>
