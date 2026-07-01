@@ -63,7 +63,6 @@ init_db()
 
 # ================= API 路由逻辑 =================
 
- 
 @csv_bp.route('/files', methods=['GET'])
 def list_files():
     conn = get_db_connection()
@@ -214,6 +213,78 @@ def upload_csv():
         "inserted_or_updated": affected_rows
     })
 
+# ================= 新增：普通文件 CSV 解析路由 =================
+@csv_bp.route('/parse_normal', methods=['POST'])
+def parse_normal_csv():
+    """
+    通用 CSV 解析逻辑：
+    以文件内容为中心，动态读取表头，忽略文件中不存在的字段，剔除全空行。
+    仅返回解析后的 JSON 数据，不进行固定结构的数据库存储。
+    """
+    if 'file' not in request.files:
+        return jsonify({"error": "缺少文件"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "未选择文件"}), 400
+
+    try:
+        raw_bytes = file.read()
+        content = raw_bytes.decode('utf-8-sig')
+    except Exception as e:
+        return jsonify({"error": f"文件编码解析失败，请确保为 UTF-8 编码: {str(e)}"}), 400
+    
+    if not content.strip():
+        return jsonify({"error": "文件内容为空"}), 400
+
+    # 分隔符识别
+    first_line = content.split('\n')[0]
+    if '\t' in first_line and ',' not in first_line:
+        delimiter = '\t'
+    elif ',' in first_line:
+        delimiter = ','
+    else:
+        try:
+            dialect = csv.Sniffer().sniff(content[:4096])
+            delimiter = dialect.delimiter
+        except:
+            delimiter = ','
+
+    # 采用普通 reader 读取，动态提取表头
+    reader = csv.reader(StringIO(content), delimiter=delimiter)
+    try:
+        headers = next(reader)
+    except StopIteration:
+        return jsonify({"error": "文件无数据行"}), 400
+        
+    # 提取有效列（过滤空列名）并建立索引映射
+    valid_cols = {}
+    for idx, h in enumerate(headers):
+        h_clean = h.strip()
+        if h_clean:
+            valid_cols[idx] = h_clean
+
+    records = []
+    for row in reader:
+        # 跳过空行
+        if not any(cell.strip() for cell in row):
+            continue
+            
+        record = {}
+        for idx, key_name in valid_cols.items():
+            if idx < len(row):
+                record[key_name] = row[idx].strip()
+            else:
+                record[key_name] = ""
+        records.append(record)
+
+    return jsonify({
+        "message": "解析成功",
+        "filename": file.filename,
+        "total_parsed": len(records),
+        "data": records
+    })
+
+# ================= 下载与导出 =================
 @csv_bp.route('/download', methods=['GET'])
 def download():
     csv_id = request.args.get('csv_id', '')
@@ -258,4 +329,3 @@ def download():
     output.seek(0)
     
     return send_file(output, as_attachment=True, download_name=export_name, mimetype='text/csv')
- 

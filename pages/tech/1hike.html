@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>徒步预测 (纯净键盘&智能坐标版)</title>
+    <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css" />
+    <style>
+        :root { --primary: #007aff; --bg: #f2f2f7; --card-bg: #ffffff; --text: #1c1c1e; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h2 { font-size: 24px; font-weight: 600; margin-bottom: 20px; text-align: center; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.04); }
+        .card-title { font-size: 16px; font-weight: 600; margin-top: 0; margin-bottom: 15px; color: #8e8e93; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+        select, input { width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 10px; border: 1px solid #e5e5ea; border-radius: 8px; font-size: 16px; outline: none; background: #fafafa; transition: border-color 0.2s; }
+        select:focus, input:focus { border-color: var(--primary); }
+        button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        button:active { opacity: 0.8; }
+        .flex-row { display: flex; gap: 10px; align-items: center; }
+        .flex-row input { margin-bottom: 0; }
+        .flex-row button { width: auto; white-space: nowrap; padding: 12px 16px; }
+        .result-box { margin-top: 15px; padding: 15px; border-radius: 8px; font-size: 18px; display: none; }
+        .result-box.success { background: #e5f4e7; border: 1px solid #cce9d4; }
+        .result-box.error { background: #feebeb; color: #ff3b30; border: 1px solid #fcdada; text-align: center; }
+        details { background: var(--card-bg); border-radius: 12px; padding: 15px 20px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.04); }
+        summary { font-size: 16px; font-weight: 600; color: var(--primary); cursor: pointer; outline: none; margin-bottom: 0;}
+        summary::-webkit-details-marker { display: none; }
+        details[open] summary { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .dropzone { border: 2px dashed #c7c7cc; border-radius: 12px; background: #fafafa; padding: 20px; text-align: center; min-height: 100px; display: flex; align-items: center; justify-content: center; }
+        .file-list { margin: 0; padding: 0; list-style: none; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f2f2f7; font-size: 14px; }
+        #workspace { display: none; }
+        .btn-action { background: #ff9500; font-size: 14px; padding: 8px 12px; border-radius: 6px; font-weight: 500;}
+        .btn-success { background: #34c759; }
+        .input-group { position: relative; margin-bottom: 10px; }
+        .input-group label { display: block; font-size: 12px; color: #8e8e93; margin-bottom: 4px; }
+        
+        /* 独立纯数字时间输入框样式优化 */
+        .time-boxes { display: flex; align-items: center; gap: 4px; }
+        .time-boxes input { 
+            width: 50px; padding: 10px 4px; text-align: center; margin: 0; 
+            -moz-appearance: textfield; border-radius: 6px; font-size: 18px; font-weight: 500;
+        }
+        /* 隐藏数字箭头的原生样式 */
+        .time-boxes input::-webkit-outer-spin-button,
+        .time-boxes input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .time-boxes span { font-weight: bold; color: #8e8e93; font-size: 18px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>🏔️ 路线预测</h2>
+
+    <div class="card">
+        <select id="projectSelect">
+            <option value="">-- 选择路线项目 --</option>
+        </select>
+        <div class="flex-row" style="margin-top: 10px;">
+            <input type="text" id="newProjectName" placeholder="新路线名称">
+            <button onclick="createProject()">新建</button>
+        </div>
+    </div>
+
+    <div id="workspace">
+        <div class="card">
+            <div class="card-title">🕒 时间联动助手</div>
+            <div class="flex-row" style="margin-bottom: 12px; justify-content: space-between;">
+                <div class="input-group">
+                    <label>起点时间 (自动存)</label>
+                    <div class="time-boxes">
+                        <input type="number" id="startH" placeholder="时" min="0" max="23" inputmode="numeric" oninput="handleStartTimeChange()" onclick="this.select()">
+                        <span>:</span>
+                        <input type="number" id="startM" placeholder="分" min="0" max="59" inputmode="numeric" oninput="handleStartTimeChange()" onclick="this.select()">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>当前时间 (修改即联动)</label>
+                    <div class="time-boxes">
+                        <input type="number" id="nowH" placeholder="时" min="0" max="23" inputmode="numeric" oninput="calcDiffTime()" onclick="this.select()">
+                        <span>:</span>
+                        <input type="number" id="nowM" placeholder="分" min="0" max="59" inputmode="numeric" oninput="calcDiffTime()" onclick="this.select()">
+                    </div>
+                </div>
+            </div>
+            <button onclick="setNowTime()" class="btn-success" style="margin-bottom: 0;">一键填入系统当前时间</button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                📍 数据测算区
+                <button id="gpsBtn" onclick="autoLocate()" class="btn-action" style="width: auto;">设备自动定位</button>
+            </div>
+            
+            <div class="flex-row" style="margin-bottom: 10px;">
+                <input type="text" id="manualGpsInput" placeholder="填入任意格式坐标文本">
+                <button onclick="manualLocate()" class="btn-action" style="background: #007aff;">解析</button>
+            </div>
+
+            <div class="input-group">
+                <label>当前行进距离 (公里)</label>
+                <input type="number" id="currDist" step="0.1" min="0" placeholder="可手动或GPS自动填入" inputmode="decimal">
+            </div>
+            <div class="input-group">
+                <label>当前已耗时 (小时)</label>
+                <input type="number" id="currTime" step="0.1" min="0" placeholder="上方时间助手自动计算填入" inputmode="decimal" style="background: #e5f4e7; border-color: #34c759;">
+            </div>
+            
+            <button onclick="predictTimeLocally()">前端离线测算</button>
+            <div id="predictResult" class="result-box"></div>
+        </div>
+
+        <div class="card" id="recordsCard" style="display: none;">
+            <div class="card-title">📂 已缓存参考基准</div>
+            <ul class="file-list" id="gpxList"></ul>
+        </div>
+
+        <details id="uploadDetails">
+            <summary>+ 补充参考轨迹 (GPX)</summary>
+            <div id="gpxDropzone" class="dropzone"></div>
+        </details>
+    </div>
+</div>
+
+<script>
+    Dropzone.autoDiscover = false;
+    const API_PREFIX = '/hike/api'; 
+    let currentProjectId = null;
+    let myDropzone = null;
+    let projectCsvDataCache = [];
+    let uploadQueue = [];
+    let isUploading = false;
+
+    // ==================== 纯数字键盘时间联动 ====================
+    
+    // 输入即可触发缓存和联动计算，抛弃原本冗余的“设为起点”按钮
+    function handleStartTimeChange() {
+        const h = document.getElementById('startH').value;
+        const m = document.getElementById('startM').value;
+        // 只有时和分都填了才缓存
+        if (h !== '' && m !== '') {
+            const timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+            localStorage.setItem('hike_start_hm', timeStr);
+            calcDiffTime(); 
+        }
+    }
+
+    function loadTimeStatus() {
+        const startHM = localStorage.getItem('hike_start_hm');
+        if (startHM) {
+            const [h, m] = startHM.split(':');
+            document.getElementById('startH').value = h;
+            document.getElementById('startM').value = m;
+        }
+    }
+
+    function setNowTime() {
+        const now = new Date();
+        document.getElementById('nowH').value = String(now.getHours()).padStart(2, '0');
+        document.getElementById('nowM').value = String(now.getMinutes()).padStart(2, '0');
+        calcDiffTime();
+    }
+
+    // 核心联动：时间框变动，立刻更新已耗时
+    function calcDiffTime() {
+        const sh = document.getElementById('startH').value;
+        const sm = document.getElementById('startM').value;
+        const nh = document.getElementById('nowH').value;
+        const nm = document.getElementById('nowM').value;
+        
+        // 四个框都填满才计算
+        if (sh === '' || sm === '' || nh === '' || nm === '') return;
+
+        let startMins = parseInt(sh) * 60 + parseInt(sm);
+        let nowMins = parseInt(nh) * 60 + parseInt(nm);
+        
+        if (nowMins < startMins) nowMins += 24 * 60; 
+
+        const diffHours = (nowMins - startMins) / 60;
+        document.getElementById('currTime').value = diffHours.toFixed(2);
+    }
+
+    // ==================== 高鲁棒性 GPS 解析器 ====================
+    
+    function calcHaversine(lat1, lon1, lat2, lon2) {
+        const R = 6371.0;
+        const toRad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * toRad;
+        const dLon = (lon2 - lon1) * toRad;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    // 万能坐标解析：屏蔽中英文符号干扰，智能提取
+    function parseCoordinates(input) {
+        // 1. 去除干扰标签(如【GCJ02】)，标点符号统一转换
+        let str = input.replace(/【.*?】/g, '').replace(/[，。]/g, ',').toUpperCase();
+        
+        // 2. 提取所有数字块和方向标识
+        const nums = str.match(/\d+(?:\.\d+)?/g);
+        const dirs = str.match(/[NSWE]/g) || [];
+        
+        if (!nums) return null;
+
+        let lat, lon;
+
+        // 场景 A：度分秒格式 (如：31° 5 46 N 109°54 22") - 必定能提取出6个数字
+        if (nums.length >= 6) {
+            let val1 = parseFloat(nums[0]) + parseFloat(nums[1])/60 + parseFloat(nums[2])/3600;
+            let val2 = parseFloat(nums[3]) + parseFloat(nums[4])/60 + parseFloat(nums[5])/3600;
+
+            if (dirs.includes('S')) val1 = -val1; 
+            if (dirs.includes('W')) val2 = -val2;
+
+            lat = val1; lon = val2;
+        }
+        // 场景 B：十进制度格式 (如：31.0711, 109.9311) - 至少能提取出2个数字
+        else if (nums.length >= 2) {
+            let val1 = parseFloat(nums[0]);
+            let val2 = parseFloat(nums[1]);
+
+            // 根据南半球或西半球符号赋予负值
+            const p1 = str.split(nums[0])[1];
+            if (p1 && p1.match(/^\s*°?\s*S/)) val1 = -val1;
+            const p2 = str.split(nums[1])[1];
+            if (p2 && p2.match(/^\s*°?\s*W/)) val2 = -val2;
+
+            lat = val1; lon = val2;
+        } else {
+            return null;
+        }
+
+        // 【智能纠错】：自动纠正经纬度反写。地球纬度绝不超过90，如果是中国坐标，经度多在90以上
+        if (Math.abs(lat) > 90 && Math.abs(lon) <= 90) {
+            let temp = lat;
+            lat = lon;
+            lon = temp;
+        }
+
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null; // 完全不合法的地球坐标
+        return { lat, lon };
+    }
+
+    function matchRouteWithCoordinates(userLat, userLon) {
+        if (projectCsvDataCache.length === 0) return { error: "当前项目无轨迹数据，无法匹配。" };
+        
+        let globalClosestDist = Infinity;
+        let matchedRouteDistKm = 0;
+
+        projectCsvDataCache.forEach(gpx => {
+            gpx.data.forEach(point => {
+                if (point.lat && point.lon) {
+                    let distToPoint = calcHaversine(userLat, userLon, point.lat, point.lon);
+                    if (distToPoint < globalClosestDist) {
+                        globalClosestDist = distToPoint;
+                        matchedRouteDistKm = point.dist;
+                    }
+                }
+            });
+        });
+
+        if (globalClosestDist === Infinity) return { error: "历史轨迹中没有坐标数据。请删除旧项目重传 GPX 文件！" };
+        return { matchedKm: matchedRouteDistKm, deviationKm: globalClosestDist };
+    }
+
+    function manualLocate() {
+        const inputStr = document.getElementById('manualGpsInput').value;
+        if (!inputStr) return alert("请先输入文本框中的坐标");
+        
+        const coords = parseCoordinates(inputStr);
+        if (!coords) return alert("无法识别格式！支持复制的格式如：\n【GCJ02】31.071°N，109.931°E \n或\n 31° 5 46.2 N 109°54 22 E");
+
+        const result = matchRouteWithCoordinates(coords.lat, coords.lon);
+        if (result.error) return alert(result.error);
+
+        if (result.deviationKm > 1.0) {
+            alert(`⚠️ 坐标警告：此点距离当前路线最近处有 ${(result.deviationKm).toFixed(2)} 公里，请确认是否偏离路线！`);
+        }
+        document.getElementById('currDist').value = result.matchedKm.toFixed(2);
+    }
+
+    function autoLocate() {
+        if (!navigator.geolocation) return alert("您的浏览器不支持定位功能。");
+        
+        const btn = document.getElementById('gpsBtn');
+        const originalText = btn.innerText;
+        btn.innerText = "定位中..."; btn.disabled = true;
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                btn.innerText = originalText; btn.disabled = false;
+                const result = matchRouteWithCoordinates(position.coords.latitude, position.coords.longitude);
+                if (result.error) return alert(result.error);
+
+                if (result.deviationKm > 1.0) {
+                    alert(`⚠️ 定位警告：当前位置距离路线最近处有 ${(result.deviationKm).toFixed(2)} 公里，请确认是否偏离路线！`);
+                }
+                document.getElementById('currDist').value = result.matchedKm.toFixed(2);
+            },
+            (error) => {
+                btn.innerText = originalText; btn.disabled = false;
+                let msg = "定位失败。请确保已授予浏览器位置权限。";
+                if (error.code === 1) msg = "您拒绝了定位请求。";
+                alert(msg);
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+    }
+
+    // ==================== 离线前端计算核心逻辑 ====================
+    function predictTimeLocally() {
+        if (projectCsvDataCache.length === 0) return alert("当前项目没有任何参考基准数据！");
+        
+        const currentDist = parseFloat(document.getElementById('currDist').value);
+        const currentTime = parseFloat(document.getElementById('currTime').value);
+
+        if (isNaN(currentDist) || isNaN(currentTime) || currentDist <= 0 || currentTime <= 0) {
+            return alert("请输入有效的距离和时间数据");
+        }
+
+        let globalBestMatch = null;
+        let globalMinDiff = Infinity;
+        let bestGpxName = "";
+        let bestGpxData = null;
+
+        projectCsvDataCache.forEach(gpx => {
+            const data = gpx.data;
+            if (data.length === 0 || data[data.length-1].dist < currentDist) return;
+
+            let localBest = null;
+            let localMinDist = Infinity;
+            
+            data.forEach(item => {
+                let distDiff = Math.abs(item.dist - currentDist);
+                if (distDiff < localMinDist) {
+                    localMinDist = distDiff;
+                    localBest = item;
+                }
+            });
+
+            if (!localBest || localMinDist > 0.5 || localBest.time <= 0.01) return;
+
+            let timeDiff = Math.abs(currentTime - localBest.time);
+            if (timeDiff < globalMinDiff) {
+                globalMinDiff = timeDiff;
+                globalBestMatch = localBest;
+                bestGpxName = gpx.name;
+                bestGpxData = data;
+            }
+        });
+
+        const resultBox = document.getElementById('predictResult');
+        resultBox.style.display = 'block';
+
+        if (!globalBestMatch) {
+            resultBox.className = 'result-box error';
+            resultBox.innerHTML = `⚠️ 未找到匹配路段（当前距离可能超出历史记录，或起点偏差过大）`;
+            return;
+        }
+
+        const refTotalTime = bestGpxData[bestGpxData.length - 1].time;
+        const refCurrentTime = globalBestMatch.time;
+        const refRemainingTime = refTotalTime - refCurrentTime;
+        const paceRatio = currentTime / refCurrentTime;
+
+        resultBox.className = 'result-box success';
+        resultBox.innerHTML = `
+            <div style="text-align: left;">
+                <div style="font-size: 18px; font-weight: 600; color: #1c1c1e; margin-bottom: 12px;">
+                    剩余预计: <span style="color: var(--primary); font-size: 24px;">${(refRemainingTime * paceRatio).toFixed(2)}</span> h<br>
+                    总计预计: <span style="color: #34c759; font-size: 24px;">${(currentTime + refRemainingTime * paceRatio).toFixed(2)}</span> h
+                </div>
+                <div style="background: rgba(0,0,0,0.04); padding: 12px; border-radius: 8px; font-size: 13px; color: #666; line-height: 1.6;">
+                    <strong>📍 基准轨迹:</strong> ${bestGpxName}<br>
+                    <strong>⏱️ 基准总用时:</strong> ${refTotalTime.toFixed(2)} h<br>
+                    <strong>📌 同步点用时:</strong> 基准 ${refCurrentTime.toFixed(2)} h (当前 ${currentTime} h)<br>
+                    <strong>📈 配速倍率:</strong> ${paceRatio.toFixed(2)} <span style="font-size: 11px; color: #999;">(>1表示比基准慢)</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // ==================== 数据获取与解析 ====================
+    async function loadProjectRecords(projectId) {
+        const res = await fetch(`${API_PREFIX}/projects/${projectId}/records`);
+        const records = await res.json();
+        
+        const listUi = document.getElementById('gpxList');
+        const recordsCard = document.getElementById('recordsCard');
+        listUi.innerHTML = '';
+        projectCsvDataCache = []; 
+        
+        if (records.length > 0) {
+            recordsCard.style.display = 'block';
+            for (const r of records) {
+                listUi.innerHTML += `
+                    <li class="file-item">
+                        <div style="display: flex; flex-direction: column;">
+                            <span>${r.original_name}</span>
+                            <span style="font-size: 12px; color: #8e8e93; margin-top: 4px;">缓存就绪 | ${r.size_formatted}</span>
+                        </div>
+                    </li>`;
+                
+                try {
+                    const csvRes = await fetch(`${API_PREFIX}/csv/${r.id}`);
+                    const csvText = await csvRes.text();
+                    const rows = csvText.trim().split('\n').slice(1); 
+                    
+                    const parsedData = rows.map(row => {
+                        const parts = row.split(',');
+                        if (parts.length >= 4) {
+                            return { lat: parseFloat(parts[0]), lon: parseFloat(parts[1]), dist: parseFloat(parts[2]), time: parseFloat(parts[3]) };
+                        }
+                        return { dist: parseFloat(parts[0]), time: parseFloat(parts[1]) };
+                    }).filter(item => !isNaN(item.dist));
+                    
+                    projectCsvDataCache.push({ name: r.original_name, data: parsedData });
+                } catch (e) {
+                    console.error("缓存 CSV 数据失败:", r.original_name, e);
+                }
+            }
+        } else {
+            recordsCard.style.display = 'none';
+        }
+    }
+
+    // ==================== 基础初始化逻辑 ====================
+    async function loadProjects() {
+        const res = await fetch(`${API_PREFIX}/projects`);
+        const projects = await res.json();
+        const select = document.getElementById('projectSelect');
+        select.innerHTML = '<option value="">-- 选择路线项目 --</option>';
+        projects.forEach(p => { select.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
+    }
+
+    document.getElementById('projectSelect').addEventListener('change', function(e) {
+        currentProjectId = e.target.value;
+        const workspace = document.getElementById('workspace');
+        if (currentProjectId) {
+            localStorage.setItem('last_hike_project_id', currentProjectId); 
+            workspace.style.display = 'block';
+            document.getElementById('predictResult').style.display = 'none'; 
+            initDropzone();
+            loadProjectRecords(currentProjectId);
+        } else {
+            workspace.style.display = 'none';
+        }
+    });
+
+    async function createProject() {
+        const name = document.getElementById('newProjectName').value;
+        if (!name) return;
+        const res = await fetch(`${API_PREFIX}/projects`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('newProjectName').value = '';
+            await loadProjects();
+            document.getElementById('projectSelect').value = data.id;
+            document.getElementById('projectSelect').dispatchEvent(new Event('change'));
+        } else { alert(data.error); }
+    }
+
+    function readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error("读取失败"));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function processQueue() {
+        if (isUploading || uploadQueue.length === 0) return;
+        isUploading = true;
+        while (uploadQueue.length > 0) {
+            const file = uploadQueue.shift();
+            file.status = Dropzone.UPLOADING;
+            myDropzone.emit("processing", file);
+            try {
+                const base64String = await readFileAsBase64(file);
+                const res = await fetch(`${API_PREFIX}/upload`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ project_id: currentProjectId, filename: file.name, file_base64: base64String })
+                });
+                const data = await res.json();
+                if (res.ok) { file.status = Dropzone.SUCCESS; myDropzone.emit("success", file, data, null); } 
+                else throw new Error(data.error);
+            } catch (err) {
+                file.status = Dropzone.ERROR; myDropzone.emit("error", file, err.message);
+            } finally { myDropzone.emit("complete", file); }
+        }
+        isUploading = false;
+        loadProjectRecords(currentProjectId); 
+        document.getElementById('uploadDetails').removeAttribute('open'); 
+    }
+
+    function initDropzone() {
+        if(myDropzone) return;
+        myDropzone = new Dropzone("#gpxDropzone", {
+            url: "/dummy-url", autoProcessQueue: false, maxFilesize: 50, acceptedFiles: ".gpx",
+            dictDefaultMessage: "点击或批量拖拽 GPX 至此", addRemoveLinks: false
+        });
+        myDropzone.on("addedfile", function(file) {
+            if (!currentProjectId) { myDropzone.removeFile(file); return alert("请先选择项目！"); }
+            uploadQueue.push(file);
+            processQueue(); 
+        });
+    }
+
+    window.onload = async () => {
+        loadTimeStatus();
+        await loadProjects();
+        const lastId = localStorage.getItem('last_hike_project_id');
+        if (lastId) {
+            const select = document.getElementById('projectSelect');
+            if (Array.from(select.options).some(opt => opt.value === lastId)) {
+                select.value = lastId;
+                select.dispatchEvent(new Event('change'));
+            }
+        }
+    };
+</script>
+</body>
+</html>
