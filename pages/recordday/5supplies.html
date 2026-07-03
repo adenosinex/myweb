@@ -115,9 +115,8 @@
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
-                    // 创建 Canvas 进行缩放
                     const canvas = document.createElement('canvas');
-                    const MAX_SIZE = 150; // 限制最大宽度/高度为 150px 足够做缩略图了
+                    const MAX_SIZE = 150; 
                     let width = img.width;
                     let height = img.height;
 
@@ -132,10 +131,8 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // 压缩为 JPEG，质量 0.7，这样生成的 base64 只有几KB大小
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     
-                    // 显示预览并保存到隐藏表单
                     document.getElementById('image-preview').src = dataUrl;
                     document.getElementById('image-preview').style.display = 'block';
                     document.getElementById('item-image-base64').value = dataUrl;
@@ -181,15 +178,16 @@
             renderList();
         }
 
+        // 核心修正：基于毫秒的实时扣减计算
         function calculateStatus(item) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const startDate = new Date(item.last_updated);
-            startDate.setHours(0, 0, 0, 0);
-            const diffDays = Math.max(0, Math.floor((today - startDate) / (1000 * 60 * 60 * 24)));
+            const now = new Date();
+            const startDate = new Date(item.last_updated || now);
+            
+            // 计算时间差，转为天数（带小数），实现平滑连续扣减
+            const diffDays = Math.max(0, (now - startDate) / (1000 * 60 * 60 * 24));
             let currentRemaining = Math.max(0, parseFloat((item.stock - (diffDays * item.daily_use)).toFixed(2)));
             let daysLeft = item.daily_use > 0 ? Math.floor(currentRemaining / item.daily_use) : 999;
-            let percent = Math.min(100, Math.max(0, (currentRemaining / item.stock) * 100));
+            let percent = item.stock > 0 ? Math.min(100, Math.max(0, (currentRemaining / item.stock) * 100)) : 0;
 
             let status = 'safe', statusText = '充足';
             if (daysLeft < 7 && daysLeft > 0) { status = 'warning'; statusText = '⚠️ 需采购'; } 
@@ -207,7 +205,6 @@
 
             itemsData.forEach(item => {
                 const stats = calculateStatus(item);
-                // 判断展示图片还是 Emoji
                 const imageContent = item.image 
                     ? `<img src="${item.image}" class="item-thumb">` 
                     : `<div class="item-thumb">${guessEmoji(item.name)}</div>`;
@@ -247,8 +244,8 @@
             document.getElementById('item-name').value = '';
             document.getElementById('item-stock').value = '';
             document.getElementById('item-daily').value = '';
-            document.getElementById('item-image').value = ''; // 清除文件选择
-            document.getElementById('item-image-base64').value = ''; // 清除图片数据
+            document.getElementById('item-image').value = ''; 
+            document.getElementById('item-image-base64').value = ''; 
             document.getElementById('image-preview').style.display = 'none';
             modal.style.display = 'flex';
         }
@@ -263,10 +260,10 @@
             document.getElementById('modal-title').innerText = '编辑 / 补货';
             document.getElementById('item-id').value = item.id;
             document.getElementById('item-name').value = item.name;
+            // 补货时输入框默认填入实时计算后的当前量
             document.getElementById('item-stock').value = stats.currentRemaining; 
             document.getElementById('item-daily').value = item.daily_use;
             
-            // 恢复图片预览
             if (item.image) {
                 document.getElementById('item-image-base64').value = item.image;
                 document.getElementById('image-preview').src = item.image;
@@ -283,13 +280,14 @@
             const name = document.getElementById('item-name').value.trim();
             const stock = parseFloat(document.getElementById('item-stock').value);
             const daily = parseFloat(document.getElementById('item-daily').value);
-            const imageBase64 = document.getElementById('item-image-base64').value; // 获取图片
+            const imageBase64 = document.getElementById('item-image-base64').value; 
 
             if (!name || isNaN(stock) || isNaN(daily)) {
                 alert("请填写完整的有效数据！");
                 return;
             }
 
+            // 保存时直接记录当前精确时间作为扣减基准点
             const nowStr = new Date().toISOString();
 
             if (id) {
@@ -314,85 +312,83 @@
                 syncToServer();
             }
         }
-// ================= CSV 导出功能 =================
-function exportToCSV() {
-    if (itemsData.length === 0) {
-        alert("没有数据可导出！");
-        return;
-    }
 
-    // 定义表头 (不包含 Base64 图片，因为 CSV 存储大数据图片会导致崩溃或不兼容)
-    const headers = ["名称", "当前库存", "每日消耗", "上次更新时间"];
-    
-    const rows = itemsData.map(item => {
-        // 计算当前真实的库存
-        const stats = calculateStatus(item);
-        return [
-            item.name,
-            stats.currentRemaining, // 导出实时剩余量
-            item.daily_use,
-            item.last_updated
-        ].join(",");
-    });
-
-    const csvContent = "\ufeff" + [headers.join(","), ...rows].join("\n"); // \ufeff 解决 Excel 中文乱码
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute("href", url);
-    link.setAttribute("download", `用品库存备份_${new Date().toLocaleDateString()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// ================= CSV 导入功能 =================
-function importFromCSV(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const text = e.target.result;
-        const lines = text.split(/\r?\n/);
-        
-        if (lines.length < 2) return;
-
-        const newItems = [];
-        // 从第二行开始遍历 (跳过表头)
-        for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(",");
-            if (cols.length < 3) continue;
-
-            const name = cols[0].trim();
-            const stock = parseFloat(cols[1]);
-            const daily = parseFloat(cols[2]);
-            const lastUpdated = cols[3] ? cols[3].trim() : new Date().toISOString();
-
-            if (name && !isNaN(stock) && !isNaN(daily)) {
-                newItems.push({
-                    id: (Date.now() + i).toString(), // 生成唯一ID
-                    name: name,
-                    stock: stock,
-                    daily_use: daily,
-                    last_updated: lastUpdated,
-                    image: "" // 导入时不包含图片
-                });
+        // ================= CSV 导出功能 =================
+        function exportToCSV() {
+            if (itemsData.length === 0) {
+                alert("没有数据可导出！");
+                return;
             }
+
+            const headers = ["名称", "当前库存", "每日消耗", "上次更新时间"];
+            
+            const rows = itemsData.map(item => {
+                const stats = calculateStatus(item);
+                return [
+                    item.name,
+                    stats.currentRemaining, // 导出实时剩余量
+                    item.daily_use,
+                    new Date().toISOString() // 修正：既然写入了计算后的当前剩余量，时间必须重置为当前，否则导入后会再次扣除时间差
+                ].join(",");
+            });
+
+            const csvContent = "\ufeff" + [headers.join(","), ...rows].join("\n"); 
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `用品库存备份_${new Date().toLocaleDateString()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
-        if (confirm(`识别到 ${newItems.length} 条数据，是否覆盖当前列表？`)) {
-            itemsData = newItems;
-            syncToServer();
-            alert("导入成功！");
+        // ================= CSV 导入功能 =================
+        function importFromCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split(/\r?\n/);
+                
+                if (lines.length < 2) return;
+
+                const newItems = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(",");
+                    if (cols.length < 3) continue;
+
+                    const name = cols[0].trim();
+                    const stock = parseFloat(cols[1]);
+                    const daily = parseFloat(cols[2]);
+                    const lastUpdated = cols[3] ? cols[3].trim() : new Date().toISOString();
+
+                    if (name && !isNaN(stock) && !isNaN(daily)) {
+                        newItems.push({
+                            id: (Date.now() + i).toString(), 
+                            name: name,
+                            stock: stock,
+                            daily_use: daily,
+                            last_updated: lastUpdated,
+                            image: "" 
+                        });
+                    }
+                }
+
+                if (confirm(`识别到 ${newItems.length} 条数据，是否覆盖当前列表？`)) {
+                    itemsData = newItems;
+                    syncToServer();
+                    alert("导入成功！");
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
         }
-        // 清空 input 方便下次选择同一文件
-        event.target.value = '';
-    };
-    reader.readAsText(file);
-}
+        
         loadData();
     </script>
 </body>

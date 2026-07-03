@@ -644,43 +644,40 @@ const PLANS = {
  
 Gym: {
   label: "Gym: 修补厂",
-  duration: 105,
+  duration: 160,
 
   exercises: [
 
-    // 1. 神经爆发（系统最高输出）
-    { name: "哑铃抓举", weight: 22, sets: 3, reps: 7, intensity: 7 },
+    // 1. 神经爆发
+    { name: "哑铃抓举", weight: 26, sets: 3, reps: 5, intensity: 8 },
     { name: "腰间俯卧撑进阶俄挺", sets: 4, reps: 5, intensity: 9 },
 
-    // 2. 下肢主力（重构：单纯自由力量）
-    { name: "保加利亚分腿蹲", weight: 32, sets: 3, reps: 8, intensity: 8 },
-    { name: "泽奇深蹲", sets: 3, reps: 6, intensity: 7 },
+    // 2. 下肢主力
+    { name: "保加利亚分腿蹲", weight: 40, sets: 3, reps: 5, intensity: 8 },
+    { name: "泽奇深蹲", weight: 50, sets: 3, reps: 6, intensity: 7 },
 
-    // 3. 上肢主力（推 + 拉分离）
+    // 3. 上肢主力
     { name: "高位下拉", weight: 100, sets: 3, reps: 5, intensity: 8 },
-    { name: "站姿单手推肩", weight: 18, sets: 3, reps: 8, intensity: 7 },
+    { name: "站姿单手推肩", weight: 22, sets: 3, reps: 8, intensity: 8 },
+    { name: "绳索划船", weight: 100, sets: 3, reps: 5, intensity: 8 },
 
-    // 4. 水平拉补偿（替代Pendlay：低冲击控制）
-    { name: "绳索划船", weight: 80, sets: 3, reps: 5, intensity: 8 },
-   
+    // 4. 全身稳定、握力
+    { name: "单手过顶行走", weight: 26, sets: 3, time: 40, intensity: 7 },
+    { name: "单手农夫行走", weight: 30, sets: 2, time: 40, intensity: 7 },
+    { name: "双手农夫行走", weight: 60, sets: 2, time: 20, intensity: 7 },
 
-    // 5. 后链与局部强化
+    // 5. 后链强化
     { name: "山羊挺身负重", weight: 20, sets: 5, reps: 10, intensity: 6 },
-    { name: "俯卧腿弯举", weight: 36, sets: 3, reps: 8, intensity: 6 },
-    { name: "面拉", weight: 20, sets: 2, reps: 16, intensity: 5 },
 
-    // 6. 核心控制
-    { name: "举腿碰杠（停顿2s）", sets: 3, reps: 5, intensity: 8 },
-    { name: "举腿碰杠（连续）", sets: 1, reps: 10, intensity: 6 },
+    // 6. 局部补强
+    { name: "俯卧腿弯举", weight: 35, sets: 3, reps: 10, intensity: 5 },
+    { name: "面拉", weight: 20, sets: 3, reps: 18, intensity: 5 },
+    { name: "单手悬挂", sets: 2, time: 3, intensity: 7 },
 
-    // 7. 稳定与握力收尾
-    { name: "单手悬挂", sets: 2, time: 5, intensity: 7 },
-    { name: "单手过顶行走", weight: 24, sets: 3, time: 40, intensity: 7 },
-    { name: "单手农夫行走", weight: 30, sets: 2, time: 30, intensity: 7 },
-    { name: "双手农夫行走", weight: 60, sets: 2, time: 20, intensity: 7 }
+    // 7. 可选
+    { name: "坐姿腿伸展（可选）", weight: 45, sets: 2, reps: 15, intensity: 5, optional: true }
   ]
 }
- 
 
 
 // ==========================================================

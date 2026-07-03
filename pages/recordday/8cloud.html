@@ -9,7 +9,6 @@
     <script src="/static/cdn/compressor.min.js"></script>
     <style> 
         [v-cloak] { display: none; } 
-        /* 自定义滚动条 */
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #e5e7eb; border-radius: 4px; }
     </style>
@@ -40,7 +39,7 @@
                         <div v-else class="w-12 h-12 rounded-xl bg-white border flex items-center justify-center text-2xl shrink-0">{{ guessEmoji(item.name, item.type) }}</div>
                         <div class="flex-grow min-w-0">
                             <h3 class="font-bold text-lg truncate">{{ item.name }}</h3>
-                            <span class="text-xs text-gray-500">{{ item.type === 'sub' ? '周期订阅' : '额度消耗' }}</span>
+                            <span class="text-xs text-gray-500">{{ item.type === 'sub' ? '周期订阅' : '额度消耗 (余额扣减)' }}</span>
                         </div>
                     </div>
                     
@@ -67,18 +66,18 @@
 
                 <div v-if="item.type === 'quota'" class="bg-white/50 rounded-xl p-3 border border-gray-100 mt-1">
                     <div class="flex justify-between items-end mb-2">
-                        <div class="text-sm text-gray-500">剩余可用额度</div>
+                        <div class="text-sm text-gray-500">剩余可用余额</div>
                         <div class="text-2xl font-black" :class="item.balance <= (item.reminderQuota || item.autoDeductAmount * 2) ? 'text-orange-500' : 'text-gray-800'">
                             {{ Number(item.balance).toFixed(2).replace(/\.00$/, '') }} <span class="text-xs font-normal text-gray-500">{{ item.unit }}</span>
                         </div>
                     </div>
                     <div class="flex justify-between text-xs border-t border-gray-200/60 pt-2 mt-2">
-                        <span class="text-gray-500">周期扣减量: {{ item.autoDeductAmount || 0 }} {{ item.unit }}</span>
-                        <span v-if="item.resetDay" class="font-bold text-gray-700">每月 {{ item.resetDay }} 日重置</span>
+                        <span class="text-gray-500">周期扣减: {{ item.autoDeductAmount || 0 }} {{ item.unit }}</span>
+                        <span v-if="item.resetDay" class="font-bold text-red-500">每月 {{ item.resetDay }} 日自动扣款</span>
                     </div>
                 </div>
 
-                <div class="flex-grow">
+                <!-- <div class="flex-grow">
                     <div class="text-[11px] text-gray-400 mb-1 border-b border-gray-100 pb-1">最近操作记录</div>
                     <div v-if="item.history && item.history.length" class="space-y-1 mt-2 max-h-24 overflow-y-auto custom-scrollbar text-xs">
                         <div v-for="rec in item.history.slice(0, 5)" :key="rec.date + Math.random()" class="flex justify-between text-gray-600">
@@ -86,15 +85,17 @@
                             <span v-if="item.type === 'sub'" class="text-green-600">
                                 {{ item.isFree ? '打卡/续期' : '续费 ¥' + (rec.cost ?? item.cost) }}
                             </span>
-                            <span v-if="item.type === 'quota'" class="text-blue-600">额度更新为: {{ rec.balance }} {{ item.unit }}</span>
+                            <span v-if="item.type === 'quota'" :class="rec.note === 'auto_deduct' ? 'text-red-500 font-bold' : 'text-blue-600'">
+                                {{ rec.note === 'auto_deduct' ? `系统扣款: -${rec.cost}` : '手动调整余额为' }}: {{ rec.balance }} {{ item.unit }}
+                            </span>
                         </div>
                     </div>
                     <div v-else class="text-xs text-gray-300 py-1">暂无记录</div>
-                </div>
+                </div> -->
 
                 <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-auto relative z-10 flex-wrap">
                     <button @click="openRecordModal(item)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded text-xs flex-grow text-center">
-                        {{ item.type === 'sub' ? '📝 登记续期' : '📊 扣减额度' }}
+                        {{ item.type === 'sub' ? '📝 登记续期' : '➕ 补充余额/手动扣减' }}
                     </button>
                     <button @click="openItemModal(item)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">编辑配置</button>
                     <button @click="deleteItem(item.id)" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded text-xs">删除</button>
@@ -108,12 +109,12 @@
                 <div class="space-y-4">
                     <div v-if="!itemForm.id" class="flex gap-2 bg-gray-100 p-1 rounded-lg">
                         <button @click="itemForm.type = 'sub'" :class="itemForm.type === 'sub' ? 'bg-white shadow text-black' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">📅 周期订阅</button>
-                        <button @click="itemForm.type = 'quota'" :class="itemForm.type === 'quota' ? 'bg-white shadow text-black' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">🗄️ 额度消耗</button>
+                        <button @click="itemForm.type = 'quota'" :class="itemForm.type === 'quota' ? 'bg-white shadow text-black' : 'text-gray-500'" class="flex-1 py-1.5 rounded text-sm font-bold transition-all">🗄️ 额度预存扣费</button>
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium mb-1">名称</label>
-                        <input v-model="itemForm.name" type="text" placeholder="如: Netflix 会员 / 每月流量包" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-200 outline-none">
+                        <input v-model="itemForm.name" type="text" placeholder="如: 电信20 / 阿里云服务器" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-200 outline-none">
                     </div>
 
                     <template v-if="itemForm.type === 'sub'">
@@ -166,25 +167,30 @@
                     <template v-if="itemForm.type === 'quota'">
                         <div class="grid grid-cols-2 gap-3">
                             <div class="col-span-2 md:col-span-1">
-                                <label class="block text-sm font-medium mb-1 text-blue-600">当前剩余可用额度</label>
+                                <label class="block text-sm font-medium mb-1 text-blue-600">建立时/当前剩余金额</label>
                                 <input v-model.number="itemForm.balance" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-lg">
                             </div>
                             <div class="col-span-2 md:col-span-1">
-                                <label class="block text-sm font-medium mb-1 text-blue-600">每次/周期自动扣减量</label>
-                                <input v-model.number="itemForm.autoDeductAmount" type="number" step="any" placeholder="单次一键扣减数值" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                <label class="block text-sm font-medium mb-1 text-blue-600">周期固定扣减量</label>
+                                <input v-model.number="itemForm.autoDeductAmount" type="number" step="any" placeholder="每月自动减掉的值" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-medium mb-1">计量单位</label>
-                                <input v-model="itemForm.unit" type="text" placeholder="如: GB, 次, 瓶" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                <input v-model="itemForm.unit" type="text" placeholder="如: ￥, GB, 次" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-1">剩余额度变色预警阈值</label>
-                                <input v-model.number="itemForm.reminderQuota" type="number" step="any" :placeholder="`默认 ${itemForm.autoDeductAmount * 2 || '两个周期'}`" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                <label class="block text-sm font-medium mb-1">变色预警阈值</label>
+                                <input v-model.number="itemForm.reminderQuota" type="number" step="any" :placeholder="`默认低于 ${itemForm.autoDeductAmount * 2 || '扣两次的值'} 飘黄`" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                            </div>
+
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-sm font-medium mb-1">起始/建档日期</label>
+                                <input v-model="itemForm.startDate" type="date" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
                             <div class="col-span-2 md:col-span-1">
-                                <label class="block text-sm font-medium mb-1">每月自动重置日(可选)</label>
-                                <input v-model.number="itemForm.resetDay" type="number" min="1" max="31" placeholder="填 1-31" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
+                                <label class="block text-sm font-medium mb-1">每月自动扣费日(可选)</label>
+                                <input v-model.number="itemForm.resetDay" type="number" min="1" max="31" placeholder="填 1-31，留空则仅手动操作" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none">
                             </div>
                         </div>
                     </template>
@@ -198,7 +204,7 @@
 
         <div v-if="modals.record" class="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
             <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-                <h3 class="text-lg font-bold mb-4">{{ currentTargetItem.type === 'sub' ? '登记续期 - ' : '扣减额度 - ' }}{{ currentTargetItem.name }}</h3>
+                <h3 class="text-lg font-bold mb-4">{{ currentTargetItem.type === 'sub' ? '登记续期 - ' : '余额调整 - ' }}{{ currentTargetItem.name }}</h3>
                 
                 <div class="space-y-4">
                     <div>
@@ -233,17 +239,17 @@
                     <template v-if="currentTargetItem.type === 'quota'">
                         <div>
                             <label class="block text-sm font-medium mb-1 flex justify-between">
-                                <span class="text-blue-600">调整后剩余可用额度 ({{ currentTargetItem.unit }})</span>
+                                <span class="text-blue-600">调整后的最新总余额 ({{ currentTargetItem.unit }})</span>
                             </label>
                             <div class="flex gap-2">
                                 <input v-model.number="recordForm.balance" type="number" step="any" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-lg">
                                 <button v-if="currentTargetItem.autoDeductAmount > 0" 
                                         @click="applyAutoDeduct"
                                         class="px-4 bg-orange-100 text-orange-600 hover:bg-orange-200 font-bold rounded-xl whitespace-nowrap">
-                                    一键扣减 {{ currentTargetItem.autoDeductAmount }}
+                                    一键扣除单次 (-{{ currentTargetItem.autoDeductAmount }})
                                 </button>
                             </div>
-                            <div class="text-xs text-gray-400 mt-2">提示：您可以直接输入校准后的最终额度，或点击一键扣减。</div>
+                            <div class="text-xs text-gray-400 mt-2">提示：若在此处充值，请直接修改为充值后的最终金额。</div>
                         </div>
                     </template>
                 </div>
@@ -262,18 +268,21 @@
 
         createApp({
             setup() {
-                const API_URL ='/tracker_data/sync/daily';
+                const API_URL = '/tracker_data/sync/daily';
                 const items = ref([]);
                 const modals = reactive({ item: false, record: false });
                 const currentTargetItem = ref(null);
                 
-                const getTodayStr = () => new Date().toISOString().split('T')[0];
+                const getTodayStr = () => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                };
 
                 const itemForm = reactive({ 
                     id: '', name: '', type: 'sub', image: '',
                     startDate: getTodayStr(), durationValue: 1, durationUnit: '月', expireDate: '', cost: 0, 
                     autoRenew: true, reminderDays: 7, isFree: false,
-                    balance: 10, unit: '次', resetDay: null, 
+                    balance: 10, unit: '次', resetDay: null, lastDeductDate: '',
                     reminderQuota: null, autoDeductAmount: 1
                 });
 
@@ -289,6 +298,8 @@
                         if (res.ok) {
                             const data = await res.json();
                             items.value = data[0]?.items || [];
+                            // 加载后立刻执行自动扣款检查
+                            checkAndApplyDeductions();
                         } else {
                             throw new Error("加载失败");
                         }
@@ -309,21 +320,85 @@
                     }
                 };
 
+                // --- 核心修正：时间轴追踪，补齐漏掉的历史扣费记录 ---
+                const checkAndApplyDeductions = () => {
+                    let needsSync = false;
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+
+                    items.value.forEach(item => {
+                        // 必须是 quota 模式，且设置了每月扣费日和扣费金额
+                        if (item.type === 'quota' && item.resetDay && item.autoDeductAmount > 0) {
+                            // 若 JSON 中没有记录上一次扣费时间，则以 startDate 为锚点
+                            let startBase = item.lastDeductDate || item.startDate;
+                            if (!startBase) return;
+
+                            let [y, m, d] = startBase.split('-');
+                            let cursorDate = new Date(y, m - 1, d);
+                            
+                            let nextMonth = cursorDate.getMonth();
+                            let nextYear = cursorDate.getFullYear();
+                            
+                            // 确定下一个有效扣费日：如果起始日已经大于等于扣费日，则推到下个月
+                            if (cursorDate.getDate() >= item.resetDay) {
+                                nextMonth++;
+                                if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+                            }
+                            
+                            let targetDate = new Date(nextYear, nextMonth, item.resetDay);
+
+                            // 当推算出的下一个扣款日期在今天或今天之前，并且余额充足，执行循环扣款
+                            while (targetDate <= today && item.balance > 0) {
+                                item.balance = Math.max(0, parseFloat((item.balance - item.autoDeductAmount).toFixed(4)));
+                                
+                                const dd = String(targetDate.getDate()).padStart(2, '0');
+                                const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+                                const yy = targetDate.getFullYear();
+                                const dateStr = `${yy}-${mm}-${dd}`;
+                                
+                                if (!item.history) item.history = [];
+                                item.history.unshift({
+                                    date: dateStr,
+                                    balance: item.balance,
+                                    note: 'auto_deduct',
+                                    cost: item.autoDeductAmount
+                                });
+
+                                item.lastDeductDate = dateStr;
+                                needsSync = true;
+
+                                // 游标移向再下一个月
+                                nextMonth++;
+                                if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+                                targetDate = new Date(nextYear, nextMonth, item.resetDay);
+                            }
+                        }
+                    });
+                    
+                    if (needsSync) syncData();
+                };
+
                 const calculateExpireDate = (startStr, val, unit) => {
                     if (!startStr || !val) return '';
-                    const d = new Date(startStr);
-                    if (unit === '年') d.setFullYear(d.getFullYear() + val);
-                    else if (unit === '月') d.setMonth(d.getMonth() + val);
-                    else if (unit === '天') d.setDate(d.getDate() + val);
-                    return d.toISOString().split('T')[0];
+                    const [y, m, d] = startStr.split('-');
+                    const date = new Date(y, m - 1, d);
+                    
+                    if (unit === '年') date.setFullYear(date.getFullYear() + val);
+                    else if (unit === '月') date.setMonth(date.getMonth() + val);
+                    else if (unit === '天') date.setDate(date.getDate() + val);
+                    
+                    const yy = date.getFullYear();
+                    const mm = String(date.getMonth() + 1).padStart(2, '0');
+                    const dd = String(date.getDate()).padStart(2, '0');
+                    return `${yy}-${mm}-${dd}`;
                 };
 
                 const getDaysLeft = (dateStr) => {
                     if (!dateStr) return 0;
-                    const target = new Date(dateStr);
-                    target.setHours(0,0,0,0);
+                    const [y, m, d] = dateStr.split('-');
+                    const target = new Date(y, m - 1, d);
                     const now = new Date();
-                    now.setHours(0,0,0,0);
+                    now.setHours(0, 0, 0, 0);
                     return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
                 };
 
@@ -334,7 +409,6 @@
                         const reminder = item.reminderDays ?? 7;
                         if (daysLeft <= reminder) return base + 'bg-red-50 border-red-200';
                     } else if (item.type === 'quota') {
-                        // 逻辑：如果没设预警阈值，默认按两倍扣减量算
                         const limit = (item.reminderQuota !== null && item.reminderQuota !== '' && item.reminderQuota !== undefined) 
                             ? item.reminderQuota 
                             : (item.autoDeductAmount * 2);
@@ -348,13 +422,14 @@
                         Object.assign(itemForm, {
                             ...item,
                             durationValue: item.durationValue || 1,
-                            durationUnit: item.durationUnit || '月'
+                            durationUnit: item.durationUnit || '月',
+                            startDate: item.startDate || getTodayStr() // 填补历史缺失
                         });
                     } else {
                         Object.assign(itemForm, { 
                             id: '', name: '', type: 'sub', image: '',
                             startDate: getTodayStr(), durationValue: 1, durationUnit: '月', expireDate: '', cost: 0, autoRenew: true, reminderDays: 7, isFree: false,
-                            balance: 10, unit: '次', resetDay: null, reminderQuota: null, autoDeductAmount: 1
+                            balance: 10, unit: '￥', resetDay: null, lastDeductDate: '', reminderQuota: null, autoDeductAmount: 1
                         });
                     }
                     modals.item = true;
@@ -362,12 +437,13 @@
 
                 const duplicateItem = (item) => {
                     const newItem = JSON.parse(JSON.stringify(item));
-                    newItem.id = ''; // 清除 ID，变为新建
+                    newItem.id = ''; 
                     newItem.name = newItem.name + ' (副本)';
-                    newItem.history = []; // 清空历史记录
-                    if (newItem.type === 'sub') {
-                        newItem.startDate = getTodayStr(); // 默认起始日设为今天
-                    } 
+                    newItem.history = []; 
+                    newItem.startDate = getTodayStr(); 
+                    if (newItem.type === 'quota') {
+                        newItem.lastDeductDate = ''; // 副本清除旧的自动扣款时间戳
+                    }
                     openItemModal(newItem);
                 };
 
@@ -444,12 +520,13 @@
                 const guessEmoji = (name, type) => {
                     const n = name.toLowerCase();
                     if(n.includes('netflix') || n.includes('爱奇艺') || n.includes('影视') || n.includes('视频')) return '🍿';
-                    if(n.includes('流量') || n.includes('宽带') || n.includes('话费')) return '📶';
-                    if(n.includes('云') || n.includes('网盘') || n.includes('icloud')) return '☁️';
+                    if(n.includes('流量') || n.includes('宽带') || n.includes('话费') || n.includes('移动') || n.includes('电信') || n.includes('联通')) return '📶';
+                    if(n.includes('云') || n.includes('网盘') || n.includes('icloud') || n.includes('115')) return '☁️';
                     if(n.includes('健身') || n.includes('gym') || n.includes('跑')) return '🏋️';
                     if(n.includes('阅读') || n.includes('书') || n.includes('杂志')) return '📖';
                     if(n.includes('电') || n.includes('水') || n.includes('燃气')) return '⚡';
                     if(n.includes('gpt') || n.includes('ai') || n.includes('api')) return '🤖';
+                    if(n.includes('车')) return '🚗';
                     return type === 'sub' ? '💳' : '📊';
                 };
 
