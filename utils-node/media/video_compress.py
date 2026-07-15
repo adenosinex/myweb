@@ -218,16 +218,24 @@ def get_video_info(filepath):
 # smart_analyze_video（原逻辑保留，仅 print 改用颜色）
 # ══════════════════════════════════════════════════════════════════════════════
 def smart_analyze_video(filepath, duration, original_size, codec, fps, config: CompressConfig):
-    predicted_ratio = 1.0
-    if codec in ['hevc', 'h265']:
-        predicted_ratio = 0.92
-    elif codec in ['h264']:
-        predicted_ratio = 0.65
-    else:
-        predicted_ratio = 0.45
+    # 计算当前实际码率 (kbps)
+    actual_bitrate_kbps = (original_size * 8 / 1024) / duration if duration > 0 else float('inf')
+
+    # 估算 CRF28 HEVC 下的保守基准码率 (kbps)
+    # 1080p 大致按 3500 kbps 估算，其他分辨率按面积比例放大
+    base_target_bitrate = 3500.0 * ((config.target_res / 1080.0) ** 2)
+    
+    # 理论压缩比 = 目标码率 / 原始码率
+    predicted_ratio = base_target_bitrate / actual_bitrate_kbps
+
+    # 针对非 HEVC 编码适度压低预测比率（因为转 HEVC 收益更大）
+    if codec in ['h264']:
+        predicted_ratio *= 0.75
+    elif codec not in ['hevc', 'h265']:
+        predicted_ratio *= 0.5
 
     if predicted_ratio > 0.9:
-        return True, "预计压缩收益不足10% (基于源编码推算)", config.crf, fps
+        return True, f"预计压缩收益不足10% (基于码率推算: 原 {actual_bitrate_kbps:.0f}kbps)", config.crf, fps
 
     target_fps = 30.0 if fps >= 50.0 else fps
     adjusted_crf = config.crf
@@ -280,8 +288,8 @@ def smart_analyze_video(filepath, duration, original_size, codec, fps, config: C
         ]
         try:
             subprocess.run(sample_cmd, timeout=30,
-                           stderr=subprocess.DEVNULL,   # ← 唯一改动：吞掉 x265 全部输出
-                           stdout=subprocess.DEVNULL)   # ← 顺手
+                           stderr=subprocess.DEVNULL,   
+                           stdout=subprocess.DEVNULL)   
             if os.path.exists(temp_out):
                 sample_size = os.path.getsize(temp_out)
                 os.remove(temp_out)
@@ -296,7 +304,6 @@ def smart_analyze_video(filepath, duration, original_size, codec, fps, config: C
                 os.remove(temp_out)
 
     return False, "", adjusted_crf, target_fps
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # compress_stream —— 压缩逻辑原样保留，仅替换输出层

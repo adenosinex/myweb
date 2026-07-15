@@ -2,7 +2,7 @@
 import os
 import sqlite3
 # 假设你的蓝图文件名为 hike_app.py，从中引入数据库路径和解析函数
-from  moduels.tech.1hike_extension  import DB_FILE, parse_gpx_to_csv
+from  moduels.tech.hike_extension  import DB_FILE, parse_gpx_to_csv
 
 def batch_regenerate():
     if not os.path.exists(DB_FILE):

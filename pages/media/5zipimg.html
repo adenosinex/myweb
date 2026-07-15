@@ -3,64 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <title>ZIP 资源浏览系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { width: 100vw; height: 100vh; overflow: hidden; background: #121212; color: #eee; display: flex; flex-direction: column; }
 
-        /* ================= 通用按钮样式 ================= */
+        /* ================= 通用与按钮样式 ================= */
         .btn { padding: 6px 15px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
         .btn:hover:not(:disabled) { background: #555; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; border-color: #333; }
         .btn-primary { background: #007acc; border-color: #007acc; }
         .btn-primary:hover:not(:disabled) { background: #0098ff; }
+        .btn-warning { background: #dcb67a; border-color: #dcb67a; color: #121212; font-weight: bold; }
+        .btn-warning:hover:not(:disabled) { background: #e5c490; }
 
-        /* ================= 视图 1：库视图 (搜索与文件夹层级) ================= */
-        #libraryView { display: flex; flex-direction: column; height: 100%; }
-        .top-bar { padding: 15px 20px; background: #1e1e1e; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        /* ================= 顶部导航与路径 ================= */
+        .top-bar { padding: 12px 20px; background: #1e1e1e; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 15px; }
+        .top-bar-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
         
-        .breadcrumbs { font-size: 1.1em; display: flex; gap: 8px; align-items: center; flex: 1; }
-        .breadcrumb-item { cursor: pointer; color: #aaa; transition: color 0.2s; }
-        .breadcrumb-item:hover { color: #fff; text-decoration: underline; }
-        .breadcrumb-separator { color: #555; }
-        .breadcrumb-current { color: #fff; font-weight: bold; }
+        .nav-buttons { display: flex; gap: 4px; }
+        .icon-btn { background: transparent; border: 1px solid transparent; color: #ccc; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-size: 1.1em; transition: 0.2s; }
+        .icon-btn:hover:not(:disabled) { background: #333; border-color: #555; }
+        .icon-btn:disabled { color: #555; cursor: not-allowed; }
+
+        .path-container { flex: 1; display: flex; align-items: center; background: #252526; border: 1px solid #444; border-radius: 4px; padding: 0 10px; height: 34px; cursor: text; overflow: hidden; transition: border-color 0.2s; }
+        .path-container:hover { border-color: #666; }
+        .path-container.focused { border-color: #007acc; background: #1e1e1e; }
         
-        .search-box { display: flex; gap: 8px; width: 350px; }
-        .search-box input { flex: 1; padding: 8px 12px; background: #2d2d30; border: 1px solid #444; color: white; border-radius: 4px; outline: none; }
+        .breadcrumbs { display: flex; align-items: center; width: 100%; height: 100%; font-size: 0.95em; overflow-x: auto; white-space: nowrap; user-select: none; }
+        .breadcrumbs::-webkit-scrollbar { display: none; }
+        .breadcrumb-item { cursor: pointer; color: #ccc; padding: 2px 4px; border-radius: 3px; }
+        .breadcrumb-item:hover { background: #444; color: #fff; }
+        .breadcrumb-separator { color: #666; font-size: 0.8em; margin: 0 4px; pointer-events: none; }
+        
+        .path-input { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 0.95em; width: 100%; display: none; font-family: inherit; }
+
+        .search-box { display: flex; gap: 8px; width: 280px; }
+        .search-box input { flex: 1; padding: 6px 12px; background: #2d2d30; border: 1px solid #444; color: white; border-radius: 4px; outline: none; }
         .search-box input:focus { border-color: #007acc; }
 
+        /* ================= 视图 1：库视图 (文件夹) ================= */
+        #libraryView { display: flex; flex-direction: column; height: 100%; flex: 1; overflow: hidden; }
         .explorer-grid { flex: 1; overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 15px; align-content: start; }
-        .file-card { background: #252526; border: 1px solid #333; border-radius: 6px; padding: 15px; cursor: pointer; transition: transform 0.1s, border-color 0.2s; display: flex; flex-direction: column; }
+        .file-card { background: #252526; border: 1px solid #333; border-radius: 6px; padding: 15px; cursor: pointer; transition: transform 0.1s, border-color 0.2s; display: flex; flex-direction: column; position: relative; }
         .file-card:hover { border-color: #007acc; transform: translateY(-2px); }
         .file-icon { font-size: 2.5em; margin-bottom: 10px; }
         .folder-icon { color: #dcb67a; }
         .zip-icon { color: #6fb3d2; }
-        .file-name { font-size: 0.95em; word-break: break-all; margin-bottom: 8px; color: #fff; flex: 1; line-height: 1.4; }
+        .file-name { font-size: 0.95em; word-break: break-all; margin-bottom: 8px; color: #fff; flex: 1; line-height: 1.4; padding-right: 25px; }
         .file-meta { font-size: 0.8em; color: #888; display: flex; justify-content: space-between; border-top: 1px solid #333; padding-top: 8px; }
 
-        /* ================= 视图 2：ZIP 画廊视图 (平铺多张图) ================= */
-        #galleryView { display: none; flex-direction: column; height: 100%; background: #0a0a0a; }
+        /* 收藏星标 */
+        .fav-star { position: absolute; top: 12px; right: 12px; font-size: 1.5em; color: #555; cursor: pointer; transition: color 0.2s, transform 0.1s; user-select: none; }
+        .fav-star:hover { transform: scale(1.2); }
+        .fav-star.active { color: #ffd700; text-shadow: 0 0 5px rgba(255,215,0,0.5); }
+        .thumb-fav-star { position: absolute; top: 5px; right: 5px; font-size: 1.8em; color: #888; text-shadow: 0 0 2px #000; transition: color 0.2s, transform 0.1s; cursor: pointer; z-index: 10; }
+        .thumb-fav-star:hover { transform: scale(1.2); }
+        .thumb-fav-star.active { color: #ffd700; }
+
+        /* ================= 视图 2：ZIP 画廊视图 ================= */
+        #galleryView { display: none; flex-direction: column; height: 100%; background: #0a0a0a; flex: 1; overflow: hidden; }
         .gallery-header { padding: 10px 20px; background: #1e1e1e; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; flex-shrink: 0; }
         .center-ctrl { display: flex; align-items: center; gap: 15px; flex: 1; justify-content: center; }
         .current-zip-title { font-size: 1.1em; color: #fff; font-weight: bold; max-width: 50vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* 画廊网格：限制最小高度以支持原生懒加载优化性能 */
         .gallery-grid { flex: 1; overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; align-content: start; }
         .thumb-container { background: #1e1e1e; border-radius: 6px; overflow: hidden; cursor: pointer; position: relative; border: 2px solid transparent; transition: border-color 0.2s; height: 350px; display: flex; flex-direction: column; }
         .thumb-container:hover { border-color: #007acc; }
         .thumb-container img { width: 100%; height: 100%; object-fit: cover; flex: 1; min-height: 0; }
         .thumb-title { background: rgba(0,0,0,0.8); color: #ddd; font-size: 12px; padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; flex-shrink: 0; }
 
-        /* ================= 视图 3：单图全屏放大阅读器 ================= */
+        /* ================= 视图 3：收藏夹视图 ================= */
+        #favoritesView { display: none; flex-direction: column; height: 100%; flex: 1; overflow-y: auto; padding: 20px; background: #121212; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px; margin-top: 20px; }
+        .section-header h2 { font-size: 1.2em; color: #dcb67a; }
+        .empty-state { color: #888; font-size: 0.9em; padding: 10px 0; }
+
+        /* ================= 视图 4：大图阅读器 ================= */
         .viewer-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 1000; display: none; flex-direction: column; }
         .viewer-tools { padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.6); position: absolute; top: 0; width: 100%; z-index: 1001; }
         .viewer-canvas { flex: 1; overflow: hidden; position: relative; display: flex; justify-content: center; align-items: center; cursor: grab; }
         .viewer-canvas:active { cursor: grabbing; }
         #viewerImage { transition: transform 0.1s ease-out; max-width: 100%; max-height: 100%; user-select: none; }
         
-        /* 状态提示 */
+        /* 状态提示层 */
         #loadingMsg { display: none; padding: 20px; color: #aaa; text-align: center; font-size: 1.2em; flex: 1; align-items: center; justify-content: center; height: 100%; }
+        #loadingOverlay { position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); color:white; display:none; flex-direction:column; justify-content:center; align-items:center; z-index: 2000; font-size: 1.2em; gap:15px; }
 
-        /* 滚动条 */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
@@ -69,39 +98,71 @@
 </head>
 <body>
 
-    <div id="libraryView">
-        <div class="top-bar">
-            <div class="breadcrumbs" id="breadcrumbs">
-                <span class="breadcrumb-item breadcrumb-current">🏠 首页</span>
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <div class="nav-buttons">
+                <button class="icon-btn" id="btnBack" onclick="goBack()" title="后退">⬅️</button>
+                <button class="icon-btn" id="btnForward" onclick="goForward()" title="前进">➡️</button>
+                <button class="icon-btn" id="btnUp" onclick="goUp()" title="返回上级目录">⬆️</button>
             </div>
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="搜索 ZIP 名称...">
+            
+            <div class="path-container" id="pathContainer" onclick="enablePathEdit()">
+                <div class="breadcrumbs" id="breadcrumbs"></div>
+                <input type="text" class="path-input" id="pathInput" onblur="submitPath()" onkeydown="if(event.key==='Enter') submitPath()">
             </div>
         </div>
+
+        <div class="search-box" id="searchBoxContainer">
+            <input type="text" id="searchInput" placeholder="搜索本层级或全局ZIP...">
+        </div>
+        <button class="btn btn-warning" onclick="openFavorites()" id="btnToggleFav">⭐ 我的收藏</button>
+    </div>
+
+    <div id="libraryView">
         <div class="explorer-grid" id="explorerGrid">
-            <div style="padding: 20px; color: #888;">正在加载数据...</div>
+            <div style="padding: 20px; color: #888;">正在获取资源列表...</div>
         </div>
     </div>
 
     <div id="galleryView">
         <div class="gallery-header">
-            <button class="btn btn-primary" onclick="exitGallery()">← 返回文件夹</button>
+            <button class="btn btn-primary" onclick="goUp()">← 返回上级</button>
             <div class="center-ctrl">
                 <button class="btn" id="btnPrevZip" onclick="switchZip(-1)" title="快捷键: W 或 ↑">↑ 上一包</button>
-                <div class="current-zip-title" id="currentZipTitle">加载中...</div>
+                <div style="text-align: center; line-height: 1.2;">
+                    <div class="current-zip-title" id="currentZipTitle">加载中...</div>
+                    <div id="zipProgressInfo" style="font-size: 0.85em; color: #aaa; margin-top: 4px;"></div>
+                </div>
                 <button class="btn" id="btnNextZip" onclick="switchZip(1)" title="快捷键: S 或 ↓">↓ 下一包</button>
             </div>
-            <div style="width: 100px;"></div> </div>
-        
-        <div id="loadingMsg">正在解析 ZIP 目录...</div>
-        
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" id="btnToggleCurrentZipFav" onclick="toggleCurrentZipFav()" title="快捷键: Z">⭐ 收藏此包</button>
+            </div>
+        </div>
+        <div id="loadingMsg">正在解析目录...</div>
         <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+
+    <div id="favoritesView">
+        <div class="section-header" style="margin-top: 0;">
+            <h2>📁 收藏的压缩包 (<span id="favZipsCount">0</span>)</h2>
+            <button class="btn" onclick="exportZipsCSV()">⬇️ 导出记录为 CSV</button>
+        </div>
+        <div class="explorer-grid" id="favZipsGrid" style="padding: 0; min-height: 100px;"></div>
+
+        <div class="section-header">
+            <h2>🖼️ 收藏的图片 (<span id="favImagesCount">0</span>)</h2>
+            <button class="btn btn-primary" onclick="downloadFavImagesZIP()">📦 打包下载图片 (ZIP)</button>
+        </div>
+        <div class="gallery-grid" id="favImagesGrid" style="padding: 0;"></div>
     </div>
 
     <div id="viewerModal" class="viewer-modal">
         <div class="viewer-tools">
             <span id="viewerCounter" style="color: #ddd;">0 / 0</span>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn" id="btnToggleImgFav" onclick="toggleCurrentImgFav()" title="快捷键: Z">⭐ 收藏此图</button>
+                <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
                 <button class="btn" onclick="resetViewerTransform()">还原缩放</button>
                 <button class="btn" onclick="closeViewer()">关闭大图 (Esc)</button>
             </div>
@@ -111,35 +172,106 @@
         </div>
     </div>
 
+    <div id="loadingOverlay">
+        <div id="overlayText">正在处理...</div>
+    </div>
+
     <script>
-        // ================= 全局状态管理 =================
+        // ================= 本地持久化 (LocalStorage) =================
+        let favZips = JSON.parse(localStorage.getItem('favZips') || '[]');
+        let favImages = JSON.parse(localStorage.getItem('favImages') || '[]');
+
+        function saveFavs() {
+            localStorage.setItem('favZips', JSON.stringify(favZips));
+            localStorage.setItem('favImages', JSON.stringify(favImages));
+        }
+
+        // ================= 全局上下文与历史路由 =================
         let fileSystemTree = { type: 'folder', name: '首页', children: {}, zipCount: 0, imgCount: 0 };
         let allZipsList = [];
-        let currentPath = []; 
         
-        // 记录搜索与平铺顺序
+        let currentPath = []; 
         let displayedZips = []; 
         let currentZipIndex = -1;  
-
-        let currentZipImages = []; 
-        let currentZipName = "";   
-        let currentAgentIdx = 0;   
+        let activeImageList = []; 
         let currentImgIndex = 0;   
+        
+        let currentZipName = "";
+        let currentAgentIdx = 0;
+        let currentMainView = 'library'; // 'library', 'gallery', 'favorites'
 
-        // 画布缩放拖拽状态
+        let navHistory = [];
+        let navIndex = -1;
+        let isNavigating = false;
+
         let scale = 1, translateX = 0, translateY = 0;
         let isDragging = false, startDragX = 0, startDragY = 0;
 
         document.addEventListener('DOMContentLoaded', loadLibrary);
 
-        // ================= 数据初始化与文件树构建 =================
+        // ================= 历史路由机制 =================
+        function pushHistoryState(state) {
+            if (isNavigating) return;
+            navHistory.splice(navIndex + 1);
+            navHistory.push(state);
+            navIndex++;
+            updateNavButtons();
+            updateBreadcrumbs();
+        }
+
+        function updateNavButtons() {
+            document.getElementById('btnBack').disabled = navIndex <= 0;
+            document.getElementById('btnForward').disabled = navIndex >= navHistory.length - 1;
+            document.getElementById('btnUp').disabled = (currentMainView !== 'library' && currentMainView !== 'gallery') || (currentMainView === 'library' && currentPath.length === 0);
+        }
+
+        function goBack() {
+            if (navIndex > 0) {
+                navIndex--;
+                restoreHistoryState(navHistory[navIndex]);
+            }
+        }
+
+        function goForward() {
+            if (navIndex < navHistory.length - 1) {
+                navIndex++;
+                restoreHistoryState(navHistory[navIndex]);
+            }
+        }
+
+        function goUp() {
+            if (currentMainView === 'library' && currentPath.length > 0) {
+                renderExplorer(currentPath.slice(0, -1));
+            } else if (currentMainView === 'gallery') {
+                renderExplorer(currentPath);
+            }
+        }
+
+        function restoreHistoryState(state) {
+            isNavigating = true;
+            document.getElementById('searchInput').value = ''; 
+            
+            if (state.view === 'library') {
+                _execRenderExplorer(state.path);
+            } else if (state.view === 'gallery') {
+                currentPath = state.parentPath; 
+                _execOpenGallery(state.zipName, state.agentIdx, state.zipIndex);
+            } else if (state.view === 'favorites') {
+                _execOpenFavorites();
+            }
+            
+            isNavigating = false;
+            updateNavButtons();
+            updateBreadcrumbs();
+        }
+
+        // ================= 初始化与数据层 =================
         function buildFileSystem(zips) {
             let root = { type: 'folder', name: '首页', children: {}, zipCount: 0, imgCount: 0 };
             zips.forEach(z => {
                 const parts = z.zip_name.split('/');
                 let curr = root;
-                curr.zipCount++;
-                curr.imgCount += z.count;
+                curr.zipCount++; curr.imgCount += z.count;
 
                 for (let i = 0; i < parts.length - 1; i++) {
                     const folderName = parts[i];
@@ -147,11 +279,9 @@
                         curr.children[folderName] = { type: 'folder', name: folderName, children: {}, zipCount: 0, imgCount: 0 };
                     }
                     curr = curr.children[folderName];
-                    curr.zipCount++;
-                    curr.imgCount += z.count;
+                    curr.zipCount++; curr.imgCount += z.count;
                 }
-                const fileName = parts[parts.length - 1];
-                curr.children[fileName] = { type: 'file', name: fileName, data: z };
+                curr.children[parts[parts.length - 1]] = { type: 'file', name: parts[parts.length - 1], data: z };
             });
             return root;
         }
@@ -161,28 +291,136 @@
                 const res = await fetch('/zipapi/library'); 
                 allZipsList = await res.json();
                 fileSystemTree = buildFileSystem(allZipsList);
-                renderExplorer(currentPath);
+                renderExplorer([]); 
             } catch (err) {
-                document.getElementById('explorerGrid').innerHTML = `<div style="color:#ff6b6b; padding: 20px;">无法连接到后端接口，请检查服务。</div>`;
+                document.getElementById('explorerGrid').innerHTML = `<div style="color:#ff6b6b; padding: 20px;">无法连接到资源节点。</div>`;
             }
         }
 
-        // ================= 视图 1：渲染资源管理器 =================
+        function getImageUrl(zipName, path, agent = 0) {
+            return `/zipapi/image?agent=${agent}&zip=${encodeURIComponent(zipName)}&path=${encodeURIComponent(path)}`;
+        }
+
+        // ================= 交互式路径栏 =================
+        function updateBreadcrumbs() {
+            const bc = document.getElementById('breadcrumbs');
+            const pathInput = document.getElementById('pathInput');
+            
+            let html = `<span class="breadcrumb-item" onclick="navigateToBreadcrumb(-1, event)">首页</span>`;
+            let pathString = "首页";
+
+            if (currentMainView === 'favorites') {
+                html += `<span class="breadcrumb-separator">▶</span><span class="breadcrumb-item">我的收藏</span>`;
+                pathString = "首页/我的收藏";
+            } else {
+                currentPath.forEach((folder, idx) => {
+                    html += `<span class="breadcrumb-separator">▶</span>`;
+                    html += `<span class="breadcrumb-item" onclick="navigateToBreadcrumb(${idx}, event)">${folder}</span>`;
+                });
+                
+                if (currentMainView === 'gallery') {
+                    const zipShortName = currentZipName.split('/').pop();
+                    html += `<span class="breadcrumb-separator">▶</span><span class="breadcrumb-item">${zipShortName}</span>`;
+                    pathString = `首页/${currentZipName}`;
+                } else {
+                    pathString = currentPath.length ? `首页/${currentPath.join('/')}` : "首页";
+                }
+            }
+            
+            bc.innerHTML = html;
+            pathInput.value = pathString;
+        }
+
+        function navigateToBreadcrumb(index, event) {
+            if (event) event.stopPropagation(); 
+            if (index === -1) {
+                renderExplorer([]);
+            } else {
+                renderExplorer(currentPath.slice(0, index + 1));
+            }
+        }
+
+        function enablePathEdit() {
+            document.getElementById('breadcrumbs').style.display = 'none';
+            const input = document.getElementById('pathInput');
+            input.style.display = 'block';
+            input.focus();
+            input.select();
+            document.getElementById('pathContainer').classList.add('focused');
+        }
+
+        function submitPath() {
+            const container = document.getElementById('pathContainer');
+            const input = document.getElementById('pathInput');
+            const bc = document.getElementById('breadcrumbs');
+            
+            container.classList.remove('focused');
+            input.style.display = 'none';
+            bc.style.display = 'flex';
+            
+            let val = input.value.trim().replace(/\\/g, '/');
+            if (val === '') return;
+            
+            if (val.startsWith('首页')) val = val.substring(2);
+            if (val.startsWith('/')) val = val.substring(1);
+            if (val.endsWith('/')) val = val.substring(0, val.length - 1);
+            
+            if (val === '我的收藏') { openFavorites(); return; }
+
+            let targetPath = val ? val.split('/') : [];
+            let curr = fileSystemTree;
+            let valid = true;
+            for (let p of targetPath) {
+                if (curr.children && curr.children[p]) { curr = curr.children[p]; } 
+                else { valid = false; break; }
+            }
+            
+            if (valid) {
+                if (curr.type === 'folder') {
+                    renderExplorer(targetPath);
+                } else if (curr.type === 'file') {
+                    const z = curr.data;
+                    const parentPath = targetPath.slice(0, -1);
+                    
+                    let parentNode = fileSystemTree;
+                    for(let f of parentPath) parentNode = parentNode.children[f];
+                    const items = Object.values(parentNode.children).sort((a,b)=> a.type!==b.type ? (a.type==='folder'?-1:1) : a.name.localeCompare(b.name));
+                    displayedZips = items.filter(i=>i.type==='file').map(i=>i.data);
+                    
+                    currentPath = parentPath;
+                    openGallery(z.zip_name, z.agent_idx || 0, displayedZips.indexOf(z));
+                }
+            } else {
+                alert("找不到指定的路径，请检查拼写是否正确！\n(例如: 首页/目录A/子目录B)");
+                updateBreadcrumbs(); 
+            }
+        }
+
+        // ================= 视图 1：库视图 (文件浏览器) =================
         function renderExplorer(pathArray) {
+            _execRenderExplorer(pathArray);
+            if (!isNavigating) pushHistoryState({ view: 'library', path: [...pathArray] });
+        }
+
+        function _execRenderExplorer(pathArray) {
+            currentMainView = 'library';
+            currentPath = pathArray;
+            
             document.getElementById('libraryView').style.display = 'flex';
             document.getElementById('galleryView').style.display = 'none';
-            currentPath = pathArray;
-            updateBreadcrumbs();
+            document.getElementById('favoritesView').style.display = 'none';
+            document.getElementById('searchBoxContainer').style.visibility = 'visible';
+            
+            const btnFav = document.getElementById('btnToggleFav');
+            btnFav.innerText = "⭐ 我的收藏";
+            btnFav.onclick = openFavorites;
 
             let currNode = fileSystemTree;
-            for (let folder of pathArray) {
-                currNode = currNode.children[folder];
-            }
+            for (let folder of pathArray) { currNode = currNode.children[folder]; }
 
             const explorer = document.getElementById('explorerGrid');
             if (!currNode || Object.keys(currNode.children).length === 0) {
-                explorer.innerHTML = `<div style="padding: 20px; color:#888; grid-column: 1 / -1;">此文件夹为空</div>`;
-                return;
+                explorer.innerHTML = `<div style="padding: 20px; color:#888; grid-column: 1 / -1;">此文件夹为空</div>`; return;
             }
 
             const items = Object.values(currNode.children).sort((a, b) => {
@@ -190,7 +428,6 @@
                 return a.name.localeCompare(b.name);
             });
 
-            // 维护当前层级的 zip 列表，用于画廊中的上一包/下一包切换
             displayedZips = items.filter(item => item.type === 'file').map(item => item.data);
 
             explorer.innerHTML = items.map(item => {
@@ -203,129 +440,255 @@
                                 <span>子文件: ${item.zipCount}</span>
                                 <span>图: ${item.imgCount}</span>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 } else {
                     const z = item.data;
                     const zipIndex = displayedZips.indexOf(z);
+                    const agentIdx = z.agent_idx || 0;
+                    const isFav = favZips.some(f => f.zipName === z.zip_name && f.agentIdx === agentIdx);
+                    
                     return `
-                        <div class="file-card" onclick="openGallery('${z.zip_name}', ${z.agent_idx}, ${zipIndex})">
+                        <div class="file-card" onclick="openGallery('${z.zip_name}', ${agentIdx}, ${zipIndex})">
+                            <div class="fav-star ${isFav ? 'active' : ''}" onclick="toggleZipFav('${z.zip_name}', ${agentIdx}, event)">${isFav ? '★' : '☆'}</div>
                             <div class="file-icon zip-icon">📦</div>
                             <div class="file-name" title="${item.name}">${item.name}</div>
                             <div class="file-meta">
                                 <span>图片: ${z.count} 张</span>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }
             }).join('');
         }
 
-        function enterFolder(folderName) {
-            renderExplorer([...currentPath, folderName]);
-        }
+        function enterFolder(folderName) { renderExplorer([...currentPath, folderName]); }
 
-        function navigateToBreadcrumb(index) {
-            if (index === -1) {
-                renderExplorer([]);
-            } else {
-                renderExplorer(currentPath.slice(0, index + 1));
-            }
-        }
-
-        function updateBreadcrumbs() {
-            const bc = document.getElementById('breadcrumbs');
-            let html = `<span class="breadcrumb-item" onclick="navigateToBreadcrumb(-1)">🏠 首页</span>`;
-            
-            currentPath.forEach((folder, idx) => {
-                html += `<span class="breadcrumb-separator">/</span>`;
-                html += `<span class="breadcrumb-item" onclick="navigateToBreadcrumb(${idx})">${folder}</span>`;
-            });
-            bc.innerHTML = html;
-        }
-
+        // ================= 搜索功能 =================
         document.getElementById('searchInput').addEventListener('input', function(e) {
             const query = e.target.value.toLowerCase().trim();
-            if (!query) {
-                renderExplorer(currentPath);
-                return;
-            }
+            if (!query) { _execRenderExplorer(currentPath); return; }
 
-            // 全局搜索并扁平化展示
             displayedZips = allZipsList.filter(z => z.zip_name.toLowerCase().includes(query));
-            document.getElementById('breadcrumbs').innerHTML = `<span class="breadcrumb-current">🔍 搜索结果: ${query}</span>`;
-
+            
             const explorer = document.getElementById('explorerGrid');
             if (displayedZips.length === 0) {
-                explorer.innerHTML = `<div style="padding: 20px; color:#888;">无匹配结果</div>`;
-                return;
+                explorer.innerHTML = `<div style="padding: 20px; color:#888;">无匹配结果</div>`; return;
             }
 
-            explorer.innerHTML = displayedZips.map((z, idx) => `
-                <div class="file-card" onclick="openGallery('${z.zip_name}', ${z.agent_idx}, ${idx})">
-                    <div class="file-icon zip-icon">📦</div>
-                    <div class="file-name" title="${z.zip_name}" style="font-size: 0.85em;">${z.zip_name}</div>
-                    <div class="file-meta"><span>包含 ${z.count} 张图</span></div>
-                </div>
-            `).join('');
+            explorer.innerHTML = displayedZips.map((z, idx) => {
+                const agentIdx = z.agent_idx || 0;
+                const isFav = favZips.some(f => f.zipName === z.zip_name && f.agentIdx === agentIdx);
+                return `
+                    <div class="file-card" onclick="openGallery('${z.zip_name}', ${agentIdx}, ${idx})">
+                        <div class="fav-star ${isFav ? 'active' : ''}" onclick="toggleZipFav('${z.zip_name}', ${agentIdx}, event)">${isFav ? '★' : '☆'}</div>
+                        <div class="file-icon zip-icon">📦</div>
+                        <div class="file-name" title="${z.zip_name}" style="font-size: 0.85em;">${z.zip_name}</div>
+                        <div class="file-meta"><span>包含 ${z.count} 张图</span></div>
+                    </div>`;
+            }).join('');
         });
 
-        function getImageUrl(zipName, path, agent = 0) {
-            return `/zipapi/image?agent=${agent}&zip=${encodeURIComponent(zipName)}&path=${encodeURIComponent(path)}`;
+        // ================= 收藏操作封装 =================
+        function toggleZipFav(zipName, agentIdx, event) {
+            if (event) event.stopPropagation();
+            const idx = favZips.findIndex(f => f.zipName === zipName && f.agentIdx === agentIdx);
+            if (idx >= 0) { favZips.splice(idx, 1); } 
+            else { favZips.push({ zipName, agentIdx, timestamp: Date.now() }); }
+            saveFavs();
+            
+            if (currentMainView === 'library') _execRenderExplorer(currentPath);
+            if (currentMainView === 'favorites') _execOpenFavorites();
         }
 
-        // ================= 视图 2：渲染 ZIP 内部多图画廊 =================
-        async function openGallery(zipName, agentIdx, zipIndexInList) {
+        function toggleCurrentZipFav() {
+            if (!currentZipName) return;
+            toggleZipFav(currentZipName, currentAgentIdx, null);
+            updateGalleryHeaderBtn(); 
+        }
+        
+        function updateGalleryHeaderBtn() {
+            const isZipFav = favZips.some(f => f.zipName === currentZipName && f.agentIdx === currentAgentIdx);
+            const btnZipFav = document.getElementById('btnToggleCurrentZipFav');
+            btnZipFav.innerText = isZipFav ? "★ 取消收藏本包" : "⭐ 收藏此包";
+            btnZipFav.style.color = isZipFav ? "#ffd700" : "white";
+        }
+
+        function toggleImgFav(zipName, path, agentIdx, event) {
+            if (event) event.stopPropagation();
+            const idx = favImages.findIndex(f => f.zipName === zipName && f.path === path && f.agentIdx === agentIdx);
+            if (idx >= 0) { favImages.splice(idx, 1); } 
+            else { favImages.push({ zipName, path, agentIdx, timestamp: Date.now() }); }
+            saveFavs();
+            
+            if (currentMainView === 'gallery' && event) {
+                const star = event.target;
+                if(idx >= 0) { star.classList.remove('active'); star.innerText = '☆'; } 
+                else { star.classList.add('active'); star.innerText = '★'; }
+            } else if (currentMainView === 'favorites') {
+                _execOpenFavorites();
+            }
+        }
+
+        // ================= 视图 3：收藏夹视图 =================
+        function openFavorites() {
+            _execOpenFavorites();
+            if (!isNavigating) pushHistoryState({ view: 'favorites' });
+        }
+
+        function _execOpenFavorites() {
+            currentMainView = 'favorites';
+            document.getElementById('libraryView').style.display = 'none';
+            document.getElementById('galleryView').style.display = 'none';
+            document.getElementById('favoritesView').style.display = 'flex';
+            document.getElementById('searchBoxContainer').style.visibility = 'hidden';
+            
+            const btnFav = document.getElementById('btnToggleFav');
+            btnFav.innerText = "🏠 回到首页";
+            btnFav.onclick = () => renderExplorer(currentPath);
+
+            document.getElementById('favZipsCount').innerText = favZips.length;
+            document.getElementById('favImagesCount').innerText = favImages.length;
+
+            const zipGrid = document.getElementById('favZipsGrid');
+            zipGrid.innerHTML = favZips.length === 0 ? `<div class="empty-state">暂无收藏</div>` : favZips.map(z => `
+                <div class="file-card" onclick="openGallery('${z.zipName}', ${z.agentIdx}, -1)">
+                    <div class="fav-star active" onclick="toggleZipFav('${z.zipName}', ${z.agentIdx}, event)">★</div>
+                    <div class="file-icon zip-icon">📦</div>
+                    <div class="file-name" title="${z.zipName}" style="font-size: 0.85em;">${z.zipName}</div>
+                </div>
+            `).join('');
+
+            const imgGrid = document.getElementById('favImagesGrid');
+            activeImageList = favImages.map(img => ({ zipName: img.zipName, path: img.path, agentIdx: img.agentIdx }));
+            
+            imgGrid.innerHTML = favImages.length === 0 ? `<div class="empty-state">暂无收藏</div>` : favImages.map((img, idx) => `
+                <div class="thumb-container" onclick="openViewer(${idx})">
+                    <div class="thumb-fav-star active" onclick="toggleImgFav('${img.zipName}', '${img.path}', ${img.agentIdx}, event)">★</div>
+                    <img src="${getImageUrl(img.zipName, img.path, img.agentIdx)}" loading="lazy">
+                    <div class="thumb-title" title="${img.path.split('/').pop()}">${img.path.split('/').pop()}</div>
+                </div>
+            `).join('');
+        }
+
+        function exportZipsCSV() {
+            if (favZips.length === 0) return alert("没有可以导出的压缩包记录");
+            let csv = "ZIP名称,节点索引,收藏时间\n";
+            favZips.forEach(z => {
+                const date = new Date(z.timestamp).toLocaleString();
+                csv += `"${z.zipName}",${z.agentIdx},"${date}"\n`;
+            });
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], {type: "text/csv;charset=utf-8"}); 
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ZIP收藏记录_${new Date().getTime()}.csv`;
+            a.click();
+        }
+
+        async function downloadFavImagesZIP() {
+            if (favImages.length === 0) return alert("没有可打包的图片");
+            
+            const overlay = document.getElementById('loadingOverlay');
+            const text = document.getElementById('overlayText');
+            overlay.style.display = 'flex';
+            
+            try {
+                const zip = new JSZip();
+                for (let i = 0; i < favImages.length; i++) {
+                    const img = favImages[i];
+                    text.innerText = `正在下载并处理: ${i + 1} / ${favImages.length}`;
+                    
+                    const url = getImageUrl(img.zipName, img.path, img.agentIdx);
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`无法获取图片 ${img.path}`);
+                    
+                    const blob = await response.blob();
+                    
+                    let origImgName = img.path.split('/').pop();
+                    let origZipName = img.zipName.split('/').pop().replace(/\.zip$/i, '');
+                    let safeName = `${origZipName} - ${origImgName}`.replace(/[\\/:*?"<>|]/g, "_");
+                    
+                    let orderPrefix = String(i + 1).padStart(3, '0');
+                    zip.file(`${orderPrefix}_${safeName}`, blob);
+                }
+                
+                text.innerText = "文件获取完毕，正在生成 ZIP 文件，请勿关闭页面...";
+                const content = await zip.generateAsync({type:"blob"});
+                
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `图片收藏合集_${new Date().getTime()}.zip`;
+                a.click();
+            } catch(e) {
+                alert("打包失败: " + e.message);
+            } finally {
+                overlay.style.display = 'none';
+            }
+        }
+
+        // ================= 视图 2：画廊视图 =================
+        function openGallery(zipName, agentIdx, zipIndexInList) {
+            _execOpenGallery(zipName, agentIdx, zipIndexInList);
+            if (!isNavigating) pushHistoryState({ view: 'gallery', zipName, agentIdx, zipIndex: zipIndexInList, parentPath: [...currentPath] });
+        }
+
+        async function _execOpenGallery(zipName, agentIdx, zipIndexInList) {
+            currentMainView = 'gallery';
             currentZipName = zipName;
             currentAgentIdx = agentIdx !== undefined ? agentIdx : 0;
             currentZipIndex = zipIndexInList;
             
             document.getElementById('libraryView').style.display = 'none';
+            document.getElementById('favoritesView').style.display = 'none';
             document.getElementById('galleryView').style.display = 'flex';
+            document.getElementById('searchBoxContainer').style.visibility = 'hidden';
             
             document.getElementById('currentZipTitle').innerText = zipName.split('/').pop();
-            document.getElementById('currentZipTitle').title = zipName;
+            updateGalleryHeaderBtn(); 
             
-            // 更新上下包按钮状态
+            // 显示目录切换进度
+            if (currentZipIndex >= 0 && displayedZips.length > 0) {
+                document.getElementById('zipProgressInfo').innerText = `当前目录进度: ${currentZipIndex + 1} / ${displayedZips.length}`;
+            } else {
+                document.getElementById('zipProgressInfo').innerText = '';
+            }
+            
             document.getElementById('btnPrevZip').disabled = (currentZipIndex <= 0);
-            document.getElementById('btnNextZip').disabled = (currentZipIndex >= displayedZips.length - 1);
+            document.getElementById('btnNextZip').disabled = (currentZipIndex < 0 || currentZipIndex >= displayedZips.length - 1);
 
             document.getElementById('galleryGrid').innerHTML = '';
             document.getElementById('loadingMsg').style.display = 'flex';
 
             try {
                 const res = await fetch(`/zipapi/list?agent=${currentAgentIdx}&zip=${encodeURIComponent(zipName)}`);
-                currentZipImages = await res.json();
+                const paths = await res.json();
+                
+                activeImageList = paths.map(p => ({ zipName: zipName, path: p, agentIdx: currentAgentIdx }));
                 
                 document.getElementById('loadingMsg').style.display = 'none';
-                
-                // 渲染大图网格（利用CSS固定高度+lazy懒加载优化性能）
-                document.getElementById('galleryGrid').innerHTML = currentZipImages.map((imgPath, idx) => `
+                document.getElementById('galleryGrid').innerHTML = activeImageList.map((img, idx) => {
+                    const isFav = favImages.some(f => f.zipName === img.zipName && f.path === img.path && f.agentIdx === img.agentIdx);
+                    return `
                     <div class="thumb-container" onclick="openViewer(${idx})">
-                        <img src="${getImageUrl(zipName, imgPath, currentAgentIdx)}" loading="lazy">
-                        <div class="thumb-title" title="${imgPath.split('/').pop()}">${imgPath.split('/').pop()}</div>
+                        <div class="thumb-fav-star ${isFav ? 'active' : ''}" onclick="toggleImgFav('${img.zipName}', '${img.path}', ${img.agentIdx}, event)">${isFav ? '★' : '☆'}</div>
+                        <img src="${getImageUrl(img.zipName, img.path, img.agentIdx)}" loading="lazy">
+                        <div class="thumb-title" title="${img.path.split('/').pop()}">${img.path.split('/').pop()}</div>
                     </div>
-                `).join('');
+                `}).join('');
             } catch (err) {
                 document.getElementById('loadingMsg').innerText = "加载图片列表失败";
             }
-        }
-
-        function exitGallery() {
-            document.getElementById('galleryView').style.display = 'none';
-            document.getElementById('libraryView').style.display = 'flex';
-            document.getElementById('galleryGrid').innerHTML = ''; // 释放 DOM 内存
         }
 
         function switchZip(direction) {
             const nextIdx = currentZipIndex + direction;
             if (nextIdx >= 0 && nextIdx < displayedZips.length) {
                 const nextZip = displayedZips[nextIdx];
-                openGallery(nextZip.zip_name, nextZip.agent_idx, nextIdx);
+                openGallery(nextZip.zip_name, nextZip.agent_idx || 0, nextIdx);
             }
         }
 
-        // ================= 视图 3：全屏放大阅读器 =================
+        // ================= 视图 4：全屏阅读器 =================
         function openViewer(index) {
             currentImgIndex = index;
             document.getElementById('viewerModal').style.display = 'flex';
@@ -335,22 +698,36 @@
 
         function closeViewer() {
             document.getElementById('viewerModal').style.display = 'none';
+            if (currentMainView === 'favorites') _execOpenFavorites(); 
         }
 
         function updateViewerImage() {
-            if (currentZipImages.length === 0) return;
-            const imgPath = currentZipImages[currentImgIndex];
+            if (activeImageList.length === 0) return;
+            const imgMeta = activeImageList[currentImgIndex];
             
-            document.getElementById('viewerImage').src = getImageUrl(currentZipName, imgPath, currentAgentIdx);
-            document.getElementById('viewerCounter').innerText = `${currentImgIndex + 1} / ${currentZipImages.length} - ${imgPath.split('/').pop()}`;
+            document.getElementById('viewerImage').src = getImageUrl(imgMeta.zipName, imgMeta.path, imgMeta.agentIdx);
+            document.getElementById('viewerCounter').innerText = `${currentImgIndex + 1} / ${activeImageList.length} - ${imgMeta.path.split('/').pop()}`;
             
-            // 预加载相邻单图
+            const isFav = favImages.some(f => f.zipName === imgMeta.zipName && f.path === imgMeta.path && f.agentIdx === imgMeta.agentIdx);
+            const btnFav = document.getElementById('btnToggleImgFav');
+            btnFav.innerText = isFav ? "★ 取消收藏" : "⭐ 收藏此图";
+            btnFav.style.color = isFav ? "#ffd700" : "white";
+
             if (currentImgIndex > 0) {
-                new Image().src = getImageUrl(currentZipName, currentZipImages[currentImgIndex - 1], currentAgentIdx);
+                const pre = activeImageList[currentImgIndex - 1];
+                new Image().src = getImageUrl(pre.zipName, pre.path, pre.agentIdx);
             }
-            if (currentImgIndex < currentZipImages.length - 1) {
-                new Image().src = getImageUrl(currentZipName, currentZipImages[currentImgIndex + 1], currentAgentIdx);
+            if (currentImgIndex < activeImageList.length - 1) {
+                const nxt = activeImageList[currentImgIndex + 1];
+                new Image().src = getImageUrl(nxt.zipName, nxt.path, nxt.agentIdx);
             }
+        }
+
+        function toggleCurrentImgFav() {
+            if (activeImageList.length === 0) return;
+            const imgMeta = activeImageList[currentImgIndex];
+            toggleImgFav(imgMeta.zipName, imgMeta.path, imgMeta.agentIdx, null);
+            updateViewerImage(); 
         }
 
         function prevImage() {
@@ -362,31 +739,22 @@
         }
 
         function nextImage() {
-            if (currentImgIndex < currentZipImages.length - 1) {
+            if (currentImgIndex < activeImageList.length - 1) {
                 currentImgIndex++;
                 resetViewerTransform();
                 updateViewerImage();
             }
         }
 
-        // ================= 大图交互逻辑 (拖拽与缩放) =================
-        function resetViewerTransform() {
-            scale = 1; translateX = 0; translateY = 0;
-            applyTransform();
-        }
-
-        function applyTransform() {
-            const imgEl = document.getElementById('viewerImage');
-            imgEl.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-        }
+        // ================= 画布拖拽缩放 =================
+        function resetViewerTransform() { scale = 1; translateX = 0; translateY = 0; applyTransform(); }
+        function applyTransform() { document.getElementById('viewerImage').style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`; }
 
         const canvas = document.getElementById('viewerCanvas');
-        
         canvas.addEventListener('wheel', (e) => {
             if (document.getElementById('viewerModal').style.display !== 'flex') return;
             e.preventDefault();
-            const zoomIntensity = 0.15;
-            scale += e.deltaY < 0 ? zoomIntensity : -zoomIntensity;
+            scale += e.deltaY < 0 ? 0.15 : -0.15;
             scale = Math.max(0.1, Math.min(scale, 10)); 
             applyTransform();
         });
@@ -407,7 +775,6 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
         canvas.addEventListener('mouseleave', () => { isDragging = false; });
-        
         canvas.addEventListener('dblclick', (e) => {
             if (e.target.id === 'viewerImage') {
                 if (scale !== 1) resetViewerTransform();
@@ -417,30 +784,29 @@
 
         // ================= 全局键盘快捷键 =================
         document.addEventListener('keydown', (e) => {
-            if (document.activeElement.id === 'searchInput') return;
+            if (document.activeElement.id === 'searchInput' || document.activeElement.id === 'pathInput') return;
 
-            // 在单图放大模式下
+            // Z 键快捷收藏
+            if (e.key.toLowerCase() === 'z') {
+                if (document.getElementById('viewerModal').style.display === 'flex') {
+                    toggleCurrentImgFav();
+                } else if (currentMainView === 'gallery') {
+                    toggleCurrentZipFav();
+                }
+                return; // 防止触发其他操作
+            }
+
             if (document.getElementById('viewerModal').style.display === 'flex') {
                 if (e.key === 'Escape') closeViewer();
                 if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') prevImage();
                 if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D' || e.key === ' ') {
-                    e.preventDefault(); 
-                    nextImage();
+                    e.preventDefault(); nextImage();
                 }
             } 
-            // 在多图画廊平铺模式下
-            else if (document.getElementById('galleryView').style.display === 'flex') {
-                if (e.key === 'Escape') {
-                    exitGallery();
-                }
-                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
-                    e.preventDefault();
-                    switchZip(-1);
-                }
-                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
-                    e.preventDefault();
-                    switchZip(1);
-                }
+            else if (currentMainView === 'gallery') {
+                if (e.key === 'Escape') goUp();
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { e.preventDefault(); switchZip(-1); }
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { e.preventDefault(); switchZip(1); }
             }
         });
     </script>
