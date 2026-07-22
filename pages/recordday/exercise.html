@@ -81,18 +81,20 @@
 
     .plan-selector {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-bottom: 20px;
     }
     .plan-btn {
-      flex: 1;
+      flex: 1 1 calc(33.333% - 8px);
+      min-width: 90px;
       padding: 10px 4px;
       border: 2px solid #e2e8f0;
       border-radius: 12px;
       background: white;
       color: #64748b;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
@@ -117,14 +119,18 @@
       font-size: 16px;
       font-weight: 600;
       color: #1e40af;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .exercise-label-left {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
     }
     .intensity-badge {
       padding: 2px 8px;
@@ -132,21 +138,28 @@
       color: #1e40af;
       border-radius: 12px;
       font-size: 12px;
+      white-space: nowrap;
     }
     .priority-badge {
       padding: 2px 8px;
       border-radius: 12px;
       font-size: 11px;
       font-weight: 700;
-      margin-left: 6px;
     }
-    .priority-badge.must {
-      background: #dcfce7;
-      color: #166534;
-    }
-    .priority-badge.opt {
-      background: #e0f2fe;
-      color: #0369a1;
+    .priority-badge.must { background: #dcfce7; color: #166534; }
+    .priority-badge.opt { background: #e0f2fe; color: #0369a1; }
+    .priority-badge.strict { background: #fee2e2; color: #991b1b; }
+    .priority-badge.flex { background: #f3f4f6; color: #475569; }
+    
+    .exercise-note {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 12px;
+      line-height: 1.4;
+      background: #f8fafc;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border-left: 3px solid #cbd5e1;
     }
 
     .input-row {
@@ -281,7 +294,6 @@
   <div class="app-container" id="app">
     <h1>自重与功能性训练记录</h1>
 
-    <!-- 知识库：完全由 KNOWLEDGE_DB 驱动 -->
     <div class="knowledge-card">
       <div class="knowledge-header">
         <i>💡</i> 核心原则与生理监控
@@ -300,7 +312,6 @@
       <div class="knowledge-content">{{ currentKnowledge?.content }}</div>
     </div>
 
-    <!-- 计划选择器：完全由 PLANS 驱动，增删计划只改 JS -->
     <div class="plan-selector">
       <div
         v-for="key in planKeys"
@@ -313,7 +324,6 @@
       </div>
     </div>
 
-    <!-- 练习列表：完全由当前计划的 exercises 数组驱动 -->
     <div>
       <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 16px;">记录数据</h2>
 
@@ -324,8 +334,14 @@
             <span>{{ exercise.name }}</span>
             <span v-if="exercise.priority === 'must'" class="priority-badge must">必做</span>
             <span v-if="exercise.priority === 'optional'" class="priority-badge opt">可选</span>
+            <span v-if="exercise.order === 'strict'" class="priority-badge strict">严格优先</span>
+            <span v-if="exercise.order === 'flexible'" class="priority-badge flex">灵活穿插</span>
           </div>
           <span class="intensity-badge">单次强度: {{ exercise.intensity }}</span>
+        </div>
+        
+        <div v-if="exercise.note" class="exercise-note">
+          <i style="margin-right:4px;">💡</i>{{ exercise.note }}
         </div>
 
         <div class="input-row" v-if="inputs[exercise.name]">
@@ -373,12 +389,12 @@
     </div>
 
     <div class="exercise-item">
-      <div style="display: flex; gap: 12px;">
-        <div style="flex: 1;" class="form-group">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 100px;" class="form-group">
           <label style="font-weight: bold; color: #1e40af; display: block; margin-bottom: 8px; font-size:14px;">用时 (分钟)</label>
           <input type="number" v-model.number="duration">
         </div>
-        <div style="flex: 2;" class="form-group">
+        <div style="flex: 2; min-width: 200px;" class="form-group">
           <label style="font-weight: bold; color: #1e40af; display: block; margin-bottom: 8px; font-size:14px;">环境/状态备注</label>
           <input type="text" v-model="remark" placeholder="气温/代偿/DOMS反馈等">
         </div>
@@ -396,12 +412,8 @@
 
   <script>
     const { createApp } = Vue;
-// ============================================================
-//  ▸  知识库 — 增删改这里即可，UI 自动跟随
-// ============================================================
 
 const KNOWLEDGE_DB = [
-
   {
     category: "修补厂法则",
     content:
@@ -416,7 +428,6 @@ Gym的唯一使命：
 真正目标不是练废，而是离开Gym后：
 骑行更稳、单双杠更轻松、徒步更耐久。`
   },
-
   {
     category: "RDL髋铰链纪律",
     content:
@@ -433,364 +444,172 @@ RDL学的是髋铰链模式——弯腰时用髋关节而不是腰椎发力。
 连续2周稳定后，
 每2周 +2.5kg。
 
-【核心感觉】
-腘绳肌轻微拉伸感即可，
-不是腰顶着拉。
-
 【日常迁移】
 搬重物、背包弯腰、骑行后锁车——
 髋铰链保护所有弯腰场景。`
   },
-
   {
-    category: "手腕与推力纪律",
+    category: "极限重量引体/双杠纪律",
     content:
-`【伪俄挺纪律】
-绝对禁止手指正朝前方做深度前倾。
+`【负重引体：绝对控制】
+必须底端静止启动，严禁甩动借力。
+双腿并拢微向前伸（空心体），用大腿内侧夹稳铃片，消灭钟摆晃动。
+严禁向后交叉弯曲小腿（会导致骨盆前倾拉扯腰部）。
 
-手腕韧带适应周期极长，
-不能硬磨。
+【负重双杠：肩前囊保护】
+身体前倾30-45度，胸肌下沿分摊受力。
+下放至大臂平行地面即可，严禁过深。
+膝盖夹稳铃片，推起时不锁死手肘。
 
-必须：
-手指朝外（外八字）
-或使用支架。
-
-A日应在双杠前优先做伪俄挺，
-避免前束力竭导致关节代偿。`
+【组间休息（极重要）】
+必须休息 3-5 分钟。
+严禁坐在无靠背平板凳上或来回踱步。
+首选：靠墙站立，或双手撑器械前倾（保持背部笔直），或趴在胸托凳上休息。`
   },
-
-  {
-    category: "后链与结构韧性",
-    content:
-`【北欧挺】
-腘绳肌是长期短板。
-北欧挺零器械、自重即可、离心效率极高。
-
-向前缓慢倒下，
-推回即可。
-
-2×3-5 足够。
-
-【山羊挺身】
-强化髋伸展，
-不是腰椎乱反弓。
-
-核心微收，
-由臀部和腘绳肌拉回。
-
-【两者互补】
-RDL = 抗屈曲能力
-（弯腰时脊柱不弯）
-
-山羊挺身 = 髋伸展能力
-（把身体拉回来）`
-  },
-
   {
     category: "预疲劳与真实容量",
     content:
 `【接受退步假象】
-高难度抗旋动作初期，
-极易引发下背DOMS并破坏骨盆稳定。
-
-前两周：
-雨刷器与左右弯各砍一组。
+高难度抗旋动作初期，极易引发下背DOMS并破坏骨盆稳定。
 
 【真实容量】
-高难动作后的常规组，
-严格保留2次余力。
-
-禁止凑数导致动作变形。
+严格保留2次余力。禁止凑数导致动作变形。
 
 【农夫行走】
-永远放Gym最后。
-
-目标：
-呼吸稳定、
-骨盆稳定、
-步态稳定。
-
-不是纯拼重量。`
+必须双手对称负重，严禁单手行走（避免骨盆抗旋）。
+永远放Gym最后。目标：呼吸稳定、骨盆稳定、步态稳定。`
   },
-
   {
     category: "恢复债务与结构适应",
     content:
 `【恢复债务】
-局部组织（肌腱/筋膜/深层稳定）
-恢复远慢于心肺与意志。
-
+局部组织（肌腱/筋膜/深层稳定）恢复远慢于心肺与意志。
 腰不痛 ≠ 恢复完成。
 
 【危险阶段】
-感觉还能练、
-还能加重、
-但长期存在轻微紧张感时，
-最容易进入慢性代偿。
+感觉还能练、还能加重、但长期存在轻微紧张感时，最容易进入慢性代偿。
 
-【修补厂纪律】
-Gym不是拼命场。
-
-长期可持续补强，
-比短期刺激更重要。`
-  },
-
-  {
-    category: "弹性与骨刺激",
-    content:
-`【骑行缺失】
-骑行几乎没有垂直冲击。
-
-长期纯骑行：
-骨刺激不足、
-足踝弹性下降、
-跟腱储能能力减弱。
-
-【跳绳定位】
-跳绳不是减脂工具。
-
-核心目标：
-足踝 stiffness、
-跟腱回弹、
-轻快落地、
-骨密度刺激。
-
-【双摇价值】
-双摇天然要求：
-更高腾空、
-更强爆发、
-更大骨冲击。
-
-【训练纪律】
-不刷时长，
-不拼心肺。
-
-采用：
-短组高质量 + 长休息。
-
-【判断标准】
-落地越来越轻、
-双摇越来越稳、
-骑行站踩更轻快、
-上楼更有弹性。`
+【日常坐姿（腰伤免役期）】
+严禁“下腰悬空弯曲”（屁股顶靠背、腰部无支撑前倾）。
+必须使用硬质腰靠填满下腰悬空区，躯干像圆柱一样堆叠在骨盆上。`
   }
-
 ];
 
-
-// ============================================================
-//  ▸  计划模板
-// ============================================================
-
 const PLANS = {
+  Gym_A: {
+    label: "Gym A: 力量突破",
+    duration: 90,
+    exercises: [
+      { name: "哑铃抓举", weight: 30, sets: 3, reps: 3, intensity: 8, order: "strict", note: "激活项。必须置于首位，发力必须绝对垂直，二头肌越过肚脐前保持放松。" },
+      { name: "负重引体向上", weight: 20, sets: 4, reps: 4, intensity: 10, order: "strict", note: "主项一。需优先抢占器械，底端静止启动消灭钟摆。双腿夹稳杠铃片。" },
+      { name: "负重双杠臂屈伸", weight: 40, sets: 4, reps: 3, intensity: 10, order: "strict", note: "主项二。若人多可与引体互换顺序。身体前倾，避免下放过深。" },
+      { name: "泽奇深蹲", weight: 80, sets: 3, reps: 5, intensity: 9, order: "flexible", note: "主项三。零腰部剪切力，强化前侧核心。深蹲架人多时可先做农夫行走。" },
+      { name: "双手农夫行走", weight: 60, sets: 3, time: 40, intensity: 8, order: "flexible", note: "主项四。严禁单手，必须对称负重防骨盆旋转。找空地即可随时插入。" },
+      { name: "杠铃推肩", weight: 40, sets: 3, reps: 5, intensity: 7, order: "flexible", note: "辅助维持。见缝插针，禁止做到力竭抢占双杠恢复配额。" },
+      { name: "器械单手划船", weight: 70, sets: 3, reps: 5, intensity: 7, order: "flexible", note: "辅助维持。器械空出随时可做。" },
+      { name: "面拉", weight: 30, sets: 3, reps: 12, intensity: 5, order: "flexible", note: "康复收尾。固定在最后进行。" }
+    ]
+  },
 
-  // ==========================================================
-  // A：爆发与推链
-  // ==========================================================
+  Gym_B: {
+    label: "Gym B: 容量增厚",
+    duration: 80,
+    exercises: [
+      { name: "负重双杠臂屈伸", weight: 20, sets: 4, reps: 10, intensity: 8, order: "strict", note: "容量主项，首发追求胸下沿泵感。" },
+      { name: "负重引体/高位下拉", weight: 10, sets: 4, reps: 10, intensity: 8, order: "flexible", note: "若引体握力提前衰减，随时切换为高位下拉完成容量。" },
+      { name: "器械坐姿划船", weight: 70, sets: 4, reps: 10, intensity: 7, order: "flexible", note: "如果胸托划船更舒服可替换。保持腰椎中立，勿仰身借力。" },
+      { name: "俯卧腿弯举", weight: 35, sets: 4, reps: 12, intensity: 6, order: "flexible", note: "下肢绝对卸载骨盆与脊柱压力。" },
+      { name: "坐姿腿伸展", weight: 45, sets: 4, reps: 12, intensity: 6, order: "flexible", note: "可与腿弯举组成超级组省时间。" },
+      { name: "双手农夫行走", weight: 50, sets: 3, time: 45, intensity: 7, order: "flexible", note: "耐力向，避开场馆过道高峰即可。" },
+      { name: "面拉", weight: 30, sets: 3, reps: 15, intensity: 5, order: "flexible", note: "收尾。" },
+      { name: "单手悬挂", weight: 0, sets: 3, time: 10, intensity: 4, order: "flexible", note: "收尾拉伸。" }
+    ]
+  },
+
+  Gym_C: {
+    label: "Gym C: 综合打磨",
+    duration: 80,
+    exercises: [
+      { name: "哑铃抓举", weight: 28, sets: 3, reps: 4, intensity: 7, order: "strict", note: "神经启动，首位执行。" },
+      { name: "负重引体向上", weight: 15, sets: 3, reps: 8, intensity: 8, order: "strict", note: "打磨控制力，保持 6-8 RM 区间。" },
+      { name: "负重双杠臂屈伸", weight: 25, sets: 3, reps: 8, intensity: 8, order: "strict", note: "主项必须靠前。" },
+      { name: "泽奇深蹲", weight: 75, sets: 3, reps: 8, intensity: 8, order: "flexible", note: "核心友好动作，架子空闲优先占用。" },
+      { name: "杠铃推肩", weight: 35, sets: 3, reps: 8, intensity: 7, order: "flexible", note: "非核心诉求，排队可延后。" },
+      { name: "器械划船", weight: 60, sets: 3, reps: 10, intensity: 6, order: "flexible" },
+      { name: "俄挺进阶/腰间俯卧撑", weight: 0, sets: 3, reps: 5, intensity: 7, order: "flexible", note: "自重项，无需抢器械，纯为唤醒水平推神经。" },
+      { name: "面拉", weight: 30, sets: 3, reps: 12, intensity: 5, order: "flexible" },
+      { name: "单手悬挂", weight: 0, sets: 2, time: 10, intensity: 4, order: "flexible" }
+    ]
+  },
+  
+  Gym_Base: {
+    label: "Gym: 综合一周",
+    duration: 160,
+    exercises: [
+      { name: "哑铃抓举", weight: 26, sets: 3, reps: 5, intensity: 8 },
+      { name: "腰间俯卧撑进阶俄挺", sets: 4, reps: 5, intensity: 9 },
+      { name: "保加利亚分腿蹲", weight: 40, sets: 3, reps: 5, intensity: 8 },
+      { name: "泽奇深蹲", weight: 50, sets: 3, reps: 6, intensity: 7 },
+      { name: "高位下拉", weight: 100, sets: 3, reps: 5, intensity: 8 },
+      { name: "站姿单手推肩", weight: 22, sets: 3, reps: 8, intensity: 8 },
+      { name: "绳索划船", weight: 100, sets: 3, reps: 5, intensity: 8 },
+      { name: "单手过顶行走", weight: 26, sets: 3, time: 40, intensity: 7 },
+      { name: "单手农夫行走", weight: 30, sets: 2, time: 40, intensity: 7 },
+      { name: "双手农夫行走", weight: 60, sets: 2, time: 20, intensity: 7 },
+      { name: "山羊挺身负重", weight: 20, sets: 5, reps: 10, intensity: 6 },
+      { name: "俯卧腿弯举", weight: 35, sets: 3, reps: 10, intensity: 5 },
+      { name: "面拉", weight: 20, sets: 3, reps: 18, intensity: 5 },
+      { name: "单手悬挂", sets: 2, time: 3, intensity: 7 }
+    ]
+  },
 
   A: {
     label: "A: 爆发与推链",
     duration: 35,
-
     exercises: [
-
-      {
-        name: "双力臂",
-        intensity: 6,
-        sets: 5,
-        reps: 3
-      },
-
-      {
-        name: "伪俄挺",
-        intensity: 5,
-        sets: 4,
-        reps: 5
-      },
-
-      {
-        name: "双杠臂屈伸",
-        intensity: 4,
-        sets: 4,
-        reps: 8
-      },
-
-      {
-        name: "举腿碰杆",
-        intensity: 4,
-        sets: 3,
-        reps: 5
-      },
-
-      {
-        name: "单臂悬挂",
-        intensity: 3,
-        sets: 2,
-        time: 10
-      }
-
+      { name: "双力臂", intensity: 6, sets: 5, reps: 3 },
+      { name: "伪俄挺", intensity: 5, sets: 4, reps: 5 },
+      { name: "双杠臂屈伸", intensity: 4, sets: 4, reps: 8 },
+      { name: "举腿碰杆", intensity: 4, sets: 3, reps: 5 },
+      { name: "单臂悬挂", intensity: 3, sets: 2, time: 10 }
     ]
   },
 
-
-  // ==========================================================
-  // Gym：修补厂
-  // ==========================================================
-
-  // ==========================================================
-  // Gym：修补厂 (新增抓举与潘德雷，调整农夫行走顺序)
-  // ==========================================================
- 
- 
-Gym: {
-  label: "Gym: 修补厂",
-  duration: 160,
-
-  exercises: [
-
-    // 1. 神经爆发
-    { name: "哑铃抓举", weight: 26, sets: 3, reps: 5, intensity: 8 },
-    { name: "腰间俯卧撑进阶俄挺", sets: 4, reps: 5, intensity: 9 },
-
-    // 2. 下肢主力
-    { name: "保加利亚分腿蹲", weight: 40, sets: 3, reps: 5, intensity: 8 },
-    { name: "泽奇深蹲", weight: 50, sets: 3, reps: 6, intensity: 7 },
-
-    // 3. 上肢主力
-    { name: "高位下拉", weight: 100, sets: 3, reps: 5, intensity: 8 },
-    { name: "站姿单手推肩", weight: 22, sets: 3, reps: 8, intensity: 8 },
-    { name: "绳索划船", weight: 100, sets: 3, reps: 5, intensity: 8 },
-
-    // 4. 全身稳定、握力
-    { name: "单手过顶行走", weight: 26, sets: 3, time: 40, intensity: 7 },
-    { name: "单手农夫行走", weight: 30, sets: 2, time: 40, intensity: 7 },
-    { name: "双手农夫行走", weight: 60, sets: 2, time: 20, intensity: 7 },
-
-    // 5. 后链强化
-    { name: "山羊挺身负重", weight: 20, sets: 5, reps: 10, intensity: 6 },
-
-    // 6. 局部补强
-    { name: "俯卧腿弯举", weight: 35, sets: 3, reps: 10, intensity: 5 },
-    { name: "面拉", weight: 20, sets: 3, reps: 18, intensity: 5 },
-    { name: "单手悬挂", sets: 2, time: 3, intensity: 7 },
-
-    // 7. 可选
-    { name: "坐姿腿伸展（可选）", weight: 45, sets: 2, reps: 15, intensity: 5, optional: true }
-  ]
-}
-
-
-// ==========================================================
-  // B：控制与抗旋
-  // ==========================================================
-,
   B: {
     label: "B: 控制与抗旋",
     duration: 45,
-
     exercises: [
-
-      {
-        name: "进阶团身前水平",
-        intensity: 5,
-        sets: 4,
-        reps: 1,
-        time: 7
-      },
-
-      {
-        name: "标准引体",
-        intensity: 4,
-        sets: 4,
-        reps: 5
-      },
-
-      {
-        name: "单杠抗旋雨刷器",
-        intensity: 5,
-        sets: 2,
-        reps: 4
-      },
-
-      {
-        name: "悬垂举腿左右弯",
-        intensity: 4,
-        sets: 2,
-        reps: 6
-      },
-
-      {
-        name: "轻伪俄挺",
-        intensity: 3,
-        sets: 3,
-        reps: 4
-      }
-
+      { name: "进阶团身前水平", intensity: 5, sets: 4, reps: 1, time: 7 },
+      { name: "标准引体", intensity: 4, sets: 4, reps: 5 },
+      { name: "单杠抗旋雨刷器", intensity: 5, sets: 2, reps: 4 },
+      { name: "悬垂举腿左右弯", intensity: 4, sets: 2, reps: 6 },
+      { name: "轻伪俄挺", intensity: 3, sets: 3, reps: 4 }
     ]
   },
 
-
-  // ==========================================================
-  // Jump：弹性与骨刺激
-  // ==========================================================
-
- Jump: {
-  label: "Jump: 弹性与骨刺激",
-  duration: 20,
-
-  exercises: [
-
-    {
-      name: "脚踝弹跳热身",
-      priority: "must",
-      intensity: 2,
-      sets: 2,
-      time: 30
-    },
-
-    {
-      name: "高弹跳跳绳",
-      priority: "must",
-      intensity: 4,
-      sets: 5,
-      time: 40
-    },
-
-    {
-      name: "双摇练习",
-      priority: "must",
-      intensity: 5,
-      sets: 5,
-      reps: 10
-    },
-
-    {
-      name: "连续轻弹跳",
-      priority: "optional",
-      intensity: 2,
-      sets: 2,
-      time: 30
-    }
-
-  ]
-}
-
+  Jump: {
+    label: "Jump: 弹性骨刺",
+    duration: 20,
+    exercises: [
+      { name: "脚踝弹跳热身", priority: "must", intensity: 2, sets: 2, time: 30 },
+      { name: "高弹跳跳绳", priority: "must", intensity: 4, sets: 5, time: 40 },
+      { name: "双摇练习", priority: "must", intensity: 5, sets: 5, reps: 10 },
+      { name: "连续轻弹跳", priority: "optional", intensity: 2, sets: 2, time: 30 }
+    ]
+  }
 };
-    // ============================================================
-    //  ▸  Vue App — 通用逻辑，不需要改
-    // ============================================================
 
     createApp({
       data() {
         return {
           plans: PLANS,
           planKeys: Object.keys(PLANS),
-          currentPlan: Object.keys(PLANS)[0],
+          currentPlan: "Gym_A",
           knowledgeDB: KNOWLEDGE_DB,
           activeKnowledgeIndex: 0,
           inputs: {},
           rating: 4,
-          duration: 35,
+          duration: 90,
           remark: '',
           generatedRecord: ''
         }

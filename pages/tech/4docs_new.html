@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人知识笔记系统</title>
+    
+    <script src="/static/cdn/vue3.5.global.prod.js"></script>
+    <link rel="stylesheet" href="/static/cdn/element-plus2.14.3.css" />
+    <script src="/static/cdn/element-plus2.14.3.js"></script>
+    <script src="/static/cdn/element.vue.js"></script>
+    <script src="/static/cdn/tailwindcss3.4.17.js"></script>
+    
+    <script src="/static/cdn/echarts.min.js"></script>
+    <link rel="stylesheet" href="/static/cdn/vditor.css" />
+    <script src="/static/cdn/vditor.js"></script>
+    
+    <style>
+        body { margin: 0; padding: 0; height: 100vh; overflow: hidden; background: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        
+        /* 侧边栏搜索高亮 (DOM 级别) */
+        .highlight-mark { background-color: #fef08a; color: #b91c1c; border-radius: 2px; padding: 0 2px; }
+        
+        /* 正文搜索无损高亮 (CSS Highlight API 级别) */
+        ::highlight(search-results) { background-color: #fef08a; color: #b91c1c; font-weight: bold; }
+        
+        /* Vditor 现代化样式覆盖 */
+        .vditor { border: none !important; }
+        .vditor-toolbar { border-bottom: 1px solid #f1f5f9 !important; background-color: #f8fafc !important; padding-left: 20px !important;}
+        /* 兼容 ir 模式与 wysiwyg 模式的内边距 */
+        .vditor-ir, .vditor-wysiwyg { padding: 20px 40px !important; }
+        .vditor-outline { border-right: 1px solid #f1f5f9; background: #fafafa; }
+    </style>
+</head>
+<body>
+    <div id="app" class="h-full flex flex-col">
+        <header v-show="!isFocusMode" class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10 shadow-sm transition-all">
+            <div class="font-bold text-slate-700 flex items-center gap-3">
+                <span class="text-lg">📚 知识笔记</span>
+                <el-button size="small" type="primary" plain @click="rebuildIndex" :loading="syncing">同步索引</el-button>
+            </div>
+            <div class="w-1/3 max-w-md">
+                <el-input v-model="searchQuery" placeholder="全局搜索(支持汉字)..." clearable @keyup.enter="forceSearch">
+                    <template #prefix>
+                        <el-icon><search></search></el-icon>
+                    </template>
+                    <template #append>
+                        <el-button @click="forceSearch" :loading="isSearching">搜索</el-button>
+                    </template>
+                </el-input>
+            </div>
+            <div class="flex items-center gap-2">
+                <el-switch v-model="autoAiTags" active-text="静默 AI 补全" size="small"></el-switch>
+            </div>
+        </header>
+
+        <div class="flex-1 flex overflow-hidden">
+            <aside v-show="!isFocusMode" class="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all">
+                <div class="p-3 border-b border-slate-200 bg-white">
+                    <el-button class="w-full" type="primary" @click="createNew">
+                        <el-icon class="mr-1"><edit-pen></edit-pen></el-icon> 快速记录
+                    </el-button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2">
+                    <div v-if="searchResults.length > 0" class="mb-4">
+                        <div class="text-xs text-slate-400 mb-2 px-2 font-medium">搜索结果</div>
+                        <div v-for="doc in searchResults" :key="doc.id" @click="loadDocument(doc.id)"
+                             class="px-3 py-2 text-sm cursor-pointer rounded hover:bg-slate-200 truncate" v-html="highlightText(getDocTitle(doc))"></div>
+                    </div>
+                    
+                    <div v-else>
+                        <div v-if="pinnedDocs.length > 0">
+                            <div class="text-[11px] text-orange-500 mb-1 mt-2 px-2 font-bold tracking-wider">📌 PINNED</div>
+                            <div v-for="doc in pinnedDocs" :key="doc.id" @click="loadDocument(doc.id)"
+                                 :class="['px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5', activeDocId === doc.id ? 'bg-orange-100 text-orange-700 font-medium' : 'hover:bg-slate-200 text-slate-700']">
+                                {{ getDocTitle(doc) }}
+                            </div>
+                        </div>
+
+                        <div class="text-[11px] text-slate-400 mb-1 mt-4 px-2 font-bold tracking-wider">📝 INBOX</div>
+                        <div v-for="doc in inboxDocs" :key="doc.id" @click="loadDocument(doc.id)"
+                             :class="['px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5', activeDocId === doc.id ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-slate-200 text-slate-700']">
+                            {{ getDocTitle(doc) }}
+                        </div>
+
+                        <div class="text-[11px] text-slate-400 mb-1 mt-4 px-2 font-bold tracking-wider">📦 ARCHIVE</div>
+                        <div v-for="doc in archiveDocs" :key="doc.id" @click="loadDocument(doc.id)"
+                             :class="['px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5', activeDocId === doc.id ? 'bg-slate-200 text-slate-800 font-medium' : 'hover:bg-slate-200 text-slate-500']">
+                            {{ getDocTitle(doc) }}
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="flex-1 flex flex-col bg-white relative shadow-[inset_0_0_20px_rgba(0,0,0,0.02)]">
+                <div v-show="!activeDocId && !isCreating" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50/50">
+                    <div class="text-4xl mb-6 opacity-80">🌱 知识图谱轨迹</div>
+                    <div id="timeline-chart" style="width: 800px; height: 250px;"></div>
+                </div>
+
+                <div v-show="activeDocId || isCreating" class="flex flex-col h-full w-full">
+                    <div class="h-12 border-b border-slate-100 flex items-center justify-between px-4 bg-slate-50/50 shrink-0">
+                        <div class="flex items-center gap-2">
+                            <el-button size="small" circle plain @click="isFocusMode = !isFocusMode" :title="isFocusMode ? '退出沉浸' : '沉浸模式'">
+                                <el-icon><full-screen></full-screen></el-icon>
+                            </el-button>
+                            <el-input v-model="docIdInput" :placeholder="isCreating ? '输入标识符(作为物理文件名)' : '文档ID(不可改)'" size="small" class="w-56" :disabled="!isCreating">
+                                <template #prepend>ID</template>
+                            </el-input>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs" :class="saveStatus === '保存失败' ? 'text-red-500' : 'text-slate-400'">{{ saveStatus }}</span>
+                            <el-button size="small" type="success" @click="manualSave" :loading="saving">保存</el-button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-hidden relative">
+                        <div id="vditor-container" class="absolute inset-0"></div>
+                    </div>
+                </div>
+            </main>
+
+            <aside v-show="(activeDocId || isCreating) && !isFocusMode" class="w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 transition-all">
+                
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex gap-2" v-if="activeDocId">
+                    <el-button size="small" class="flex-1" :type="activeDocMeta.is_pinned ? 'warning' : 'default'" @click="toggleAction('toggle_pin')">
+                        {{ activeDocMeta.is_pinned ? '取消置顶' : '📌 置顶' }}
+                    </el-button>
+                    <el-button size="small" class="flex-1" :type="activeDocStatus === 'archive' ? 'primary' : 'info'" plain @click="toggleAction('toggle_archive')">
+                        {{ activeDocStatus === 'archive' ? '还原活跃' : '📦 归档' }}
+                    </el-button>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1"><el-icon><document></document></el-icon> 文档状态</h3>
+                    <div class="text-[13px] text-slate-600 space-y-3">
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">生命周期</span>
+                            <el-tag :type="activeDocStatus === 'archive' ? 'info' : 'success'" size="small" effect="dark">
+                                {{ activeDocStatus.toUpperCase() }}
+                            </el-tag>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">创建时间</span><span :title="fullCreatedTime">{{ createdTimeAgo }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">最后更新</span><span :title="fullUpdateTime">{{ updatedTimeAgo }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-col">
+                    <h3 class="text-sm font-bold text-slate-700 mb-3 flex justify-between items-center">
+                        <div class="flex items-center gap-1"><el-icon><cpu></cpu></el-icon> 标签提取</div>
+                        <el-button size="small" type="primary" :loading="aiLoading" @click="generateTags">提取</el-button>
+                    </h3>
+                    <div class="text-[11px] text-slate-400 mb-2">使用 AI 自动阅读提炼标签</div>
+                    
+                    <div v-if="relatedDocs.length > 0" class="mt-4 border-t border-slate-100 pt-3">
+                        <h4 class="text-xs font-bold text-slate-600 mb-2">🔗 相关关联推荐</h4>
+                        <div class="space-y-1.5">
+                            <div v-for="rd in relatedDocs" :key="rd.id" @click="loadDocument(rd.id)" class="text-[12px] text-blue-600 hover:text-blue-800 cursor-pointer truncate">
+                                {{ rd.title }} <span class="text-slate-400 text-[10px]">({{ rd.overlap }} 标签重合)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+        
+        const formatTimeAgo = (timestamp) => {
+            if (!timestamp) return '-';
+            const seconds = Math.floor((new Date() - new Date(timestamp * 1000)) / 1000);
+            if (seconds < 60) return "刚刚";
+            const intervals = [{ limit: 31536000, label: "年" }, { limit: 2592000, label: "个月" }, { limit: 86400, label: "天" }, { limit: 3600, label: "小时" }, { limit: 60, label: "分钟" }];
+            for (let i of intervals) {
+                const count = Math.floor(seconds / i.limit);
+                if (count >= 1) return count + " " + i.label + "前";
+            }
+        };
+
+        const app = createApp({
+            setup() {
+                const documents = ref([]);
+                const searchResults = ref([]);
+                const searchQuery = ref('');
+                
+                const activeDocId = ref('');
+                const docIdInput = ref('');
+                const editorContent = ref('');
+                const isCreating = ref(false);
+                const activeDocMeta = ref({ created_time: null, update_time: null, is_pinned: 0 });
+                const relatedDocs = ref([]);
+                
+                const saving = ref(false);
+                const syncing = ref(false);
+                const isSearching = ref(false);
+                const saveStatus = ref('');
+                let debounceTimer = null;
+                const aiLoading = ref(false);
+                const generatedTags = ref([]);
+                
+                const isFocusMode = ref(false);
+                const autoAiTags = ref(localStorage.getItem('autoAiTags') === 'true');
+                watch(autoAiTags, (val) => localStorage.setItem('autoAiTags', val));
+
+                let vditorInstance = null;
+                let echartsInstance = null;
+
+                const getDocTitle = (doc) => {
+                    let title = doc.title || '';
+                    const isDefault = !title || title.trim() === '' || title === '新文档标题' || title.startsWith('随记_') || title.startsWith('note_');
+                    if (isDefault && doc.tags_cache && doc.tags_cache !== '未分类' && doc.tags_cache !== '笔记') {
+                        return `[提取] ${doc.tags_cache.replace(/,/g, ' | ')}`;
+                    }
+                    return title || doc.id || '未命名笔记';
+                };
+
+                const escapeRegExp = (str) => str ? str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+
+                const highlightText = (text) => {
+                    if (!searchQuery.value) return text;
+                    const regex = new RegExp(`(${escapeRegExp(searchQuery.value)})`, 'gi');
+                    return text.replace(regex, '<mark class="highlight-mark">$1</mark>');
+                };
+
+                const applyEditorHighlight = () => {
+                    try {
+                        if (!CSS.highlights) return;
+                        CSS.highlights.clear();
+                        if (!searchQuery.value) return;
+
+                        const editorDom = document.querySelector('.vditor-ir') || document.querySelector('.vditor-wysiwyg');
+                        if (!editorDom) return;
+
+                        const treeWalker = document.createTreeWalker(editorDom, NodeFilter.SHOW_TEXT);
+                        const ranges = [];
+                        let currentNode;
+                        const regex = new RegExp(escapeRegExp(searchQuery.value), 'gi');
+
+                        while ((currentNode = treeWalker.nextNode())) {
+                            const text = currentNode.textContent;
+                            let match;
+                            while ((match = regex.exec(text)) !== null) {
+                                if (match[0].length === 0) break; 
+                                const range = new Range();
+                                range.setStart(currentNode, match.index);
+                                range.setEnd(currentNode, match.index + match[0].length);
+                                ranges.push(range);
+                            }
+                        }
+
+                        if (ranges.length > 0) {
+                            const highlight = new Highlight(...ranges);
+                            CSS.highlights.set('search-results', highlight);
+                        }
+                    } catch (e) {
+                        console.warn("编辑器内搜索高亮渲染异常 (已被捕获，不影响全局搜索逻辑):", e);
+                    }
+                };
+
+                // --- 搜索核心逻辑 ---
+                let searchTimer = null;
+                const executeSearch = async () => {
+                    applyEditorHighlight();
+                    
+                    const q = searchQuery.value.trim();
+                    if (!q) { 
+                        searchResults.value = []; 
+                        return; 
+                    }
+
+                    isSearching.value = true;
+                    try {
+                        const res = await fetch(`/docapi/search?q=${encodeURIComponent(q)}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            searchResults.value = data.results || [];
+                            if (searchResults.value.length === 0) {
+                                ElementPlus.ElMessage.info('没有匹配的搜索结果');
+                            }
+                        } else {
+                            ElementPlus.ElMessage.error(`搜索接口返回异常: 状态码 ${res.status}`);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        ElementPlus.ElMessage.error(`请求后端失败，请检查网络或后端是否开启: ${e.message}`);
+                    } finally {
+                        isSearching.value = false;
+                    }
+                };
+
+                // 供 v-model 监听调用的防抖函数（打字时触发）
+                const debouncedSearch = () => {
+                    clearTimeout(searchTimer);
+                    searchTimer = setTimeout(() => {
+                        executeSearch();
+                    }, 400); // 增加到 400ms 避免频繁请求
+                };
+
+                // 供点击按钮/回车键直接调用的函数
+                const forceSearch = () => {
+                    clearTimeout(searchTimer);
+                    executeSearch();
+                };
+
+                // 监听中文输入，只有当拼音结束，实际汉字落入变量时才会触发 watch
+                watch(searchQuery, () => {
+                    debouncedSearch();
+                });
+
+                const pinnedDocs = computed(() => documents.value.filter(d => d.is_pinned === 1));
+                const inboxDocs = computed(() => documents.value.filter(d => d.status === 'active' && d.is_pinned === 0));
+                const archiveDocs = computed(() => documents.value.filter(d => d.status === 'archive' && d.is_pinned === 0));
+
+                const activeDocStatus = computed(() => activeDocId.value ? (documents.value.find(d => d.id === activeDocId.value)?.status || '-') : (isCreating.value ? 'active' : '-'));
+                const createdTimeAgo = computed(() => formatTimeAgo(activeDocMeta.value.created_time));
+                const updatedTimeAgo = computed(() => formatTimeAgo(activeDocMeta.value.update_time));
+                const fullCreatedTime = computed(() => activeDocMeta.value.created_time ? new Date(activeDocMeta.value.created_time * 1000).toLocaleString() : '');
+                const fullUpdateTime = computed(() => activeDocMeta.value.update_time ? new Date(activeDocMeta.value.update_time * 1000).toLocaleString() : '');
+
+                const fetchDocuments = async () => {
+                    const res = await fetch('/docapi/documents');
+                    documents.value = (await res.json()).docs || [];
+                };
+
+                const fetchRelated = async (id) => {
+                    const res = await fetch(`/docapi/document/${id}/related`);
+                    relatedDocs.value = await res.json();
+                };
+
+                const initECharts = async () => {
+                    const chartDom = document.getElementById('timeline-chart');
+                    if (!chartDom) return;
+                    if (!echartsInstance) echartsInstance = echarts.init(chartDom);
+                    
+                    const res = await fetch('/docapi/timeline');
+                    const heatmapData = await res.json();
+                    
+                    const year = new Date().getFullYear();
+                    echartsInstance.setOption({
+                        tooltip: { formatter: p => `${p.value[0]}: ${p.value[1]} 篇` },
+                        visualMap: { min: 0, max: 5, show: false, inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] } },
+                        calendar: { top: 30, left: 30, right: 30, range: year, itemStyle: { borderWidth: 3, borderColor: '#f8fafc' }, splitLine: { show: false }, yearLabel: { show: false } },
+                        series: { type: 'heatmap', coordinateSystem: 'calendar', data: heatmapData }
+                    });
+                };
+
+                const initOrUpdateVditor = (content) => {
+                    if (vditorInstance) {
+                        vditorInstance.setValue(content);
+                        setTimeout(applyEditorHighlight, 100);
+                    } else {
+                        vditorInstance = new Vditor('vditor-container', {
+                            mode: 'ir',
+                            height: '100%', 
+                            cache: { enable: false }, 
+                            outline: { enable: false, position: 'left' },
+                            toolbar: [
+                                'headings', 'bold', 'italic', 'strike', 'link', '|',
+                                'list', 'ordered-list', 'check', '|',
+                                'quote', 'line', 'code', 'inline-code', '|',
+                                'table', 'undo', 'redo', '|',
+                                'outline', 'fullscreen'
+                            ],
+                            value: content,
+                            input: (val) => { 
+                                editorContent.value = val; 
+                                handleInput();
+                                applyEditorHighlight();
+                            },
+                            after: () => { setTimeout(applyEditorHighlight, 100); }
+                        });
+                    }
+                };
+
+                const createNew = () => {
+                    activeDocId.value = ''; isCreating.value = true; relatedDocs.value = []; generatedTags.value = [];
+                    const ts = new Date().getTime();
+                    docIdInput.value = `note_${ts}`;
+                    activeDocMeta.value = { created_time: Math.floor(ts / 1000), update_time: Math.floor(ts / 1000), is_pinned: 0 };
+                    editorContent.value = `---\ntitle: 随记_${ts}\ntags:\n  - 笔记\n---\n\n`;
+                    saveStatus.value = '新建待存';
+                    nextTick(() => initOrUpdateVditor(editorContent.value));
+                };
+
+                const loadDocument = async (id) => {
+                    isCreating.value = false; generatedTags.value = [];
+                    const res = await fetch(`/docapi/document/${id}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        activeDocId.value = id;
+                        docIdInput.value = id;
+                        editorContent.value = data.content;
+                        activeDocMeta.value = data.meta;
+                        saveStatus.value = '已加载';
+                        nextTick(() => initOrUpdateVditor(data.content));
+                        fetchRelated(id);
+                    }
+                };
+
+                const executeSave = async () => {
+                    if (!docIdInput.value) return;
+                    saving.value = true;
+                    try {
+                        const res = await fetch('/docapi/document/save', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: docIdInput.value, content: editorContent.value })
+                        });
+                        if (res.ok) {
+                            saveStatus.value = `已保存 ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
+                            activeDocId.value = docIdInput.value;
+                            isCreating.value = false;
+                            activeDocMeta.value.update_time = Math.floor(Date.now() / 1000);
+                            await fetchDocuments();
+                        }
+                    } catch (e) { saveStatus.value = '保存失败'; } finally { saving.value = false; }
+                };
+
+                const manualSave = () => { clearTimeout(debounceTimer); executeSave(); };
+                const handleInput = () => { saveStatus.value = '等待自动保存...'; clearTimeout(debounceTimer); debounceTimer = setTimeout(executeSave, 1200); };
+
+                const toggleAction = async (actionStr) => {
+                    if (!activeDocId.value) return;
+                    await fetch('/docapi/document/action', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: activeDocId.value, action: actionStr })
+                    });
+                    await loadDocument(activeDocId.value);
+                    await fetchDocuments();
+                };
+
+                const generateTags = async () => {
+                    if (!editorContent.value.trim()) return;
+                    aiLoading.value = true;
+                    try {
+                        const res = await fetch('/docapi/document/ai/tags', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: editorContent.value })
+                        });
+                        const data = await res.json();
+                        
+                        if (data.tags && Array.isArray(data.tags) && data.tags.length > 0 && !data.tags[0].includes("ERROR") && !data.tags[0].includes("MISSING")) {
+                            generatedTags.value = data.tags; 
+                            let content = editorContent.value;
+                            
+                            const match = content.match(/^---\n([\s\S]*?)\n---/);
+                            if (match) {
+                                let metaStr = match[1];
+                                const tagYaml = 'tags:\n' + data.tags.map(t => `  - ${t}`).join('\n');
+                                
+                                if (metaStr.match(/^tags:.*(?:\n\s*-.*)*/m)) {
+                                    metaStr = metaStr.replace(/^tags:.*(?:\n\s*-.*)*/m, tagYaml);
+                                } else {
+                                    metaStr += '\n' + tagYaml;
+                                }
+                                
+                                editorContent.value = `---\n${metaStr.trim()}\n---\n` + content.slice(match[0].length).trimStart();
+                                initOrUpdateVditor(editorContent.value);
+                                handleInput();
+                            }
+                        } else {
+                            ElementPlus.ElMessage.warning('未能提取出有效标签');
+                        }
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('AI 解析故障');
+                    } finally { 
+                        aiLoading.value = false; 
+                    }
+                };
+
+                const runSilentAiBatch = async () => {
+                    try {
+                        const res = await fetch('/docapi/ai/batch_tags', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.processed > 0) fetchDocuments();
+                    } catch(e){}
+                };
+
+                const rebuildIndex = async () => {
+                    syncing.value = true;
+                    try { await fetch('/docapi/init', { method: 'POST' }); await fetchDocuments(); initECharts(); }
+                    finally { syncing.value = false; }
+                };
+
+                onMounted(() => { 
+                    fetchDocuments(); 
+                    initECharts(); 
+                    if (autoAiTags.value) setTimeout(runSilentAiBatch, 3000); 
+                });
+
+                return {
+                    documents, searchResults, searchQuery, autoAiTags, isFocusMode,
+                    pinnedDocs, inboxDocs, archiveDocs, activeDocId, docIdInput, editorContent, relatedDocs,
+                    isCreating, saving, syncing, isSearching, saveStatus, activeDocStatus, activeDocMeta, aiLoading, generatedTags,
+                    createdTimeAgo, updatedTimeAgo, fullCreatedTime, fullUpdateTime,
+                    createNew, loadDocument, manualSave, handleInput, forceSearch, rebuildIndex, generateTags, toggleAction, getDocTitle, highlightText
+                };
+            }
+        });
+
+        for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>
