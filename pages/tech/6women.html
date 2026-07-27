@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WomenPic — 女星数据中心</title>
+<style>
+/* ====== Reset & Base ====== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0b12; --surface:#14141f; --surface2:#1c1c2e;
+  --border:#252540; --border-light:#2e2e48;
+  --text:#e2e2f0; --text-dim:#7c7ca0; --text-faint:#555570;
+  --accent:#e8617c; --accent-glow:rgba(232,97,124,0.18);
+  --gold:#e2b04a; --gold-glow:rgba(226,176,74,0.15);
+  --cool:#5badd4; --cool-glow:rgba(91,173,212,0.15);
+  --mint:#6ec9a0;
+  --radius:14px; --radius-sm:9px; --radius-xs:6px;
+  --shadow-lg:0 12px 48px rgba(0,0,0,0.5);
+  --transition:0.25s cubic-bezier(0.4,0,0.2,1);
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text); line-height:1.6; min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ====== Header ====== */
+.header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(11,11,18,0.9); backdrop-filter:blur(16px) saturate(1.4);
+  border-bottom:1px solid var(--border); padding:12px 28px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.header h1{
+  font-size:1.35rem;font-weight:700;letter-spacing:-0.3px;
+  background:linear-gradient(135deg,var(--accent),#f5a0b8);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.header .stats{color:var(--text-dim);font-size:0.82rem;margin-left:6px}
+.search-box{
+  margin-left:auto;background:var(--surface);border:1px solid var(--border);
+  border-radius:24px;padding:7px 18px;display:flex;align-items:center;gap:8px;
+  min-width:210px;transition:border-color var(--transition);
+}
+.search-box:focus-within{border-color:var(--accent)}
+.search-box input{background:none;border:none;outline:none;color:var(--text);font-size:0.88rem;width:100%}
+.search-box input::placeholder{color:var(--text-dim)}
+.search-box .icon{color:var(--text-dim);font-size:0.95rem}
+
+/* ====== Main Grid ====== */
+.container{max-width:1440px;margin:0 auto;padding:24px 28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:22px}
+
+/* ====== Grid Card ====== */
+.card{
+  background:var(--surface);border-radius:var(--radius);overflow:hidden;
+  cursor:pointer;transition:transform var(--transition),box-shadow var(--transition);
+  border:1px solid var(--border);position:relative;
+}
+.card:hover{transform:translateY(-5px);box-shadow:0 10px 36px var(--accent-glow);border-color:var(--accent)}
+.card-img{width:100%;height:320px;object-fit:cover;background:var(--surface2);display:block}
+.card-body{padding:14px 16px 16px}
+.card-name{font-size:1.1rem;font-weight:650;margin-bottom:6px;letter-spacing:-0.2px}
+.card-meta{font-size:0.78rem;color:var(--text-dim);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.card-meta span{white-space:nowrap}
+.card-summary{font-size:0.8rem;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-badge{display:inline-block;background:rgba(232,97,124,0.15);color:var(--accent);font-size:0.7rem;padding:2px 10px;border-radius:10px;margin-right:6px;font-weight:500}
+
+/* Mini gauges on card */
+.card-gauges{display:flex;gap:10px;margin:10px 0 4px}
+.card-gauge{
+  flex:1;background:var(--surface2);border-radius:var(--radius-xs);
+  padding:7px 10px;font-size:0.72rem;display:flex;align-items:center;gap:6px;
+  border:1px solid var(--border);
+}
+.card-gauge .g-icon{font-size:0.85rem}
+.card-gauge .g-val{font-weight:600;font-size:0.9rem}
+.card-gauge .g-label{color:var(--text-dim);margin-left:auto;font-size:0.65rem;font-style:italic}
+
+/* ====== Modal ====== */
+.modal-overlay{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);
+  justify-content:center;align-items:flex-start;padding:24px 12px;overflow-y:auto;
+}
+.modal-overlay.active{display:flex}
+.modal{
+  background:var(--surface);border-radius:var(--radius);max-width:960px;width:100%;
+  box-shadow:var(--shadow-lg);border:1px solid var(--border);
+  animation:slideUp 0.3s cubic-bezier(0.22,0.61,0.36,1);
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(36px)}to{opacity:1;transform:translateY(0)}}
+
+.modal-header{
+  position:relative;height:240px;overflow:hidden;border-radius:var(--radius) var(--radius) 0 0;
+}
+.modal-header img{width:100%;height:100%;object-fit:cover}
+.modal-header .overlay{position:absolute;inset:0;background:linear-gradient(transparent 35%,var(--surface) 95%)}
+.modal-header .title-group{position:absolute;bottom:18px;left:24px;right:24px}
+.modal-header h2{font-size:1.75rem;font-weight:700;letter-spacing:-0.3px}
+.modal-header .meta-line{font-size:0.82rem;color:var(--text-dim);margin-top:4px;display:flex;gap:16px;flex-wrap:wrap}
+.modal-close{
+  position:absolute;top:14px;right:14px;z-index:10;
+  background:rgba(0,0,0,0.45);border:none;color:#fff;
+  width:34px;height:34px;border-radius:50%;cursor:pointer;
+  font-size:1.1rem;display:flex;align-items:center;justify-content:center;
+  transition:background var(--transition);backdrop-filter:blur(4px);
+}
+.modal-close:hover{background:rgba(0,0,0,0.7)}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 20px;gap:4px}
+.tab{
+  padding:13px 22px;cursor:pointer;font-size:0.88rem;color:var(--text-dim);
+  border-bottom:2px solid transparent;transition:all var(--transition);
+  font-weight:500;white-space:nowrap;
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.tab-content{display:none;padding:0}
+.tab-content.active{display:block}
+
+/* ====== Dashboard Layout (Info Tab) ====== */
+.dashboard{padding:20px 24px 28px;display:flex;flex-direction:column;gap:22px}
+
+/* Section: Identity Card */
+.identity-card{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;
+}
+.id-item{
+  background:var(--surface2);border-radius:var(--radius-sm);padding:13px 16px;
+  border:1px solid var(--border);transition:border-color var(--transition);
+}
+.id-item:hover{border-color:var(--border-light)}
+.id-item .id-label{font-size:0.68rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px}
+.id-item .id-value{font-size:0.92rem;font-weight:550;color:var(--text)}
+
+/* Section: Body Dashboard */
+.body-dashboard{
+  display:grid;grid-template-columns:1fr 1fr;gap:20px;
+}
+@media(max-width:600px){.body-dashboard{grid-template-columns:1fr}}
+
+.gauge-card{
+  background:var(--surface2);border-radius:var(--radius);
+  padding:20px;border:1px solid var(--border);
+  position:relative;overflow:hidden;
+  transition:transform var(--transition),box-shadow var(--transition);
+}
+.gauge-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.3)}
+.gauge-card.height{border-left:3px solid var(--gold)}
+.gauge-card.weight{border-left:3px solid var(--cool)}
+
+.gauge-card .gauge-title{
+  font-size:0.75rem;color:var(--text-faint);text-transform:uppercase;
+  letter-spacing:1px;margin-bottom:16px;font-weight:500;
+}
+.gauge-card .gauge-value-group{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}
+.gauge-card .gauge-number{font-size:3rem;font-weight:700;line-height:1;letter-spacing:-1px}
+.gauge-card.height .gauge-number{color:var(--gold)}
+.gauge-card.weight .gauge-number{color:var(--cool)}
+.gauge-card .gauge-unit{font-size:1rem;color:var(--text-dim);font-weight:400}
+.gauge-card .gauge-eval{
+  font-size:1.1rem;font-weight:600;letter-spacing:0.5px;
+  font-family:Georgia,"Times New Roman","Noto Serif SC",serif;
+}
+.gauge-card.height .gauge-eval{color:var(--gold)}
+.gauge-card.weight .gauge-eval{color:var(--mint)}
+
+/* Gauge Bar */
+.gauge-bar-wrap{position:relative;height:8px;margin:12px 0 8px}
+.gauge-bar-bg{
+  width:100%;height:100%;border-radius:4px;background:var(--border);
+  overflow:hidden;position:relative;
+}
+.gauge-bar-fill{
+  height:100%;border-radius:4px;transition:width 1s cubic-bezier(0.22,0.61,0.36,1);
+  position:relative;
+}
+.gauge-card.height .gauge-bar-fill{background:linear-gradient(90deg,#c89230,var(--gold),#f5d080)}
+.gauge-card.weight .gauge-bar-fill{background:linear-gradient(90deg,#3d90b8,var(--cool),#8dd0f0)}
+
+.gauge-bar-fill::after{
+  content:'';position:absolute;right:0;top:50%;transform:translate(50%,-50%);
+  width:12px;height:12px;border-radius:50%;
+  box-shadow:0 0 10px currentColor;
+}
+.gauge-card.height .gauge-bar-fill::after{background:var(--gold)}
+.gauge-card.weight .gauge-bar-fill::after{background:var(--cool)}
+
+/* Reference marker on gauge */
+.gauge-ref{
+  position:absolute;top:-2px;bottom:-2px;width:2px;
+  border-radius:1px;z-index:2;
+}
+.gauge-ref.avg{background:rgba(255,255,255,0.35)}
+.gauge-ref-label{
+  position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+  font-size:0.6rem;color:var(--text-faint);white-space:nowrap;font-weight:500;
+}
+
+/* Reference hint text */
+.gauge-ref-info{
+  font-size:0.68rem;color:var(--text-faint);margin-top:6px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.gauge-ref-info .avg-line{border-bottom:1px dashed var(--text-faint);padding-bottom:1px}
+.gauge-ref-info .bmi-line{font-style:italic}
+
+/* Section: Highlights strip */
+.highlights-strip{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+.hl-tag{
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+  border-radius:20px;padding:5px 14px;font-size:0.76rem;color:var(--text-dim);
+  transition:all var(--transition);
+}
+.hl-tag:hover{color:var(--text);border-color:var(--border-light)}
+.hl-tag.accent{border-color:rgba(232,97,124,0.25);color:var(--accent);background:rgba(232,97,124,0.06)}
+
+/* More-info expandable */
+.more-toggle{
+  display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  font-size:0.74rem;color:var(--text-faint);padding:6px 0;
+  transition:color var(--transition);user-select:none;
+}
+.more-toggle:hover{color:var(--text-dim)}
+.more-toggle .arrow{transition:transform var(--transition);font-size:0.65rem}
+.more-toggle.open .arrow{transform:rotate(180deg)}
+.more-content{
+  max-height:0;overflow:hidden;transition:max-height 0.35s ease;
+}
+.more-content.open{max-height:200px}
+.more-inner{
+  display:flex;gap:10px;flex-wrap:wrap;padding:8px 0 0;
+}
+.more-chip{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius-xs);padding:5px 14px;font-size:0.73rem;color:var(--text-dim);
+}
+
+/* Section: Works mini (inline in info tab) */
+.works-mini{margin-top:4px}
+.works-mini h4{font-size:0.78rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px}
+.works-mini .wm-list{display:flex;flex-wrap:wrap;gap:6px}
+.works-mini .wm-item{
+  background:var(--surface2);border-radius:var(--radius-xs);
+  padding:4px 12px;font-size:0.75rem;color:var(--text-dim);
+  border:1px solid transparent;transition:all var(--transition);
+}
+.works-mini .wm-item:hover{border-color:var(--border-light);color:var(--text)}
+
+/* ====== Gallery ====== */
+.gallery-tab{padding:20px 24px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}
+.gallery img{
+  width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:var(--radius-sm);
+  cursor:pointer;transition:transform var(--transition),box-shadow var(--transition);
+}
+.gallery img:hover{transform:scale(1.06);box-shadow:0 6px 18px rgba(0,0,0,0.4)}
+
+/* ====== Works ====== */
+.works-tab{padding:20px 24px}
+.film-table{width:100%;border-collapse:collapse;font-size:0.84rem}
+.film-table th{text-align:left;padding:11px 14px;color:var(--text-faint);font-weight:500;border-bottom:1px solid var(--border);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px}
+.film-table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.film-table tbody tr{transition:background var(--transition)}
+.film-table tbody tr:hover td{background:var(--surface2)}
+.film-table .year{color:var(--gold);font-weight:550;white-space:nowrap;width:55px}
+.film-table .role{color:var(--text-dim);font-size:0.78rem}
+.film-table a{color:var(--accent);text-decoration:none;font-weight:500}
+.film-table a:hover{text-decoration:underline}
+
+/* ====== Bio ====== */
+.bio-tab{padding:20px 24px}
+.bio-text{line-height:1.9;color:var(--text-dim);font-size:0.9rem;white-space:pre-line}
+
+/* ====== Loading & empty ====== */
+.loading{text-align:center;padding:60px;color:var(--text-dim)}
+.spinner{width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:80px 20px;color:var(--text-dim)}
+.empty .icon{font-size:2.8rem;margin-bottom:12px}
+
+/* ====== Lightbox ====== */
+.lightbox{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.93);justify-content:center;align-items:center}
+.lightbox.active{display:flex}
+.lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--radius-sm)}
+.lightbox-close{position:absolute;top:22px;right:22px;background:none;border:none;color:#fff;font-size:1.8rem;cursor:pointer;opacity:0.7;transition:opacity var(--transition)}
+.lightbox-close:hover{opacity:1}
+
+/* ====== Scroll Animations ====== */
+.anim-in{opacity:0;transform:translateY(20px);transition:opacity 0.5s ease,transform 0.5s ease}
+.anim-in.visible{opacity:1;transform:translateY(0)}
+
+/* ====== Toast ====== */
+.toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:999;
+  background:var(--surface2);color:var(--text);padding:10px 24px;border-radius:24px;
+  font-size:0.82rem;border:1px solid var(--border);box-shadow:var(--shadow-lg);
+  opacity:0;transition:opacity 0.3s;pointer-events:none;
+}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <h1>✨ WomenPic</h1>
+  <span class="stats" id="headerStats"></span>
+  <div class="search-box">
+    <span class="icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="搜索女星…" autocomplete="off">
+  </div>
+</header>
+
+<div class="container">
+  <div id="grid" class="grid"></div>
+  <div id="loading" class="loading"><div class="spinner"></div><p>加载中…</p></div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-header" id="modalHeader">
+      <img id="modalBanner" src="" alt="">
+      <div class="overlay"></div>
+      <div class="title-group">
+        <h2 id="modalName"></h2>
+        <div class="meta-line" id="modalMeta"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="tabs" id="modalTabs">
+      <div class="tab active" data-tab="dashboard">📊 档案</div>
+      <div class="tab" data-tab="gallery">🖼️ 相册</div>
+      <div class="tab" data-tab="works">🎬 作品</div>
+      <div class="tab" data-tab="bio">📖 简介</div>
+    </div>
+    <div id="tabDashboard" class="tab-content active"></div>
+    <div id="tabGallery" class="tab-content"></div>
+    <div id="tabWorks" class="tab-content"></div>
+    <div id="tabBio" class="tab-content"></div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+  <button class="lightbox-close">✕</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+// ====== Evaluation System ======
+const REF = {
+  height_avg: 158, // cm，中国成年女性平均身高
+  height_tiers: [
+    { max: 155, label: '娇小', color: '#c0a0e0' },
+    { max: 160, label: '偏娇小', color: '#a0c8e8' },
+    { max: 165, label: '标准', color: '#8ec8a0' },
+    { max: 170, label: '偏高挑', color: '#e8c060' },
+    { max: Infinity, label: '高挑', color: '#e89850' }
+  ],
+  // BMI 分级 (中国标准)
+  bmi_tiers: [
+    { max: 18.5, label: '纤细', risk: '低于标准范围', color: '#6ec9a0' },
+    { max: 24, label: '标准', risk: '', color: '#8ec8a0' },
+    { max: 28, label: '丰腴', risk: '', color: '#e8c060' },
+    { max: Infinity, label: '丰盈', risk: '高于标准范围', color: '#e88060' }
+  ]
+};
+
+function parseHeight(cmStr) {
+  const m = String(cmStr||'').match(/([\d.]+)/);
+  return m ? parseFloat(m[1]) : null;
+}
+function parseWeight(kgStr) {
+  const m = String(kgStr||'').match(/([\d.]+)/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function evaluateHeight(cm) {
+  for (const t of REF.height_tiers) {
+    if (cm < t.max) return { label: t.label, color: t.color };
+  }
+  return { label: '高挑', color: '#e89850' };
+}
+function calcBMI(cm, kg) {
+  if (!cm || !kg) return null;
+  return kg / ((cm / 100) ** 2);
+}
+function evaluateBMI(bmi) {
+  if (bmi === null) return { label: '—', risk: '', color: '#888' };
+  for (const t of REF.bmi_tiers) {
+    if (bmi <= t.max) return t;
+  }
+  return { label: '—', risk: '', color: '#888' };
+}
+
+// Gauge bar percent: map value into [0, 1] on the reference scale
+function gaugePercent(value, refAvg, maxVal) {
+  // Scale so that refAvg sits at ~50% and maxVal at ~95%
+  const scale = refAvg / 0.5;
+  return Math.min((value / scale) * 100, 98);
+}
+
+// ====== Config ======
+const API_BASE = '/womenpic/api';
+let allActresses = [];
+let currentActress = null;
+
+// ====== Init ======
+document.addEventListener('DOMContentLoaded', () => {
+  loadActresses();
+  document.getElementById('searchInput').addEventListener('input', debounce(onSearch, 280));
+  document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  document.getElementById('modalTabs').addEventListener('click', e => {
+    if (e.target.classList.contains('tab')) switchTab(e.target.dataset.tab);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+});
+
+// ====== API ======
+async function loadActresses() {
+  const grid = document.getElementById('grid');
+  const loading = document.getElementById('loading');
+  grid.innerHTML = '';
+  loading.style.display = 'block';
+  try {
+    const res = await fetch(`${API_BASE}/actresses`);
+    const data = await res.json();
+    allActresses = data.data || [];
+    renderGrid(allActresses);
+    document.getElementById('headerStats').textContent = `共 ${data.count} 位女星`;
+  } catch (err) {
+    grid.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>无法连接后端服务</p><p style="font-size:0.8rem;margin-top:6px">请确保已启动 python backend/app.py</p></div>`;
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+async function loadActressDetail(name) {
+  const res = await fetch(`${API_BASE}/actress/${encodeURIComponent(name)}`);
+  if (!res.ok) throw new Error('Not found');
+  return res.json();
+}
+
+// ====== Render Grid ======
+function renderGrid(actresses) {
+  const grid = document.getElementById('grid');
+  if (!actresses.length) {
+    grid.innerHTML = '<div class="empty"><div class="icon">📭</div><p>没有匹配的女星</p></div>';
+    return;
+  }
+  grid.innerHTML = actresses.map(a => {
+    // 尝试从 summary 或 baike 中提取身高体重用于卡片 mini 展示
+    return `
+    <div class="card" onclick="openDetail('${esc(a.name)}')" title="点击查看档案">
+      <img class="card-img" src="${a.profile_image||''}" alt="${esc(a.name)}"
+           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22320%22><rect fill=%22%231c1c2e%22 width=%22300%22 height=%22320%22/><text fill=%22%23555570%22 x=%22150%22 y=%22160%22 text-anchor=%22middle%22 font-size=%2236%22>📷</text></svg>'">
+      <div class="card-body">
+        <div class="card-name">${esc(a.name)}</div>
+        <div class="card-meta">
+          ${a.birthday ? `<span>🎂 ${a.birthday}</span>` : ''}
+          ${a.birthplace ? `<span>📍 ${a.birthplace}</span>` : ''}
+        </div>
+        <div class="card-meta">
+          <span class="card-badge">🖼 ${a.image_count}</span>
+          <span class="card-badge">🎬 ${a.works_count}</span>
+        </div>
+        ${a.summary ? `<div class="card-summary">${esc(a.summary)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ====== Render Detail Dashboard ======
+function renderDetail(data) {
+  currentActress = data;
+  const baike = data.baike || {};
+
+  // ── Modal Header ──
+  const bannerImg = data.images?.[0]?.url || '';
+  document.getElementById('modalBanner').src = bannerImg;
+  document.getElementById('modalName').textContent = data.name;
+  document.getElementById('modalMeta').innerHTML = [
+    data.birthday ? `🎂 ${data.birthday}` : '',
+    data.birthplace ? `📍 ${data.birthplace}` : ''
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+
+  // ── Dashboard Tab ──
+  const cm = parseHeight(baike.bodyHeight || '');
+  const kg = parseWeight(baike.bodyWeight || '');
+  const hEval = cm ? evaluateHeight(cm) : null;
+  const bmi = calcBMI(cm, kg);
+  const bEval = evaluateBMI(bmi);
+
+  // Identity fields
+  const idFields = [
+    ['本名', baike.name_cn || data.name],
+    ['英文名', baike.name_en || ''],
+    ['国籍', baike.nationality || ''],
+    ['民族', baike.ethnicity || ''],
+    ['出生地', baike.birthplace || data.birthplace || ''],
+    ['生日', baike.birthday || data.birthday || ''],
+    ['职业', baike.occupation || ''],
+    ['毕业院校', baike.education || ''],
+    ['经纪公司', baike.agency || ''],
+    ['别名', baike.alternateName || ''],
+  ].filter(([,v]) => v);
+
+  // Works highlights (first 8)
+  const works = data.filmography || [];
+  const topWorks = works.slice(0, 10);
+
+  // Achievements highlight
+  const achievements = baike.achievements || '';
+
+  let html = `<div class="dashboard">`;
+
+  // Section 1: Identity Card
+  html += `<div class="identity-card">`;
+  idFields.forEach(([k, v]) => {
+    html += `<div class="id-item"><div class="id-label">${k}</div><div class="id-value">${esc(String(v))}</div></div>`;
+  });
+  html += `</div>`;
+
+  // Section 2: Body Metrics Dashboard
+  if (cm || kg) {
+    const hPct = cm ? gaugePercent(cm, REF.height_avg, 180) : 0;
+    const wPct = kg ? gaugePercent(kg, 55, 80) : 0;
+    // For weight bar, we show it relative to BMI range
+    const bmiPct = bmi ? Math.min((bmi / 30) * 100, 95) : 0;
+
+    html += `<div class="body-dashboard">`;
+
+    // Height gauge
+    html += `
+    <div class="gauge-card height anim-in">
+      <div class="gauge-title">📏 身高</div>
+      <div class="gauge-value-group">
+        <span class="gauge-number">${cm||'—'}</span>
+        <span class="gauge-unit">cm</span>
+        <span class="gauge-eval">${hEval?.label||''}</span>
+      </div>
+      <div class="gauge-bar-wrap">
+        <div class="gauge-ref avg" style="left:${(REF.height_avg/180*100)}%">
+          <div class="gauge-ref-label">avg</div>
+        </div>
+        <div class="gauge-bar-bg">
+          <div class="gauge-bar-fill" style="width:0%" data-width="${hPct}%"></div>
+        </div>
+      </div>
+      <div class="gauge-ref-info">
+        <span class="avg-line">中国女性平均 158cm</span>
+        <span>${cm ? (cm > REF.height_avg ? `↑ +${(cm-REF.height_avg).toFixed(1)}cm` : cm < REF.height_avg ? `↓ ${(cm-REF.height_avg).toFixed(1)}cm` : '≈ 平均值') : ''}</span>
+      </div>
+    </div>`;
+
+    // Weight gauge
+    html += `
+    <div class="gauge-card weight anim-in">
+      <div class="gauge-title">⚖️ 体重</div>
+      <div class="gauge-value-group">
+        <span class="gauge-number">${kg||'—'}</span>
+        <span class="gauge-unit">kg</span>
+        <span class="gauge-eval">${bEval?.label||''}</span>
+      </div>
+      <div class="gauge-bar-wrap">
+        <div class="gauge-bar-bg">
+          <div class="gauge-bar-fill" style="width:0%" data-width="${bmiPct}%"></div>
+        </div>
+      </div>
+      <div class="gauge-ref-info">
+        <span class="bmi-line">BMI ${bmi ? bmi.toFixed(1) : '—'}（${bEval?.label||'—'}）</span>
+        <span>${bEval?.risk ? `⚠ ${bEval.risk}` : ''}</span>
+      </div>
+    </div>`;
+
+    html += `</div>`;
+  }
+
+  // Section 3: Works highlights
+  if (topWorks.length) {
+    html += `<div class="works-mini"><h4>🎬 代表作品</h4><div class="wm-list">`;
+    topWorks.forEach(w => {
+      html += `<span class="wm-item">${esc(w.title)}${w.role ? ' · '+esc(w.role) : ''}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Section 4: Achievements highlight
+  if (achievements) {
+    const achList = achievements.split(/\s{2,}|  /).filter(Boolean).slice(0, 6);
+    html += `<div class="highlights-strip">`;
+    achList.forEach(a => {
+      html += `<span class="hl-tag accent">🏆 ${esc(a)}</span>`;
+    });
+    html += `</div>`;
+  }
+
+  // Section 5: More info (blood type / constellation — collapsed)
+  const extras = [];
+  if (baike.blood_type) extras.push(`🩸 ${baike.blood_type}`);
+  if (baike.constellation) extras.push(`♑ ${baike.constellation}`);
+  if (baike.customDefault) extras.push(`🐾 ${baike.customDefault}`);
+
+  if (extras.length) {
+    html += `
+    <div>
+      <div class="more-toggle" onclick="toggleMore(this)" title="更多信息">
+        更多信息 <span class="arrow">▾</span>
+      </div>
+      <div class="more-content">
+        <div class="more-inner">
+          ${extras.map(e => `<span class="more-chip">${e}</span>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // TMDB link
+  if (data.tmdb_url) {
+    html += `<p style="font-size:0.76rem;margin-top:4px">
+      🔗 <a href="${data.tmdb_url}" target="_blank" style="color:var(--accent)">在 TMDB 查看完整档案</a>
+    </p>`;
+  }
+
+  html += `</div>`;
+  document.getElementById('tabDashboard').innerHTML = html;
+
+  // Animate gauges after render
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.gauge-bar-fill[data-width]').forEach(bar => {
+      bar.style.width = bar.dataset.width;
+    });
+    // Animate-in cards
+    setTimeout(() => {
+      document.querySelectorAll('.anim-in').forEach(el => el.classList.add('visible'));
+    }, 50);
+  });
+
+  // ── Gallery Tab ──
+  if (data.images?.length) {
+    document.getElementById('tabGallery').innerHTML = `
+      <div class="gallery-tab"><div class="gallery">
+        ${data.images.slice(0,60).map(img => `
+          <img src="${img.url}" alt="${esc(img.filename)}"
+               onclick="openLightbox('${img.url}')"
+               onerror="this.style.display='none'" loading="lazy">
+        `).join('')}
+      </div></div>`;
+  } else {
+    document.getElementById('tabGallery').innerHTML = '<div class="gallery-tab"><p class="empty">暂无图片</p></div>';
+  }
+
+  // ── Works Tab ──
+  if (works.length) {
+    document.getElementById('tabWorks').innerHTML = `
+      <div class="works-tab">
+        <p style="margin-bottom:14px;color:var(--text-dim);font-size:0.8rem">
+          共 ${data.filmography_total} 部作品，显示前 ${Math.min(works.length,100)} 部
+        </p>
+        <table class="film-table">
+          <thead><tr><th>年份</th><th>作品</th><th>角色</th></tr></thead>
+          <tbody>
+            ${works.map(w => `
+              <tr>
+                <td class="year">${w.year||'—'}</td>
+                <td>${w.url ? `<a href="${w.url}" target="_blank">${esc(w.title)}</a>` : esc(w.title)}</td>
+                <td class="role">${esc(w.role||'')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } else {
+    document.getElementById('tabWorks').innerHTML = '<div class="works-tab"><p class="empty">暂无作品数据</p></div>';
+  }
+
+  // ── Bio Tab ──
+  let bioText = data.biography || '';
+  if (data.wiki_zh) bioText += '\n\n── Wikipedia 中文 ──\n' + data.wiki_zh;
+  if (data.wiki_en) bioText += '\n\n── Wikipedia English ──\n' + data.wiki_en;
+  document.getElementById('tabBio').innerHTML = bioText
+    ? `<div class="bio-tab"><div class="bio-text">${esc(bioText)}</div></div>`
+    : '<div class="bio-tab"><p class="empty">暂无简介</p></div>';
+}
+
+// ====== Modal ======
+async function openDetail(name) {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  overlay.scrollTop = 0;
+
+  // Reset tabs to dashboard
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i === 0));
+
+  ['tabDashboard','tabGallery','tabWorks','tabBio'].forEach(id => {
+    document.getElementById(id).innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  });
+
+  try {
+    const data = await loadActressDetail(name);
+    renderDetail(data);
+  } catch (err) {
+    document.getElementById('tabDashboard').innerHTML = '<div class="dashboard"><p class="empty">加载详情失败</p></div>';
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+  currentActress = null;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
+  const idMap = { dashboard:'tabDashboard', gallery:'tabGallery', works:'tabWorks', bio:'tabBio' };
+  const el = document.getElementById(idMap[name]);
+  if (el) el.classList.add('active');
+}
+
+// ====== More toggle ======
+function toggleMore(btn) {
+  btn.classList.toggle('open');
+  btn.nextElementSibling.classList.toggle('open');
+}
+
+// ====== Lightbox ======
+function openLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('active');
+}
+
+// ====== Search ======
+function onSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) { renderGrid(allActresses); return; }
+  const filtered = allActresses.filter(a =>
+    a.name.toLowerCase().includes(q.toLowerCase()) ||
+    (a.birthplace||'').includes(q) ||
+    (a.summary||'').includes(q)
+  );
+  renderGrid(filtered);
+}
+
+// ====== Utils ======
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+</script>
+</body>
+</html>

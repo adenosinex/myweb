@@ -211,6 +211,7 @@
                 watch(autoAiTags, (val) => localStorage.setItem('autoAiTags', val));
 
                 let vditorInstance = null;
+                let isVditorReady = false;
                 let echartsInstance = null;
 
                 const getDocTitle = (doc) => {
@@ -352,12 +353,15 @@
                     });
                 };
 
-                const initOrUpdateVditor = (content) => {
-                    if (vditorInstance) {
+               const initOrUpdateVditor = (content) => {
+                    if (vditorInstance && isVditorReady) {
+                        // 已经初始化且就绪，直接安全设值
                         vditorInstance.setValue(content);
                         setTimeout(applyEditorHighlight, 100);
-                    } else {
+                    } else if (!vditorInstance) {
+                        // 尚未初始化，开始创建
                         vditorInstance = new Vditor('vditor-container', {
+                            cdn: '/static/cdn/vditor',
                             mode: 'ir',
                             height: '100%', 
                             cache: { enable: false }, 
@@ -375,11 +379,17 @@
                                 handleInput();
                                 applyEditorHighlight();
                             },
-                            after: () => { setTimeout(applyEditorHighlight, 100); }
+                            after: () => { 
+                                isVditorReady = true;
+                                // 确保 Vditor 真正就绪后，加载这期间可能已被切换的最新内容
+                                vditorInstance.setValue(editorContent.value);
+                                setTimeout(applyEditorHighlight, 100); 
+                            }
                         });
                     }
+                    // 如果 vditorInstance 存在但 isVditorReady 为 false，说明正在异步加载中。
+                    // 此时上方外部逻辑已经更新了 editorContent.value，直接等待 after 回调执行即可。
                 };
-
                 const createNew = () => {
                     activeDocId.value = ''; isCreating.value = true; relatedDocs.value = []; generatedTags.value = [];
                     const ts = new Date().getTime();

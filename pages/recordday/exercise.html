@@ -312,6 +312,7 @@
       <div class="knowledge-content">{{ currentKnowledge?.content }}</div>
     </div>
 
+    <!-- 顶部计划切换区 -->
     <div class="plan-selector">
       <div
         v-for="key in planKeys"
@@ -324,14 +325,15 @@
       </div>
     </div>
 
+    <!-- 数据记录区 -->
     <div>
       <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 16px;">记录数据</h2>
 
-      <div v-for="exercise in currentExercises" :key="exercise.name" class="exercise-item">
+      <div v-for="(exercise, index) in currentExercises" :key="exercise.name" class="exercise-item">
         <div class="exercise-label">
           <div class="exercise-label-left">
             <i style="margin-right:8px;">🎯</i>
-            <span>{{ exercise.name }}</span>
+            <span>{{ index + 1 }}. {{ exercise.name }}</span>
             <span v-if="exercise.priority === 'must'" class="priority-badge must">必做</span>
             <span v-if="exercise.priority === 'optional'" class="priority-badge opt">可选</span>
             <span v-if="exercise.order === 'strict'" class="priority-badge strict">严格优先</span>
@@ -346,7 +348,6 @@
 
         <div class="input-row" v-if="inputs[exercise.name]">
           <div class="input-group">
-
             <div v-if="inputs[exercise.name].weight !== undefined">
               <div class="input-label">负重(kg)</div>
               <input type="number" step="0.5" min="0" v-model.number="inputs[exercise.name].weight">
@@ -368,13 +369,13 @@
               <div class="input-label">时间(s)</div>
               <input type="number" min="0" step="5" v-model.number="inputs[exercise.name].time">
             </div>
-
           </div>
           <button @click="deload(exercise)" class="btn-deload">降阶</button>
         </div>
       </div>
     </div>
 
+    <!-- 综合评价区 -->
     <div class="exercise-item">
       <h2 style="font-size: 1.2rem; font-weight: bold; color: #1e40af; margin-bottom: 8px; margin-top:0;">体感评分 (综合疲劳度)</h2>
       <div class="rating-container">
@@ -387,7 +388,6 @@
         >★</span>
       </div>
     </div>
-
     <div class="exercise-item">
       <div style="display: flex; gap: 12px; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 100px;" class="form-group">
@@ -401,6 +401,59 @@
       </div>
     </div>
 
+    <!-- ================= 核心：全自动换行批量修改模块 ================= -->
+    <div class="exercise-item">
+      <div class="exercise-label" @click="showBatchEdit = !showBatchEdit" style="cursor: pointer; margin-bottom: 0;">
+        <div class="exercise-label-left">
+          <i>📝</i> <span>快捷批量修改配置 (文字版)</span>
+        </div>
+      </div>
+      <div v-show="showBatchEdit" style="margin-top: 12px;">
+        
+        <div class="exercise-note" style="background:#e0f2fe; border-left-color:#38bdf8;">
+          💡 <b>提示：</b>下方的文本框会<b>实时自动同步</b>为您勾选的计划配置！直接在文字上修改数字（格式：动作名 属性=值），然后点击【应用修改】即可。<br>
+          支持属性：重量, 组数, 次数, 时间, 强度。
+        </div>
+
+        <div style="margin-bottom: 8px; font-weight:bold; font-size: 13px; color: #1e40af;">请勾选计划（自动加载至文本框，支持多选）：</div>
+        <!-- 优化样式：独立卡片避免粘连 -->
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; background: #f8fafc; padding: 10px; border-radius: 8px;">
+          <label v-for="key in planKeys" :key="key" style="font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 12px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <input type="checkbox" :value="key" v-model="batchEditPlans" @change="loadSelectedPlansText" style="margin: 0;"> 
+            <span style="font-weight: 600; color: #334155;">{{ key }}</span>
+          </label>
+        </div>
+
+        <textarea v-model="batchEditText" style="width: 100%; height: 220px; padding: 12px; border: 1px solid #94a3b8; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none; background: white; white-space: pre; font-family: monospace;"></textarea>
+        
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <!-- 重新加载按钮保留，以防用户改乱了想恢复 -->
+          <button @click="loadSelectedPlansText" class="copy-btn" style="flex: 1; margin-top: 0; background: #f1f5f9; color: #475569;">🔄 放弃修改 (重新加载)</button>
+          <button @click="applyBatchEdit" class="copy-btn" style="flex: 2; margin-top: 0; background: #1e40af; color: white; font-size: 15px;">⚡ 立即应用修改</button>
+        </div>
+      </div>
+    </div>
+    <!-- ========================================================= -->
+
+    <!-- 高级 JSON 与云端同步模块 -->
+    <div class="exercise-item">
+      <div class="exercise-label" @click="showConfig = !showConfig" style="cursor: pointer; margin-bottom: 0;">
+        <div class="exercise-label-left">
+          <i>⚙️</i> <span>高级 JSON 配置与云端备份</span>
+        </div>
+      </div>
+      <div v-show="showConfig" style="margin-top: 12px;">
+        <div class="exercise-note">在此进行云端备份/拉取。云端Key固定为：<b>gym_cfg</b></div>
+        <textarea v-model="configJsonStr" style="width: 100%; height: 200px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 12px; box-sizing: border-box; background: #f8fafc; white-space: pre; outline: none;"></textarea>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button @click="applyLocalConfig" class="copy-btn" style="flex: 1; margin-top:0; background:#dbeafe; color:#1e40af;">应用本地</button>
+          <button @click="loadFromCloud" class="copy-btn" style="flex: 1; margin-top:0; background:#fef3c7; color:#b45309;">云端加载</button>
+          <button @click="saveToCloud" class="copy-btn" style="flex: 1; margin-top:0; background:#dcfce7; color:#166534;">云端保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部生成记录功能 -->
     <button @click="generateRecord" class="btn-generate">一键生成复盘记录</button>
 
     <div v-if="generatedRecord" class="record-container">
@@ -416,185 +469,108 @@
 const KNOWLEDGE_DB = [
   {
     category: "修补厂法则",
-    content:
-`健身房不是主战场，是修补厂。骑行是引擎，体操是技能，徒步是享受。
-
-Gym的唯一使命：
-修复骑行/体操/徒步覆盖不了的不均衡，防止未来出问题。
-
-核心原则：
-结构稳定 > 动作质量 > 重量数字。
-
-真正目标不是练废，而是离开Gym后：
-骑行更稳、单双杠更轻松、徒步更耐久。`
+    content: `健身房不是主战场，是修补厂。骑行是引擎，体操是技能，徒步是享受。\nGym的唯一使命：\n修复骑行/体操/徒步覆盖不了的不均衡，防止未来出问题。\n\n核心原则：\n结构稳定 > 动作质量 > 重量数字。`
   },
   {
     category: "RDL髋铰链纪律",
-    content:
-`【核心】
-RDL学的是髋铰链模式——弯腰时用髋关节而不是腰椎发力。
-
-【纪律】
-空杆练到完美，不急着加重。
-允许练不到，不允许腰代偿。
-
-【判断标准】
-空杆×15×3、
-全程无腰痛、
-连续2周稳定后，
-每2周 +2.5kg。
-
-【日常迁移】
-搬重物、背包弯腰、骑行后锁车——
-髋铰链保护所有弯腰场景。`
+    content: `【核心】\nRDL学的是髋铰链模式——弯腰时用髋关节而不是腰椎发力。\n【纪律】\n空杆练到完美，不急着加重。\n允许练不到，不允许腰代偿。`
   },
   {
     category: "极限重量引体/双杠纪律",
-    content:
-`【负重引体：绝对控制】
-必须底端静止启动，严禁甩动借力。
-双腿并拢微向前伸（空心体），用大腿内侧夹稳铃片，消灭钟摆晃动。
-严禁向后交叉弯曲小腿（会导致骨盆前倾拉扯腰部）。
-
-【负重双杠：肩前囊保护】
-身体前倾30-45度，胸肌下沿分摊受力。
-下放至大臂平行地面即可，严禁过深。
-膝盖夹稳铃片，推起时不锁死手肘。
-
-【组间休息（极重要）】
-必须休息 3-5 分钟。
-严禁坐在无靠背平板凳上或来回踱步。
-首选：靠墙站立，或双手撑器械前倾（保持背部笔直），或趴在胸托凳上休息。`
+    content: `【负重引体：绝对控制】\n必须底端静止启动，严禁甩动借力。\n双腿并拢微向前伸（空心体），用大腿内侧夹稳铃片，消灭钟摆晃动。\n严禁向后交叉弯曲小腿（会导致骨盆前倾拉扯腰部）。`
   },
   {
     category: "预疲劳与真实容量",
-    content:
-`【接受退步假象】
-高难度抗旋动作初期，极易引发下背DOMS并破坏骨盆稳定。
-
-【真实容量】
-严格保留2次余力。禁止凑数导致动作变形。
-
-【农夫行走】
-必须双手对称负重，严禁单手行走（避免骨盆抗旋）。
-永远放Gym最后。目标：呼吸稳定、骨盆稳定、步态稳定。`
+    content: `【接受退步假象】\n高难度抗旋动作初期，极易引发下背DOMS并破坏骨盆稳定。\n【真实容量】\n严格保留2次余力。禁止凑数导致动作变形。`
   },
   {
     category: "恢复债务与结构适应",
-    content:
-`【恢复债务】
-局部组织（肌腱/筋膜/深层稳定）恢复远慢于心肺与意志。
-腰不痛 ≠ 恢复完成。
-
-【危险阶段】
-感觉还能练、还能加重、但长期存在轻微紧张感时，最容易进入慢性代偿。
-
-【日常坐姿（腰伤免役期）】
-严禁“下腰悬空弯曲”（屁股顶靠背、腰部无支撑前倾）。
-必须使用硬质腰靠填满下腰悬空区，躯干像圆柱一样堆叠在骨盆上。`
+    content: `【恢复债务】\n局部组织（肌腱/筋膜/深层稳定）恢复远慢于心肺与意志。\n腰不痛 ≠ 恢复完成。\n【危险阶段】\n感觉还能练、还能加重、但长期存在轻微紧张感时，最容易进入慢性代偿。`
   }
 ];
 
 const PLANS = {
-  Gym_A: {
-    label: "Gym A: 力量突破",
-    duration: 90,
-    exercises: [
-      { name: "哑铃抓举", weight: 30, sets: 3, reps: 3, intensity: 8, order: "strict", note: "激活项。必须置于首位，发力必须绝对垂直，二头肌越过肚脐前保持放松。" },
-      { name: "负重引体向上", weight: 20, sets: 4, reps: 4, intensity: 10, order: "strict", note: "主项一。需优先抢占器械，底端静止启动消灭钟摆。双腿夹稳杠铃片。" },
-      { name: "负重双杠臂屈伸", weight: 40, sets: 4, reps: 3, intensity: 10, order: "strict", note: "主项二。若人多可与引体互换顺序。身体前倾，避免下放过深。" },
-      { name: "泽奇深蹲", weight: 80, sets: 3, reps: 5, intensity: 9, order: "flexible", note: "主项三。零腰部剪切力，强化前侧核心。深蹲架人多时可先做农夫行走。" },
-      { name: "双手农夫行走", weight: 60, sets: 3, time: 40, intensity: 8, order: "flexible", note: "主项四。严禁单手，必须对称负重防骨盆旋转。找空地即可随时插入。" },
-      { name: "杠铃推肩", weight: 40, sets: 3, reps: 5, intensity: 7, order: "flexible", note: "辅助维持。见缝插针，禁止做到力竭抢占双杠恢复配额。" },
-      { name: "器械单手划船", weight: 70, sets: 3, reps: 5, intensity: 7, order: "flexible", note: "辅助维持。器械空出随时可做。" },
-      { name: "面拉", weight: 30, sets: 3, reps: 12, intensity: 5, order: "flexible", note: "康复收尾。固定在最后进行。" }
+  "Gym_A": {
+    "label": "Gym A: 力量突破 (主冲1RM)",
+    "duration": 90,
+    "exercises": [
+      { "name": "哑铃抓举", "weight": 30, "sets": 3, "reps": 3, "intensity": 8, "order": "strict", "note": "激活项。发力必须绝对垂直。" },
+      { "name": "负重引体向上", "weight": "极限", "sets": 5, "reps": 1, "intensity": 10, "order": "strict", "note": "主项一。冲击1RM。需底端静止启动消灭钟摆。" },
+      { "name": "负重双杠臂屈伸", "weight": 40, "sets": 4, "reps": 3, "intensity": 9, "order": "strict", "note": "主项二。3RM积累，严禁做单次极限。" },
+      { "name": "泽奇深蹲", "weight": 80, "sets": 3, "reps": 5, "intensity": 9, "order": "flexible", "note": "主项三。零腰部剪切力，强化前侧核心。" },
+      { "name": "双手农夫行走", "weight": 60, "sets": 3, "time": 40, "intensity": 8, "order": "flexible", "note": "严禁单手，必须对称负重防骨盆旋转。" },
+      { "name": "杠铃推肩", "weight": 40, "sets": 3, "reps": 5, "intensity": 7, "order": "flexible", "note": "见缝插针，禁止做到力竭抢占双杠恢复配额。" },
+      { "name": "器械单手划船", "weight": 70, "sets": 3, "reps": 5, "intensity": 7, "order": "flexible", "note": "器械空出随时可做。" },
+      { "name": "面拉", "weight": 30, "sets": 3, "reps": 12, "intensity": 5, "order": "flexible", "note": "康复收尾。固定在最后进行。" }
     ]
   },
-
-  Gym_B: {
-    label: "Gym B: 容量增厚",
-    duration: 80,
-    exercises: [
-      { name: "负重双杠臂屈伸", weight: 20, sets: 4, reps: 10, intensity: 8, order: "strict", note: "容量主项，首发追求胸下沿泵感。" },
-      { name: "负重引体/高位下拉", weight: 10, sets: 4, reps: 10, intensity: 8, order: "flexible", note: "若引体握力提前衰减，随时切换为高位下拉完成容量。" },
-      { name: "器械坐姿划船", weight: 70, sets: 4, reps: 10, intensity: 7, order: "flexible", note: "如果胸托划船更舒服可替换。保持腰椎中立，勿仰身借力。" },
-      { name: "俯卧腿弯举", weight: 35, sets: 4, reps: 12, intensity: 6, order: "flexible", note: "下肢绝对卸载骨盆与脊柱压力。" },
-      { name: "坐姿腿伸展", weight: 45, sets: 4, reps: 12, intensity: 6, order: "flexible", note: "可与腿弯举组成超级组省时间。" },
-      { name: "双手农夫行走", weight: 50, sets: 3, time: 45, intensity: 7, order: "flexible", note: "耐力向，避开场馆过道高峰即可。" },
-      { name: "面拉", weight: 30, sets: 3, reps: 15, intensity: 5, order: "flexible", note: "收尾。" },
-      { name: "单手悬挂", weight: 0, sets: 3, time: 10, intensity: 4, order: "flexible", note: "收尾拉伸。" }
+  "Gym_B": {
+    "label": "Gym B: 容量增厚 (A日容量版)",
+    "duration": 90,
+    "exercises": [
+      { "name": "哑铃抓举", "weight": 20, "sets": 4, "reps": 5, "intensity": 6, "order": "strict" },
+      { "name": "负重引体向上/高位下拉", "weight": 10, "sets": 4, "reps": 10, "intensity": 8, "order": "strict" },
+      { "name": "负重双杠臂屈伸", "weight": 20, "sets": 4, "reps": 10, "intensity": 8, "order": "strict" },
+      { "name": "泽奇深蹲", "weight": 60, "sets": 3, "reps": 10, "intensity": 8, "order": "flexible" },
+      { "name": "双手农夫行走", "weight": 50, "sets": 3, "time": 45, "intensity": 7, "order": "flexible" },
+      { "name": "杠铃推肩", "weight": 30, "sets": 4, "reps": 10, "intensity": 7, "order": "flexible" },
+      { "name": "器械单手划船", "weight": 50, "sets": 4, "reps": 10, "intensity": 7, "order": "flexible" },
+      { "name": "俯卧腿弯举", "weight": 30, "sets": 3, "reps": 12, "intensity": 6, "order": "flexible" },
+      { "name": "坐姿腿伸展", "weight": 40, "sets": 3, "reps": 12, "intensity": 6, "order": "flexible" },
+      { "name": "面拉", "weight": 25, "sets": 3, "reps": 15, "intensity": 5, "order": "flexible" },
+      { "name": "单手悬挂", "weight": 0, "sets": 3, "time": 15, "intensity": 4, "order": "flexible" }
     ]
   },
-
-  Gym_C: {
-    label: "Gym C: 综合打磨",
-    duration: 80,
-    exercises: [
-      { name: "哑铃抓举", weight: 28, sets: 3, reps: 4, intensity: 7, order: "strict", note: "神经启动，首位执行。" },
-      { name: "负重引体向上", weight: 15, sets: 3, reps: 8, intensity: 8, order: "strict", note: "打磨控制力，保持 6-8 RM 区间。" },
-      { name: "负重双杠臂屈伸", weight: 25, sets: 3, reps: 8, intensity: 8, order: "strict", note: "主项必须靠前。" },
-      { name: "泽奇深蹲", weight: 75, sets: 3, reps: 8, intensity: 8, order: "flexible", note: "核心友好动作，架子空闲优先占用。" },
-      { name: "杠铃推肩", weight: 35, sets: 3, reps: 8, intensity: 7, order: "flexible", note: "非核心诉求，排队可延后。" },
-      { name: "器械划船", weight: 60, sets: 3, reps: 10, intensity: 6, order: "flexible" },
-      { name: "俄挺进阶/腰间俯卧撑", weight: 0, sets: 3, reps: 5, intensity: 7, order: "flexible", note: "自重项，无需抢器械，纯为唤醒水平推神经。" },
-      { name: "面拉", weight: 30, sets: 3, reps: 12, intensity: 5, order: "flexible" },
-      { name: "单手悬挂", weight: 0, sets: 2, time: 10, intensity: 4, order: "flexible" }
+  "Gym_Base": {
+    "label": "Gym: 综合一周",
+    "duration": 160,
+    "exercises": [
+      { "name": "哑铃抓举", "weight": 26, "sets": 3, "reps": 5, "intensity": 8 },
+      { "name": "腰间俯卧撑进阶俄挺", "sets": 4, "reps": 5, "intensity": 9 },
+      { "name": "保加利亚分腿蹲", "weight": 40, "sets": 3, "reps": 5, "intensity": 8 },
+      { "name": "泽奇深蹲", "weight": 50, "sets": 3, "reps": 6, "intensity": 7 },
+      { "name": "高位下拉", "weight": 100, "sets": 3, "reps": 5, "intensity": 8 },
+      { "name": "站姿单手推肩", "weight": 22, "sets": 3, "reps": 8, "intensity": 8 },
+      { "name": "绳索划船", "weight": 100, "sets": 3, "reps": 5, "intensity": 8 },
+      { "name": "单手过顶行走", "weight": 26, "sets": 3, "time": 40, "intensity": 7 },
+      { "name": "单手农夫行走", "weight": 30, "sets": 2, "time": 40, "intensity": 7 },
+      { "name": "双手农夫行走", "weight": 60, "sets": 2, "time": 20, "intensity": 7 },
+      { "name": "山羊挺身负重", "weight": 20, "sets": 5, "reps": 10, "intensity": 6 },
+      { "name": "俯卧腿弯举", "weight": 35, "sets": 3, "reps": 10, "intensity": 5 },
+      { "name": "面拉", "weight": 20, "sets": 3, "reps": 18, "intensity": 5 },
+      { "name": "单手悬挂", "sets": 2, "time": 3, "intensity": 7 }
     ]
   },
-  
-  Gym_Base: {
-    label: "Gym: 综合一周",
-    duration: 160,
-    exercises: [
-      { name: "哑铃抓举", weight: 26, sets: 3, reps: 5, intensity: 8 },
-      { name: "腰间俯卧撑进阶俄挺", sets: 4, reps: 5, intensity: 9 },
-      { name: "保加利亚分腿蹲", weight: 40, sets: 3, reps: 5, intensity: 8 },
-      { name: "泽奇深蹲", weight: 50, sets: 3, reps: 6, intensity: 7 },
-      { name: "高位下拉", weight: 100, sets: 3, reps: 5, intensity: 8 },
-      { name: "站姿单手推肩", weight: 22, sets: 3, reps: 8, intensity: 8 },
-      { name: "绳索划船", weight: 100, sets: 3, reps: 5, intensity: 8 },
-      { name: "单手过顶行走", weight: 26, sets: 3, time: 40, intensity: 7 },
-      { name: "单手农夫行走", weight: 30, sets: 2, time: 40, intensity: 7 },
-      { name: "双手农夫行走", weight: 60, sets: 2, time: 20, intensity: 7 },
-      { name: "山羊挺身负重", weight: 20, sets: 5, reps: 10, intensity: 6 },
-      { name: "俯卧腿弯举", weight: 35, sets: 3, reps: 10, intensity: 5 },
-      { name: "面拉", weight: 20, sets: 3, reps: 18, intensity: 5 },
-      { name: "单手悬挂", sets: 2, time: 3, intensity: 7 }
+  "A": {
+    "label": "A: 爆发与推链",
+    "duration": 35,
+    "exercises": [
+      { "name": "双力臂", "intensity": 6, "sets": 5, "reps": 3 },
+      { "name": "伪俄挺", "intensity": 5, "sets": 4, "reps": 5 },
+      { "name": "双杠臂屈伸", "intensity": 4, "sets": 4, "reps": 8 },
+      { "name": "举腿碰杆", "intensity": 4, "sets": 3, "reps": 5 },
+      { "name": "单臂悬挂", "intensity": 3, "sets": 2, "time": 10 }
     ]
   },
-
-  A: {
-    label: "A: 爆发与推链",
-    duration: 35,
-    exercises: [
-      { name: "双力臂", intensity: 6, sets: 5, reps: 3 },
-      { name: "伪俄挺", intensity: 5, sets: 4, reps: 5 },
-      { name: "双杠臂屈伸", intensity: 4, sets: 4, reps: 8 },
-      { name: "举腿碰杆", intensity: 4, sets: 3, reps: 5 },
-      { name: "单臂悬挂", intensity: 3, sets: 2, time: 10 }
+  "B": {
+    "label": "B: 控制与抗旋",
+    "duration": 45,
+    "exercises": [
+      { "name": "进阶团身前水平", "intensity": 5, "sets": 4, "reps": 1, "time": 7 },
+      { "name": "标准引体", "intensity": 4, "sets": 4, "reps": 5 },
+      { "name": "单杠抗旋雨刷器", "intensity": 5, "sets": 2, "reps": 4 },
+      { "name": "悬垂举腿左右弯", "intensity": 4, "sets": 2, "reps": 6 },
+      { "name": "轻伪俄挺", "intensity": 3, "sets": 3, "reps": 4 }
     ]
   },
-
-  B: {
-    label: "B: 控制与抗旋",
-    duration: 45,
-    exercises: [
-      { name: "进阶团身前水平", intensity: 5, sets: 4, reps: 1, time: 7 },
-      { name: "标准引体", intensity: 4, sets: 4, reps: 5 },
-      { name: "单杠抗旋雨刷器", intensity: 5, sets: 2, reps: 4 },
-      { name: "悬垂举腿左右弯", intensity: 4, sets: 2, reps: 6 },
-      { name: "轻伪俄挺", intensity: 3, sets: 3, reps: 4 }
-    ]
-  },
-
-  Jump: {
-    label: "Jump: 弹性骨刺",
-    duration: 20,
-    exercises: [
-      { name: "脚踝弹跳热身", priority: "must", intensity: 2, sets: 2, time: 30 },
-      { name: "高弹跳跳绳", priority: "must", intensity: 4, sets: 5, time: 40 },
-      { name: "双摇练习", priority: "must", intensity: 5, sets: 5, reps: 10 },
-      { name: "连续轻弹跳", priority: "optional", intensity: 2, sets: 2, time: 30 }
+  "Jump": {
+    "label": "Jump: 弹性骨刺",
+    "duration": 20,
+    "exercises": [
+      { "name": "脚踝弹跳热身", "priority": "must", "intensity": 2, "sets": 2, "time": 30 },
+      { "name": "高弹跳跳绳", "priority": "must", "intensity": 4, "sets": 5, "time": 40 },
+      { "name": "双摇练习", "priority": "must", "intensity": 5, "sets": 5, "reps": 10 },
+      { "name": "连续轻弹跳", "priority": "optional", "intensity": 2, "sets": 2, "time": 30 }
     ]
   }
 };
@@ -611,7 +587,14 @@ const PLANS = {
           rating: 4,
           duration: 90,
           remark: '',
-          generatedRecord: ''
+          generatedRecord: '',
+          
+          showConfig: false,
+          configJsonStr: JSON.stringify(PLANS, null, 2),
+          
+          showBatchEdit: false,
+          batchEditPlans: [],
+          batchEditText: ''
         }
       },
       computed: {
@@ -626,7 +609,11 @@ const PLANS = {
         }
       },
       created() {
+        // 核心修复：初始加载时，自动勾选并立刻提取配置文本，不留空白！
+        this.batchEditPlans = [this.currentPlan];
         this.applyDefaults();
+        this.loadSelectedPlansText();
+        this.loadFromCloud(true);
       },
       methods: {
         switchPlan(key) {
@@ -634,6 +621,10 @@ const PLANS = {
           this.currentPlan = key;
           this.applyDefaults();
           this.generatedRecord = '';
+
+          // 核心修复：点击顶部计划切换时，不仅改状态，还瞬间替换文本框内容！
+          this.batchEditPlans = [key];
+          this.loadSelectedPlansText();
         },
         applyDefaults() {
           this.inputs = {};
@@ -725,6 +716,189 @@ const PLANS = {
             document.execCommand('copy');
             document.body.removeChild(ta);
             alert('记录已复制！');
+          }
+        },
+        
+        // --- 批量换行编辑逻辑 ---
+        loadSelectedPlansText() {
+          if (this.batchEditPlans.length === 0) {
+            this.batchEditText = "";
+            return;
+          }
+          let text = "";
+          this.batchEditPlans.forEach(planKey => {
+            const plan = this.plans[planKey];
+            text += `// === ${planKey} ===\n`;
+            plan.exercises.forEach(ex => {
+              let line = ex.name;
+              if (ex.weight !== undefined) line += ` 重量=${ex.weight}`;
+              if (ex.sets !== undefined) line += ` 组数=${ex.sets}`;
+              if (ex.reps !== undefined) line += ` 次数=${ex.reps}`;
+              if (ex.time !== undefined) line += ` 时间=${ex.time}`;
+              if (ex.intensity !== undefined) line += ` 强度=${ex.intensity}`;
+              text += line + "\n";
+            });
+            text += "\n";
+          });
+          this.batchEditText = text.trim();
+        },
+      async applyBatchEdit() {
+          if (this.batchEditPlans.length === 0) {
+            alert("请至少勾选一个计划！");
+            return;
+          }
+          if (!this.batchEditText.trim()) {
+            alert("请输入要修改的内容！");
+            return;
+          }
+
+          // 按行分割，不去掉空白行，方便精确解析
+          const lines = this.batchEditText.split('\n').map(l => l.trim());
+          const newExercisesMap = {};
+          
+          // 属性映射字典（支持中英文混合）
+          const keyMap = {
+            '重量': 'weight', 'weight': 'weight',
+            '组数': 'sets', 'sets': 'sets',
+            '次数': 'reps', 'reps': 'reps',
+            '时间': 'time', 'time': 'time',
+            '强度': 'intensity', 'intensity': 'intensity'
+          };
+
+          // 如果只勾选了一个计划，默认所有无标记动作都归属该计划
+          let currentPlanKey = this.batchEditPlans.length === 1 ? this.batchEditPlans[0] : null;
+
+          for (let line of lines) {
+            if (!line) continue;
+            
+            // 匹配并切换当前计划作用域：// === Gym_A ===
+            const planMatch = line.match(/^\/\/\s*===\s*(.+?)\s*===/);
+            if (planMatch) {
+              currentPlanKey = planMatch[1];
+              if (!newExercisesMap[currentPlanKey]) newExercisesMap[currentPlanKey] = [];
+              continue;
+            }
+
+            // 过滤常规注释
+            if (line.startsWith('//')) continue;
+
+            if (!currentPlanKey) continue;
+            if (!newExercisesMap[currentPlanKey]) newExercisesMap[currentPlanKey] = [];
+
+            const tokens = line.split(/\s+/);
+            if (tokens.length < 1) continue;
+            
+            const name = tokens[0];
+            const props = { name };
+            
+            for (let i = 1; i < tokens.length; i++) {
+              const match = tokens[i].match(/^([^=:：]+)[=:：](.+)$/);
+              if (match) {
+                const rawKey = match[1];
+                let val = match[2];
+                const enKey = keyMap[rawKey];
+                
+                if (enKey) {
+                  if (['weight', 'sets', 'reps', 'time', 'intensity'].includes(enKey)) {
+                    val = isNaN(Number(val)) ? val : Number(val);
+                  }
+                  props[enKey] = val;
+                }
+              }
+            }
+            newExercisesMap[currentPlanKey].push(props);
+          }
+
+          let updatedPlanCount = 0;
+          for (const [planKey, newExList] of Object.entries(newExercisesMap)) {
+            if (this.plans[planKey]) {
+              const oldExList = this.plans[planKey].exercises;
+              
+              // 核心重构：彻底根据文本框的新列表进行【覆写替换】，实现自由删减、排序
+              const finalExercises = newExList.map(newEx => {
+                // 如果旧配置有该动作，继承它的优先级和备注
+                const oldEx = oldExList.find(e => e.name === newEx.name);
+                if (oldEx) {
+                  const merged = { ...oldEx };
+                  // 强制清除旧的数值属性，严格以文本框输入为准
+                  ['weight', 'sets', 'reps', 'time', 'intensity'].forEach(k => delete merged[k]);
+                  return Object.assign(merged, newEx);
+                } else {
+                  return newEx; // 完全新增的动作
+                }
+              });
+              
+              // 覆盖替换原计划的 exercises 数组
+              this.plans[planKey].exercises = finalExercises;
+              updatedPlanCount++;
+            }
+          }
+
+          if (updatedPlanCount === 0) {
+            alert("未能识别出有效的计划修改！\n请确保多选时保留了类似 // === Gym_A === 的分隔线。");
+            return;
+          }
+
+          // 同步到底层 JSON 文本框
+          this.configJsonStr = JSON.stringify(this.plans, null, 2);
+          
+          this.applyDefaults();
+          // 重新对齐格式化
+          this.loadSelectedPlansText(); 
+          
+          // ==== 自动云同步 ====
+          await this.saveToCloud(true);
+          
+          alert(`✅ 修改已应用并自动同步至云端！\n已按文本完全重建 ${updatedPlanCount} 个计划。`);
+        },
+        // --- 高级 JSON 与云端同步逻辑 ---
+        // --- 高级 JSON 与云端同步逻辑 ---
+        applyLocalConfig(silent = false) {
+          try {
+            const parsed = JSON.parse(this.configJsonStr);
+            this.plans = parsed;
+            this.planKeys = Object.keys(parsed);
+            if (!this.planKeys.includes(this.currentPlan)) {
+              this.currentPlan = this.planKeys[0];
+            }
+            this.applyDefaults();
+            // 核心修复：云端数据覆盖后，同时刷新上方的批量修改文本框
+            this.batchEditPlans = [this.currentPlan];
+            this.loadSelectedPlansText();
+            
+            if (silent !== true) alert('本地 JSON 结构应用成功！');
+          } catch (e) {
+            if (silent !== true) alert('JSON格式错误，请检查大括号和逗号！\n' + e.message);
+          }
+        },
+        async loadFromCloud(silent = false) {
+          try {
+            const res = await fetch('/api2/kv/gym_cfg');
+            if (!res.ok) throw new Error('云端无数据或接口异常');
+            const data = await res.json();
+            this.configJsonStr = JSON.stringify(data, null, 2);
+            this.applyLocalConfig(true); // 应用时强制静默
+            
+            if (silent !== true) alert('云端配置加载并应用成功！');
+          } catch (e) {
+            if (silent !== true) alert('加载失败: ' + e.message);
+            else console.log('静默加载云端数据失败（可能是首次使用或无网络），已使用默认配置');
+          }
+        },
+        async saveToCloud(silent = false) {
+          try {
+            const parsed = JSON.parse(this.configJsonStr);
+            const res = await fetch('/api2/kv/gym_cfg', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ payload: parsed })
+            });
+            if (!res.ok) throw new Error('网络保存失败');
+            
+            if (silent !== true) alert('云端保存成功！');
+          } catch (e) {
+            if (silent !== true) alert('保存失败: ' + e.message);
+            else console.error('静默自动保存失败:', e);
           }
         }
       }
