@@ -393,7 +393,7 @@ tbody tr:hover { background: var(--row-hover); }
                 <h1>模型管理</h1>
             </div>
             <div class="actions">
-                <a href="{{ url_for('openrouter.index') }}" class="btn btn-ghost">← 返回价格页</a>
+                 <button onclick="history.back()" class="btn btn-ghost">返回上一页</button>
             </div>
         </header>
 
@@ -438,14 +438,14 @@ tbody tr:hover { background: var(--row-hover); }
         </section>
     </div>
 
-    <script>window.BASE_PATH = {{ url_for('openrouter.index')|tojson }};</script>
-    <script>{% raw %}
+    <script>window.BASE_PATH = "/openrouter/";</script>
+    <script>
 /* OpenRouter Price Monitor — 模型管理页逻辑（原生 JS，无外部依赖） */
 (function () {
     "use strict";
 
     // 蓝图 URL 前缀（形如 "/openrouter/"），由模板注入；缺失时回退到 "/"
-    var BASE = window.BASE_PATH || "/";
+    var BASE = window.BASE_PATH || "/openrouter/";
 
     var els = {
         addForm: document.getElementById("add-form"),
@@ -587,6 +587,6 @@ tbody tr:hover { background: var(--row-hover); }
     load();
 })();
 
-{% endraw %}</script>
+</script>
 </body>
 </html>

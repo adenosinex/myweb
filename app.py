@@ -319,45 +319,7 @@ def get_chongqing_oil():
         return jsonify({"code": -1, "msg": str(e)}), 500
 
 
-@app.route('/api2/_sys/pages', methods=['GET'])
-def get_pages_list():
-    
-    
-    if not os.path.exists(PAGES_DIR):
-        return jsonify([])
-    
-    # ✅ 递归遍历所有子目录（核心修改）
-    file_mtime_pairs = []
-    for root, _, files in os.walk(PAGES_DIR):
-        for f in files:
-            # 跳过不符合条件的文件
-            if not f.endswith('.html') or f == 'index.html' or '-' in f:
-                continue
-                
-            # ✅ 获取相对于 PAGES_DIR 的路径（保留子目录结构）
-            rel_path = os.path.relpath(os.path.join(root, f), PAGES_DIR)
-            
-            # ✅ 构造同名 SVG 路径（仅用文件名，不包含子目录）
-            svg_name = os.path.splitext(f)[0] + ".svg"
-            svg_path = os.path.join('static/svg', svg_name)
-            
-            try:
-                mtime = os.path.getmtime(svg_path)
-                file_mtime_pairs.append((rel_path, mtime))
-            except FileNotFoundError:
-                # ✅ 修正原逻辑错误：直接使用 0 代替 float('inf') and 0
-                file_mtime_pairs.append((rel_path, 0))
-            except Exception as e:
-                app.logger.warning(f"跳过 {rel_path}: 无法获取 {svg_path} 时间戳 - {str(e)}")
-    
-    # ✅ 按 SVG 修改时间降序排序（最新修改的排最前）
-    sorted_pairs = sorted(file_mtime_pairs, key=lambda x: x[1], reverse=True)
-    
-    # ✅ 提取路径并移除 .html 扩展名（保留子目录结构）
-    result = [os.path.splitext(path)[0] for path, _ in sorted_pairs]
-    
-    return jsonify(result)
-
+ 
 @app.route('/api2/<collection>', methods=['POST'])
 def save_data(collection):
     data = request.json
@@ -405,58 +367,127 @@ def get_kv(key):
                 return jsonify({"error": "提取码已过期，数据已永久销毁"}), 404
             return jsonify(json.loads(v))
         return jsonify({"error": "提取码不存在或已被销毁"}), 404
+ 
+# ================= 6. 静态页面与路由 =================
+# ================= 修改 1：get_html_path =================
 def get_html_path(filename):
-    """在 PAGES_DIR 及其子目录中查找匹配的 HTML 文件路径"""
-    # 1. 优先检查精确路径（支持直接传入带路径的请求，如 sub/page.html）
+    """在 PAGES_DIR 中查找 HTML 文件路径"""
+    # 1. 目录映射（去掉 .html 后作为目录）
+    candidate_dir = filename[:-5] if filename.endswith('.html') else filename
+    dir_index = os.path.join(PAGES_DIR, candidate_dir, 'index.html')
+    if os.path.exists(dir_index):
+        return dir_index
+
+    # 2. 精确文件路径
     exact_path = os.path.join(PAGES_DIR, filename)
     if os.path.exists(exact_path):
         return exact_path
-        
-    # 2. 如果精确路径不存在，提取纯文件名并在目录树中递归查找
+
+    # 3. 递归查找（根据文件名）
     base_filename = os.path.basename(filename)
     for root, dirs, files in os.walk(PAGES_DIR):
         if base_filename in files:
             return os.path.join(root, base_filename)
-            
+
     return None
 
-# ================= 6. 静态页面与路由 =================
+# ================= 修改 2：页面列表 API =================
+@app.route('/api2/_sys/pages', methods=['GET'])
+def get_pages_list():
+    if not os.path.exists(PAGES_DIR):
+        return jsonify([])
+
+    items = []  # 存放 (显示路径, 对应文件绝对路径) 用于排序
+
+    # 递归遍历 pages 目录
+    for root, dirs, files in os.walk(PAGES_DIR):
+        rel_dir = os.path.relpath(root, PAGES_DIR)
+        if rel_dir == '.':
+            rel_dir = ''
+
+        # 判断当前目录是否包含 index.html
+        has_index = 'index.html' in files
+
+        if has_index:
+            # 目录入口：仅当不是根目录（根目录的 index.html 是主页面，不加入列表）
+            if rel_dir:
+                # 检查目录名是否含有 '-'
+                dir_name = os.path.basename(rel_dir)
+                if '-' not in dir_name:
+                    index_file = os.path.join(root, 'index.html')
+                    items.append((rel_dir, index_file))
+        else:
+            # 没有 index.html 的目录：列出普通 .html 文件
+            for f in files:
+                if f.endswith('.html') and f != 'index.html':
+                    # 保留原有规则：文件名包含 '-' 的不展示
+                    file_base = f[:-5]  # 去掉 .html
+                    if '-' in file_base:
+                        continue
+
+                    # 构建相对路径（不带 .html）
+                    if rel_dir:
+                        page_path = os.path.join(rel_dir, file_base).replace(os.sep, '/')
+                    else:
+                        page_path = file_base
+
+                    full_path = os.path.join(root, f)
+                    items.append((page_path, full_path))
+
+    # 按文件修改时间降序排序（最新修改的排前面）
+    items.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+
+    # 返回路径列表
+    result = [item[0] for item in items]
+    return jsonify(result)
+# ================= 修改 3：serve_html_with_icon =================
 def serve_html_with_icon(filename):
     if not filename or not isinstance(filename, str):
         app.logger.error("无效的文件名: %s", filename)
-        return "Invalid filename", 400  # 替换未导入的 abort，改用直接返回错误与状态码
+        return "Invalid filename", 400
 
     if not filename.endswith('.html'):
         filename += '.html'
-    
-    # 1. 获取文件真实的本地系统路径
+
+    # 获取文件真实路径（支持目录映射）
     html_path = get_html_path(filename)
-    
+
     if not html_path or not os.path.exists(html_path):
         return "Page Not Found", 404
 
-    # 2. 提取用于查找 SVG 的基础名（处理路径剥离与子网页 '-' 分割逻辑）
-    # 示例: subfolder/main-sub.html -> base_name: main-sub -> main_name: main
+    # 提取用于查找 SVG 的基础名
     base_name = os.path.basename(html_path).replace('.html', '')
-    main_name = base_name.split('-')[0].lower() if '-' in base_name else base_name.lower()
-    main_name2 = re.sub(r'^\d+', '', main_name)
+
+    if base_name == 'index':
+        parent_dir = os.path.dirname(html_path)
+        if parent_dir == PAGES_DIR:
+            # 根目录 index.html 使用 "index" 作为图标名
+            icon_base = base_name
+        else:
+            # 子目录 index.html 使用父目录名作为图标名（如 project1）
+            icon_base = os.path.basename(parent_dir)
+        # 移除可能的数字前缀（与原有逻辑保持一致）
+        main_name2 = re.sub(r'^\d+', '', icon_base).lower()
+    else:
+        # 普通文件：保留原有逻辑（处理连字符等）
+        main_name = base_name.split('-')[0].lower() if '-' in base_name else base_name.lower()
+        main_name2 = re.sub(r'^\d+', '', main_name)
+
     svg_path = os.path.join('static', 'svg', f'{main_name2}.svg')
-    print('--------',svg_path)
-    # 3. 如果存在对应的 SVG 图标，读取文件并注入到 HTML 的 <head> 中
+
+    # 如果存在对应的 SVG 图标，注入到 HTML <head> 中
     if os.path.exists(svg_path):
         with open(html_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        print('svg',main_name2)
-        icon_tag = f'<link rel="icon" href="/static/svg/{main_name2 }.svg" type="image/svg+xml">'
-        
+
+        icon_tag = f'<link rel="icon" href="/static/svg/{main_name2}.svg" type="image/svg+xml">'
         if '</head>' in content:
             content = content.replace('</head>', f'    {icon_tag}\n</head>', 1)
         else:
             content = icon_tag + '\n' + content
-            
         return content
 
-    # 4. 如果不存在 SVG，动态提取实际所在的子目录，直接返回源文件
+    # 无 SVG 时直接返回文件
     directory = os.path.dirname(html_path)
     file_name = os.path.basename(html_path)
     return send_from_directory(directory, file_name)

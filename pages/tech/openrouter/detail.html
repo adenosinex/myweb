@@ -398,7 +398,7 @@ tbody tr:hover { background: var(--row-hover); }
                     <button data-mode="both" class="active">USD+CNY</button>
                     <button data-mode="cny">CNY</button>
                 </div>
-                <a href="{{ url_for('openrouter.index') }}" class="btn btn-ghost">← 返回首页</a>
+                <a href="/openrouter/" class="btn btn-ghost">← 返回首页</a>
             </div>
         </header>
 
@@ -413,9 +413,9 @@ tbody tr:hover { background: var(--row-hover); }
         </footer>
     </div>
 
-    <script>window.BASE_PATH = {{ url_for('openrouter.index')|tojson }};</script>
-    <script>window.MODEL_ID = {{ model_id|tojson }};</script>
-    <script>{% raw %}
+    <script>window.BASE_PATH = "/openrouter/";</script>
+    
+    <script>
 /* OpenRouter Price Monitor — 模型详情页逻辑（原生 JS，无外部依赖）
  * 数据来源：/api/models/<model_id>（仅读 cache.json，与首页一致）。
  * 逐 Provider 明细来自后台刷新时写入缓存的 model.providers 字段。
@@ -423,8 +423,12 @@ tbody tr:hover { background: var(--row-hover); }
 (function () {
     "use strict";
 
-    var MODEL_ID = window.MODEL_ID || "";
-    var BASE = window.BASE_PATH || "/"; // 蓝图 URL 前缀，形如 "/openrouter/"
+    var MODEL_ID = (function () {
+    var p = window.location.pathname;
+    var i = p.indexOf("/openrouter/model/");
+    return i === 0 ? decodeURIComponent(p.slice("/openrouter/model/".length)) : "";
+})();
+    var BASE = window.BASE_PATH || "/openrouter/"; // 蓝图 URL 前缀，形如 "/openrouter/"
     var state = {
         data: null,
         currencyMode: "both", // usd | cny | both
@@ -750,6 +754,6 @@ tbody tr:hover { background: var(--row-hover); }
     load();
 })();
 
-{% endraw %}</script>
+</script>
 </body>
 </html>

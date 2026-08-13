@@ -394,7 +394,7 @@ tbody tr:hover { background: var(--row-hover); }
             </div>
             <div class="actions">
                 <button id="btn-refresh" class="btn btn-primary">立即刷新</button>
-                <a href="{{ url_for('openrouter.settings') }}" class="btn btn-ghost">模型管理</a>
+                <a href="/openrouter/settings.html" class="btn btn-ghost">模型管理</a>
             </div>
         </header>
 
@@ -456,14 +456,14 @@ tbody tr:hover { background: var(--row-hover); }
         </footer>
     </div>
 
-    <script>window.BASE_PATH = {{ url_for('openrouter.index')|tojson }};</script>
-    <script>{% raw %}
+    <button onclick="history.back()" class="btn btn-ghost">返回上一页</button>
+    <script>
 /* OpenRouter Price Monitor — 首页逻辑（原生 JS，无任何外部依赖） */
 (function () {
     "use strict";
 
     // 蓝图 URL 前缀（形如 "/openrouter/"），由模板注入；缺失时回退到 "/"
-    var BASE = window.BASE_PATH || "/";
+    var BASE = window.BASE_PATH || "/openrouter/";
 
     var state = {
         models: [],        // 后端合并后的模型数组
@@ -751,6 +751,6 @@ tbody tr:hover { background: var(--row-hover); }
     load();
 })();
 
-{% endraw %}</script>
+</script>
 </body>
 </html>

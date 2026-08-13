@@ -1,11 +1,11 @@
-"""OpenRouter 模型价格查询站 —— 单文件后端。
+"""OpenRouter 模型价格查询站 —— 单文件后端（前后端分离）。
 
-全部后端逻辑（配置/缓存读写、OpenRouter API 交互、路由、后台刷新）都在本文件内，
-无 services/、无独立 CSS/JS 文件（前端为自包含 HTML，内联样式与脚本）。
+后端只提供 JSON API + 静态 HTML；前端为纯静态 HTML（内联 CSS/JS），
+通过 fetch 调用 API，无 Jinja 模板渲染。
 
 结构：
-    app.py               —— 唯一后端文件
-    templates/*.html     —— 自包含 HTML（内联 CSS + JS）
+    app.py               —— 唯一后端文件（JSON API + 静态页面 + 后台刷新）
+    static/*.html        —— 纯静态 HTML（内联 CSS + JS，前后端独立）
     db/openrouter/*.json —— 后端数据目录（models.json / config.json / cache.json）
 
 数据策略：
@@ -22,7 +22,7 @@ import time
 from datetime import datetime, timezone
 
 import requests
-from flask import Blueprint, Flask, jsonify, render_template, request
+from flask import Blueprint, Flask, jsonify, request, send_from_directory
 
 # ---------------------------------------------------------------------------
 # 常量与路径
@@ -30,7 +30,9 @@ from flask import Blueprint, Flask, jsonify, render_template, request
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # 后端数据目录（配置 + 缓存统一存放；相对项目根为 db/openrouter）
 openrouter_DIR = os.path.join(_BASE_DIR, "db", "openrouter")
-
+# 前端静态目录（纯静态 HTML，无 Jinja）
+STATIC_DIR = os.path.join(_BASE_DIR, "static")
+ 
 MODELS_FILE = os.path.join(openrouter_DIR, "models.json")
 SETTINGS_FILE = os.path.join(openrouter_DIR, "config.json")
 CACHE_FILE = os.path.join(openrouter_DIR, "cache.json")
@@ -560,21 +562,22 @@ def do_refresh():
 
 
 # ---------------------------------------------------------------------------
-# 页面路由
+# 页面路由（纯静态 HTML，前后端分离；前端自行调用下方 JSON API）
 # ---------------------------------------------------------------------------
 @openrouter_bp.route("/")
 def index():
-    return render_template("index.html")
+    return send_from_directory(STATIC_DIR, "index.html")
 
 
 @openrouter_bp.route("/settings")
 def settings():
-    return render_template("settings.html")
+    return send_from_directory(STATIC_DIR, "settings.html")
 
 
 @openrouter_bp.route("/model/<path:model_id>")
 def model_detail(model_id):
-    return render_template("detail.html", model_id=model_id)
+    # model_id 仅用于匹配 URL；前端从 window.location.pathname 自行解析
+    return send_from_directory(STATIC_DIR, "detail.html")
 
 
 # ---------------------------------------------------------------------------
@@ -776,7 +779,7 @@ def start_background_refresh():
 # ---------------------------------------------------------------------------
 # 应用与入口
 # ---------------------------------------------------------------------------
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 app.json.ensure_ascii = False
 app.register_blueprint(openrouter_bp)
 
