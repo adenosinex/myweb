@@ -2,165 +2,1084 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>我的自定义沙盒</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <title>🛠️ 个人工具箱 & HTML沙盒</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js">
+    </script>
     <style>
-        :root { --default-icon: '📄'; }
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 40px auto; background: #f4f5f7; color: #333; padding-bottom: 80px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn { padding: 8px 16px; background: #0052cc; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 14px; white-space: nowrap; }
-        .btn:hover { background: #0043a6; }
-        .btn-success { background: #28a745; border: 1px solid #28a745; color: white; } .btn-success:hover { background: #218838; }
-        .btn-outline { background: transparent; border: 1px solid #0052cc; color: #0052cc; } .btn-outline:hover { background: #e6f0ff; }
-        .btn-warning { background: #ffc107; color: #333; } .btn-warning:hover { background: #e0a800; }
-        .btn-toolbox { background: #6f42c1; color: white; } .btn-toolbox:hover { background: #5a32a3; }
-        .btn-danger { background: #dc3545; color: white; } .btn-danger:hover { background: #c82333; }
-        .back-link { margin-left: 15px; color: #666; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; } .back-link:hover { text-decoration: underline; }
+        :root {
+            --default-icon: '📄';
+            --accent: #0052cc;
+            --accent-light: #e6f0ff;
+            --danger: #dc3545;
+            --success: #28a745;
+            --warning: #ffc107;
+            --bg: #f4f5f7;
+            --card-bg: #fff;
+            --text: #333;
+            --text-muted: #888;
+            --border: #eaeaea;
+            --radius: 10px;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+            --shadow-hover: 0 8px 20px rgba(0, 0, 0, 0.1);
+            --timeline-line: #d0d5dd;
+            --new-glow: 0 0 0 3px rgba(0, 130, 255, 0.25);
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
-        .view-container { display: none; } .view-container.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        * {
+            box-sizing: border-box;
+        }
 
-        /* 强制分组容器只能纵向多行排列，避免拖拽时变多列 */
-        #pages-grid { display: flex; flex-direction: column; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 20px 24px 100px;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
 
-        /* 分组容器基础样式 */
-        .group-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 25px; transition: all 0.3s ease; border: 2px solid transparent; }
-        .group-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; border-bottom: 1px solid #eaeaea; padding-bottom: 10px; color: #444; }
-        .group-header .group-icon { margin-right: 8px; font-size: 22px; }
-        
-        /* 虚拟分组样式 */
-        .group-virtual { border: 2px dashed #0052cc; background: #f8faff; }
+        /* ========== HEADER ========== */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            white-space: nowrap;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
 
-        /* 沉浸式高亮选择模式 */
-        .group-container.has-selection { background: #f0f6ff; border: 2px solid #0052cc; box-shadow: 0 4px 15px rgba(0,82,204,0.15); }
-        .group-container.has-selection .card-checkbox { opacity: 1; transform: scale(1.4); }
-        .group-container.has-selection .card-wrapper:not(.selected) .card { border-color: #b5d0ff; } 
+        /* ========== 搜索栏 ========== */
+        .search-bar-wrap {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 240px;
+            padding: 10px 16px 10px 40px;
+            border: 2px solid #ddd;
+            border-radius: 28px;
+            font-size: 14px;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") 14px center no-repeat;
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.1);
+        }
+        .search-input::placeholder {
+            color: #bbb;
+        }
+        .search-clear {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #999;
+            padding: 6px 10px;
+            border-radius: 50%;
+            transition: all var(--transition);
+            display: none;
+        }
+        .search-clear.visible {
+            display: inline-block;
+        }
+        .search-clear:hover {
+            background: #eee;
+            color: #333;
+        }
+        .result-count {
+            font-size: 13px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            min-width: 60px;
+        }
 
-        .group-drag-handle { cursor: grab; margin-right: 12px; font-size: 16px; color: #999; padding: 4px; border-radius: 4px; transition: background 0.2s; }
-        .group-drag-handle:hover { background: #eee; color: #333; }
-        .group-drag-handle:active { cursor: grabbing; }
-        .group-action-btn { margin-left: auto; font-size: 13px; font-weight: normal; color: #666; background: #f0f0f0; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
-        .group-action-btn:hover { background: #0052cc; color: white; }
+        /* ========== 视图切换标签 ========== */
+        .view-tabs {
+            display: flex;
+            gap: 4px;
+            background: #e8ecf1;
+            border-radius: 24px;
+            padding: 3px;
+            white-space: nowrap;
+        }
+        .view-tab {
+            padding: 7px 16px;
+            border-radius: 21px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            background: transparent;
+            color: #666;
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .view-tab.active {
+            background: #fff;
+            color: var(--accent);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+        .view-tab:hover:not(.active) {
+            color: #333;
+            background: rgba(255, 255, 255, 0.5);
+        }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; min-height: 120px; padding-bottom: 10px; }
-        .card-wrapper { position: relative; cursor: grab; }
-        .card-wrapper:active { cursor: grabbing; }
-        .card { background: #fff; padding: 25px 20px; border-radius: 10px; text-align: center; text-decoration: none; color: #333; transition: all 0.2s; border: 1px solid #eaeaea; display: block; height: 100%; box-sizing: border-box; }
-        .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); border-color: #007bff; }
-        
-        /* 绝对定位的置顶标记 */
-        .pin-badge { position: absolute; top: -8px; right: -8px; background: #dc3545; color: white; font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 2px 5px rgba(220,53,69,0.4); z-index: 10; pointer-events: none; }
+        /* ========== 按钮体系 ========== */
+        .btn {
+            padding: 8px 15px;
+            background: var(--accent);
+            color: #fff;
+            text-decoration: none;
+            border: none;
+            border-radius: 7px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn:hover {
+            background: #0043a6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0, 82, 204, 0.25);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn-success {
+            background: var(--success);
+        }
+        .btn-success:hover {
+            background: #1e7e34;
+            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--accent);
+            color: var(--accent);
+        }
+        .btn-outline:hover {
+            background: var(--accent-light);
+            box-shadow: none;
+            transform: translateY(-1px);
+        }
+        .btn-warning {
+            background: var(--warning);
+            color: #333;
+        }
+        .btn-warning:hover {
+            background: #e0a800;
+            box-shadow: 0 4px 10px rgba(255, 193, 7, 0.3);
+        }
+        .btn-toolbox {
+            background: #6f42c1;
+            color: #fff;
+        }
+        .btn-toolbox:hover {
+            background: #5a32a3;
+            box-shadow: 0 4px 10px rgba(111, 66, 193, 0.3);
+        }
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+            box-shadow: 0 4px 10px rgba(220, 53, 69, 0.3);
+        }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 11px;
+            border-radius: 5px;
+        }
+        .btn-ghost {
+            background: #f0f0f0;
+            color: #555;
+            border: none;
+        }
+        .btn-ghost:hover {
+            background: #ddd;
+            box-shadow: none;
+            transform: none;
+        }
 
-        /* 低调的复选框 */
-        .card-checkbox { position: absolute; top: 12px; left: 12px; z-index: 5; transform: scale(1.1); cursor: pointer; accent-color: #0052cc; opacity: 0.15; transition: all 0.2s; }
-        .card-wrapper:hover .card-checkbox { opacity: 0.8; }
-        .card-checkbox:checked { opacity: 1 !important; transform: scale(1.4) !important; }
-        .card-wrapper.selected .card { border-color: #0052cc; background-color: #f4f8ff; box-shadow: 0 0 0 2px rgba(0,82,204,0.2); }
-        
-        .card .icon { font-size: 36px; margin-bottom: 12px; }
-        .card .title { font-size: 15px; font-weight: bold; margin-bottom: 8px; line-height: 1.3; }
-        .card .tags { font-size: 12px; color: #888; background: #f0f0f0; padding: 3px 8px; border-radius: 4px; display: inline-block; margin: 2px; }
-        .card .tag-folder { background: #d1e2ff; color: #0052cc; font-weight: bold; border: 1px solid #b5d0ff; }
+        /* ========== 视图容器 ========== */
+        .view-container {
+            display: none;
+        }
+        .view-container.active {
+            display: block;
+            animation: fadeSlideIn 0.3s ease;
+        }
+        @keyframes fadeSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
-        /* 卡片右上方悬浮按钮组 */
-        .card-action-btns { position: absolute; top: 10px; right: 10px; display: none; gap: 6px; z-index: 2; flex-wrap: wrap; justify-content: flex-end; }
-        .card-wrapper:hover .card-action-btns { display: flex; }
-        .card-btn { font-size: 12px; color: #666; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; transition: all 0.2s; }
-        .card-btn:hover { background: #28a745; color: white; }
-        .card-btn-move { color: #0052cc; background: #e6f0ff; }
-        .card-btn-move:hover { background: #0052cc; color: white; }
-        .card-btn-pin { color: #dc3545; background: #ffe6e6; }
-        .card-btn-pin:hover { background: #dc3545; color: white; }
+        /* ========== 网格视图 ========== */
+        #pages-grid {
+            display: flex;
+            flex-direction: column;
+        }
+        .group-container {
+            background: var(--card-bg);
+            padding: 18px 20px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            transition: all var(--transition);
+            border: 2px solid transparent;
+        }
+        .group-container.has-selection {
+            background: #f0f6ff;
+            border-color: var(--accent);
+            box-shadow: 0 4px 16px rgba(0, 82, 204, 0.12);
+        }
+        .group-container.group-virtual {
+            border: 2px dashed var(--accent);
+            background: #f8faff;
+        }
+        .group-header {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            color: #444;
+            gap: 8px;
+        }
+        .group-header .group-icon {
+            font-size: 20px;
+        }
+        .group-drag-handle {
+            cursor: grab;
+            font-size: 15px;
+            color: #bbb;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all var(--transition);
+            user-select: none;
+        }
+        .group-drag-handle:hover {
+            background: #eee;
+            color: #555;
+        }
+        .group-drag-handle:active {
+            cursor: grabbing;
+        }
+        .group-action-btn {
+            margin-left: auto;
+            font-size: 12px;
+            font-weight: 500;
+            color: #666;
+            background: #f0f0f0;
+            border: none;
+            padding: 5px 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all var(--transition);
+            white-space: nowrap;
+        }
+        .group-action-btn:hover {
+            background: var(--accent);
+            color: #fff;
+        }
+        .group-count {
+            font-size: 12px;
+            color: #999;
+            font-weight: 400;
+            background: #f5f5f5;
+            padding: 2px 9px;
+            border-radius: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 14px;
+            min-height: 80px;
+            padding-bottom: 6px;
+        }
+        .card-wrapper {
+            position: relative;
+            cursor: grab;
+        }
+        .card-wrapper:active {
+            cursor: grabbing;
+        }
+        .card {
+            background: #fff;
+            padding: 20px 16px 16px;
+            border-radius: var(--radius);
+            text-align: center;
+            text-decoration: none;
+            color: #333;
+            transition: all var(--transition);
+            border: 1px solid var(--border);
+            display: block;
+            height: 100%;
+            position: relative;
+        }
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--accent);
+        }
+        .card.card-new-highlight {
+            border-color: #4da3ff !important;
+            box-shadow: var(--new-glow) !important;
+            animation: subtlePulse 2s ease-in-out infinite;
+        }
+        @keyframes subtlePulse {
+            0%,
+            100% {
+                box-shadow: 0 0 0 3px rgba(0, 130, 255, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 0 7px rgba(0, 130, 255, 0.06);
+            }
+        }
+        .new-badge {
+            position: absolute;
+            top: -7px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff4757;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+            z-index: 10;
+            pointer-events: none;
+            animation: badgeBounce 0.5s ease;
+        }
+        @keyframes badgeBounce {
+            0% {
+                transform: translateX(-50%) scale(0);
+            }
+            60% {
+                transform: translateX(-50%) scale(1.2);
+            }
+            100% {
+                transform: translateX(-50%) scale(1);
+            }
+        }
+        .pin-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--danger);
+            color: #fff;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
+            z-index: 10;
+            pointer-events: none;
+        }
+        .card-checkbox {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 5;
+            transform: scale(1.1);
+            cursor: pointer;
+            accent-color: var(--accent);
+            opacity: 0.12;
+            transition: all var(--transition);
+        }
+        .card-wrapper:hover .card-checkbox {
+            opacity: 0.8;
+        }
+        .card-checkbox:checked {
+            opacity: 1 !important;
+            transform: scale(1.35) !important;
+        }
+        .card-wrapper.selected .card {
+            border-color: var(--accent);
+            background-color: #f4f8ff;
+            box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+        }
+        .card .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .card .title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+        .card .tags {
+            font-size: 11px;
+            color: #888;
+            background: #f0f0f0;
+            padding: 2px 7px;
+            border-radius: 4px;
+            display: inline-block;
+            margin: 2px;
+        }
+        .card .tag-folder {
+            background: #d1e2ff;
+            color: var(--accent);
+            font-weight: 700;
+            border: 1px solid #b5d0ff;
+        }
+        .card-action-btns {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: none;
+            gap: 4px;
+            z-index: 2;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .card-wrapper:hover .card-action-btns {
+            display: flex;
+        }
+        .card-btn {
+            font-size: 10px;
+            color: #666;
+            background: #f0f0f0;
+            padding: 3px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+            font-weight: 600;
+            transition: all var(--transition);
+            white-space: nowrap;
+        }
+        .card-btn:hover {
+            background: var(--success);
+            color: #fff;
+        }
+        .card-btn-move {
+            color: var(--accent);
+            background: var(--accent-light);
+        }
+        .card-btn-move:hover {
+            background: var(--accent);
+            color: #fff;
+        }
+        .card-btn-pin {
+            color: var(--danger);
+            background: #ffe6e6;
+        }
+        .card-btn-pin:hover {
+            background: var(--danger);
+            color: #fff;
+        }
 
-        .form-panel { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
-        input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        textarea { width: 100%; height: 400px; padding: 15px; font-family: 'Consolas', monospace; background: #1e1e1e; color: #d4d4d4; border: none; border-radius: 5px; box-sizing: border-box; resize: vertical; }
+        /* ========== 时间线视图 ========== */
+        .timeline-wrap {
+            position: relative;
+            padding-left: 40px;
+        }
+        .timeline-wrap::before {
+            content: '';
+            position: absolute;
+            left: 18px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--timeline-line);
+            border-radius: 2px;
+        }
+        .timeline-group {
+            margin-bottom: 28px;
+            position: relative;
+        }
+        .timeline-group-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            position: relative;
+        }
+        .timeline-dot {
+            position: absolute;
+            left: -31px;
+            top: 4px;
+            width: 14px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 0 0 3px var(--accent-light);
+            z-index: 2;
+        }
+        .timeline-dot.today {
+            background: #ff4757;
+            box-shadow: 0 0 0 3px #ffe0e3;
+            animation: dotPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes dotPulse {
+            0%,
+            100% {
+                box-shadow: 0 0 0 3px #ffe0e3;
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(255, 71, 87, 0.08);
+            }
+        }
+        .timeline-group-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: #444;
+            margin-left: 0;
+        }
+        .timeline-items {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .timeline-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: #fff;
+            padding: 14px 18px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            text-decoration: none;
+            color: #333;
+            transition: all var(--transition);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        }
+        .timeline-card:hover {
+            border-color: var(--accent);
+            box-shadow: var(--shadow-hover);
+            transform: translateX(4px);
+        }
+        .timeline-card.card-new-highlight {
+            border-color: #4da3ff !important;
+            box-shadow: var(--new-glow) !important;
+        }
+        .timeline-card .tl-icon {
+            font-size: 28px;
+            flex-shrink: 0;
+            width: 40px;
+            text-align: center;
+        }
+        .timeline-card .tl-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .timeline-card .tl-title {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+        .timeline-card .tl-meta {
+            font-size: 11px;
+            color: #999;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .timeline-card .tl-actions {
+            display: flex;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+        .timeline-card .tl-time-badge {
+            font-size: 10px;
+            color: #aaa;
+            white-space: nowrap;
+            flex-shrink: 0;
+            text-align: right;
+            min-width: 50px;
+        }
 
-        #graph-container { width: 100%; height: 650px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: none; }
+        /* ========== 列表视图 ========== */
+        .list-view-table {
+            width: 100%;
+            background: #fff;
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .list-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 18px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: all var(--transition);
+            cursor: pointer;
+            text-decoration: none;
+            color: #333;
+            position: relative;
+        }
+        .list-row:hover {
+            background: #f8faff;
+        }
+        .list-row.card-new-highlight {
+            background: #f0f7ff !important;
+            border-left: 3px solid #4da3ff !important;
+        }
+        .list-row .lr-icon {
+            font-size: 22px;
+            flex-shrink: 0;
+            width: 34px;
+            text-align: center;
+        }
+        .list-row .lr-title {
+            font-weight: 600;
+            font-size: 14px;
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .list-row .lr-tags {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            max-width: 200px;
+        }
+        .list-row .lr-folder {
+            font-size: 11px;
+            color: var(--accent);
+            background: var(--accent-light);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .list-row .lr-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity var(--transition);
+        }
+        .list-row:hover .lr-actions {
+            opacity: 1;
+        }
+        .list-group-header {
+            background: #f8f9fb;
+            padding: 10px 18px;
+            font-weight: 700;
+            font-size: 13px;
+            color: #555;
+            border-bottom: 2px solid #e8ecf1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-        .toolbox-panel { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; display: none; }
-        .toolbox-panel.active { display: block; }
-        .toolbox-row { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; }
-        .toolbox-divider { border-top: 1px solid #eee; margin: 15px 0; }
+        /* ========== 表单面板 ========== */
+        .form-panel {
+            background: #fff;
+            padding: 30px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: 700;
+            font-size: 13px;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #ddd;
+            border-radius: 7px;
+            font-size: 14px;
+            transition: all var(--transition);
+            background: #fafbfc;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.06);
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: none;
+            border-radius: 7px;
+            resize: vertical;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .icon-hint {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .back-link {
+            margin-left: 12px;
+            color: #666;
+            text-decoration: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+            color: var(--accent);
+        }
 
-        .icon-hint { font-size: 12px; color: #888; margin-top: 4px; }
-        .sortable-ghost { opacity: 0.4; background: #f8f9fa; border: 2px dashed #0052cc; border-radius: 10px; }
-        
-        /* 批量操作悬浮栏 */
-        .batch-bar { position: fixed; bottom: -80px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: white; padding: 12px 24px; border-radius: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 15px; z-index: 1000; transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; }
-        .batch-bar.visible { bottom: 30px; }
-        .batch-btn { background: #0052cc; color: white; border: none; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-weight: bold; }
-        .batch-btn:hover { background: #0043a6; }
-        .batch-btn-cancel { background: transparent; border: 1px solid #666; color: #ddd; }
-        .batch-btn-cancel:hover { background: #333; }
+        /* ========== 工具箱面板 ========== */
+        .toolbox-panel {
+            background: #fff;
+            padding: 22px 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            display: none;
+        }
+        .toolbox-panel.active {
+            display: block;
+            animation: fadeSlideIn 0.3s ease;
+        }
+        .toolbox-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .toolbox-divider {
+            border-top: 1px solid #eee;
+            margin: 12px 0;
+        }
 
-        /* 移动弹窗选择器样式 */
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; opacity: 0; transition: opacity 0.2s; backdrop-filter: blur(2px); }
-        .modal-overlay.active { display: flex; opacity: 1; }
-        .modal-box { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: translateY(20px); transition: transform 0.2s; max-height: 80vh; display: flex; flex-direction: column; }
-        .modal-overlay.active .modal-box { transform: translateY(0); }
-        .modal-box h3 { margin-top: 0; margin-bottom: 15px; color: #333; }
-        .folder-list { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; margin-bottom: 20px; padding-bottom: 5px; }
-        .folder-option { background: #f0f6ff; border: 1px solid #b5d0ff; color: #0052cc; padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: all 0.2s; font-weight: bold; font-size: 14px; user-select: none; }
-        .folder-option:hover { background: #0052cc; color: white; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,82,204,0.2); }
-        .modal-actions { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 15px; border-top: 1px solid #eee; }
+        /* ========== 批量操作栏 ========== */
+        .batch-bar {
+            position: fixed;
+            bottom: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a1a1a;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            z-index: 1000;
+            transition: bottom 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 13px;
+        }
+        .batch-bar.visible {
+            bottom: 28px;
+        }
+        .batch-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all var(--transition);
+        }
+        .batch-btn:hover {
+            background: #0043a6;
+        }
+        .batch-btn-cancel {
+            background: transparent;
+            border: 1px solid #666;
+            color: #ddd;
+        }
+        .batch-btn-cancel:hover {
+            background: #333;
+        }
+
+        /* ========== 移动弹窗 ========== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.2s;
+            backdrop-filter: blur(3px);
+        }
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        .modal-box {
+            background: #fff;
+            padding: 24px;
+            border-radius: 14px;
+            width: 90%;
+            max-width: 480px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+            transform: translateY(20px);
+            transition: transform 0.25s ease;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-overlay.active .modal-box {
+            transform: translateY(0);
+        }
+        .modal-box h3 {
+            margin-top: 0;
+            margin-bottom: 14px;
+            color: #333;
+        }
+        .folder-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            overflow-y: auto;
+            margin-bottom: 18px;
+            padding-bottom: 4px;
+        }
+        .folder-option {
+            background: #f0f6ff;
+            border: 1px solid #b5d0ff;
+            color: var(--accent);
+            padding: 7px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all var(--transition);
+            font-weight: 600;
+            font-size: 13px;
+            user-select: none;
+        }
+        .folder-option:hover {
+            background: var(--accent);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 82, 204, 0.2);
+        }
+        .modal-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid #eee;
+        }
+        #new-folder-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        /* ========== 网状图容器 ========== */
+        #graph-container {
+            width: 100%;
+            height: 650px;
+            background: #fff;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: none;
+        }
+
+        /* ========== Toast ========== */
+        .toast-msg {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: #fff;
+            padding: 12px 26px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            z-index: 9999;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+            animation: fadeSlideIn 0.3s ease;
+            pointer-events: none;
+        }
+
+        /* ========== 拖拽占位 ========== */
+        .sortable-ghost {
+            opacity: 0.35;
+            background: #f8f9fa;
+            border: 2px dashed var(--accent);
+            border-radius: var(--radius);
+        }
+
+        /* ========== 响应式 ========== */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px 10px 100px;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .grid {
+                grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                gap: 10px;
+            }
+            .timeline-wrap {
+                padding-left: 28px;
+            }
+            .timeline-wrap::before {
+                left: 12px;
+            }
+            .timeline-dot {
+                left: -22px;
+                width: 10px;
+                height: 10px;
+            }
+            .list-row .lr-tags {
+                display: none;
+            }
+            .view-tabs {
+                flex-wrap: wrap;
+            }
+        }
     </style>
 </head>
 <body>
+
+    <!-- ==================== 主列表视图 ==================== -->
     <div id="view-list" class="view-container active">
+        <!-- 头部 -->
         <div class="header">
             <h2>🛠️ 个人工具箱 & HTML沙盒</h2>
             <div class="header-actions">
-                <button class="btn btn-outline" onclick="exportCSV()">⬇️ 导出未标记</button>
-                <button class="btn btn-outline" onclick="document.getElementById('csv-file').click()">⬆️ 导入标记</button>
+                <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇️ 导出未标记</button>
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('csv-file').click()">⬆️ 导入标记</button>
                 <input type="file" id="csv-file" style="display:none" accept=".csv" onchange="importCSV(event)">
-                <button class="btn btn-toolbox" onclick="toggleToolbox()">🧰 工具箱</button>
-                <button class="btn btn-success" id="toggle-view-btn" onclick="toggleViewMode()" style="color: white">🕸️ 切换网状图</button>
-                <button class="btn" onclick="createNewGroupUI()">📁 新建分组</button>
-                <button class="btn" onclick="switchView('upload')">+ 新建项目</button>
+                <button class="btn btn-toolbox btn-sm" onclick="toggleToolbox()">🧰 工具箱</button>
+                <button class="btn btn-sm" onclick="createNewGroupUI()">📁 新建分组</button>
+                <button class="btn btn-success btn-sm" onclick="switchView('upload')">+ 新建项目</button>
             </div>
         </div>
 
+        <!-- 搜索栏 + 视图切换 -->
+        <div class="search-bar-wrap">
+            <input type="text" class="search-input" id="search-input" placeholder="🔍  搜索标题、标签、分组...  (实时筛选)" oninput="onSearchInput()">
+            <button class="search-clear" id="search-clear" onclick="clearSearch()" title="清除搜索">✕</button>
+            <span class="result-count" id="result-count"></span>
+            <div class="view-tabs" id="view-tabs">
+                <button class="view-tab active" data-view="grid" onclick="switchDisplayView('grid')" title="网格卡片">
+                    <span>▦</span> 网格
+                </button>
+                <button class="view-tab" data-view="timeline" onclick="switchDisplayView('timeline')" title="时间线">
+                    <span>📅</span> 时间线
+                </button>
+                <button class="view-tab" data-view="list" onclick="switchDisplayView('list')" title="紧凑列表">
+                    <span>📋</span> 列表
+                </button>
+                <button class="view-tab" data-view="graph" onclick="switchDisplayView('graph')" title="网状关系图">
+                    <span>🕸️</span> 网状图
+                </button>
+            </div>
+        </div>
+
+        <!-- 工具箱面板 -->
         <div id="toolbox-panel" class="toolbox-panel">
             <h3 style="margin-top:0;">🔧 批量图标管理</h3>
             <div class="toolbox-row">
-                <button class="btn btn-warning" onclick="exportIconCSV()">📤 导出图标CSV (含预览)</button>
-                <span style="color:#666;">导出项目标题、当前图标、HTML前200字预览</span>
+                <button class="btn btn-warning btn-sm" onclick="exportIconCSV()">📤 导出图标CSV (含预览)</button>
+                <span style="color:#666;font-size:12px;">导出项目标题、当前图标、HTML前200字预览</span>
             </div>
             <div class="toolbox-divider"></div>
             <div class="toolbox-row">
-                <button class="btn btn-success" onclick="document.getElementById('icon-csv-file').click()">📥 导入图标CSV并更新</button>
+                <button class="btn btn-success btn-sm" onclick="document.getElementById('icon-csv-file').click()">📥 导入图标CSV并更新</button>
                 <input type="file" id="icon-csv-file" style="display:none" accept=".csv" onchange="importIconCSV(event)">
-                <span style="color:#666;">CSV需包含 id(或title)、icon 列，将批量更新图标</span>
+                <span style="color:#666;font-size:12px;">CSV需包含 id(或title)、icon 列，将批量更新图标</span>
             </div>
         </div>
 
+        <!-- 视图容器：网格 / 时间线 / 列表 -->
         <div id="pages-grid"></div>
+        <div id="timeline-container" style="display:none;"></div>
+        <div id="list-container" style="display:none;"></div>
         <div id="graph-container"></div>
     </div>
 
+    <!-- ==================== 批量操作栏 ==================== -->
     <div id="batch-bar" class="batch-bar">
         <span>已选择 <b id="batch-count">0</b> 项</span>
         <button class="batch-btn" onclick="executeBatchMove()">📁 批量移动至...</button>
         <button class="batch-btn batch-btn-cancel" onclick="clearBatchSelection()">✖ 取消选择</button>
     </div>
 
+    <!-- ==================== 移动弹窗 ==================== -->
     <div id="move-modal" class="modal-overlay">
         <div class="modal-box">
             <h3 id="move-modal-title">移动至分类...</h3>
             <div id="move-modal-list" class="folder-list"></div>
             <div class="modal-actions">
-                <input type="text" id="new-folder-input" placeholder="输入新物理分类名称..." style="flex:1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
-                <button class="btn btn-success" onclick="moveModalCreateFromInput()">+ 创建并移入</button>
-                <button class="btn btn-outline" onclick="closeMoveModal()">取消</button>
+                <input type="text" id="new-folder-input" placeholder="输入新物理分类名称..." style="flex:1;">
+                <button class="btn btn-success btn-sm" onclick="moveModalCreateFromInput()">+ 创建并移入</button>
+                <button class="btn btn-ghost btn-sm" onclick="closeMoveModal()">取消</button>
             </div>
         </div>
     </div>
 
+    <!-- ==================== 新建项目页面 ==================== -->
     <div id="view-upload" class="view-container">
         <div class="form-panel">
             <h2>🚀 部署新项目</h2>
@@ -192,6 +1111,7 @@
         </div>
     </div>
 
+    <!-- ==================== 编辑项目页面 ==================== -->
     <div id="view-edit" class="view-container">
         <div class="form-panel">
             <h2>✏️ 编辑项目</h2>
@@ -217,7 +1137,7 @@
                     <label>完整 HTML 代码</label>
                     <textarea id="edit-html" required placeholder="在此粘贴或编写HTML代码..."></textarea>
                 </div>
-                <div style="display: flex; gap: 15px; align-items: center;">
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
                     <button type="submit" class="btn btn-success">更新并保留页面</button>
                     <button type="button" class="btn btn-danger" onclick="deletePage()">🗑️ 删除项目</button>
                     <span class="back-link" onclick="switchView('list')">返回上一页</span>
@@ -227,9 +1147,24 @@
     </div>
 
     <script>
+        // ==================== 全局常量与状态 ====================
         const API_BASE = '/sandbox';
-        const EMOJI_POOL = ['🔧','📌','🚀','🎯','📊','💡','🎮','📁','🖼️','📝','🔗','🗂️','📈','🔍','🧩','🎨','📦','⚙️','🌟','💎','🏢','🌐','📡','🔋'];
+        const EMOJI_POOL = ['🔧', '📌', '🚀', '🎯', '📊', '💡', '🎮', '📁', '🖼️', '📝', '🔗', '🗂️', '📈', '🔍', '🧩', '🎨', '📦',
+            '⚙️', '🌟', '💎', '🏢', '🌐', '📡', '🔋'
+        ];
+        const LS_TIMESTAMPS_KEY = 'sandbox_page_timestamps';
+        const NEW_THRESHOLD_HOURS = 48; // 48小时内标记为"新"
 
+        let currentPagesData = [];
+        let backendOrder = { group_order: [], item_order: [] };
+        let currentDisplayView = 'grid'; // 'grid' | 'timeline' | 'list' | 'graph'
+        let chartInstance = null;
+        let toolboxVisible = false;
+        let selectedIds = new Set();
+        let currentMoveCallback = null;
+        let searchQuery = '';
+
+        // ==================== 工具函数 ====================
         function getDefaultIcon(seed) {
             if (!seed) return EMOJI_POOL[0];
             let hash = 0;
@@ -244,7 +1179,6 @@
 
         function injectIconToHtml(htmlContent, iconEmoji, title) {
             if (!htmlContent) return htmlContent;
-            const titleText = title || '项目';
             const emojiPrefix = iconEmoji + ' ';
             const titleRegex = /<title[^>]*>([\s\S]*?)<\/title>/i;
             if (titleRegex.test(htmlContent)) {
@@ -252,74 +1186,234 @@
             } else {
                 const headRegex = /<head[^>]*>/i;
                 if (headRegex.test(htmlContent)) {
-                    return htmlContent.replace(headRegex, (match) => match + `<title>${emojiPrefix}${titleText}</title>`);
+                    return htmlContent.replace(headRegex, (match) => match + `<title>${emojiPrefix}${title ||
+                        '项目'}</title>`);
                 } else {
-                    return `<title>${emojiPrefix}${titleText}</title>` + htmlContent;
+                    return `<title>${emojiPrefix}${title || '项目'}</title>` + htmlContent;
                 }
             }
         }
 
-        let currentPagesData = [];
-        let backendOrder = { group_order: [], item_order: [] };
-        let isGraphMode = false;
-        let chartInstance = null;
-        let toolboxVisible = false;
-        let selectedIds = new Set();
-        let currentMoveCallback = null;
-
-        function toggleToolbox() {
-            toolboxVisible = !toolboxVisible;
-            document.getElementById('toolbox-panel').classList.toggle('active', toolboxVisible);
+        // localStorage 时间戳管理
+        function getTimestamps() {
+            try {
+                return JSON.parse(localStorage.getItem(LS_TIMESTAMPS_KEY) || '{}');
+            } catch (e) { return {}; }
         }
 
+        function saveTimestamps(ts) {
+            try {
+                localStorage.setItem(LS_TIMESTAMPS_KEY, JSON.stringify(ts));
+            } catch (e) { /* localStorage 满则静默失败 */ }
+        }
+
+        function recordPageTimestamp(pageId) {
+            const ts = getTimestamps();
+            if (!ts[pageId]) {
+                ts[pageId] = new Date().toISOString();
+                saveTimestamps(ts);
+            }
+        }
+
+        function getPageCreatedAt(pageId) {
+            const ts = getTimestamps();
+            return ts[pageId] || null;
+        }
+
+        function isNewPage(pageId) {
+            const createdAt = getPageCreatedAt(pageId);
+            if (!createdAt) return false;
+            const diffHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
+            return diffHours < NEW_THRESHOLD_HOURS;
+        }
+
+        function getTimeGroupLabel(pageId) {
+            const createdAt = getPageCreatedAt(pageId);
+            if (!createdAt) return 'history';
+            const now = new Date();
+            const created = new Date(createdAt);
+            const diffDays = Math.floor((now - created) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) return 'today';
+            if (diffDays === 1) return 'yesterday';
+            if (diffDays < 7) return 'this_week';
+            if (diffDays < 30) return 'this_month';
+            return 'history';
+        }
+
+        function getTimeGroupLabelText(label) {
+            const map = {
+                'today': '🟢 今天',
+                'yesterday': '📅 昨天',
+                'this_week': '📆 本周',
+                'this_month': '🗓️ 本月',
+                'history': '📚 历史项目'
+            };
+            return map[label] || label;
+        }
+
+        function formatTimeAgo(isoStr) {
+            if (!isoStr) return '';
+            const diff = Date.now() - new Date(isoStr).getTime();
+            const mins = Math.floor(diff / 60000);
+            if (mins < 1) return '刚刚';
+            if (mins < 60) return mins + '分钟前';
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return hours + '小时前';
+            const days = Math.floor(hours / 24);
+            if (days < 30) return days + '天前';
+            return Math.floor(days / 30) + '个月前';
+        }
+
+        // Toast
+        function showToast(msg) {
+            const t = document.createElement('div');
+            t.className = 'toast-msg';
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0';
+                t.style.transition = 'opacity 0.4s'; }, 1800);
+            setTimeout(() => t.remove(), 2200);
+        }
+
+        // ==================== 视图切换 ====================
         function switchView(viewName, param = null) {
             document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
-            document.getElementById(`view-${viewName}`).classList.add('active');
-            if (viewName === 'list') loadPages();
-            else if (viewName === 'upload') document.getElementById('upload-form').reset();
-            else if (viewName === 'edit' && param) loadEditData(param);
+            const target = document.getElementById(`view-${viewName}`);
+            if (target) target.classList.add('active');
+            if (viewName === 'list') {
+                loadPages();
+            } else if (viewName === 'upload') {
+                document.getElementById('upload-form').reset();
+            } else if (viewName === 'edit' && param) {
+                loadEditData(param);
+            }
         }
 
+        function switchDisplayView(view) {
+            currentDisplayView = view;
+            // 更新标签激活状态
+            document.querySelectorAll('#view-tabs .view-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.getAttribute('data-view') === view);
+            });
+            // 显示/隐藏容器
+            const gridEl = document.getElementById('pages-grid');
+            const timelineEl = document.getElementById('timeline-container');
+            const listEl = document.getElementById('list-container');
+            const graphEl = document.getElementById('graph-container');
+
+            gridEl.style.display = 'none';
+            timelineEl.style.display = 'none';
+            listEl.style.display = 'none';
+            graphEl.style.display = 'none';
+
+            if (view === 'grid') {
+                gridEl.style.display = '';
+                renderGrid();
+            } else if (view === 'timeline') {
+                timelineEl.style.display = '';
+                renderTimeline();
+            } else if (view === 'list') {
+                listEl.style.display = '';
+                renderListView();
+            } else if (view === 'graph') {
+                graphEl.style.display = 'block';
+                renderGraph();
+            }
+            clearBatchSelection();
+            updateBatchBar();
+        }
+
+        // ==================== 搜索 ====================
+        function onSearchInput() {
+            searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
+            const clearBtn = document.getElementById('search-clear');
+            if (searchQuery) {
+                clearBtn.classList.add('visible');
+            } else {
+                clearBtn.classList.remove('visible');
+            }
+            refreshCurrentView();
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            searchQuery = '';
+            document.getElementById('search-clear').classList.remove('visible');
+            refreshCurrentView();
+        }
+
+        function refreshCurrentView() {
+            if (currentDisplayView === 'grid') renderGrid();
+            else if (currentDisplayView === 'timeline') renderTimeline();
+            else if (currentDisplayView === 'list') renderListView();
+            else if (currentDisplayView === 'graph') renderGraph();
+            updateBatchBar();
+        }
+
+        function filterPages(pages) {
+            if (!searchQuery) return pages;
+            const q = searchQuery;
+            return pages.filter(p => {
+                const title = (p.title || '').toLowerCase();
+                const tags = (p.tags || '').toLowerCase();
+                const folder = (p.folder || '').toLowerCase();
+                return title.includes(q) || tags.includes(q) || folder.includes(q);
+            });
+        }
+
+        function updateResultCount(filtered, total) {
+            const el = document.getElementById('result-count');
+            if (searchQuery) {
+                el.textContent = `显示 ${filtered.length} / ${total} 项`;
+            } else {
+                el.textContent = `共 ${total} 项`;
+            }
+        }
+
+        // ==================== 数据加载 ====================
         function loadPages() {
             fetch(`${API_BASE}/api/pages`)
                 .then(res => res.json())
                 .then(data => {
-                    currentPagesData = data.pages;
+                    currentPagesData = data.pages || [];
                     backendOrder = data.order || { group_order: [], item_order: [] };
-                    clearBatchSelection(); 
-                    if (isGraphMode) renderGraph();
-                    else renderGrid();
-                }).catch(err => console.error("加载列表失败", err));
+                    clearBatchSelection();
+                    refreshCurrentView();
+                })
+                .catch(err => console.error("加载列表失败", err));
         }
 
         function syncOrderToBackend() {
             const container = document.getElementById('pages-grid');
-            const newGroupOrder = Array.from(container.children).map(el => el.getAttribute('data-group-name'));
-            const newItemOrder = Array.from(document.querySelectorAll('.card-wrapper')).map(el => el.getAttribute('data-id'));
-            
+            if (!container || currentDisplayView !== 'grid') return;
+            const newGroupOrder = Array.from(container.children).map(el => el.getAttribute('data-group-name') || '');
+            const newItemOrder = Array.from(document.querySelectorAll('#pages-grid .card-wrapper')).map(el => el.getAttribute(
+                'data-id') || '');
             fetch(`${API_BASE}/api/order`, {
                 method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ group_order: newGroupOrder, item_order: newItemOrder })
-            });
+            }).catch(() => {});
         }
 
+        // ==================== 批量选择 ====================
         function toggleCheck(checkbox, pageId) {
-            const wrapper = checkbox.closest('.card-wrapper');
+            const wrapper = checkbox.closest('.card-wrapper') || checkbox.closest('.timeline-card') || checkbox.closest(
+                '.list-row');
             const group = checkbox.closest('.group-container');
 
             if (checkbox.checked) {
                 selectedIds.add(pageId);
-                wrapper.classList.add('selected');
+                if (wrapper) wrapper.classList.add('selected');
             } else {
                 selectedIds.delete(pageId);
-                wrapper.classList.remove('selected');
+                if (wrapper) wrapper.classList.remove('selected');
             }
-            
-            const hasChecked = group.querySelector('.card-checkbox:checked');
-            if (hasChecked) group.classList.add('has-selection');
-            else group.classList.remove('has-selection');
-
+            if (group) {
+                const hasChecked = group.querySelector('.card-checkbox:checked');
+                if (hasChecked) group.classList.add('has-selection');
+                else group.classList.remove('has-selection');
+            }
             updateBatchBar();
         }
 
@@ -334,37 +1428,34 @@
         function clearBatchSelection() {
             selectedIds.clear();
             document.querySelectorAll('.card-checkbox').forEach(cb => cb.checked = false);
-            document.querySelectorAll('.card-wrapper.selected').forEach(w => w.classList.remove('selected'));
+            document.querySelectorAll('.card-wrapper.selected, .timeline-card.selected, .list-row.selected').forEach(w => w
+                .classList.remove('selected'));
             document.querySelectorAll('.group-container.has-selection').forEach(g => g.classList.remove('has-selection'));
             updateBatchBar();
         }
 
-        // --- 移动选择器弹窗核心逻辑 ---
+        // ==================== 移动弹窗 ====================
         function showMoveModal(title, callback) {
             currentMoveCallback = callback;
             document.getElementById('move-modal-title').innerText = title;
-            document.getElementById('new-folder-input').value = ''; 
-            
+            document.getElementById('new-folder-input').value = '';
             let folders = new Set(['未分类']);
             currentPagesData.forEach(p => {
                 if (p.folder && p.folder.trim() !== '') folders.add(p.folder.trim());
             });
-            
             const listEl = document.getElementById('move-modal-list');
             listEl.innerHTML = '';
-            
             Array.from(folders).sort().forEach(f => {
                 const btn = document.createElement('div');
                 btn.className = 'folder-option';
                 btn.innerText = f;
                 btn.onclick = () => {
-                    const cb = currentMoveCallback; 
-                    closeMoveModal();               
-                    if (cb) cb(f);                  
+                    const cb = currentMoveCallback;
+                    closeMoveModal();
+                    if (cb) cb(f);
                 };
                 listEl.appendChild(btn);
             });
-            
             document.getElementById('move-modal').classList.add('active');
         }
 
@@ -384,96 +1475,38 @@
             }
         }
 
-        // --- 置顶功能 ---
-        async function togglePin(pageId) {
-            const page = currentPagesData.find(p => p.id === pageId);
-            if (!page) return;
-            
-            let tagsArray = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
-            const isPinned = tagsArray.includes('置顶');
-            
-            if (isPinned) {
-                // 取消置顶
-                tagsArray = tagsArray.filter(t => t !== '置顶');
-                
-                // 将该ID放到后端排序数组最前列，实现“排在不置顶的最前列”
-                backendOrder.item_order = backendOrder.item_order.filter(id => id !== pageId);
-                backendOrder.item_order.unshift(pageId); 
-            } else {
-                // 置顶
-                tagsArray.push('置顶');
-            }
-            
-            page.tags = tagsArray.join(', ');
-            
-            try {
-                // 将新tags存储到后端
-                await fetch(`${API_BASE}/api/pages/${pageId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        title: page.title, 
-                        icon: page.icon, 
-                        folder: page.folder, 
-                        tags: page.tags, 
-                        html_content: page.html_content 
-                    })
-                });
-                
-                // 基于最新数据直接刷新当前视图
-                renderGrid();
-                
-                // 如果是取消置顶，视图更新后顺带将调整好的 DOM 排序同步给后端固化
-                if (isPinned) {
-                    syncOrderToBackend();
-                }
-                
-                showToast(isPinned ? '已取消置顶' : '📌 已置顶');
-            } catch (e) {
-                alert('操作失败');
-            }
-        }
-
-        // 卡片右上角快捷移动单个文件
         function openMoveModal(pageId, currentFolder) {
             showMoveModal(`将项目移出 [${currentFolder}]`, (targetFolder) => {
                 if (targetFolder === currentFolder) {
                     showToast(`项目已经在 [${targetFolder}] 中`);
                     return;
                 }
-                
                 fetch(`${API_BASE}/api/pages/${pageId}/move`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ new_folder: targetFolder })
-                }).then(r => r.json()).then(d => {
-                    if (d.status === 'success') { 
-                        showToast(`✅ 已移动至 [${targetFolder}]`); 
-                        loadPages(); 
-                    } else { 
-                        alert('移动失败: ' + d.error); 
-                    }
-                }).catch(err => alert("请求失败: " + err));
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_folder: targetFolder })
+                    }).then(r => r.json()).then(d => {
+                        if (d.status === 'success') { showToast(`✅ 已移动至 [${targetFolder}]`);
+                            loadPages(); } else { alert('移动失败: ' + d.error); }
+                    })
+                    .catch(err => alert("请求失败: " + err));
             });
         }
 
-        // 底部工具栏批量移动
         function executeBatchMove() {
             if (selectedIds.size === 0) return;
-            
             showMoveModal(`移动选中的 ${selectedIds.size} 项`, async (targetFolder) => {
                 showToast(`正在批量移动至 [${targetFolder}]...`);
                 let successCount = 0;
                 const idArray = Array.from(selectedIds);
-                
-                const promises = idArray.map(pid => 
+                const promises = idArray.map(pid =>
                     fetch(`${API_BASE}/api/pages/${pid}/move`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ new_folder: targetFolder })
-                    }).then(r => r.json()).then(d => { if(d.status === 'success') successCount++; })
+                    }).then(r => r.json()).then(d => { if (d.status === 'success')
+                        successCount++; })
                 );
-                
                 await Promise.all(promises);
                 showToast(`✅ 成功移动 ${successCount} 项到 ${targetFolder}`);
                 clearBatchSelection();
@@ -481,31 +1514,60 @@
             });
         }
 
-        // 建立纯视觉新分组
+        // ==================== 置顶 ====================
+        async function togglePin(pageId) {
+            const page = currentPagesData.find(p => p.id === pageId);
+            if (!page) return;
+            let tagsArray = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+            const isPinned = tagsArray.includes('置顶');
+            if (isPinned) {
+                tagsArray = tagsArray.filter(t => t !== '置顶');
+                backendOrder.item_order = backendOrder.item_order.filter(id => id !== pageId);
+                backendOrder.item_order.unshift(pageId);
+            } else {
+                tagsArray.push('置顶');
+            }
+            page.tags = tagsArray.join(', ');
+            try {
+                await fetch(`${API_BASE}/api/pages/${pageId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: page.title,
+                        icon: page.icon,
+                        folder: page.folder,
+                        tags: page.tags,
+                        html_content: page.html_content
+                    })
+                });
+                refreshCurrentView();
+                if (!isPinned) syncOrderToBackend();
+                showToast(isPinned ? '已取消置顶' : '📌 已置顶');
+            } catch (e) { alert('操作失败'); }
+        }
+
+        // ==================== 分组操作 ====================
         function createNewGroupUI() {
             const groupName = prompt("请输入新分类名称 (纯建立视觉框，拖入文件后方可真正在硬盘生成):");
             if (!groupName || groupName.trim() === '') return;
-            const gn = groupName.trim().split(/[,，]/)[0]; 
-            
+            const gn = groupName.trim().split(/[,，]/)[0];
             if (document.querySelector(`[data-group-name="REAL_${gn}"]`)) {
                 return alert("该分组在当前视图中已存在！");
             }
-            
             const groupIcon = getDefaultIcon('GROUP_' + gn);
             const html = `
-                <div class="group-container" data-group-name="REAL_${gn}">
-                    <div class="group-header">
-                        <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
-                        <span class="group-icon">${groupIcon}</span>
-                        <span>${gn}</span>
-                        <button class="group-action-btn" onclick="renameGroup('${gn}')">✏️ 重命名物理文件夹</button>
-                    </div>
-                    <div class="grid group-grid" data-folder="${gn}"></div>
-                </div>`;
-            
+            <div class="group-container" data-group-name="REAL_${gn}">
+              <div class="group-header">
+                <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
+                <span class="group-icon">${groupIcon}</span>
+                <span>${gn}</span>
+                <span class="group-count">0项</span>
+                <button class="group-action-btn" onclick="renameGroup('${gn}')">✏️ 重命名</button>
+              </div>
+              <div class="grid group-grid" data-folder="${gn}"></div>
+            </div>`;
             const container = document.getElementById('pages-grid');
             container.insertAdjacentHTML('afterbegin', html);
-            
             const newGrid = container.querySelector(`[data-group-name="REAL_${gn}"] .group-grid`);
             Sortable.create(newGrid, {
                 group: { name: 'shared', put: true },
@@ -516,163 +1578,25 @@
             syncOrderToBackend();
         }
 
-        // 统一的卡片拖拽结束处理
         function handleCardDragEnd(evt) {
             const itemEl = evt.item;
             const pageId = itemEl.getAttribute('data-id');
-            const originalPhysicalFolder = itemEl.getAttribute('data-physical-folder'); 
+            const originalPhysicalFolder = itemEl.getAttribute('data-physical-folder');
             const targetPhysicalFolder = evt.to.getAttribute('data-folder');
-            
             syncOrderToBackend();
-
-            if (evt.from !== evt.to) {
-                if (targetPhysicalFolder !== originalPhysicalFolder) {
-                    fetch(`${API_BASE}/api/pages/${pageId}/move`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ new_folder: targetPhysicalFolder })
-                    }).then(r => r.json()).then(d => {
-                        if (d.status === 'success') { 
-                            showToast(`✅ 已移动至物理目录 [${targetPhysicalFolder}]`); 
-                            itemEl.setAttribute('data-physical-folder', targetPhysicalFolder);
-                        } else { 
-                            alert('移动失败: ' + d.error); 
-                            loadPages(); 
-                        }
-                    });
-                }
+            if (evt.from !== evt.to && targetPhysicalFolder !== originalPhysicalFolder) {
+                fetch(`${API_BASE}/api/pages/${pageId}/move`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_folder: targetPhysicalFolder })
+                }).then(r => r.json()).then(d => {
+                    if (d.status === 'success') {
+                        showToast(`✅ 已移动至物理目录 [${targetPhysicalFolder}]`);
+                        itemEl.setAttribute('data-physical-folder', targetPhysicalFolder);
+                    } else { alert('移动失败: ' + d.error);
+                        loadPages(); }
+                });
             }
-        }
-
-        function renderGrid() {
-            const container = document.getElementById('pages-grid');
-            container.innerHTML = '';
-            
-            const grouped = {};
-            currentPagesData.forEach(page => {
-                let folder = page.folder && page.folder !== '' && page.folder !== '未分类' ? page.folder : '未分类';
-                let tags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
-
-                page._physicalFolder = folder; 
-
-                if (folder === '未分类' && tags.length > 0) {
-                    let primaryTag = tags[0];
-                    let vKey = `VIRTUAL_${primaryTag}`;
-                    if (!grouped[vKey]) grouped[vKey] = { isVirtual: true, name: primaryTag, pages: [] };
-                    grouped[vKey].pages.push(page);
-                } else {
-                    let fKey = `REAL_${folder}`;
-                    if (!grouped[fKey]) grouped[fKey] = { isVirtual: false, name: folder, pages: [] };
-                    grouped[fKey].pages.push(page);
-                }
-            });
-
-            const finalGrouped = grouped;
-
-            const sortedKeys = Object.keys(finalGrouped).sort((a, b) => {
-                let groupA = finalGrouped[a], groupB = finalGrouped[b];
-                if (groupA.isVirtual !== groupB.isVirtual) return groupA.isVirtual ? 1 : -1;
-                let idxA = backendOrder.group_order.indexOf(a);
-                let idxB = backendOrder.group_order.indexOf(b);
-                if (idxA === -1) idxA = 999; if (idxB === -1) idxB = 999;
-                return idxA - idxB;
-            });
-
-            sortedKeys.forEach(key => {
-                const groupData = finalGrouped[key];
-                const isVirtual = groupData.isVirtual;
-                const groupName = groupData.name;
-                const pages = groupData.pages;
-                
-                pages.sort((a, b) => {
-                    const aPinned = (a.tags || '').includes('置顶');
-                    const bPinned = (b.tags || '').includes('置顶');
-                    
-                    // 置顶规则：置顶卡片排在组内最前面
-                    if (aPinned && !bPinned) return -1;
-                    if (!aPinned && bPinned) return 1;
-
-                    // 非置顶卡片按拖拽历史排列
-                    let idxA = backendOrder.item_order.indexOf(a.id);
-                    let idxB = backendOrder.item_order.indexOf(b.id);
-                    if (idxA === -1) idxA = 999999; if (idxB === -1) idxB = 999999;
-                    return idxA - idxB;
-                });
-
-                const groupIcon = getDefaultIcon('GROUP_' + groupName);
-                let cardsHtml = pages.map(page => {
-                    const displayIcon = resolveIcon(page);
-                    let badgeText = groupName;
-                    let folderBadge = `<span class="tags tag-folder">${badgeText}</span>`;
-                    
-                    // 过滤掉控制排名的置顶标签，避免在普通标签里二次展示
-                    let rawTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
-                    let displayTags = rawTags.filter(t => t !== '置顶');
-                    let isPinned = rawTags.includes('置顶');
-                    
-                    let tagsHtml = displayTags.map(t => `<span class="tags">${t}</span>`).join('');
-                    let pinBadgeHtml = isPinned ? `<div class="pin-badge">📌 置顶</div>` : '';
-                    
-                    return `
-                        <div class="card-wrapper" data-id="${page.id}" data-physical-folder="${page._physicalFolder}">
-                            ${pinBadgeHtml}
-                            <input type="checkbox" class="card-checkbox" value="${page.id}" onclick="event.stopPropagation(); toggleCheck(this, '${page.id}')">
-                            <a href="${API_BASE}/view/${page.id}" target="_blank" class="card" draggable="false">
-                                <div class="icon">${displayIcon}</div>
-                                <div class="title">${page.title}</div>
-                                <div>${folderBadge} ${tagsHtml}</div>
-                            </a>
-                            <div class="card-action-btns">
-                                <button class="card-btn card-btn-pin" onclick="event.preventDefault(); event.stopPropagation(); togglePin('${page.id}')">${isPinned ? '取消置顶' : '📌 置顶'}</button>
-                                <button class="card-btn card-btn-move" onclick="event.preventDefault(); event.stopPropagation(); openMoveModal('${page.id}', '${badgeText}')">移动</button>
-                                <button class="card-btn" onclick="event.preventDefault(); event.stopPropagation(); switchView('edit', '${page.id}')">编辑</button>
-                            </div>
-                        </div>`;
-                }).join('');
-
-                let headerActions = '';
-                if (isVirtual) {
-                    headerActions = `<button class="group-action-btn btn-success" onclick="confirmVirtualGroup('${groupName}', '${pages.map(p=>p.id).join(',')}')">✨ 确认为新文件夹</button>`;
-                } else {
-                    headerActions = `<button class="group-action-btn" onclick="renameGroup('${groupName}')">✏️ 重命名物理文件夹</button>`;
-                }
-
-                let groupClasses = ['group-container'];
-                if (isVirtual) groupClasses.push('group-virtual');
-
-                let subTitle = isVirtual ? '<span style="color:#0052cc;font-size:12px;margin-left:5px;">(标签提取虚拟呈现)</span>' : '';
-                let targetFolderData = isVirtual ? '未分类' : groupName;
-
-                const groupHtml = `
-                    <div class="${groupClasses.join(' ')}" data-group-name="${key}">
-                        <div class="group-header">
-                            <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
-                            <span class="group-icon">${groupIcon}</span>
-                            <span>${groupName} ${subTitle}</span>
-                            ${headerActions}
-                        </div>
-                        <div class="grid group-grid" data-folder="${targetFolderData}">
-                            ${cardsHtml}
-                        </div>
-                    </div>`;
-                container.innerHTML += groupHtml;
-            });
-
-            Sortable.create(container, {
-                handle: '.group-drag-handle',
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                onEnd: syncOrderToBackend
-            });
-
-            document.querySelectorAll('.group-grid').forEach(el => {
-                Sortable.create(el, {
-                    group: { name: 'shared', put: true }, 
-                    animation: 150,
-                    ghostClass: 'sortable-ghost',
-                    onEnd: handleCardDragEnd
-                });
-            });
         }
 
         async function confirmVirtualGroup(newFolderName, pageIdsStr) {
@@ -682,9 +1606,13 @@
             let successCount = 0;
             for (let pid of pageIds) {
                 try {
-                    const r = await fetch(`${API_BASE}/api/pages/${pid}/move`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_folder: newFolderName }) });
+                    const r = await fetch(`${API_BASE}/api/pages/${pid}/move`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_folder: newFolderName })
+                    });
                     if ((await r.json()).status === 'success') successCount++;
-                } catch(e) {}
+                } catch (e) {}
             }
             showToast(`✅ 成功创建文件夹并移入 ${successCount} 个项目`);
             loadPages();
@@ -695,11 +1623,405 @@
             const newName = prompt(`将物理分组文件夹 "${oldName}" 重命名为:`, oldName);
             if (!newName || newName.trim() === '' || newName === oldName) return;
             fetch(`${API_BASE}/api/groups/rename`, {
-                method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ old_name: oldName, new_name: newName.trim() })
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_name: oldName, new_name: newName.trim() })
             }).then(r => r.json()).then(d => {
-                if(d.status === 'success') { showToast(`✅ 文件夹重命名完成`); loadPages(); }
-                else { alert('重命名失败: ' + d.error); loadPages(); }
+                if (d.status === 'success') { showToast(`✅ 文件夹重命名完成`);
+                    loadPages(); } else { alert('重命名失败: ' + d.error);
+                    loadPages(); }
             });
+        }
+
+        // ==================== 渲染：网格视图 ====================
+        function renderGrid() {
+            const container = document.getElementById('pages-grid');
+            if (!container || currentDisplayView !== 'grid') return;
+            container.innerHTML = '';
+            container.style.display = '';
+
+            const filtered = filterPages(currentPagesData);
+            updateResultCount(filtered, currentPagesData.length);
+
+            const grouped = {};
+            filtered.forEach(page => {
+                let folder = page.folder && page.folder !== '' && page.folder !== '未分类' ? page.folder : '未分类';
+                let tags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+                page._physicalFolder = folder;
+                if (folder === '未分类' && tags.length > 0) {
+                    let vKey = `VIRTUAL_${tags[0]}`;
+                    if (!grouped[vKey]) grouped[vKey] = { isVirtual: true, name: tags[0], pages: [] };
+                    grouped[vKey].pages.push(page);
+                } else {
+                    let fKey = `REAL_${folder}`;
+                    if (!grouped[fKey]) grouped[fKey] = { isVirtual: false, name: folder, pages: [] };
+                    grouped[fKey].pages.push(page);
+                }
+            });
+
+            const sortedKeys = Object.keys(grouped).sort((a, b) => {
+                let groupA = grouped[a],
+                    groupB = grouped[b];
+                if (groupA.isVirtual !== groupB.isVirtual) return groupA.isVirtual ? 1 : -1;
+                let idxA = backendOrder.group_order.indexOf(a);
+                let idxB = backendOrder.group_order.indexOf(b);
+                if (idxA === -1) idxA = 999;
+                if (idxB === -1) idxB = 999;
+                return idxA - idxB;
+            });
+
+            sortedKeys.forEach(key => {
+                const groupData = grouped[key];
+                const isVirtual = groupData.isVirtual;
+                const groupName = groupData.name;
+                const pages = groupData.pages;
+                pages.sort((a, b) => {
+                    const aPinned = (a.tags || '').includes('置顶');
+                    const bPinned = (b.tags || '').includes('置顶');
+                    if (aPinned && !bPinned) return -1;
+                    if (!aPinned && bPinned) return 1;
+                    let idxA = backendOrder.item_order.indexOf(a.id);
+                    let idxB = backendOrder.item_order.indexOf(b.id);
+                    if (idxA === -1) idxA = 999999;
+                    if (idxB === -1) idxB = 999999;
+                    return idxA - idxB;
+                });
+
+                const groupIcon = getDefaultIcon('GROUP_' + groupName);
+                let cardsHtml = pages.map(page => {
+                    const displayIcon = resolveIcon(page);
+                    let rawTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+                    let displayTags = rawTags.filter(t => t !== '置顶');
+                    let isPinned = rawTags.includes('置顶');
+                    let isNew = isNewPage(page.id);
+                    let tagsHtml = displayTags.map(t => `<span class="tags">${t}</span>`).join('');
+                    let folderBadge =
+                        `<span class="tags tag-folder">${isVirtual ? '未分类→' + groupName : groupName}</span>`;
+                    let pinBadgeHtml = isPinned ? `<div class="pin-badge">📌 置顶</div>` : '';
+                    let newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : '';
+                    let cardClasses = isNew ? 'card card-new-highlight' : 'card';
+                    return `
+                <div class="card-wrapper" data-id="${page.id}" data-physical-folder="${page._physicalFolder}">
+                  ${newBadgeHtml}${pinBadgeHtml}
+                  <input type="checkbox" class="card-checkbox" value="${page.id}" onclick="event.stopPropagation(); toggleCheck(this, '${page.id}')">
+                  <a href="${API_BASE}/view/${page.id}" target="_blank" class="${cardClasses}" draggable="false">
+                    <span class="icon">${displayIcon}</span>
+                    <div class="title">${escapeHtml(page.title)}</div>
+                    <div>${folderBadge} ${tagsHtml}</div>
+                  </a>
+                  <div class="card-action-btns">
+                    <button class="card-btn card-btn-pin" onclick="event.preventDefault();event.stopPropagation();togglePin('${page.id}')">${isPinned?'取消置顶':'📌'}</button>
+                    <button class="card-btn card-btn-move" onclick="event.preventDefault();event.stopPropagation();openMoveModal('${page.id}','${escapeAttr(groupName)}')">移动</button>
+                    <button class="card-btn" onclick="event.preventDefault();event.stopPropagation();switchView('edit','${page.id}')">编辑</button>
+                  </div>
+                </div>`;
+                }).join('');
+
+                let headerActions = isVirtual ?
+                    `<button class="group-action-btn btn-success" style="background:#28a745;color:#fff;" onclick="confirmVirtualGroup('${escapeAttr(groupName)}','${pages.map(p=>p.id).join(',')}')">✨ 确认为新文件夹</button>` :
+                    `<button class="group-action-btn" onclick="renameGroup('${escapeAttr(groupName)}')">✏️ 重命名</button>`;
+                let subTitle = isVirtual ?
+                    '<span style="color:#0052cc;font-size:11px;margin-left:4px;">(标签虚拟分组)</span>' : '';
+                let groupClasses = ['group-container'];
+                if (isVirtual) groupClasses.push('group-virtual');
+                let targetFolderData = isVirtual ? '未分类' : groupName;
+
+                const groupHtml = `
+              <div class="${groupClasses.join(' ')}" data-group-name="${key}">
+                <div class="group-header">
+                  <span class="group-drag-handle" title="按住拖动排序组别">↕️</span>
+                  <span class="group-icon">${groupIcon}</span>
+                  <span>${escapeHtml(groupName)} ${subTitle}</span>
+                  <span class="group-count">${pages.length}项</span>
+                  ${headerActions}
+                </div>
+                <div class="grid group-grid" data-folder="${targetFolderData}">${cardsHtml}</div>
+              </div>`;
+                container.innerHTML += groupHtml;
+            });
+
+            if (Object.keys(grouped).length === 0) {
+                container.innerHTML =
+                    '<div style="text-align:center;padding:60px;color:#999;">📭 没有匹配的项目<br><small>尝试调整搜索条件或<a href="javascript:switchView(\'upload\')" style="color:#0052cc;">新建项目</a></small></div>';
+                return;
+            }
+
+            // Sortable: 分组拖拽
+            Sortable.create(container, {
+                handle: '.group-drag-handle',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: syncOrderToBackend
+            });
+            // Sortable: 卡片拖拽
+            document.querySelectorAll('#pages-grid .group-grid').forEach(el => {
+                Sortable.create(el, {
+                    group: { name: 'shared', put: true },
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: handleCardDragEnd
+                });
+            });
+        }
+
+        // ==================== 渲染：时间线视图 ====================
+        function renderTimeline() {
+            const container = document.getElementById('timeline-container');
+            if (!container || currentDisplayView !== 'timeline') return;
+            container.innerHTML = '';
+            container.style.display = '';
+
+            const filtered = filterPages(currentPagesData);
+            updateResultCount(filtered, currentPagesData.length);
+
+            // 按时间分组
+            const timeGroups = { today: [], yesterday: [], this_week: [], this_month: [], history: [] };
+            filtered.forEach(page => {
+                const label = getTimeGroupLabel(page.id);
+                if (timeGroups[label]) timeGroups[label].push(page);
+                else timeGroups['history'].push(page);
+            });
+
+            // 每组内：置顶优先，然后按时间倒序
+            Object.keys(timeGroups).forEach(key => {
+                timeGroups[key].sort((a, b) => {
+                    const aPinned = (a.tags || '').includes('置顶');
+                    const bPinned = (b.tags || '').includes('置顶');
+                    if (aPinned && !bPinned) return -1;
+                    if (!aPinned && bPinned) return 1;
+                    const ta = getPageCreatedAt(a.id);
+                    const tb = getPageCreatedAt(b.id);
+                    if (ta && tb) return new Date(tb) - new Date(ta);
+                    if (ta) return -1;
+                    if (tb) return 1;
+                    return 0;
+                });
+            });
+
+            const groupOrder = ['today', 'yesterday', 'this_week', 'this_month', 'history'];
+            let totalItems = 0;
+            let html = '<div class="timeline-wrap">';
+
+            groupOrder.forEach(label => {
+                const pages = timeGroups[label];
+                if (pages.length === 0) return;
+                totalItems += pages.length;
+                const dotClass = label === 'today' ? 'timeline-dot today' : 'timeline-dot';
+                html += `
+              <div class="timeline-group">
+                <div class="timeline-group-header">
+                  <div class="${dotClass}"></div>
+                  <span class="timeline-group-title">${getTimeGroupLabelText(label)}</span>
+                  <span class="group-count">${pages.length}项</span>
+                </div>
+                <div class="timeline-items">`;
+
+                pages.forEach(page => {
+                    const displayIcon = resolveIcon(page);
+                    let rawTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+                    let displayTags = rawTags.filter(t => t !== '置顶');
+                    let isPinned = rawTags.includes('置顶');
+                    let isNew = isNewPage(page.id);
+                    let folderName = page.folder || '未分类';
+                    let timeAgo = formatTimeAgo(getPageCreatedAt(page.id));
+                    let cardClass = 'timeline-card';
+                    if (isNew) cardClass += ' card-new-highlight';
+                    let tagsHtml = displayTags.map(t => `<span class="tags">${t}</span>`).join('');
+
+                    html += `
+                <div class="${cardClass}" data-id="${page.id}" style="cursor:default;">
+                  ${isNew ? '<div class="new-badge" style="position:absolute;top:-6px;left:8px;">NEW</div>' : ''}
+                  ${isPinned ? '<span style="position:absolute;top:-6px;right:8px;background:#dc3545;color:#fff;font-size:9px;padding:2px 7px;border-radius:8px;z-index:2;">📌</span>' : ''}
+                  <input type="checkbox" class="card-checkbox" value="${page.id}" onclick="event.stopPropagation(); toggleCheck(this, '${page.id}')" style="position:static;flex-shrink:0;opacity:0.5;">
+                  <span class="tl-icon">${displayIcon}</span>
+                  <a href="${API_BASE}/view/${page.id}" target="_blank" class="tl-info" style="text-decoration:none;color:inherit;flex:1;min-width:0;">
+                    <div class="tl-title">${escapeHtml(page.title)}</div>
+                    <div class="tl-meta">
+                      <span class="tags tag-folder">📁 ${escapeHtml(folderName)}</span>
+                      ${tagsHtml}
+                    </div>
+                  </a>
+                  <span class="tl-time-badge">${timeAgo}</span>
+                  <div class="tl-actions">
+                    <button class="card-btn card-btn-pin" onclick="event.preventDefault();event.stopPropagation();togglePin('${page.id}')" title="${isPinned?'取消置顶':'置顶'}">${isPinned?'📌':'📍'}</button>
+                    <button class="card-btn card-btn-move" onclick="event.preventDefault();event.stopPropagation();openMoveModal('${page.id}','${escapeAttr(folderName)}')" title="移动">📁</button>
+                    <button class="card-btn" onclick="event.preventDefault();event.stopPropagation();switchView('edit','${page.id}')" title="编辑">✏️</button>
+                  </div>
+                </div>`;
+                });
+                html += '</div></div>';
+            });
+
+            html += '</div>';
+
+            if (totalItems === 0) {
+                html =
+                    '<div style="text-align:center;padding:60px;color:#999;">📭 没有匹配的项目<br><small>尝试调整搜索条件或<a href="javascript:switchView(\'upload\')" style="color:#0052cc;">新建项目</a></small></div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // ==================== 渲染：列表视图 ====================
+        function renderListView() {
+            const container = document.getElementById('list-container');
+            if (!container || currentDisplayView !== 'list') return;
+            container.innerHTML = '';
+            container.style.display = '';
+
+            const filtered = filterPages(currentPagesData);
+            updateResultCount(filtered, currentPagesData.length);
+
+            // 按分组归类
+            const grouped = {};
+            filtered.forEach(page => {
+                let folder = page.folder && page.folder !== '' && page.folder !== '未分类' ? page.folder : '未分类';
+                if (!grouped[folder]) grouped[folder] = [];
+                grouped[folder].push(page);
+            });
+
+            const sortedFolderNames = Object.keys(grouped).sort((a, b) => {
+                if (a === '未分类') return 1;
+                if (b === '未分类') return -1;
+                return a.localeCompare(b, 'zh');
+            });
+
+            let html = '<div class="list-view-table">';
+            let totalItems = 0;
+
+            sortedFolderNames.forEach(folder => {
+                const pages = grouped[folder];
+                totalItems += pages.length;
+                const folderIcon = getDefaultIcon('GROUP_' + folder);
+                html +=
+                    `<div class="list-group-header"><span>${folderIcon}</span> ${escapeHtml(folder)} <span class="group-count">${pages.length}项</span></div>`;
+
+                pages.forEach(page => {
+                    const displayIcon = resolveIcon(page);
+                    let rawTags = page.tags ? page.tags.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+                    let displayTags = rawTags.filter(t => t !== '置顶');
+                    let isNew = isNewPage(page.id);
+                    let rowClass = 'list-row';
+                    if (isNew) rowClass += ' card-new-highlight';
+                    let tagsHtml = displayTags.map(t => `<span class="tags">${t}</span>`).join('');
+
+                    html += `
+                <div class="${rowClass}" data-id="${page.id}" style="cursor:default;">
+                  ${isNew ? '<span style="background:#ff4757;color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;flex-shrink:0;font-weight:700;">NEW</span>' : ''}
+                  <input type="checkbox" class="card-checkbox" value="${page.id}" onclick="event.stopPropagation(); toggleCheck(this, '${page.id}')" style="position:static;flex-shrink:0;opacity:0.5;">
+                  <span class="lr-icon">${displayIcon}</span>
+                  <a href="${API_BASE}/view/${page.id}" target="_blank" class="lr-title" style="text-decoration:none;color:inherit;">${escapeHtml(page.title)}</a>
+                  <span class="lr-tags">${tagsHtml}</span>
+                  <span class="lr-folder">📁 ${escapeHtml(folder)}</span>
+                  <div class="lr-actions">
+                    <button class="card-btn card-btn-pin" onclick="event.preventDefault();event.stopPropagation();togglePin('${page.id}')" title="置顶">📌</button>
+                    <button class="card-btn card-btn-move" onclick="event.preventDefault();event.stopPropagation();openMoveModal('${page.id}','${escapeAttr(folder)}')" title="移动">📁</button>
+                    <button class="card-btn" onclick="event.preventDefault();event.stopPropagation();switchView('edit','${page.id}')" title="编辑">✏️</button>
+                  </div>
+                </div>`;
+                });
+            });
+
+            html += '</div>';
+
+            if (totalItems === 0) {
+                html =
+                    '<div style="text-align:center;padding:60px;color:#999;">📭 没有匹配的项目<br><small>尝试调整搜索条件或<a href="javascript:switchView(\'upload\')" style="color:#0052cc;">新建项目</a></small></div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // ==================== 网状图 ====================
+        function renderGraph() {
+            const container = document.getElementById('graph-container');
+            if (!container || currentDisplayView !== 'graph') return;
+            container.style.display = 'block';
+            if (!chartInstance) chartInstance = echarts.init(container);
+            const filtered = filterPages(currentPagesData);
+            const nodes = [],
+                links = [];
+            const categoriesSet = new Set(),
+                tagCounts = {};
+            filtered.forEach(page => {
+                let folder = page.folder || '未分类';
+                tagCounts[folder] = (tagCounts[folder] || 0) + 1;
+            });
+            filtered.forEach(page => {
+                let folder = page.folder || '未分类';
+                categoriesSet.add(folder);
+                if (!nodes.find(n => n.id === 'TAG_' + folder)) {
+                    const count = tagCounts[folder];
+                    nodes.push({
+                        id: 'TAG_' + folder,
+                        name: folder,
+                        value: count,
+                        symbolSize: Math.min(100, 40 + count * 5),
+                        category: folder,
+                        itemStyle: { borderWidth: 3, borderColor: '#fff', shadowBlur: 10,
+                            shadowColor: 'rgba(0,0,0,0.3)' },
+                        label: { show: true, formatter: '{b}\n({c})', fontSize: 15,
+                        fontWeight: 'bold' }
+                    });
+                }
+                links.push({ source: page.id, target: 'TAG_' + folder });
+                nodes.push({
+                    id: page.id,
+                    name: page.title,
+                    symbolSize: 18,
+                    category: folder,
+                    url: `${API_BASE}/view/${page.id}`,
+                    label: { show: true, position: 'right', formatter: '{b}' }
+                });
+            });
+            const categories = Array.from(categoriesSet).map(name => ({ name }));
+            const option = {
+                tooltip: {
+                    formatter: function(p) {
+                        if (p.data.id && p.data.id.startsWith('TAG_'))
+                            return `📁 <b>${p.data.name}</b><br/>共聚集了 ${p.data.value} 个项目`;
+                        const page = filtered.find(pp => pp.id === p.data.id);
+                        return `${page ? resolveIcon(page) : '📄'} ${p.data.name}`;
+                    }
+                },
+                legend: { data: categories.map(c => c.name), type: 'scroll', bottom: 10 },
+                animationDurationUpdate: 1500,
+                animationEasingUpdate: 'quinticInOut',
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    force: { repulsion: 400, edgeLength: [50, 100] },
+                    data: nodes,
+                    links: links,
+                    categories: categories,
+                    roam: true,
+                    label: { position: 'right' },
+                    lineStyle: { color: 'source', curveness: 0.1 }
+                }]
+            };
+            chartInstance.setOption(option);
+            chartInstance.off('click');
+            chartInstance.on('click', function(p) { if (p.data && p.data.url) window.open(p.data.url, '_blank'); });
+            updateResultCount(filtered, currentPagesData.length);
+        }
+
+        // ==================== 工具箱 ====================
+        function toggleToolbox() {
+            toolboxVisible = !toolboxVisible;
+            document.getElementById('toolbox-panel').classList.toggle('active', toolboxVisible);
+        }
+
+        // ==================== 编辑/删除 ====================
+        function loadEditData(pageId) {
+            fetch(`${API_BASE}/api/pages/${pageId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) return alert(data.error);
+                    document.getElementById('edit-id').value = data.id;
+                    document.getElementById('edit-title').value = data.title || '';
+                    document.getElementById('edit-icon').value = data.icon || '';
+                    document.getElementById('edit-folder').value = data.folder || '';
+                    document.getElementById('edit-tags').value = data.tags || '';
+                    document.getElementById('edit-html').value = data.html_content || '';
+                }).catch(err => alert("读取失败"));
         }
 
         function deletePage() {
@@ -707,71 +2029,94 @@
             if (!pageId) return;
             if (!confirm('⚠️ 确定要彻底删除该项目文件吗？此操作不可恢复。')) return;
             fetch(`${API_BASE}/api/pages/${pageId}`, { method: 'DELETE' })
-            .then(r => r.json()).then(d => {
-                if (d.status === 'success') { showToast('🗑️ 物理文件已删除'); switchView('list'); }
-                else { alert('删除失败: ' + d.error); }
-            }).catch(err => alert("请求失败"));
+                .then(r => r.json()).then(d => {
+                    if (d.status === 'success') {
+                        // 清理时间戳记录
+                        const ts = getTimestamps();
+                        delete ts[pageId];
+                        saveTimestamps(ts);
+                        showToast('🗑️ 物理文件已删除');
+                        switchView('list');
+                    } else { alert('删除失败: ' + d.error); }
+                }).catch(err => alert("请求失败"));
         }
 
-        function toggleViewMode() {
-            isGraphMode = !isGraphMode;
-            const btn = document.getElementById('toggle-view-btn');
-            const grid = document.getElementById('pages-grid');
-            const graph = document.getElementById('graph-container');
-            if (isGraphMode) {
-                btn.innerHTML = '🔲 切换列表视图';
-                grid.style.display = 'none'; graph.style.display = 'block';
-                renderGraph();
-            } else {
-                btn.innerHTML = '🕸️ 切换网状图';
-                graph.style.display = 'none'; grid.style.display = 'block';
-                renderGrid();
+        // ==================== 表单提交 ====================
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const titleValue = document.getElementById('upload-title').value.trim();
+            let iconValue = document.getElementById('upload-icon').value.trim(),
+                htmlValue = document.getElementById('upload-html').value;
+            if (!iconValue) {
+                iconValue = getDefaultIcon(titleValue || 'new');
+                htmlValue = injectIconToHtml(htmlValue, iconValue, titleValue);
             }
-        }
+            fetch(`${API_BASE}/api/pages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: titleValue,
+                        icon: iconValue,
+                        folder: document.getElementById('upload-folder').value,
+                        tags: document.getElementById('upload-tags').value,
+                        html_content: htmlValue
+                    })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'success') {
+                        // 记录新项目时间戳
+                        if (d.id) recordPageTimestamp(d.id);
+                        // 如果后端返回了完整页面数据，也尝试记录
+                        if (d.page && d.page.id) recordPageTimestamp(d.page.id);
+                        showToast('✅ 项目已部署 (可在上方返回列表)');
+                        // 延迟加载以获取新ID
+                        setTimeout(() => loadPages(), 500);
+                    } else alert(d.error);
+                });
+        });
 
-        function renderGraph() {
-            const container = document.getElementById('graph-container');
-            if (!chartInstance) chartInstance = echarts.init(container);
-            const nodes = [], links = [];
-            const categoriesSet = new Set(), tagCounts = {};
-            
-            currentPagesData.forEach(page => {
-                let folder = page.folder || '未分类';
-                tagCounts[folder] = (tagCounts[folder] || 0) + 1;
-            });
-            
-            currentPagesData.forEach(page => {
-                let folder = page.folder || '未分类';
-                categoriesSet.add(folder);
-                if (!nodes.find(n => n.id === 'TAG_'+folder)) {
-                    const count = tagCounts[folder];
-                    nodes.push({ id:'TAG_'+folder, name:folder, value:count, symbolSize:Math.min(100,40+count*5), category:folder, itemStyle:{ borderWidth:3, borderColor:'#fff', shadowBlur:10, shadowColor:'rgba(0,0,0,0.3)' }, label:{ show:true, formatter:'{b}\n({c})', fontSize:15, fontWeight:'bold' } });
-                }
-                links.push({ source:page.id, target:'TAG_'+folder });
-                nodes.push({ id:page.id, name:page.title, symbolSize:18, category:folder, url:`${API_BASE}/view/${page.id}`, label:{ show:true, position:'right', formatter:'{b}' } });
-            });
-            const categories = Array.from(categoriesSet).map(name => ({ name }));
-            const option = {
-                tooltip: { formatter: function(p) {
-                    if (p.data.id && p.data.id.startsWith('TAG_')) return `📁 <b>${p.data.name}</b><br/>共聚集了 ${p.data.value} 个项目`;
-                    const page = currentPagesData.find(pp => pp.id === p.data.id);
-                    return `${page ? resolveIcon(page) : '📄'} ${p.data.name}`;
-                }},
-                legend: { data: categories.map(c=>c.name), type:'scroll', bottom:10 },
-                animationDurationUpdate:1500, animationEasingUpdate:'quinticInOut',
-                series:[{ type:'graph', layout:'force', force:{ repulsion:400, edgeLength:[50,100] }, data:nodes, links:links, categories:categories, roam:true, label:{ position:'right' }, lineStyle:{ color:'source', curveness:0.1 } }]
-            };
-            chartInstance.setOption(option);
-            chartInstance.off('click'); chartInstance.on('click', function(p) { if (p.data && p.data.url) window.open(p.data.url, '_blank'); });
-        }
+        document.getElementById('edit-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const pageId = document.getElementById('edit-id').value,
+                titleValue = document.getElementById('edit-title').value.trim();
+            let iconValue = document.getElementById('edit-icon').value.trim(),
+                htmlValue = document.getElementById('edit-html').value;
+            if (!iconValue) {
+                iconValue = getDefaultIcon(pageId || titleValue || 'edit');
+                htmlValue = injectIconToHtml(htmlValue, iconValue, titleValue);
+            }
+            fetch(`${API_BASE}/api/pages/${pageId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: titleValue,
+                        icon: iconValue,
+                        folder: document.getElementById('edit-folder').value,
+                        tags: document.getElementById('edit-tags').value,
+                        html_content: htmlValue
+                    })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'success') { showToast('✅ 代码已更新并保存'); } else alert(d.error);
+                });
+        });
 
-        function exportCSV() { window.location.href = `${API_BASE}/api/export_untagged`; showToast('开始下载 CSV 文件'); }
+        // ==================== CSV 导入导出 ====================
+        function exportCSV() { window.location.href = `${API_BASE}/api/export_untagged`;
+            showToast('开始下载 CSV 文件'); }
+
         function importCSV(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const formData = new FormData(); formData.append('file', file);
-            fetch(`${API_BASE}/api/import_tags`, { method:'POST', body:formData })
-                .then(r=>r.json()).then(d=>{ if(d.status==='success'){ showToast(`✅ 成功更新了 ${d.updated} 个项目`); loadPages(); } else alert(d.error); })
-                .catch(err=>alert("上传处理失败"));
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            fetch(`${API_BASE}/api/import_tags`, { method: 'POST', body: formData })
+                .then(r => r.json()).then(d => { if (d.status === 'success') { showToast(
+                        `✅ 成功更新了 ${d.updated} 个项目`);
+                        loadPages(); } else alert(d.error); })
+                .catch(err => alert("上传处理失败"));
             event.target.value = '';
         }
 
@@ -780,96 +2125,112 @@
             let csv = 'id,title,icon,html_preview\n';
             currentPagesData.forEach(page => {
                 const preview = (page.html_content || '').replace(/\n/g, ' ').replace(/,/g, '，').substring(0, 200);
-                csv += `"${page.id || ''}","${(page.title || '').replace(/,/g, '，')}","${page.icon || ''}","${preview}"\n`;
+                csv +=
+                    `"${page.id || ''}","${(page.title || '').replace(/,/g, '，')}","${page.icon || ''}","${preview}"\n`;
             });
             const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'icon_export.csv'; link.click();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'icon_export.csv';
+            link.click();
             showToast('图标CSV已导出');
         }
 
         async function importIconCSV(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const text = await file.text(); const lines = text.split('\n').filter(line => line.trim() !== '');
-            if (lines.length < 2) { alert('CSV格式错误'); event.target.value = ''; return; }
+            const file = event.target.files[0];
+            if (!file) return;
+            const text = await file.text();
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) { alert('CSV格式错误');
+                event.target.value = ''; return; }
             const header = lines[0].split(',');
             const idIdx = header.findIndex(h => h.trim().toLowerCase() === 'id');
             const iconIdx = header.findIndex(h => h.trim().toLowerCase() === 'icon');
-            if (idIdx === -1 || iconIdx === -1) { alert('CSV需包含id和icon列'); event.target.value = ''; return; }
-            
+            if (idIdx === -1 || iconIdx === -1) { alert('CSV需包含id和icon列');
+                event.target.value = ''; return; }
             let updatedCount = 0;
             for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(','); if (cols.length <= Math.max(idIdx, iconIdx)) continue;
-                const csvId = cols[idIdx].replace(/^"|"$/g, '').trim(); const csvIcon = cols[iconIdx].replace(/^"|"$/g, '').trim();
+                const cols = lines[i].split(',');
+                if (cols.length <= Math.max(idIdx, iconIdx)) continue;
+                const csvId = cols[idIdx].replace(/^"|"$/g, '').trim();
+                const csvIcon = cols[iconIdx].replace(/^"|"$/g, '').trim();
                 if (!csvId) continue;
-                
-                const page = currentPagesData.find(p => p.id == csvId || p.title === csvId); if (!page) continue;
+                const page = currentPagesData.find(p => p.id == csvId || p.title === csvId);
+                if (!page) continue;
                 try {
                     const res = await fetch(`${API_BASE}/api/pages/${page.id}`);
                     const pageDetail = await res.json();
                     if (!pageDetail.error) {
-                        const resp = await fetch(`${API_BASE}/api/pages/${page.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: pageDetail.title, icon: csvIcon, folder: pageDetail.folder, tags: pageDetail.tags, html_content: pageDetail.html_content }) });
+                        const resp = await fetch(`${API_BASE}/api/pages/${page.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                title: pageDetail.title,
+                                icon: csvIcon,
+                                folder: pageDetail.folder,
+                                tags: pageDetail.tags,
+                                html_content: pageDetail.html_content
+                            })
+                        });
                         if ((await resp.json()).status === 'success') updatedCount++;
                     }
                 } catch (e) {}
             }
-            showToast(`✅ 成功更新了 ${updatedCount} 个图标`); loadPages(); event.target.value = '';
+            showToast(`✅ 成功更新了 ${updatedCount} 个图标`);
+            loadPages();
+            event.target.value = '';
         }
 
-        function loadEditData(pageId) {
-            fetch(`${API_BASE}/api/pages/${pageId}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.error) return alert(data.error);
-                    document.getElementById('edit-id').value = data.id; document.getElementById('edit-title').value = data.title || '';
-                    document.getElementById('edit-icon').value = data.icon || ''; document.getElementById('edit-folder').value = data.folder || '';
-                    document.getElementById('edit-tags').value = data.tags || ''; document.getElementById('edit-html').value = data.html_content || '';
-                }).catch(err => alert("读取失败"));
+        // ==================== HTML 转义辅助 ====================
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
 
-        document.getElementById('upload-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const titleValue = document.getElementById('upload-title').value.trim();
-            let iconValue = document.getElementById('upload-icon').value.trim(), htmlValue = document.getElementById('upload-html').value;
-            
-            if (!iconValue) {
-                iconValue = getDefaultIcon(titleValue || 'new');
-                htmlValue = injectIconToHtml(htmlValue, iconValue, titleValue);
-            }
-            
-            fetch(`${API_BASE}/api/pages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleValue, icon: iconValue, folder: document.getElementById('upload-folder').value, tags: document.getElementById('upload-tags').value, html_content: htmlValue }) })
-                .then(r=>r.json()).then(d=>{ 
-                    if(d.status==='success') showToast('✅ 项目已部署 (可在上方返回列表)'); 
-                    else alert(d.error); 
-                });
+        function escapeAttr(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g,
+                '&gt;');
+        }
+
+        // ==================== 初始化 ====================
+        window.addEventListener('resize', () => { if (chartInstance && currentDisplayView === 'graph') chartInstance
+                .resize(); });
+        window.onload = () => {
+            switchView('list');
+            currentDisplayView = 'grid';
+            document.querySelectorAll('#view-tabs .view-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.getAttribute('data-view') === 'grid');
+            });
+        };
+
+        // 点击弹窗遮罩关闭
+        document.getElementById('move-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeMoveModal();
         });
 
-        document.getElementById('edit-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const pageId = document.getElementById('edit-id').value, titleValue = document.getElementById('edit-title').value.trim();
-            let iconValue = document.getElementById('edit-icon').value.trim(), htmlValue = document.getElementById('edit-html').value;
-            
-            if (!iconValue) {
-                iconValue = getDefaultIcon(pageId || titleValue || 'edit');
-                htmlValue = injectIconToHtml(htmlValue, iconValue, titleValue);
+        // 键盘快捷键：ESC关闭弹窗、Ctrl+F聚焦搜索
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeMoveModal();
+                clearBatchSelection();
             }
-            
-            fetch(`${API_BASE}/api/pages/${pageId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleValue, icon: iconValue, folder: document.getElementById('edit-folder').value, tags: document.getElementById('edit-tags').value, html_content: htmlValue }) })
-                .then(r=>r.json()).then(d=>{ 
-                    if(d.status==='success'){ 
-                        showToast('✅ 代码已更新并保存');
-                    } else alert(d.error); 
-                });
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                // 不阻止默认，但也聚焦我们的搜索框
+                if (document.getElementById('view-list').classList.contains('active')) {
+                    e.preventDefault();
+                    document.getElementById('search-input').focus();
+                }
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                if (document.getElementById('view-list').classList.contains('active')) {
+                    e.preventDefault();
+                    document.getElementById('search-input').focus();
+                }
+            }
         });
-
-        function showToast(msg) {
-            const t = document.createElement('div'); t.textContent = msg;
-            Object.assign(t.style, { position:'fixed', bottom:'30px', left:'50%', transform:'translateX(-50%)', background:'#28a745', color:'#fff', padding:'12px 28px', borderRadius:'8px', fontWeight:'bold', fontSize:'15px', zIndex:9999, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', animation:'fadeIn 0.3s ease' });
-            document.body.appendChild(t);
-            setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.4s'; }, 1800); setTimeout(()=>t.remove(), 2200);
-        }
-
-        window.addEventListener('resize', ()=>{ if(chartInstance && isGraphMode) chartInstance.resize(); });
-        window.onload = ()=> switchView('list');
     </script>
 </body>
 </html>

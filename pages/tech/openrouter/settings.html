@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型管理 · OpenRouter Price Monitor</title>
+    <style>
+:root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --border: #e3e6ea;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --green: #059669;
+    --amber: #d97706;
+    --red: #dc2626;
+    --row-hover: #f0f4ff;
+    --radius: 8px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 24px 20px 48px;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .logo { color: var(--accent); font-size: 22px; }
+.brand h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+.brand-sub { color: var(--muted); font-weight: 500; }
+.actions { display: flex; gap: 8px; }
+
+/* ---------- 按钮 ---------- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .15s, border-color .15s, color .15s;
+    font-family: inherit;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { background: #a5b8e8; cursor: not-allowed; }
+.btn-ghost { background: var(--panel); color: var(--text); border-color: var(--border); }
+.btn-ghost:hover { border-color: #c3c9d1; background: #fafbfc; }
+.btn-danger { background: #fff; color: var(--red); border-color: var(--border); }
+.btn-danger:hover { background: #fef2f2; border-color: #fca5a5; }
+
+/* ---------- 元信息栏 ---------- */
+.meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 16px;
+}
+.meta-item { display: flex; flex-direction: column; gap: 2px; }
+.meta-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.meta-value { font-size: 13px; font-weight: 550; }
+
+/* 状态徽章 */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+    width: fit-content;
+}
+.status-badge::before {
+    content: "";
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.status-updated { color: var(--green); background: #ecfdf5; }
+.status-cached { color: var(--amber); background: #fffbeb; }
+.status-error { color: var(--red); background: #fef2f2; }
+.status-empty { color: var(--muted); background: #f3f4f6; }
+
+/* 分段选择器 */
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented button {
+    border: none; background: var(--panel); padding: 5px 12px;
+    font-size: 12px; cursor: pointer; color: var(--muted); font-family: inherit;
+}
+.segmented button.active { background: var(--accent); color: #fff; }
+.segmented button:not(:last-child) { border-right: 1px solid var(--border); }
+
+/* 错误横幅 */
+.error-banner {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+.hidden { display: none !important; }
+
+/* ---------- 工具栏 ---------- */
+.toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.search {
+    flex: 1; max-width: 340px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px; font-family: inherit;
+    background: var(--panel);
+}
+.search:focus { outline: none; border-color: var(--accent); }
+.count { color: var(--muted); font-size: 12px; }
+
+/* ---------- 表格 ---------- */
+.table-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+table { width: 100%; border-collapse: collapse; }
+thead th {
+    text-align: left;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+thead th.sortable { cursor: pointer; user-select: none; }
+thead th.sortable:hover { color: var(--text); }
+thead th .caret { opacity: .5; font-size: 10px; }
+thead th.sorted-asc .caret::after { content: "▲"; opacity: 1; }
+thead th.sorted-desc .caret::after { content: "▼"; opacity: 1; }
+tbody td { padding: 12px 16px; border-bottom: 1px solid #f0f1f3; vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--row-hover); }
+
+.cell-model .name { font-weight: 600; }
+.cell-model .id { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+.cell-price .amount { font-family: var(--mono); font-weight: 600; font-size: 14px; }
+.cell-price .cny { font-family: var(--mono); font-size: 12px; color: var(--muted); display: block; }
+.cell-price .unit { font-size: 11px; color: var(--muted); }
+.cell-ctx { font-family: var(--mono); font-size: 13px; }
+
+/* 行内状态点 */
+.dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 550; }
+.dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+.dot-ok { color: var(--green); }
+.dot-ok::before { background: var(--green); }
+.dot-miss { color: var(--red); }
+.dot-miss::before { background: var(--red); }
+
+/* 空态 */
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+
+/* ---------- 卡片（移动端） ---------- */
+.cards { display: none; }
+@media (max-width: 720px) {
+    .table-wrap { display: none; }
+    .cards { display: flex; flex-direction: column; gap: 12px; }
+}
+.card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+}
+.card .c-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.card .c-name { font-weight: 600; }
+.card .c-id { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; margin-top: 2px; }
+.card .c-grid { display: flex; gap: 24px; margin-top: 12px; }
+.card .c-grid .c-col { display: flex; flex-direction: column; gap: 2px; }
+.card .c-grid .c-k { font-size: 11px; color: var(--muted); }
+.card .c-grid .c-v { font-family: var(--mono); font-weight: 600; }
+.card .c-grid .c-v small { font-weight: 400; color: var(--muted); font-size: 11px; }
+
+/* ---------- 设置页 ---------- */
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+.panel-title { margin: 0 0 14px; font-size: 15px; font-weight: 650; }
+.form { display: flex; flex-direction: column; gap: 12px; }
+.form-row { flex-direction: row; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 220px; }
+.field-inline { flex: 0; min-width: auto; flex-direction: row; align-items: center; gap: 8px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field .hint { font-size: 11px; color: #9ca3af; font-weight: 400; }
+.field input[type="text"], .field input[type="number"] {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: inherit;
+}
+.field input:focus { outline: none; border-color: var(--accent); }
+.form-msg { font-size: 13px; margin-top: 8px; }
+.form-msg.ok { color: var(--green); }
+.form-msg.err { color: var(--red); }
+
+/* 开关 */
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: #d1d5db; border-radius: 22px; transition: .2s;
+}
+.slider::before {
+    content: ""; position: absolute; height: 16px; width: 16px;
+    left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s;
+}
+.switch input:checked + .slider { background: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+.switch-label { font-size: 13px; }
+
+/* 模型列表 */
+.model-list { display: flex; flex-direction: column; gap: 8px; }
+.model-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.model-row .m-info { flex: 1; min-width: 0; }
+.model-row .m-name { font-weight: 600; }
+.model-row .m-name input {
+    font-size: 13px; padding: 2px 6px; border: 1px solid transparent; border-radius: 4px;
+    font-family: inherit; width: 100%;
+}
+.model-row .m-name input:hover, .model-row .m-name input:focus { border-color: var(--border); outline: none; }
+.model-row .m-id { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; }
+.model-row.disabled { opacity: .55; }
+.m-actions { display: flex; gap: 6px; align-items: center; }
+.m-actions .btn { padding: 5px 10px; font-size: 12px; }
+
+.footer { margin-top: 28px; text-align: center; color: #9ca3af; font-size: 12px; }
+
+/* ---------- 首页：详情入口 ---------- */
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.cell-action { white-space: nowrap; text-align: right; }
+.card .c-foot { margin-top: 12px; text-align: right; }
+
+/* ---------- 详情页 ---------- */
+.detail-head .d-head-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; flex-wrap: wrap;
+}
+.detail-head .d-name { margin: 0; font-size: 20px; font-weight: 650; }
+.detail-head .d-id { font-family: var(--mono); font-size: 13px; color: var(--muted); word-break: break-all; }
+.d-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.d-meta-item { display: inline-flex; gap: 6px; font-size: 12px; color: var(--muted); align-items: baseline; }
+
+/* 键值网格 */
+.kv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 24px; }
+.kv-item { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid #f0f1f3; }
+.kv-k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.kv-v { font-size: 14px; font-weight: 550; word-break: break-all; }
+.kv-v .muted, .muted { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+.d-sub { font-size: 12px; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
+.d-desc { font-size: 13px; color: var(--text); margin: 4px 0 0; line-height: 1.6; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+    font-family: var(--mono); font-size: 12px;
+    background: #f0f4ff; color: var(--accent);
+    border: 1px solid #dbe4ff; border-radius: 6px;
+    padding: 2px 8px;
+}
+
+/* 统计卡片 */
+.stat-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+.stat-card {
+    flex: 1; min-width: 150px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+}
+.stat-k { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.stat-v { font-family: var(--mono); font-size: 16px; font-weight: 650; }
+.stat-v .cny { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+
+.unit-note { font-size: 12px; color: var(--muted); font-weight: 400; }
+
+/* 可横向滚动表格（移动端） */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.kv-table { min-width: 320px; }
+.kv-table th, .kv-table td { padding: 10px 12px; }
+.kv-table td:last-child { font-family: var(--mono); }
+
+.d-unavailable {
+    background: #f8fafc; border: 1px dashed var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    color: var(--muted); font-size: 13px;
+}
+.d-note { font-size: 12px; color: #9ca3af; margin: 10px 0 0; }
+.d-foot { margin-top: 16px; }
+
+/* ---------- Provider 详情表格 ---------- */
+.p-baseline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.p-baseline select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 13px; font-family: inherit; background: var(--panel);
+}
+.p-baseline select:focus { outline: none; border-color: var(--accent); }
+.p-base-name { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+
+.provider-table { min-width: 760px; }
+.provider-table th { white-space: nowrap; }
+.provider-table td { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+.provider-table td.p-name { font-family: var(--sans); }
+.provider-table tr.is-base { background: #f0f6ff; }
+.provider-table tr.is-base td.p-name .p-name-text { font-weight: 700; }
+
+.p-name-text { font-weight: 600; }
+.badge-base {
+    display: inline-block; margin-left: 6px;
+    font-family: var(--sans); font-size: 10px; font-weight: 700;
+    color: #fff; background: var(--accent); border-radius: 4px; padding: 1px 6px;
+    vertical-align: middle; letter-spacing: .03em;
+}
+.qtag {
+    display: inline-block; margin-left: 6px;
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    background: #f3f4f6; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+    vertical-align: middle;
+}
+
+/* 价格差异百分比（更便宜=绿，更贵=红） */
+.diff { font-family: var(--mono); font-size: 11px; margin-left: 4px; }
+.diff-neg { color: var(--green); }
+.diff-pos { color: var(--red); }
+.diff-zero { color: var(--muted); }
+
+.dot-warn { color: var(--amber); }
+.dot-warn::before { background: var(--amber); }
+
+@media (max-width: 720px) {
+    .kv-grid { grid-template-columns: 1fr; }
+    .stat-cards { flex-direction: column; }
+}
+
+</style>
+</head>
+<body>
+    <div class="container">
+        <header class="topbar">
+            <div class="brand">
+                <span class="logo">◈</span>
+                <h1>模型管理</h1>
+            </div>
+            <div class="actions">
+                <a href="{{ url_for('openrouter.index') }}" class="btn btn-ghost">← 返回价格页</a>
+            </div>
+        </header>
+
+        <section class="panel">
+            <h2 class="panel-title">添加模型</h2>
+            <form id="add-form" class="form">
+                <div class="field">
+                    <label for="model-id">Model ID <span class="hint">（以 OpenRouter 官方 id 为准，如 deepseek/xxx）</span></label>
+                    <input type="text" id="model-id" placeholder="deepseek/deepseek-chat-v3.1" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="model-name">显示名称 <span class="hint">（可自定义）</span></label>
+                    <input type="text" id="model-name" placeholder="DeepSeek Chat" autocomplete="off">
+                </div>
+                <div class="field field-inline">
+                    <label class="switch">
+                        <input type="checkbox" id="model-enabled" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="switch-label">启用</span>
+                </div>
+                <button type="submit" class="btn btn-primary">添加模型</button>
+            </form>
+            <div class="form-msg hidden" id="form-msg"></div>
+        </section>
+
+        <section class="panel">
+            <h2 class="panel-title">已关注模型</h2>
+            <div class="model-list" id="model-list"></div>
+        </section>
+
+        <section class="panel">
+            <h2 class="panel-title">汇率设置</h2>
+            <form id="rate-form" class="form form-row">
+                <div class="field">
+                    <label for="rate-input">1 USD = ¥</label>
+                    <input type="number" id="rate-input" step="0.01" min="0.01" placeholder="7.2">
+                </div>
+                <button type="submit" class="btn btn-primary">保存汇率</button>
+            </form>
+            <div class="form-msg hidden" id="rate-msg"></div>
+        </section>
+    </div>
+
+    <script>window.BASE_PATH = {{ url_for('openrouter.index')|tojson }};</script>
+    <script>{% raw %}
+/* OpenRouter Price Monitor — 模型管理页逻辑（原生 JS，无外部依赖） */
+(function () {
+    "use strict";
+
+    // 蓝图 URL 前缀（形如 "/openrouter/"），由模板注入；缺失时回退到 "/"
+    var BASE = window.BASE_PATH || "/";
+
+    var els = {
+        addForm: document.getElementById("add-form"),
+        modelId: document.getElementById("model-id"),
+        modelName: document.getElementById("model-name"),
+        modelEnabled: document.getElementById("model-enabled"),
+        formMsg: document.getElementById("form-msg"),
+        modelList: document.getElementById("model-list"),
+        rateForm: document.getElementById("rate-form"),
+        rateInput: document.getElementById("rate-input"),
+        rateMsg: document.getElementById("rate-msg"),
+    };
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
+
+    function showMsg(el, text, ok) {
+        el.textContent = text;
+        el.classList.remove("hidden", "ok", "err");
+        el.classList.add(ok ? "ok" : "err");
+    }
+
+    function hideMsg(el) {
+        el.classList.add("hidden");
+    }
+
+    function api(url, options) {
+        // 统一拼上蓝图前缀；url 若带前导 "/" 先去掉再拼
+        var path = url.charAt(0) === "/" ? url.slice(1) : url;
+        return fetch(BASE + path, options).then(function (r) {
+            return r.json().then(function (d) {
+                if (!r.ok) throw new Error(d.error || ("HTTP " + r.status));
+                return d;
+            });
+        });
+    }
+
+    function renderList(models) {
+        if (!models.length) {
+            els.modelList.innerHTML = '<div class="empty">暂无模型，请在上方添加</div>';
+            return;
+        }
+        els.modelList.innerHTML = models.map(function (m) {
+            return '<div class="model-row' + (m.enabled ? "" : " disabled") + '" data-id="' + escapeHtml(m.id) + '">' +
+                '<label class="switch">' +
+                '<input type="checkbox" class="toggle" ' + (m.enabled ? "checked" : "") + '>' +
+                '<span class="slider"></span>' +
+                '</label>' +
+                '<div class="m-info">' +
+                '<div class="m-name"><input type="text" class="rename" value="' + escapeHtml(m.name) + '"></div>' +
+                '<div class="m-id">' + escapeHtml(m.id) + '</div>' +
+                '</div>' +
+                '<div class="m-actions">' +
+                '<button class="btn btn-danger delete">删除</button>' +
+                '</div>' +
+                '</div>';
+        }).join("");
+
+        els.modelList.querySelectorAll(".model-row").forEach(function (row) {
+            var id = row.getAttribute("data-id");
+
+            row.querySelector(".toggle").addEventListener("change", function (e) {
+                api("/api/models/" + encodeURIComponent(id), {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: e.target.checked }),
+                }).then(load).catch(function (err) { alert(err.message); load(); });
+            });
+
+            row.querySelector(".delete").addEventListener("click", function () {
+                if (!confirm("确认删除模型 " + id + " 的关注关系？")) return;
+                api("/api/models/" + encodeURIComponent(id), { method: "DELETE" })
+                    .then(load).catch(function (err) { alert(err.message); });
+            });
+
+            var nameInput = row.querySelector(".rename");
+            nameInput.addEventListener("change", function () {
+                var name = nameInput.value.trim();
+                api("/api/models/" + encodeURIComponent(id), {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: name }),
+                }).then(load).catch(function (err) { alert(err.message); load(); });
+            });
+        });
+    }
+
+    function load() {
+        return api("/api/models").then(function (data) {
+            renderList(data.models || []);
+            els.rateInput.value = data.usd_cny_rate != null ? data.usd_cny_rate : 7.2;
+        }).catch(function (err) {
+            showMsg(els.formMsg, "加载失败：" + err.message, false);
+        });
+    }
+
+    els.addForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        hideMsg(els.formMsg);
+        var id = els.modelId.value.trim();
+        var name = els.modelName.value.trim();
+        var enabled = els.modelEnabled.checked;
+        if (!id) { showMsg(els.formMsg, "Model ID 不能为空", false); return; }
+
+        api("/api/models", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: id, name: name, enabled: enabled }),
+        }).then(function () {
+            els.modelId.value = "";
+            els.modelName.value = "";
+            els.modelEnabled.checked = true;
+            showMsg(els.formMsg, "已添加，请在价格页点击「立即刷新」获取最新价格", true);
+            load();
+        }).catch(function (err) {
+            showMsg(els.formMsg, err.message, false);
+        });
+    });
+
+    els.rateForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        hideMsg(els.rateMsg);
+        var rate = parseFloat(els.rateInput.value);
+        if (!(rate > 0)) { showMsg(els.rateMsg, "请输入正数汇率", false); return; }
+        api("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usd_cny_rate: rate }),
+        }).then(function () {
+            showMsg(els.rateMsg, "汇率已保存", true);
+        }).catch(function (err) {
+            showMsg(els.rateMsg, err.message, false);
+        });
+    });
+
+    load();
+})();
+
+{% endraw %}</script>
+</body>
+</html>

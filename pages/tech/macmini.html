@@ -670,7 +670,7 @@
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loader-ring"></div>
-  <div class="loader-text">Reading Disk Health Data…</div>
+  <div class="loader-text">正在读取磁盘健康数据…</div>
 </div>
 
 <div class="top-bar">
@@ -678,16 +678,64 @@
     <svg class="apple-logo" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
       <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
     </svg>
-    <h1>Disk Health Monitor</h1>
+    <h1>磁盘健康监视器</h1>
   </div>
   <div class="top-bar-right">
     <div class="status-dot" id="statusDot"></div>
-    <span class="status-text" id="statusText">Connected</span>
-    <button class="refresh-btn" onclick="loadAllData()">↻ Refresh</button>
+    <span class="status-text" id="statusText">已连接</span>
+    <button class="refresh-btn" onclick="loadAllData()">↻ 刷新</button>
   </div>
 </div>
 
 <div class="container">
+
+  <!-- 可用空间卡片已移至最前 -->
+  <div class="detail-grid" style="grid-template-columns: 1fr; animation-delay: 0s;">
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <div class="detail-card-header-icon">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        </div>
+        <div class="detail-card-title">存储容量 (APFS)</div>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+        <div>
+          <div class="info-row">
+            <span class="info-row-key">总容量</span>
+            <span class="info-row-val" id="spaceTotal">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-key">已用空间</span>
+            <span class="info-row-val" id="spaceUsed">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-key">可用 (df)</span>
+            <span class="info-row-val" id="spaceAvail">—</span>
+          </div>
+        </div>
+        <div>
+          <div class="info-row">
+            <span class="info-row-key">APFS 可用空间</span>
+            <span class="info-row-val" id="spaceApfs">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-key">空间压力</span>
+            <span class="info-row-val" id="spacePressure">—</span>
+          </div>
+          <div class="progress-group" style="margin-top: 14px;">
+            <div class="progress-header">
+              <span class="progress-label">使用率</span>
+              <span class="progress-value" id="spaceUsageVal">—</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="spaceUsageBar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="hero-section">
     <div class="score-card">
@@ -698,7 +746,7 @@
         </svg>
         <div class="score-value">
           <div class="score-number" id="scoreNumber">—</div>
-          <div class="score-label">Health Score</div>
+          <div class="score-label">健康评分</div>
         </div>
       </div>
       <div class="health-badge" id="healthBadge">
@@ -713,40 +761,40 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
         </div>
         <div>
-          <div class="info-tile-label">Temperature</div>
+          <div class="info-tile-label">温度</div>
           <div><span class="info-tile-value" id="tileTemp">—</span><span class="info-tile-unit">°C</span></div>
         </div>
-        <div class="info-tile-sub" id="tileTempNote">NVMe Sensor</div>
+        <div class="info-tile-sub" id="tileTempNote">NVMe 传感器</div>
       </div>
       <div class="info-tile">
         <div class="info-tile-icon icon-spare">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>
         </div>
         <div>
-          <div class="info-tile-label">Available Spare</div>
+          <div class="info-tile-label">可用备用块</div>
           <div><span class="info-tile-value" id="tileSpare">—</span><span class="info-tile-unit">%</span></div>
         </div>
-        <div class="info-tile-sub" id="tileSpareNote">Threshold: —%</div>
+        <div class="info-tile-sub" id="tileSpareNote">阈值：—%</div>
       </div>
       <div class="info-tile">
         <div class="info-tile-icon icon-usage">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
         </div>
         <div>
-          <div class="info-tile-label">Lifetime Used</div>
+          <div class="info-tile-label">已使用寿命</div>
           <div><span class="info-tile-value" id="tileUsed">—</span><span class="info-tile-unit">%</span></div>
         </div>
-        <div class="info-tile-sub">Wear Indicator</div>
+        <div class="info-tile-sub">磨损指示</div>
       </div>
       <div class="info-tile">
         <div class="info-tile-icon icon-hours">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div>
-          <div class="info-tile-label">Power-On Hours</div>
-          <div><span class="info-tile-value" id="tileHours">—</span><span class="info-tile-unit"> hrs</span></div>
+          <div class="info-tile-label">开机小时</div>
+          <div><span class="info-tile-value" id="tileHours">—</span><span class="info-tile-unit"> 小时</span></div>
         </div>
-        <div class="info-tile-sub" id="tileCyclesNote">— Cycles</div>
+        <div class="info-tile-sub" id="tileCyclesNote">— 次</div>
       </div>
     </div>
   </div>
@@ -757,26 +805,26 @@
         <div class="detail-card-header-icon">
           <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="12" cy="12" r="3"/><path d="M12 2v20M2 12h20"/></svg>
         </div>
-        <div class="detail-card-title">Disk Information</div>
+        <div class="detail-card-title">磁盘信息</div>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Model</span>
+        <span class="info-row-key">型号</span>
         <span class="info-row-val" id="infoModel">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Capacity</span>
+        <span class="info-row-key">容量</span>
         <span class="info-row-val" id="infoCapacity">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Firmware</span>
+        <span class="info-row-key">固件</span>
         <span class="info-row-val" id="infoFirmware">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">TRIM Support</span>
+        <span class="info-row-key">TRIM 支持</span>
         <span class="info-row-val" id="infoTrim">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">SMART Status</span>
+        <span class="info-row-key">SMART 状态</span>
         <span class="info-row-val" id="infoSmart">—</span>
       </div>
     </div>
@@ -786,12 +834,12 @@
         <div class="detail-card-header-icon">
           <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         </div>
-        <div class="detail-card-title">SMART Health</div>
+        <div class="detail-card-title">SMART 健康</div>
       </div>
 
       <div class="progress-group">
         <div class="progress-header">
-          <span class="progress-label">Life Used</span>
+          <span class="progress-label">已使用寿命</span>
           <span class="progress-value" id="smartLifeUsed">—%</span>
         </div>
         <div class="progress-track">
@@ -801,7 +849,7 @@
 
       <div class="progress-group">
         <div class="progress-header">
-          <span class="progress-label">Available Spare</span>
+          <span class="progress-label">可用备用块</span>
           <span class="progress-value" id="smartSpare">—%</span>
         </div>
         <div class="progress-track">
@@ -810,19 +858,19 @@
       </div>
 
       <div class="info-row" style="margin-top: 14px;">
-        <span class="info-row-key">Critical Warning</span>
+        <span class="info-row-key">严重警告</span>
         <span class="info-row-val" id="smartCritical">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Media Errors</span>
+        <span class="info-row-key">介质错误</span>
         <span class="info-row-val" id="smartErrors">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Error Log Entries</span>
+        <span class="info-row-key">错误日志条目</span>
         <span class="info-row-val" id="smartLogEntries">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Unsafe Shutdowns</span>
+        <span class="info-row-key">不安全关机次数</span>
         <span class="info-row-val" id="smartShutdowns">—</span>
       </div>
     </div>
@@ -834,21 +882,21 @@
         <div class="detail-card-header-icon">
           <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         </div>
-        <div class="detail-card-title">Data Transfer Volume</div>
+        <div class="detail-card-title">数据传输量</div>
       </div>
       <div class="write-stats">
         <div class="write-stat-item">
           <div class="write-stat-bar-track">
             <div class="write-stat-bar-fill read" id="readBar"></div>
           </div>
-          <div class="write-stat-label">READ</div>
+          <div class="write-stat-label">读取</div>
           <div class="write-stat-value" id="readVal">— TB</div>
         </div>
         <div class="write-stat-item">
           <div class="write-stat-bar-track">
             <div class="write-stat-bar-fill write" id="writeBar"></div>
           </div>
-          <div class="write-stat-label">WRITE</div>
+          <div class="write-stat-label">写入</div>
           <div class="write-stat-value" id="writeVal">— TB</div>
         </div>
       </div>
@@ -859,26 +907,26 @@
         <div class="detail-card-header-icon">
           <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         </div>
-        <div class="detail-card-title">Operational Summary</div>
+        <div class="detail-card-title">运行摘要</div>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Power Cycles</span>
+        <span class="info-row-key">电源周期</span>
         <span class="info-row-val" id="sumCycles">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Power-On Hours</span>
+        <span class="info-row-key">开机小时</span>
         <span class="info-row-val" id="sumHours">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Unsafe Shutdowns</span>
+        <span class="info-row-key">不安全关机</span>
         <span class="info-row-val" id="sumUnsafe">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Overall Health</span>
+        <span class="info-row-key">整体健康</span>
         <span class="info-row-val" id="sumHealth">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Overall Assessment</span>
+        <span class="info-row-key">总体评估</span>
         <span class="info-row-val" id="sumAssessment">—</span>
       </div>
     </div>
@@ -890,23 +938,23 @@
         <div class="detail-card-header-icon">
           <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M3 21l6-6 4 4 8-8"/></svg>
         </div>
-        <div class="detail-card-title">Linear Lifetime Model</div>
+        <div class="detail-card-title">线性寿命模型</div>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Model Base</span>
+        <span class="info-row-key">模型类型</span>
         <span class="info-row-val" id="linModelBase">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Written Data</span>
+        <span class="info-row-key">已写入数据</span>
         <span class="info-row-val" id="linWritten">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">TBW Estimate</span>
+        <span class="info-row-key">TBW 估算</span>
         <span class="info-row-val" id="linTbw">—</span>
       </div>
       <div class="progress-group" style="margin-top: 14px;">
         <div class="progress-header">
-          <span class="progress-label">Linear Health Score</span>
+          <span class="progress-label">线性健康评分</span>
           <span class="progress-value" id="linHealthVal">—%</span>
         </div>
         <div class="progress-track">
@@ -920,23 +968,23 @@
         <div class="detail-card-header-icon">
           <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         </div>
-        <div class="detail-card-title">Advanced Risk Model</div>
+        <div class="detail-card-title">高级风险模型</div>
       </div>
       <div class="info-row">
-        <span class="info-row-key">WAF Estimate</span>
+        <span class="info-row-key">WAF 估算</span>
         <span class="info-row-val" id="advWaf">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Risk Level</span>
+        <span class="info-row-key">风险等级</span>
         <span class="info-row-val" id="advRiskLevel">—</span>
       </div>
       <div class="info-row">
-        <span class="info-row-key">Life Multiplier</span>
+        <span class="info-row-key">寿命倍数</span>
         <span class="info-row-val" id="advLifeMult">—</span>
       </div>
       <div class="progress-group" style="margin-top: 14px;">
         <div class="progress-header">
-          <span class="progress-label">Non-linear Health Score</span>
+          <span class="progress-label">非线性健康评分</span>
           <span class="progress-value" id="advHealthVal">—%</span>
         </div>
         <div class="progress-track">
@@ -946,60 +994,13 @@
     </div>
   </div>
 
-  <div class="detail-grid" style="grid-template-columns: 1fr; animation-delay: 0.7s;">
-    <div class="detail-card">
-      <div class="detail-card-header">
-        <div class="detail-card-header-icon">
-          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        </div>
-        <div class="detail-card-title">Storage Capacity (APFS)</div>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
-        <div>
-          <div class="info-row">
-            <span class="info-row-key">Total Capacity</span>
-            <span class="info-row-val" id="spaceTotal">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-row-key">Used Space</span>
-            <span class="info-row-val" id="spaceUsed">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-row-key">Available (df)</span>
-            <span class="info-row-val" id="spaceAvail">—</span>
-          </div>
-        </div>
-        <div>
-          <div class="info-row">
-            <span class="info-row-key">APFS Free Space</span>
-            <span class="info-row-val" id="spaceApfs">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-row-key">Space Pressure</span>
-            <span class="info-row-val" id="spacePressure">—</span>
-          </div>
-          <div class="progress-group" style="margin-top: 14px;">
-            <div class="progress-header">
-              <span class="progress-label">Usage Percent</span>
-              <span class="progress-value" id="spaceUsageVal">—</span>
-            </div>
-            <div class="progress-track">
-              <div class="progress-fill" id="spaceUsageBar"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="full-section" style="animation-delay: 0.8s;">
     <button class="raw-toggle" onclick="toggleRaw()">
-      <span>View Raw Output (system_profiler + smartctl)</span>
+      <span>查看原始输出 (system_profiler + smartctl)</span>
       <span class="raw-toggle-arrow" id="rawArrow">▼</span>
     </button>
     <div class="raw-output" id="rawOutput">
-      <pre id="rawContent">Loading…</pre>
+      <pre id="rawContent">加载中…</pre>
     </div>
   </div>
 
@@ -1051,7 +1052,7 @@
   function renderHealth(data) {
     healthData = data;
     const score = data.health_score || 0;
-    const circumference = 2 * Math.PI * 80; // 502.65
+    const circumference = 2 * Math.PI * 80;
     const offset = circumference - (score / 100) * circumference;
 
     const ring = document.getElementById('scoreRing');
@@ -1059,7 +1060,6 @@
     const badge = document.getElementById('healthBadge');
     const statusEl = document.getElementById('healthStatus');
 
-    // Animate score number
     let current = 0;
     const step = score / 40;
     const interval = setInterval(() => {
@@ -1071,24 +1071,22 @@
       scoreEl.textContent = Math.round(current);
     }, 30);
 
-    // Ring
     ring.style.strokeDashoffset = offset;
 
-    // Color based on status
     if (data.status === 'GOOD') {
       ring.style.stroke = '#2a8c4a';
       badge.className = 'health-badge good';
-      statusEl.textContent = 'Excellent';
+      statusEl.textContent = '优秀';
       document.getElementById('statusDot').style.background = '#2a8c4a';
     } else if (data.status === 'WARN') {
       ring.style.stroke = '#c7882a';
       badge.className = 'health-badge warn';
-      statusEl.textContent = 'Warning';
+      statusEl.textContent = '警告';
       document.getElementById('statusDot').style.background = '#c7882a';
     } else {
       ring.style.stroke = '#c0392b';
       badge.className = 'health-badge bad';
-      statusEl.textContent = 'Critical';
+      statusEl.textContent = '严重';
       document.getElementById('statusDot').style.background = '#c0392b';
     }
   }
@@ -1096,26 +1094,21 @@
   function renderSmart(data) {
     smartData = data;
 
-    // Temperature
     document.getElementById('tileTemp').textContent =
       (data.temperature_c && data.temperature_c !== -1) ? data.temperature_c : '—';
 
-    // Available Spare
     document.getElementById('tileSpare').textContent =
       (data.available_spare >= 0) ? data.available_spare : '—';
     document.getElementById('tileSpareNote').textContent =
-      'Threshold: ' + ((data.available_spare_threshold >= 0) ? data.available_spare_threshold + '%' : '—');
+      '阈值：' + ((data.available_spare_threshold >= 0) ? data.available_spare_threshold + '%' : '—');
 
-    // Lifetime Used
     document.getElementById('tileUsed').textContent =
       (data.percentage_used >= 0) ? data.percentage_used : '—';
 
-    // Power On Hours
     document.getElementById('tileHours').textContent = formatHours(data.power_on_hours);
     document.getElementById('tileCyclesNote').textContent =
-      (data.power_cycles >= 0) ? data.power_cycles.toLocaleString() + ' Power Cycles' : '— Cycles';
+      (data.power_cycles >= 0) ? data.power_cycles.toLocaleString() + ' 次电源周期' : '— 次';
 
-    // Smart Life Bar
     const lifeUsed = data.percentage_used >= 0 ? data.percentage_used : 0;
     const lifeBar = document.getElementById('smartLifeBar');
     document.getElementById('smartLifeUsed').textContent = lifeUsed + '%';
@@ -1124,7 +1117,6 @@
       lifeBar.className = 'progress-fill ' + (lifeUsed < 60 ? 'good' : lifeUsed < 80 ? 'warn' : 'bad');
     }, 200);
 
-    // Smart Spare Bar
     const spare = data.available_spare >= 0 ? data.available_spare : 0;
     const spareBar = document.getElementById('smartSpareBar');
     document.getElementById('smartSpare').textContent = spare + '%';
@@ -1133,7 +1125,6 @@
       spareBar.className = 'progress-fill ' + (spare > 40 ? 'good' : spare > 20 ? 'warn' : 'bad');
     }, 300);
 
-    // Critical Warning
     const critEl = document.getElementById('smartCritical');
     critEl.textContent = data.critical_warning || '—';
     if (data.critical_warning && data.critical_warning !== '0x00') {
@@ -1142,21 +1133,17 @@
       critEl.style.color = 'var(--good)';
     }
 
-    // Media Errors
     const errEl = document.getElementById('smartErrors');
     errEl.textContent = (data.media_errors >= 0) ? data.media_errors : '—';
     errEl.style.color = (data.media_errors > 0) ? 'var(--bad)' : 'var(--good)';
 
-    // Error Log Entries
     document.getElementById('smartLogEntries').textContent =
       (data.error_log_entries >= 0) ? data.error_log_entries : '—';
 
-    // Unsafe Shutdowns
     const unsafeEl = document.getElementById('smartShutdowns');
     unsafeEl.textContent = (data.unsafe_shutdowns >= 0) ? data.unsafe_shutdowns : '—';
     unsafeEl.style.color = (data.unsafe_shutdowns > 0) ? 'var(--warn)' : 'var(--text-primary)';
 
-    // Write/Read bars
     const readTB = data.data_units_read_tb || 0;
     const writeTB = data.data_units_written_tb || 0;
     const maxTB = Math.max(readTB, writeTB, 1);
@@ -1169,7 +1156,6 @@
       document.getElementById('writeBar').style.height = Math.min((writeTB / maxTB) * 100, 100) + '%';
     }, 400);
 
-    // Operational Summary
     document.getElementById('sumCycles').textContent =
       (data.power_cycles >= 0) ? data.power_cycles.toLocaleString() : '—';
     document.getElementById('sumHours').textContent = formatHours(data.power_on_hours);
@@ -1200,9 +1186,9 @@
     rawData = data;
     document.getElementById('rawContent').textContent =
       '=== system_profiler SPNVMeDataType ===\n\n' +
-      (data.system_profiler || '(empty)') +
+      (data.system_profiler || '(空)') +
       '\n\n=== smartctl -a /dev/disk0 ===\n\n' +
-      (data.smartctl || '(empty)');
+      (data.smartctl || '(空)');
   }
 
   function renderLinear(data) {
@@ -1223,10 +1209,19 @@
     document.getElementById('advWaf').textContent = data.waf_estimate ? data.waf_estimate.toFixed(2) + 'x' : '—';
 
     const riskEl = document.getElementById('advRiskLevel');
-    riskEl.textContent = data.risk_level || '—';
-    if (data.risk_level === 'LOW') riskEl.style.color = 'var(--good)';
-    else if (data.risk_level === 'MID') riskEl.style.color = 'var(--warn)';
-    else if (data.risk_level === 'HIGH') riskEl.style.color = 'var(--bad)';
+    const riskLevel = data.risk_level;
+    if (riskLevel === 'LOW') {
+      riskEl.textContent = '低';
+      riskEl.style.color = 'var(--good)';
+    } else if (riskLevel === 'MID') {
+      riskEl.textContent = '中';
+      riskEl.style.color = 'var(--warn)';
+    } else if (riskLevel === 'HIGH') {
+      riskEl.textContent = '高';
+      riskEl.style.color = 'var(--bad)';
+    } else {
+      riskEl.textContent = '—';
+    }
 
     document.getElementById('advLifeMult').textContent = data.life_multiplier ? data.life_multiplier.toFixed(2) + 'x' : '—';
 
@@ -1246,10 +1241,19 @@
     document.getElementById('spaceApfs').textContent = data.apfs_free_space || '—';
 
     const pressureEl = document.getElementById('spacePressure');
-    pressureEl.textContent = data.space_pressure || '—';
-    if (data.space_pressure === 'LOW') pressureEl.style.color = 'var(--good)';
-    else if (data.space_pressure === 'MID') pressureEl.style.color = 'var(--warn)';
-    else if (data.space_pressure === 'HIGH') pressureEl.style.color = 'var(--bad)';
+    const pressure = data.space_pressure;
+    if (pressure === 'LOW') {
+      pressureEl.textContent = '低';
+      pressureEl.style.color = 'var(--good)';
+    } else if (pressure === 'MID') {
+      pressureEl.textContent = '中';
+      pressureEl.style.color = 'var(--warn)';
+    } else if (pressure === 'HIGH') {
+      pressureEl.textContent = '高';
+      pressureEl.style.color = 'var(--bad)';
+    } else {
+      pressureEl.textContent = '—';
+    }
 
     let usageVal = 0;
     if (data.usage_percent) {
@@ -1261,7 +1265,6 @@
     
     setTimeout(() => {
       bar.style.width = Math.min(usageVal, 100) + '%';
-      // 注意：占用率越高，颜色越偏向危险色
       bar.className = 'progress-fill ' + (usageVal < 60 ? 'good' : usageVal < 80 ? 'warn' : 'bad');
     }, 700);
   }
@@ -1292,25 +1295,25 @@
     const [healthRes, smartRes, infoRes, rawRes, linRes, advRes, spaceRes] = results;
 
     if (healthRes.status === 'fulfilled') renderHealth(healthRes.value);
-    else showToast('Failed to load health score: ' + (healthRes.reason?.message || 'Unknown'));
+    else showToast('健康评分加载失败: ' + (healthRes.reason?.message || '未知错误'));
 
     if (smartRes.status === 'fulfilled') renderSmart(smartRes.value);
-    else showToast('Failed to load SMART data: ' + (smartRes.reason?.message || 'Unknown'));
+    else showToast('SMART 数据加载失败: ' + (smartRes.reason?.message || '未知错误'));
 
     if (infoRes.status === 'fulfilled') renderInfo(infoRes.value);
-    else showToast('Failed to load disk info: ' + (infoRes.reason?.message || 'Unknown'));
+    else showToast('磁盘信息加载失败: ' + (infoRes.reason?.message || '未知错误'));
 
     if (rawRes.status === 'fulfilled') renderRaw(rawRes.value);
-    else showToast('Failed to load raw data: ' + (rawRes.reason?.message || 'Unknown'));
+    else showToast('原始数据加载失败: ' + (rawRes.reason?.message || '未知错误'));
 
     if (linRes.status === 'fulfilled') renderLinear(linRes.value);
-    else console.warn('Failed to load linear model data', linRes.reason);
+    else console.warn('线性模型数据加载失败', linRes.reason);
 
     if (advRes.status === 'fulfilled') renderAdvanced(advRes.value);
-    else console.warn('Failed to load advanced model data', advRes.reason);
+    else console.warn('高级模型数据加载失败', advRes.reason);
 
     if (spaceRes.status === 'fulfilled') renderSpace(spaceRes.value);
-    else console.warn('Failed to load space data', spaceRes.reason);
+    else console.warn('空间数据加载失败', spaceRes.reason);
 
     setTimeout(() => overlay.classList.add('hidden'), 600);
   }

@@ -2,10 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>WomenPic — 女星数据中心</title>
     <style>
-        /* ====== Reset & Base ====== */
         *,
         *::before,
         *::after {
@@ -13,7 +12,6 @@
             margin: 0;
             padding: 0
         }
-
         :root {
             --bg: #0b0b12;
             --surface: #14141f;
@@ -26,20 +24,20 @@
             --accent: #e8617c;
             --accent-glow: rgba(232, 97, 124, 0.18);
             --gold: #e2b04a;
-            --gold-glow: rgba(226, 176, 74, 0.15);
+            --gold-glow: rgba(226, 176, 74, 0.2);
             --cool: #5badd4;
             --cool-glow: rgba(91, 173, 212, 0.15);
             --mint: #6ec9a0;
             --orange: #e89850;
             --rose: #e878a0;
             --lavender: #b8a0d8;
+            --pink: #f0a0b8;
             --radius: 14px;
             --radius-sm: 9px;
             --radius-xs: 6px;
             --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.5);
             --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
             background: var(--bg);
@@ -47,20 +45,21 @@
             line-height: 1.6;
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
         }
-
-        /* ====== Header ====== */
         .header {
             position: sticky;
             top: 0;
             z-index: 100;
             background: rgba(11, 11, 18, 0.9);
             backdrop-filter: blur(16px) saturate(1.4);
+            -webkit-backdrop-filter: blur(16px) saturate(1.4);
             border-bottom: 1px solid var(--border);
             padding: 12px 28px;
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
             flex-wrap: wrap;
         }
         .header h1 {
@@ -70,22 +69,24 @@
             background: linear-gradient(135deg, var(--accent), #f5a0b8);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            flex-shrink: 0;
         }
         .header .stats {
             color: var(--text-dim);
             font-size: 0.82rem;
-            margin-left: 6px
+            margin-left: 2px;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
-
-        /* Channel Filters */
         .channel-filters {
             display: flex;
             gap: 6px;
             flex-wrap: wrap;
             align-items: center;
+            flex-shrink: 0;
         }
         .channel-btn {
-            padding: 5px 16px;
+            padding: 6px 16px;
             border-radius: 20px;
             border: 1px solid var(--border);
             background: var(--surface);
@@ -95,10 +96,18 @@
             font-weight: 500;
             white-space: nowrap;
             transition: all var(--transition);
+            touch-action: manipulation;
+            min-height: 34px;
+            display: inline-flex;
+            align-items: center;
         }
         .channel-btn:hover {
             color: var(--text);
-            border-color: var(--border-light)
+            border-color: var(--border-light);
+        }
+        .channel-btn:active {
+            transform: scale(0.95);
+            transition: transform 0.1s;
         }
         .channel-btn.active {
             background: var(--accent);
@@ -108,9 +117,8 @@
         .channel-btn .count {
             font-size: 0.68rem;
             opacity: 0.7;
-            margin-left: 4px
+            margin-left: 4px;
         }
-
         .search-box {
             margin-left: auto;
             background: var(--surface);
@@ -122,9 +130,10 @@
             gap: 8px;
             min-width: 210px;
             transition: border-color var(--transition);
+            flex-shrink: 1;
         }
         .search-box:focus-within {
-            border-color: var(--accent)
+            border-color: var(--accent);
         }
         .search-box input {
             background: none;
@@ -132,29 +141,54 @@
             outline: none;
             color: var(--text);
             font-size: 0.88rem;
-            width: 100%
+            width: 100%;
+            -webkit-user-select: text;
+            user-select: text;
         }
         .search-box input::placeholder {
-            color: var(--text-dim)
+            color: var(--text-dim);
         }
         .search-box .icon {
             color: var(--text-dim);
-            font-size: 0.95rem
+            font-size: 0.95rem;
+            flex-shrink: 0;
         }
-
-        /* ====== Main Grid ====== */
+        .global-translate-btn {
+            background: rgba(110, 201, 160, 0.15);
+            border: 1px solid var(--mint);
+            color: var(--mint);
+            padding: 7px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 500;
+            transition: all var(--transition);
+            white-space: nowrap;
+            flex-shrink: 0;
+            touch-action: manipulation;
+            min-height: 34px;
+        }
+        .global-translate-btn:hover {
+            background: rgba(110, 201, 160, 0.25);
+        }
+        .global-translate-btn:active {
+            transform: scale(0.95);
+            transition: transform 0.1s;
+        }
+        .global-translate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .container {
             max-width: 1440px;
             margin: 0 auto;
-            padding: 24px 28px
+            padding: 24px 28px;
         }
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-            gap: 22px
+            gap: 22px;
         }
-
-        /* ====== Grid Card ====== */
         .card {
             background: var(--surface);
             border-radius: var(--radius);
@@ -163,38 +197,44 @@
             transition: transform var(--transition), box-shadow var(--transition);
             border: 1px solid var(--border);
             position: relative;
+            touch-action: manipulation;
         }
         .card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 36px var(--accent-glow);
-            border-color: var(--accent)
+            border-color: var(--accent);
+        }
+        .card:active {
+            transform: scale(0.97);
+            transition: transform 0.12s;
         }
         .card-img {
             width: 100%;
             height: 320px;
             object-fit: cover;
             background: var(--surface2);
-            display: block
+            display: block;
         }
         .card-body {
-            padding: 14px 16px 16px
+            padding: 14px 16px 16px;
         }
         .card-name {
             font-size: 1.1rem;
             font-weight: 650;
             margin-bottom: 6px;
-            letter-spacing: -0.2px
+            letter-spacing: -0.2px;
         }
         .card-meta {
             font-size: 0.78rem;
             color: var(--text-dim);
             display: flex;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
-            margin-bottom: 8px
+            margin-bottom: 8px;
+            align-items: center;
         }
         .card-meta span {
-            white-space: nowrap
+            white-space: nowrap;
         }
         .card-summary {
             font-size: 0.8rem;
@@ -203,7 +243,7 @@
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
-            overflow: hidden
+            overflow: hidden;
         }
         .card-badge {
             display: inline-block;
@@ -213,10 +253,114 @@
             padding: 2px 10px;
             border-radius: 10px;
             margin-right: 6px;
-            font-weight: 500
+            font-weight: 500;
         }
 
-        /* Channel tag on card */
+        /* 年龄评价标签 */
+        .age-eval-tag {
+            display: inline-block;
+            font-size: 0.72rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            margin-left: 5px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            border: 1.5px solid transparent;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
+            transition: all var(--transition);
+            vertical-align: middle;
+            animation: agePulse 3s ease-in-out infinite;
+            white-space: nowrap;
+        }
+        @keyframes agePulse {
+            0%,
+            100% {
+                box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 18px currentColor;
+            }
+        }
+        .age-eval-tag.tier-teen {
+            background: rgba(240, 160, 184, 0.25);
+            color: #f5b8c8;
+            border-color: rgba(240, 160, 184, 0.5);
+        }
+        .age-eval-tag.tier-young {
+            background: rgba(110, 201, 160, 0.25);
+            color: #8fe0b8;
+            border-color: rgba(110, 201, 160, 0.5);
+        }
+        .age-eval-tag.tier-peak {
+            background: rgba(226, 176, 74, 0.28);
+            color: #f0c860;
+            border-color: rgba(226, 176, 74, 0.55);
+        }
+        .age-eval-tag.tier-mature {
+            background: rgba(232, 152, 80, 0.25);
+            color: #f5b870;
+            border-color: rgba(232, 152, 80, 0.5);
+        }
+        .age-eval-tag.tier-ripe {
+            background: rgba(232, 120, 160, 0.25);
+            color: #f5a0c0;
+            border-color: rgba(232, 120, 160, 0.5);
+        }
+        .age-eval-tag.tier-senior {
+            background: rgba(184, 160, 216, 0.22);
+            color: #ccb8e8;
+            border-color: rgba(184, 160, 216, 0.45);
+        }
+
+        /* 三围评分标签 */
+        .body-eval-tag {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 3px 9px;
+            border-radius: 10px;
+            margin-left: 6px;
+            font-weight: 650;
+            letter-spacing: 0.3px;
+            border: 1.5px solid transparent;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .body-eval-tag.grade-s {
+            background: rgba(226, 176, 74, 0.22);
+            color: #f0c860;
+            border-color: rgba(226, 176, 74, 0.5);
+        }
+        .body-eval-tag.grade-a {
+            background: rgba(232, 97, 124, 0.22);
+            color: #f5a0b8;
+            border-color: rgba(232, 97, 124, 0.5);
+        }
+        .body-eval-tag.grade-b {
+            background: rgba(91, 173, 212, 0.22);
+            color: #80c8e8;
+            border-color: rgba(91, 173, 212, 0.5);
+        }
+        .body-eval-tag.grade-c {
+            background: rgba(110, 201, 160, 0.2);
+            color: #8fe0b8;
+            border-color: rgba(110, 201, 160, 0.45);
+        }
+        .body-eval-tag.grade-d {
+            background: rgba(184, 160, 216, 0.2);
+            color: #ccb8e8;
+            border-color: rgba(184, 160, 216, 0.4);
+        }
+
+        .bwh-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
         .channel-tag {
             position: absolute;
             top: 10px;
@@ -231,14 +375,13 @@
         }
         .channel-tag.default {
             background: rgba(91, 173, 212, 0.2);
-            color: var(--cool)
+            color: var(--cool);
         }
         .channel-tag.jav {
             background: rgba(232, 152, 80, 0.2);
-            color: var(--orange)
+            color: var(--orange);
         }
 
-        /* ====== Modal ====== */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -246,13 +389,15 @@
             z-index: 200;
             background: rgba(0, 0, 0, 0.72);
             backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             justify-content: center;
             align-items: flex-start;
             padding: 24px 12px;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .modal-overlay.active {
-            display: flex
+            display: flex;
         }
         .modal {
             background: var(--surface);
@@ -266,14 +411,13 @@
         @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(36px)
+                transform: translateY(36px);
             }
             to {
                 opacity: 1;
-                transform: translateY(0)
+                transform: translateY(0);
             }
         }
-
         .modal-header {
             position: relative;
             height: 240px;
@@ -283,31 +427,32 @@
         .modal-header img {
             width: 100%;
             height: 100%;
-            object-fit: cover
+            object-fit: cover;
         }
         .modal-header .overlay {
             position: absolute;
             inset: 0;
-            background: linear-gradient(transparent 35%, var(--surface) 95%)
+            background: linear-gradient(transparent 35%, var(--surface) 95%);
         }
         .modal-header .title-group {
             position: absolute;
             bottom: 18px;
             left: 24px;
-            right: 24px
+            right: 24px;
         }
         .modal-header h2 {
             font-size: 1.75rem;
             font-weight: 700;
-            letter-spacing: -0.3px
+            letter-spacing: -0.3px;
         }
         .modal-header .meta-line {
             font-size: 0.82rem;
             color: var(--text-dim);
             margin-top: 4px;
             display: flex;
-            gap: 16px;
-            flex-wrap: wrap
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
         }
         .modal-header .ch-tag {
             display: inline-block;
@@ -320,11 +465,11 @@
         }
         .modal-header .ch-tag.default {
             background: rgba(91, 173, 212, 0.2);
-            color: var(--cool)
+            color: var(--cool);
         }
         .modal-header .ch-tag.jav {
             background: rgba(232, 152, 80, 0.2);
-            color: var(--orange)
+            color: var(--orange);
         }
         .modal-close {
             position: absolute;
@@ -344,17 +489,23 @@
             justify-content: center;
             transition: background var(--transition);
             backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            touch-action: manipulation;
         }
         .modal-close:hover {
-            background: rgba(0, 0, 0, 0.7)
+            background: rgba(0, 0, 0, 0.7);
         }
-
-        /* Tabs */
         .tabs {
             display: flex;
             border-bottom: 1px solid var(--border);
             padding: 0 20px;
-            gap: 4px
+            gap: 4px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .tabs::-webkit-scrollbar {
+            display: none;
         }
         .tab {
             padding: 13px 22px;
@@ -365,32 +516,30 @@
             transition: all var(--transition);
             font-weight: 500;
             white-space: nowrap;
+            flex-shrink: 0;
+            touch-action: manipulation;
         }
         .tab:hover {
-            color: var(--text)
+            color: var(--text);
         }
         .tab.active {
             color: var(--accent);
-            border-bottom-color: var(--accent)
+            border-bottom-color: var(--accent);
         }
-
         .tab-content {
             display: none;
-            padding: 0
+            padding: 0;
         }
         .tab-content.active {
-            display: block
+            display: block;
         }
 
-        /* ====== Dashboard Layout (Info Tab) ====== */
         .dashboard {
             padding: 20px 24px 28px;
             display: flex;
             flex-direction: column;
-            gap: 22px
+            gap: 22px;
         }
-
-        /* Section: Identity Card */
         .identity-card {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -404,22 +553,21 @@
             transition: border-color var(--transition);
         }
         .id-item:hover {
-            border-color: var(--border-light)
+            border-color: var(--border-light);
         }
         .id-item .id-label {
             font-size: 0.68rem;
             color: var(--text-faint);
             text-transform: uppercase;
             letter-spacing: 0.6px;
-            margin-bottom: 5px
+            margin-bottom: 5px;
         }
         .id-item .id-value {
             font-size: 0.92rem;
             font-weight: 550;
-            color: var(--text)
+            color: var(--text);
         }
 
-        /* Section: Body Dashboard */
         .body-dashboard {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -427,10 +575,9 @@
         }
         @media(max-width:600px) {
             .body-dashboard {
-                grid-template-columns: 1fr
+                grid-template-columns: 1fr;
             }
         }
-
         .gauge-card {
             background: var(--surface2);
             border-radius: var(--radius);
@@ -442,18 +589,17 @@
         }
         .gauge-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3)
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
         }
         .gauge-card.height {
-            border-left: 3px solid var(--gold)
+            border-left: 3px solid var(--gold);
         }
         .gauge-card.weight {
-            border-left: 3px solid var(--cool)
+            border-left: 3px solid var(--cool);
         }
         .gauge-card.bwh {
-            border-left: 3px solid var(--orange)
+            border-left: 3px solid var(--orange);
         }
-
         .gauge-card .gauge-title {
             font-size: 0.75rem;
             color: var(--text-faint);
@@ -473,13 +619,13 @@
             font-size: 3rem;
             font-weight: 700;
             line-height: 1;
-            letter-spacing: -1px
+            letter-spacing: -1px;
         }
         .gauge-card.height .gauge-number {
-            color: var(--gold)
+            color: var(--gold);
         }
         .gauge-card.weight .gauge-number {
-            color: var(--cool)
+            color: var(--cool);
         }
         .gauge-card.bwh .gauge-number {
             color: var(--orange);
@@ -488,224 +634,37 @@
         .gauge-card .gauge-unit {
             font-size: 1rem;
             color: var(--text-dim);
-            font-weight: 400
+            font-weight: 400;
         }
-        .gauge-card .gauge-eval {
-            font-size: 1.1rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
-        }
-        .gauge-card.height .gauge-eval {
-            color: var(--gold)
-        }
-        .gauge-card.weight .gauge-eval {
-            color: var(--mint)
-        }
-        .gauge-card.bwh .gauge-eval {
-            color: var(--rose);
-            font-size: 0.95rem;
-        }
-
-        /* Gauge Bar */
-        .gauge-bar-wrap {
-            position: relative;
-            height: 8px;
-            margin: 12px 0 8px
-        }
-        .gauge-bar-bg {
-            width: 100%;
-            height: 100%;
-            border-radius: 4px;
-            background: var(--border);
-            overflow: hidden;
-            position: relative;
-        }
-        .gauge-bar-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 1s cubic-bezier(0.22, 0.61, 0.36, 1);
-            position: relative;
-        }
-        .gauge-card.height .gauge-bar-fill {
-            background: linear-gradient(90deg, #c89230, var(--gold), #f5d080)
-        }
-        .gauge-card.weight .gauge-bar-fill {
-            background: linear-gradient(90deg, #3d90b8, var(--cool), #8dd0f0)
-        }
-        .gauge-card.bwh .gauge-bar-fill {
-            background: linear-gradient(90deg, #d47a30, var(--orange), #f0b870)
-        }
-
-        .gauge-bar-fill::after {
-            content: '';
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translate(50%, -50%);
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            box-shadow: 0 0 10px currentColor;
-        }
-        .gauge-card.height .gauge-bar-fill::after {
-            background: var(--gold)
-        }
-        .gauge-card.weight .gauge-bar-fill::after {
-            background: var(--cool)
-        }
-        .gauge-card.bwh .gauge-bar-fill::after {
-            background: var(--orange)
-        }
-
-        /* Reference marker on gauge */
-        .gauge-ref {
-            position: absolute;
-            top: -2px;
-            bottom: -2px;
-            width: 2px;
-            border-radius: 1px;
-            z-index: 2;
-        }
-        .gauge-ref.avg {
-            background: rgba(255, 255, 255, 0.35)
-        }
-        .gauge-ref-label {
-            position: absolute;
-            top: -18px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.6rem;
-            color: var(--text-faint);
-            white-space: nowrap;
-            font-weight: 500;
-        }
-
-        /* Reference hint text */
-        .gauge-ref-info {
-            font-size: 0.68rem;
-            color: var(--text-faint);
+        .gauge-card .bwh-eval-row {
             margin-top: 6px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-        .gauge-ref-info .avg-line {
-            border-bottom: 1px dashed var(--text-faint);
-            padding-bottom: 1px
-        }
-        .gauge-ref-info .bmi-line {
-            font-style: italic
-        }
-        .gauge-ref-info .bwh-eval-tag {
-            display: inline-block;
-            background: rgba(232, 120, 160, 0.15);
-            color: var(--rose);
-            padding: 2px 8px;
-            border-radius: 8px;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-weight: 600;
             letter-spacing: 0.3px;
-        }
-        .gauge-ref-info .bwh-shape-tag {
-            display: inline-block;
-            background: rgba(184, 160, 216, 0.15);
-            color: var(--lavender);
-            padding: 2px 8px;
-            border-radius: 8px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        }
-
-        /* Section: Highlights strip */
-        .highlights-strip {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
             align-items: center;
+            gap: 6px;
         }
-        .hl-tag {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 5px 14px;
-            font-size: 0.76rem;
-            color: var(--text-dim);
-            transition: all var(--transition);
-        }
-        .hl-tag:hover {
-            color: var(--text);
-            border-color: var(--border-light)
-        }
-        .hl-tag.accent {
-            border-color: rgba(232, 97, 124, 0.25);
-            color: var(--accent);
-            background: rgba(232, 97, 124, 0.06)
-        }
-
-        /* More-info expandable */
-        .more-toggle {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            font-size: 0.74rem;
+        .gauge-card .bwh-eval-detail {
+            font-size: 0.65rem;
             color: var(--text-faint);
-            padding: 6px 0;
-            transition: color var(--transition);
-            user-select: none;
+            font-weight: 400;
+            margin-top: 2px;
         }
-        .more-toggle:hover {
-            color: var(--text-dim)
-        }
-        .more-toggle .arrow {
-            transition: transform var(--transition);
-            font-size: 0.65rem
-        }
-        .more-toggle.open .arrow {
-            transform: rotate(180deg)
-        }
-        .more-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.35s ease;
-        }
-        .more-content.open {
-            max-height: 200px
-        }
-        .more-inner {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            padding: 8px 0 0;
-        }
-        .more-chip {
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-xs);
-            padding: 5px 14px;
-            font-size: 0.73rem;
-            color: var(--text-dim);
-        }
-
-        /* Section: Works mini (inline in info tab) */
         .works-mini {
-            margin-top: 4px
+            margin-top: 4px;
         }
         .works-mini h4 {
             font-size: 0.78rem;
             color: var(--text-faint);
             text-transform: uppercase;
             letter-spacing: 0.8px;
-            margin-bottom: 8px
+            margin-bottom: 8px;
         }
         .works-mini .wm-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px
+            gap: 6px;
         }
         .works-mini .wm-item {
             background: var(--surface2);
@@ -715,32 +674,22 @@
             color: var(--text-dim);
             border: 1px solid transparent;
             transition: all var(--transition);
-            cursor: default;
-            position: relative;
-        }
-        .works-mini .wm-item:hover {
-            border-color: var(--border-light);
-            color: var(--text)
         }
         .works-mini .wm-item .wm-original {
-            font-size: 0.65rem;
-            color: var(--text-faint);
+            font-size: 0.6rem;
+            color: rgba(85, 85, 112, 0.65);
             display: block;
             margin-top: 1px;
             font-style: italic;
+            opacity: 0.7;
         }
-        .works-mini .wm-item.translated .wm-original {
-            display: block;
-        }
-
-        /* ====== Gallery ====== */
         .gallery-tab {
-            padding: 20px 24px
+            padding: 20px 24px;
         }
         .gallery {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-            gap: 10px
+            gap: 10px;
         }
         .gallery img {
             width: 100%;
@@ -749,20 +698,42 @@
             border-radius: var(--radius-sm);
             cursor: pointer;
             transition: transform var(--transition), box-shadow var(--transition);
+            touch-action: manipulation;
         }
         .gallery img:hover {
             transform: scale(1.06);
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4)
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
         }
-
-        /* ====== Works Tab ====== */
+        .gallery img:active {
+            transform: scale(0.95);
+            transition: transform 0.1s;
+        }
         .works-tab {
-            padding: 20px 24px
+            padding: 20px 24px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        .works-tab::-webkit-scrollbar {
+            height: 4px;
+        }
+        .works-tab::-webkit-scrollbar-thumb {
+            background: var(--border-light);
+            border-radius: 2px;
+        }
+        .works-tab-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         .film-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.84rem
+            font-size: 0.84rem;
+            min-width: 520px;
         }
         .film-table th {
             text-align: left;
@@ -772,7 +743,7 @@
             border-bottom: 1px solid var(--border);
             font-size: 0.72rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px
+            letter-spacing: 0.5px;
         }
         .film-table td {
             padding: 10px 14px;
@@ -780,55 +751,38 @@
             vertical-align: top;
         }
         .film-table tbody tr {
-            transition: background var(--transition)
+            transition: background var(--transition);
         }
         .film-table tbody tr:hover td {
-            background: var(--surface2)
+            background: var(--surface2);
         }
         .film-table .code {
             color: var(--accent);
             font-weight: 550;
             white-space: nowrap;
             width: 90px;
-            font-family: monospace
+            font-family: monospace;
         }
         .film-table .date {
             color: var(--gold);
             font-weight: 550;
             white-space: nowrap;
-            width: 85px
+            width: 85px;
         }
         .film-table .tags {
             white-space: nowrap;
-            width: 100px
+            width: 100px;
         }
         .film-table .title-cell {
             min-width: 180px;
         }
-        .film-table .title-original {
+        .title-original {
             display: block;
-            font-size: 0.7rem;
-            color: var(--text-faint);
+            font-size: 0.65rem;
+            color: rgba(85, 85, 112, 0.65);
             font-style: italic;
             margin-top: 2px;
-        }
-        .work-tag {
-            display: inline-block;
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: 3px;
-            padding: 1px 7px;
-            font-size: 0.7rem;
-            margin-right: 4px;
-            color: var(--text-dim)
-        }
-        .film-table a {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: 500
-        }
-        .film-table a:hover {
-            text-decoration: underline
+            opacity: 0.7;
         }
         .translate-badge {
             display: inline-block;
@@ -841,23 +795,31 @@
             vertical-align: middle;
             letter-spacing: 0.3px;
         }
-
-        /* ====== Bio ====== */
+        .work-tag {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-dim);
+            font-size: 0.65rem;
+            padding: 2px 7px;
+            border-radius: 5px;
+            margin: 1px 3px 1px 0;
+            white-space: nowrap;
+        }
         .bio-tab {
-            padding: 20px 24px
+            padding: 20px 24px;
         }
         .bio-text {
             line-height: 1.9;
             color: var(--text-dim);
             font-size: 0.9rem;
-            white-space: pre-line
+            white-space: pre-line;
+            -webkit-user-select: text;
+            user-select: text;
         }
-
-        /* ====== Loading & empty ====== */
         .loading {
             text-align: center;
             padding: 60px;
-            color: var(--text-dim)
+            color: var(--text-dim);
         }
         .spinner {
             width: 38px;
@@ -866,24 +828,22 @@
             border-top-color: var(--accent);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
-            margin: 0 auto 16px
+            margin: 0 auto 16px;
         }
         @keyframes spin {
             to {
-                transform: rotate(360deg)
+                transform: rotate(360deg);
             }
         }
         .empty {
             text-align: center;
             padding: 80px 20px;
-            color: var(--text-dim)
+            color: var(--text-dim);
         }
         .empty .icon {
             font-size: 2.8rem;
-            margin-bottom: 12px
+            margin-bottom: 12px;
         }
-
-        /* ====== Lightbox ====== */
         .lightbox {
             display: none;
             position: fixed;
@@ -891,64 +851,290 @@
             z-index: 300;
             background: rgba(0, 0, 0, 0.93);
             justify-content: center;
-            align-items: center
+            align-items: center;
+            touch-action: manipulation;
         }
         .lightbox.active {
-            display: flex
+            display: flex;
         }
         .lightbox img {
             max-width: 92vw;
             max-height: 92vh;
-            border-radius: var(--radius-sm)
+            border-radius: var(--radius-sm);
+            object-fit: contain;
         }
         .lightbox-close {
             position: absolute;
             top: 22px;
             right: 22px;
-            background: none;
+            background: rgba(255, 255, 255, 0.1);
             border: none;
             color: #fff;
             font-size: 1.8rem;
             cursor: pointer;
-            opacity: 0.7;
-            transition: opacity var(--transition)
+            opacity: 0.8;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity var(--transition), background var(--transition);
+            touch-action: manipulation;
+            z-index: 5;
         }
         .lightbox-close:hover {
-            opacity: 1
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
         }
 
-        /* ====== Scroll Animations ====== */
-        .anim-in {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.5s ease, transform 0.5s ease
+        .modal-age-eval {
+            display: inline-block;
+            font-size: 0.76rem;
+            padding: 4px 12px;
+            border-radius: 14px;
+            margin-left: 6px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            border: 2px solid transparent;
+            vertical-align: middle;
+            animation: agePulse 3s ease-in-out infinite;
+            white-space: nowrap;
         }
-        .anim-in.visible {
-            opacity: 1;
-            transform: translateY(0)
+        .modal-age-eval.tier-teen {
+            background: rgba(240, 160, 184, 0.28);
+            color: #f5b8c8;
+            border-color: rgba(240, 160, 184, 0.55);
+        }
+        .modal-age-eval.tier-young {
+            background: rgba(110, 201, 160, 0.28);
+            color: #8fe0b8;
+            border-color: rgba(110, 201, 160, 0.55);
+        }
+        .modal-age-eval.tier-peak {
+            background: rgba(226, 176, 74, 0.3);
+            color: #f0c860;
+            border-color: rgba(226, 176, 74, 0.6);
+        }
+        .modal-age-eval.tier-mature {
+            background: rgba(232, 152, 80, 0.28);
+            color: #f5b870;
+            border-color: rgba(232, 152, 80, 0.55);
+        }
+        .modal-age-eval.tier-ripe {
+            background: rgba(232, 120, 160, 0.28);
+            color: #f5a0c0;
+            border-color: rgba(232, 120, 160, 0.55);
+        }
+        .modal-age-eval.tier-senior {
+            background: rgba(184, 160, 216, 0.25);
+            color: #ccb8e8;
+            border-color: rgba(184, 160, 216, 0.5);
+        }
+
+        /* 分页控件 */
+        .pagination-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .page-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all var(--transition);
+            touch-action: manipulation;
+            white-space: nowrap;
+            min-height: 34px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .page-btn:hover:not(:disabled) {
+            color: var(--text);
+            border-color: var(--border-light);
+        }
+        .page-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .page-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .page-size-select {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            outline: none;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 14px;
+                gap: 8px;
+            }
+            .header h1 {
+                font-size: 1.15rem;
+            }
+            .header .stats {
+                font-size: 0.72rem;
+            }
+            .channel-filters {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                width: 100%;
+                padding-bottom: 4px;
+            }
+            .channel-btn {
+                padding: 7px 14px;
+                font-size: 0.74rem;
+                min-height: 36px;
+            }
+            .search-box {
+                width: 100%;
+                margin-left: 0;
+                flex-basis: 100%;
+                order: 10;
+                padding: 8px 16px;
+            }
+            .global-translate-btn {
+                padding: 7px 12px;
+                font-size: 0.72rem;
+                min-height: 36px;
+            }
+            .container {
+                padding: 16px 14px;
+            }
+            .grid {
+                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+                gap: 16px;
+            }
+            .card-img {
+                height: 280px;
+            }
+            .modal-overlay {
+                padding: 0;
+                align-items: stretch;
+            }
+            .modal {
+                border-radius: 0;
+                max-width: 100%;
+                min-height: 100vh;
+                border: none;
+            }
+            .modal-header {
+                height: 180px;
+                border-radius: 0;
+            }
+            .modal-header .title-group {
+                bottom: 12px;
+                left: 16px;
+                right: 16px;
+            }
+            .modal-header h2 {
+                font-size: 1.35rem;
+            }
+            .modal-close {
+                top: 10px;
+                right: 10px;
+                width: 38px;
+                height: 38px;
+            }
+            .tabs {
+                padding: 0 8px;
+            }
+            .tab {
+                padding: 11px 14px;
+                font-size: 0.8rem;
+            }
+            .works-tab {
+                padding: 14px 10px;
+            }
+            .film-table {
+                font-size: 0.76rem;
+                min-width: 480px;
+            }
+            .pagination-bar {
+                gap: 6px;
+            }
+            .page-btn {
+                padding: 5px 10px;
+                font-size: 0.7rem;
+                min-height: 32px;
+            }
+            .page-size-select {
+                padding: 5px 8px;
+                font-size: 0.7rem;
+            }
+        }
+        @media (max-width: 480px) {
+            .header {
+                padding: 8px 10px;
+            }
+            .container {
+                padding: 12px 8px;
+            }
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .card-img {
+                height: 260px;
+            }
+            .modal-header {
+                height: 150px;
+            }
+            .modal-header h2 {
+                font-size: 1.2rem;
+            }
+            .works-tab {
+                padding: 10px 6px;
+            }
+            .film-table {
+                font-size: 0.7rem;
+                min-width: 420px;
+            }
         }
     </style>
 </head>
 <body>
-
     <header class="header">
         <h1>✨ WomenPic</h1>
         <span class="stats" id="headerStats"></span>
         <div class="channel-filters" id="channelFilters">
             <button class="channel-btn active" data-channel="">🌐 全部</button>
         </div>
+        <button class="global-translate-btn" id="globalTranslateBtn" title="翻译全部女星的作品标题并缓存">🌐 全文翻译</button>
         <div class="search-box">
             <span class="icon">🔍</span>
-            <input type="text" id="searchInput" placeholder="搜索女星…" autocomplete="off">
+            <input type="text" id="searchInput" placeholder="搜索女星或作品…" autocomplete="off">
         </div>
     </header>
 
     <div class="container">
         <div id="grid" class="grid"></div>
-        <div id="loading" class="loading"><div class="spinner"></div><p>加载中…</p></div>
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>加载中…</p>
+        </div>
     </div>
 
-    <!-- Detail Modal -->
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal" id="modal">
             <div class="modal-header" id="modalHeader">
@@ -973,386 +1159,182 @@
         </div>
     </div>
 
-    <!-- Lightbox -->
-    <div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
-        <button class="lightbox-close">✕</button>
+    <div class="lightbox" id="lightbox">
+        <button class="lightbox-close" onclick="document.getElementById('lightbox').classList.remove('active')">✕</button>
         <img id="lightboxImg" src="" alt="">
     </div>
 
     <script>
-        // ====== Translation API Configuration ======
-        const TRANSLATION_CONFIG = {
-            enabled: true,
-            apiEndpoint: '/womenpic/api/translate',
-            targetLang: 'zh',
-            sourceLang: 'auto',
-            batchSize: 15,
-            requestTimeout: 8000,
-            cache: new Map(),
-            pendingQueue: [],
-            pendingTimer: null,
-            flushDelay: 300,
-        };
-
-        /**
-         * 翻译文本（批量处理）
-         * @param {string[]} texts - 待翻译文本数组
-         * @returns {Promise<Map<string, string>>} 原文->译文的映射
-         */
-        async function translateBatch(texts) {
-            const uniqueTexts = [...new Set(texts.filter(t => t && t.trim()))];
-            if (!uniqueTexts.length) return new Map();
-
-            // 检查缓存
-            const resultMap = new Map();
-            const uncached = [];
-            for (const text of uniqueTexts) {
-                const cacheKey = `${text}__${TRANSLATION_CONFIG.targetLang}`;
-                if (TRANSLATION_CONFIG.cache.has(cacheKey)) {
-                    resultMap.set(text, TRANSLATION_CONFIG.cache.get(cacheKey));
-                } else {
-                    // 如果文本已经是纯中文，跳过翻译
-                    if (isPrimarilyChinese(text)) {
-                        TRANSLATION_CONFIG.cache.set(cacheKey, text);
-                        resultMap.set(text, text);
-                    } else {
-                        uncached.push(text);
-                    }
-                }
-            }
-
-            if (!uncached.length) return resultMap;
-
-            // 分批请求
-            for (let i = 0; i < uncached.length; i += TRANSLATION_CONFIG.batchSize) {
-                const batch = uncached.slice(i, i + TRANSLATION_CONFIG.batchSize);
-                try {
-                    const translated = await callTranslationAPI(batch);
-                    for (let j = 0; j < batch.length; j++) {
-                        const original = batch[j];
-                        const translatedText = translated[j] || original;
-                        const cacheKey = `${original}__${TRANSLATION_CONFIG.targetLang}`;
-                        TRANSLATION_CONFIG.cache.set(cacheKey, translatedText);
-                        resultMap.set(original, translatedText);
-                    }
-                } catch (err) {
-                    console.warn('翻译API请求失败，使用原始文本:', err.message);
-                    // 失败时使用原始文本
-                    for (const original of batch) {
-                        const cacheKey = `${original}__${TRANSLATION_CONFIG.targetLang}`;
-                        TRANSLATION_CONFIG.cache.set(cacheKey, original);
-                        resultMap.set(original, original);
-                    }
-                }
-            }
-
-            return resultMap;
-        }
-
-        /**
-         * 调用翻译API
-         * @param {string[]} texts
-         * @returns {Promise<string[]>} 翻译后的文本数组
-         */
-        async function callTranslationAPI(texts) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), TRANSLATION_CONFIG.requestTimeout);
-
-            try {
-                const response = await fetch(TRANSLATION_CONFIG.apiEndpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        texts: texts,
-                        source_lang: TRANSLATION_CONFIG.sourceLang,
-                        target_lang: TRANSLATION_CONFIG.targetLang,
-                    }),
-                    signal: controller.signal,
-                });
-
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                if (data.translations && Array.isArray(data.translations)) {
-                    return data.translations.map((t, i) => {
-                        if (typeof t === 'string') return t;
-                        if (t && t.translated) return t.translated;
-                        return texts[i] || '';
-                    });
-                }
-                throw new Error('Invalid response format');
-            } catch (err) {
-                clearTimeout(timeoutId);
-                if (err.name === 'AbortError') {
-                    throw new Error('翻译请求超时');
-                }
-                throw err;
-            }
-        }
-
-        /**
-         * 判断文本是否主要为中文
-         */
-        function isPrimarilyChinese(text) {
-            if (!text) return false;
-            const chineseChars = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
-            const totalChars = text.replace(/\s/g, '').length;
-            if (totalChars === 0) return false;
-            return chineseChars / totalChars > 0.5;
-        }
-
-        /**
-         * 安排翻译任务（防抖批量处理）
-         * @param {string[]} texts
-         * @param {function} callback - 收到翻译结果后的回调 (resultMap) => void
-         */
-        function scheduleTranslation(texts, callback) {
-            if (!TRANSLATION_CONFIG.enabled) {
-                // 翻译禁用，直接回调空映射
-                const emptyMap = new Map();
-                texts.forEach(t => emptyMap.set(t, t));
-                callback(emptyMap);
-                return;
-            }
-
-            TRANSLATION_CONFIG.pendingQueue.push({ texts, callback });
-
-            if (TRANSLATION_CONFIG.pendingTimer) {
-                clearTimeout(TRANSLATION_CONFIG.pendingTimer);
-            }
-
-            TRANSLATION_CONFIG.pendingTimer = setTimeout(async () => {
-                const queue = [...TRANSLATION_CONFIG.pendingQueue];
-                TRANSLATION_CONFIG.pendingQueue = [];
-                TRANSLATION_CONFIG.pendingTimer = null;
-
-                // 合并所有待翻译文本
-                const allTexts = [];
-                for (const item of queue) {
-                    allTexts.push(...item.texts);
-                }
-
-                const resultMap = await translateBatch(allTexts);
-
-                // 分发结果给各个回调
-                for (const item of queue) {
-                    item.callback(resultMap);
-                }
-            }, TRANSLATION_CONFIG.flushDelay);
-        }
-
-        /**
-         * 翻译单个文本（同步从缓存获取，或安排异步翻译）
-         * @param {string} text
-         * @returns {string} 缓存中的翻译或原文
-         */
-        function getCachedTranslation(text) {
-            if (!text || !text.trim()) return text;
-            if (isPrimarilyChinese(text)) return text;
-            const cacheKey = `${text}__${TRANSLATION_CONFIG.targetLang}`;
-            if (TRANSLATION_CONFIG.cache.has(cacheKey)) {
-                return TRANSLATION_CONFIG.cache.get(cacheKey);
-            }
-            return text; // 未缓存时返回原文
-        }
-
-        // ====== Evaluation System ======
-        const REF = {
-            height_avg: 158,
-            height_tiers: [
-                { max: 155, label: '娇小', color: '#c0a0e0' },
-                { max: 160, label: '偏娇小', color: '#a0c8e8' },
-                { max: 165, label: '标准', color: '#8ec8a0' },
-                { max: 170, label: '偏高挑', color: '#e8c060' },
-                { max: Infinity, label: '高挑', color: '#e89850' }
-            ],
-            bmi_tiers: [
-                { max: 18.5, label: '纤细', risk: '低于标准范围', color: '#6ec9a0' },
-                { max: 24, label: '标准', risk: '', color: '#8ec8a0' },
-                { max: 28, label: '丰腴', risk: '', color: '#e8c060' },
-                { max: Infinity, label: '丰盈', risk: '高于标准范围', color: '#e88060' }
-            ],
-            // 三围评价体系
-            bust_tiers: [
-                { max: 80, label: '娇小', color: '#c0a0e0' },
-                { max: 85, label: '适中', color: '#8ec8a0' },
-                { max: 90, label: '丰满', color: '#e8c060' },
-                { max: 95, label: '傲人', color: '#e89850' },
-                { max: Infinity, label: '巨乳', color: '#e8617c' }
-            ],
-            whr_tiers: [
-                { max: 0.70, label: '极致细腰', color: '#6ec9a0', shapeLabel: '沙漏型' },
-                { max: 0.75, label: '纤细腰身', color: '#8ec8a0', shapeLabel: '沙漏型' },
-                { max: 0.80, label: '标准比例', color: '#a0c8e8', shapeLabel: '匀称型' },
-                { max: 0.85, label: '适中', color: '#e8c060', shapeLabel: '匀称型' },
-                { max: Infinity, label: '丰腴', color: '#e88060', shapeLabel: '苹果型' }
-            ],
-            // 身材类型判断
-            bodyShapeRules: [
-                {
-                    name: '沙漏型',
-                    icon: '⏳',
-                    color: '#e878a0',
-                    condition: (b, w, h, whr) => whr < 0.78 && Math.abs(b - h) < 5 && b > 80
-                }, {
-                    name: '梨型',
-                    icon: '🍐',
-                    color: '#b8a0d8',
-                    condition: (b, w, h, whr) => h > b + 3 && whr < 0.82
-                }, {
-                    name: '倒三角',
-                    icon: '🔻',
-                    color: '#5badd4',
-                    condition: (b, w, h, whr) => b > h + 3 && whr < 0.82
-                }, {
-                    name: '矩形',
-                    icon: '⬜',
-                    color: '#8ec8a0',
-                    condition: (b, w, h, whr) => Math.abs(b - h) < 8 && Math.abs(b - w) < 15 && whr >= 0.75
-                }, {
-                    name: '苹果型',
-                    icon: '🍎',
-                    color: '#e89850',
-                    condition: (b, w, h, whr) => whr >= 0.85
-                },
-            ]
-        };
-
-        function parseHeight(cmStr) {
-            const m = String(cmStr || '').match(/([\d.]+)/);
-            return m ? parseFloat(m[1]) : null;
-        }
-
-        function parseWeight(kgStr) {
-            const m = String(kgStr || '').match(/([\d.]+)/);
-            return m ? parseFloat(m[1]) : null;
-        }
-
-        function parseNumeric(val) {
-            const m = String(val || '').match(/([\d.]+)/);
-            return m ? parseFloat(m[1]) : null;
-        }
-
-        function evaluateHeight(cm) {
-            for (const t of REF.height_tiers)
-                if (cm < t.max) return t;
-            return { label: '高挑', color: '#e89850' };
-        }
-
-        function calcBMI(cm, kg) {
-            if (!cm || !kg) return null;
-            return kg / ((cm / 100) ** 2);
-        }
-
-        function evaluateBMI(bmi) {
-            if (bmi === null) return { label: '—', risk: '', color: '#888' };
-            for (const t of REF.bmi_tiers)
-                if (bmi <= t.max) return t;
-            return { label: '—', risk: '', color: '#888' };
-        }
-
-        function evaluateBust(bustCm) {
-            if (!bustCm) return null;
-            for (const t of REF.bust_tiers)
-                if (bustCm < t.max) return t;
-            return { label: '巨乳', color: '#e8617c' };
-        }
-
-        function evaluateWHR(whr) {
-            if (whr === null || whr === undefined || isNaN(whr)) return null;
-            for (const t of REF.whr_tiers)
-                if (whr < t.max) return t;
-            return { label: '丰腴', color: '#e88060', shapeLabel: '苹果型' };
-        }
-
-        function determineBodyShape(bust, waist, hip, whr) {
-            if (!bust || !waist || !hip || whr === null || whr === undefined || isNaN(whr)) return null;
-            for (const rule of REF.bodyShapeRules) {
-                if (rule.condition(bust, waist, hip, whr)) {
-                    return rule;
-                }
-            }
-            return { name: '匀称型', icon: '✨', color: '#8ec8a0' };
-        }
-
-        function gaugePercent(value, refAvg, maxVal) {
-            const scale = refAvg / 0.5;
-            return Math.min((value / scale) * 100, 98);
-        }
-
-        // ====== Config ======
         const API_BASE = '/womenpic/api';
-        const CH_LABELS = {
-            default: '默认',
-            jav: 'Jav',
-        };
+        const CH_LABELS = { default: '默认', jav: 'Jav' };
         let allActresses = [];
         let currentChannel = '';
         let currentActress = null;
 
-        // ====== Init ======
+        // 年龄计算与评价
+        function calculateAge(birthdayStr) {
+            if (!birthdayStr) return null;
+            const parts = birthdayStr.split(/[-/.]/);
+            if (parts.length < 3) return null;
+            const year = parseInt(parts[0], 10),
+                month = parseInt(parts[1], 10) - 1,
+                day = parseInt(parts[2], 10);
+            if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+            const birthDate = new Date(year, month, day);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+            return age >= 0 ? age : null;
+        }
+
+        const AGE_TIERS = [
+            { max: 20, label: '少女感', tierClass: 'tier-teen', color: '#f5b8c8' },
+            { max: 24, label: '年轻', tierClass: 'tier-young', color: '#8fe0b8' },
+            { max: 28, label: '巅峰', tierClass: 'tier-peak', color: '#f0c860' },
+            { max: 32, label: '成熟魅力', tierClass: 'tier-mature', color: '#f5b870' },
+            { max: 36, label: '熟龄魅力', tierClass: 'tier-ripe', color: '#f5a0c0' },
+            { max: Infinity, label: '资深', tierClass: 'tier-senior', color: '#ccb8e8' },
+        ];
+
+        function evaluateAge(age) {
+            if (age == null) return null;
+            for (const t of AGE_TIERS)
+                if (age <= t.max) return t;
+            return { label: '资深', tierClass: 'tier-senior', color: '#ccb8e8' };
+        }
+
+        // 三围数据评分
+        function evaluateBody(bustCm, waistCm, hipCm) {
+            if (!bustCm || !waistCm || !hipCm || bustCm <= 0 || waistCm <= 0 || hipCm <= 0) return null;
+            const whr = waistCm / hipCm;
+            const bwd = bustCm - waistCm;
+            let whrScore = 0,
+                whrDesc = '';
+            if (whr >= 0.67 && whr <= 0.73) { whrScore = 5;
+                whrDesc = '黄金腰臀比'; } else if (whr >= 0.65 && whr <= 0.76) { whrScore = 4;
+                whrDesc = '优秀腰臀比'; } else if (whr >= 0.62 && whr <= 0.80) { whrScore = 3;
+                whrDesc = '良好腰臀比'; } else if (whr >= 0.58 && whr <= 0.85) { whrScore = 2;
+                whrDesc = '一般腰臀比'; } else { whrScore = 1;
+                whrDesc = '腰臀比偏极端'; }
+            let bwdScore = 0,
+                bwdDesc = '';
+            if (bwd >= 28) { bwdScore = 5;
+                bwdDesc = '极致曲线'; } else if (bwd >= 23) { bwdScore = 4;
+                bwdDesc = '丰满有致'; } else if (bwd >= 18) { bwdScore = 3;
+                bwdDesc = '凹凸有致'; } else if (bwd >= 13) { bwdScore = 2;
+                bwdDesc = '曲线柔和'; } else { bwdScore = 1;
+                bwdDesc = '纤细直板'; }
+            const totalScore = whrScore + bwdScore;
+            let grade, label, color, gradeClass;
+            if (totalScore >= 9) { grade = 'S';
+                label = '💎 黄金比例';
+                color = '#f0c860';
+                gradeClass = 'grade-s'; } else if (totalScore >= 7) { grade = 'A';
+                label = '🔥 火辣身材';
+                color = '#f5a0b8';
+                gradeClass = 'grade-a'; } else if (totalScore >= 5) { grade = 'B';
+                label = '✨ 匀称优美';
+                color = '#80c8e8';
+                gradeClass = 'grade-b'; } else if (totalScore >= 3) { grade = 'C';
+                label = '💫 自然清新';
+                color = '#8fe0b8';
+                gradeClass = 'grade-c'; } else { grade = 'D';
+                label = '🌱 纤细苗条';
+                color = '#ccb8e8';
+                gradeClass = 'grade-d'; }
+            return {
+                whr: parseFloat(whr.toFixed(3)),
+                bwd: parseFloat(bwd.toFixed(1)),
+                grade,
+                label,
+                color,
+                gradeClass,
+                whrScore,
+                bwdScore,
+                totalScore,
+                whrDesc,
+                bwdDesc
+            };
+        }
+
+        function timeAgo(dateStr) {
+            if (!dateStr) return null;
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return null;
+            const diffDays = Math.floor((new Date() - d) / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) return null;
+            if (diffDays < 30) return `${diffDays}天前`;
+            if (diffDays < 365) return `${Math.floor(diffDays / 30)}个月前`;
+            return `${Math.floor(diffDays / 365)}年前`;
+        }
+
+        function esc(s) { if (!s) return '';
+            const d = document.createElement('div');
+            d.textContent = s; return d.innerHTML; }
+
+        function escAttr(s) { if (!s) return ''; return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/'/g, '&#39;'); }
+
+        function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t);
+                t = setTimeout(() => fn(...args), ms); }; }
+
+        function isPrimarilyChinese(text) {
+            if (!text) return false;
+            const chinese = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
+            const total = text.replace(/\s/g, '').length;
+            return total === 0 ? false : chinese / total > 0.5;
+        }
+
+        function parseHeight(v) { const m = String(v || '').match(/([\d.]+)/); return m ? parseFloat(m[1]) : null; }
+
+        function parseWeight(v) { const m = String(v || '').match(/([\d.]+)/); return m ? parseFloat(m[1]) : null; }
+
+        function parseNumeric(v) { const m = String(v || '').match(/([\d.]+)/); return m ? parseFloat(m[1]) : null; }
+
+        // ====== 初始化 ======
         document.addEventListener('DOMContentLoaded', () => {
             loadActresses();
             document.getElementById('searchInput').addEventListener('input', debounce(onSearch, 280));
-            document.getElementById('modalOverlay').addEventListener('click', e => {
-                if (e.target === e.currentTarget) closeModal();
-            });
-            document.getElementById('modalTabs').addEventListener('click', e => {
-                if (e.target.classList.contains('tab')) switchTab(e.target.dataset.tab);
-            });
+            document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e
+                    .currentTarget) closeModal(); });
+            document.getElementById('modalTabs').addEventListener('click', e => { if (e.target.classList.contains(
+                    'tab')) switchTab(e.target.dataset.tab); });
             document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+            document.getElementById('globalTranslateBtn').addEventListener('click', onGlobalTranslate);
         });
 
-        // ====== Channel Filter ======
         function switchChannel(channel) {
             currentChannel = channel;
-            document.querySelectorAll('.channel-btn').forEach(b => {
-                b.classList.toggle('active', b.dataset.channel === channel);
-            });
+            document.querySelectorAll('.channel-btn').forEach(b => b.classList.toggle('active', b.dataset.channel ===
+                channel));
             renderGrid(allActresses);
             updateStats();
         }
 
-        // ====== API ======
         async function loadActresses() {
-            const grid = document.getElementById('grid');
-            const loading = document.getElementById('loading');
+            const grid = document.getElementById('grid'),
+                loading = document.getElementById('loading');
             grid.innerHTML = '';
             loading.style.display = 'block';
             try {
                 const res = await fetch(`${API_BASE}/actresses`);
                 const data = await res.json();
                 allActresses = data.data || [];
-
                 const channels = data.channels || {};
                 const filterDiv = document.getElementById('channelFilters');
-                filterDiv.innerHTML =
-                '<button class="channel-btn active" data-channel="">🌐 全部</button>';
-                const sortedCh = Object.keys(channels).sort();
-                for (const ch of sortedCh) {
-                    const label = CH_LABELS[ch] || ch;
+                filterDiv.innerHTML = '<button class="channel-btn active" data-channel="">🌐 全部</button>';
+                for (const ch of Object.keys(channels).sort()) {
                     filterDiv.innerHTML +=
-                        `<button class="channel-btn" data-channel="${ch}">${label} <span class="count">${channels[ch]}</span></button>`;
+                        `<button class="channel-btn" data-channel="${ch}">${CH_LABELS[ch]||ch} <span class="count">${channels[ch]}</span></button>`;
                 }
-                filterDiv.querySelectorAll('.channel-btn').forEach(b => {
-                    b.addEventListener('click', () => switchChannel(b.dataset.channel));
-                });
-
+                filterDiv.querySelectorAll('.channel-btn').forEach(b => b.addEventListener('click', () => switchChannel(b
+                    .dataset.channel)));
                 renderGrid(allActresses);
                 updateStats();
             } catch (err) {
-                grid.innerHTML =
-                    `<div class="empty"><div class="icon">⚠️</div><p>无法连接后端服务</p><p style="font-size:0.8rem;margin-top:6px">请确保已启动 python server.py</p></div>`;
-            } finally {
-                loading.style.display = 'none';
-            }
+                grid.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>无法连接后端服务</p></div>`;
+            } finally { loading.style.display = 'none'; }
         }
 
         function updateStats() {
@@ -1361,8 +1343,7 @@
         }
 
         function getFilteredActresses() {
-            if (!currentChannel) return allActresses;
-            return allActresses.filter(a => a.channel === currentChannel);
+            return currentChannel ? allActresses.filter(a => a.channel === currentChannel) : allActresses;
         }
 
         async function loadActressDetail(name) {
@@ -1371,335 +1352,307 @@
             return res.json();
         }
 
-        // ====== Render Grid ======
         function renderGrid(actresses) {
-            const filtered = currentChannel ?
-                actresses.filter(a => a.channel === currentChannel) :
-                actresses;
+            const filtered = currentChannel ? actresses.filter(a => a.channel === currentChannel) : actresses;
             const grid = document.getElementById('grid');
-
             if (!filtered.length) {
-                grid.innerHTML =
-                    `<div class="empty"><div class="icon">📭</div><p>${currentChannel ? '该渠道暂无' : '暂无'}匹配的女星</p></div>`;
+                grid.innerHTML = `<div class="empty"><div class="icon">📭</div><p>暂无匹配的女星</p></div>`;
                 return;
             }
+            grid.innerHTML = filtered.map(a => buildCardHTML(a)).join('');
+        }
 
-            grid.innerHTML = filtered.map(a => {
-                const chTag = a.channel && a.channel !== 'default' ?
-                    `<span class="channel-tag ${a.channel}">${CH_LABELS[a.channel] || a.channel}</span>` :
-                    '';
-                return `
-    <div class="card" onclick="openDetail('${esc(a.name)}')" title="点击查看档案">
-      <img class="card-img" src="${a.profile_image||''}" alt="${esc(a.name)}"
-           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22320%22><rect fill=%22%231c1c2e%22 width=%22300%22 height=%22320%22/><text fill=%22%23555570%22 x=%22150%22 y=%22160%22 text-anchor=%22middle%22 font-size=%2236%22>📷</text></svg>'">
-      ${chTag}
-      <div class="card-body">
-        <div class="card-name">${esc(a.name)}</div>
-        <div class="card-meta">
-          ${a.birthday ? `<span>🎂 ${a.birthday}</span>` : ''}
-          ${a.age ? `<span>🔢 ${a.age}岁</span>` : ''}
-          ${a.height_cm ? `<span>📏 ${a.height_cm}cm</span>` : ''}
-          ${a.birthplace ? `<span>📍 ${a.birthplace}</span>` : ''}
-        </div>
-        ${(a.bust_cm && a.waist_cm && a.hip_cm) ? `
-        <div class="card-meta">
-          <span>📐 B${a.bust_cm}/W${a.waist_cm}/H${a.hip_cm}${a.cup ? ' · '+a.cup+'cup' : ''}</span>
-        </div>` : ''}
-        <div class="card-meta">
-          <span class="card-badge">🖼 ${a.image_count||0}</span>
-          <span class="card-badge">🎬 ${a.works_count||0}</span>
-        </div>
-        ${a.summary ? `<div class="card-summary">${esc(a.summary)}</div>` : ''}
-      </div>
-    </div>`;
+        function renderGridInPlace(actresses) {
+            document.getElementById('grid').innerHTML = actresses.map(a => buildCardHTML(a)).join('');
+        }
+
+        function buildCardHTML(a) {
+            const chTag = a.channel && a.channel !== 'default' ?
+                `<span class="channel-tag ${a.channel}">${CH_LABELS[a.channel]||a.channel}</span>` : '';
+            const age = a.age != null ? a.age : (a.birthday ? calculateAge(a.birthday) : null);
+            const ageEval = evaluateAge(age);
+            const displayName = a.name_zh && a.name_zh !== a.name ? `${esc(a.name_zh)} (${esc(a.name)})` : esc(a.name);
+            let bwhHTML = '';
+            if (a.bust_cm && a.waist_cm && a.hip_cm) {
+                const bodyEval = evaluateBody(parseFloat(a.bust_cm), parseFloat(a.waist_cm), parseFloat(a.hip_cm));
+                const cupStr = a.cup ? ' · ' + esc(a.cup) + 'cup' : '';
+                if (bodyEval) {
+                    bwhHTML =
+                        `<div class="card-meta"><span class="bwh-row">📐 B${esc(String(a.bust_cm))}/W${esc(String(a.waist_cm))}/H${esc(String(a.hip_cm))}${cupStr} <span class="body-eval-tag ${bodyEval.gradeClass}">${bodyEval.label}</span></span></div>`;
+                } else {
+                    bwhHTML =
+                        `<div class="card-meta"><span>📐 B${esc(String(a.bust_cm))}/W${esc(String(a.waist_cm))}/H${esc(String(a.hip_cm))}${cupStr}</span></div>`;
+                }
+            } else if (a.bust_cm || a.waist_cm || a.hip_cm) {
+                const cupStr2 = a.cup ? ' · ' + esc(a.cup) + 'cup' : '';
+                bwhHTML =
+                    `<div class="card-meta"><span>📐 B${esc(String(a.bust_cm||'?'))}/W${esc(String(a.waist_cm||'?'))}/H${esc(String(a.hip_cm||'?'))}${cupStr2}</span></div>`;
+            }
+            let workTimeInfo = '';
+            if (a.first_work_date || a.last_work_date) {
+                const firstAgo = a.first_work_date ? timeAgo(a.first_work_date) : null;
+                const lastAgo = a.last_work_date ? timeAgo(a.last_work_date) : null;
+                workTimeInfo = `<div class="card-meta">${firstAgo?`<span>📅 ${firstAgo}</span>`:''}${lastAgo?`<span>🕒 ${lastAgo}</span>`:''}</div>`;
+            }
+            const ageTagHTML = age != null && ageEval ?
+                `<span class="age-eval-tag ${ageEval.tierClass}" style="color:${ageEval.color}">${ageEval.label}</span>` : '';
+            return `
+            <div class="card" onclick="openDetail('${esc(a.name)}')" title="点击查看档案">
+              <img class="card-img" src="${a.profile_image||''}" alt="${esc(a.name)}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22320%22><rect fill=%22%231c1c2e%22 width=%22300%22 height=%22320%22/><text fill=%22%23555570%22 x=%22150%22 y=%22160%22 text-anchor=%22middle%22 font-size=%2236%22>📷</text></svg>'" loading="lazy">
+              ${chTag}
+              <div class="card-body">
+                <div class="card-name">${displayName}</div>
+                <div class="card-meta">
+                  ${age!=null?`<span>🔢 ${age}岁 ${ageTagHTML}</span>`:''}
+                  ${a.birthplace?`<span>📍 ${a.birthplace}</span>`:''}
+                </div>
+                ${bwhHTML}
+                ${workTimeInfo}
+                <div class="card-meta">
+                  <span class="card-badge">🖼 ${a.image_count||0}</span>
+                  <span class="card-badge">🎬 ${a.works_count||0}</span>
+                </div>
+                ${a.summary?`<div class="card-summary">${esc(a.summary)}</div>`:''}
+              </div>
+            </div>`;
+        }
+
+        // ========== 作品分页核心逻辑 ==========
+        function renderWorksTable(films, page, pageSize) {
+            const start = (page - 1) * pageSize;
+            const end = Math.min(start + pageSize, films.length);
+            const pageFilms = films.slice(start, end);
+            return pageFilms.map((w, idx) => {
+                const zh = w.title_zh;
+                const hasZh = zh && zh !== w.title;
+                const seq = start + idx + 1;
+                return `<tr>
+                    <td style="color:var(--text-faint);width:40px;text-align:center;">${seq}</td>
+                    <td class="code">${esc(w.code||'')}</td>
+                    <td class="date">${w.date||w.year||'—'}</td>
+                    <td class="title-cell">
+                      <span class="translatable-work-title" data-original-title="${escAttr(w.title)}">
+                        ${hasZh ? `${esc(zh)} <span class="translate-badge">译</span><span class="title-original">${esc(w.title)}</span>` : esc(w.title)}
+                      </span>
+                    </td>
+                    <td class="tags">${(w.tags||[]).map(t=>`<span class="work-tag">${esc(t)}</span>`).join(' ')}</td>
+                  </tr>`;
             }).join('');
         }
 
-        // ====== Render Detail Dashboard ======
-        function renderDetail(data) {
+        function updateWorksPagination(films, page, pageSize) {
+            const total = films.length;
+            const totalPages = Math.ceil(total / pageSize) || 1;
+            const tabWorks = document.getElementById('tabWorks');
+            tabWorks.dataset.page = page;
+            tabWorks.dataset.pageSize = pageSize;
+            const tbody = tabWorks.querySelector('#worksTableBody');
+            if (tbody) tbody.innerHTML = renderWorksTable(films, page, pageSize);
+            const statsSpan = tabWorks.querySelector('.works-stats');
+            if (statsSpan) {
+                const start = (page - 1) * pageSize + 1;
+                const end = Math.min(page * pageSize, total);
+                statsSpan.textContent = `共 ${total} 部作品，显示第 ${start}-${end} 部`;
+            }
+            const prevBtn = tabWorks.querySelector('.page-prev');
+            const nextBtn = tabWorks.querySelector('.page-next');
+            const pageInfo = tabWorks.querySelector('.page-info');
+            if (prevBtn) prevBtn.disabled = (page <= 1);
+            if (nextBtn) nextBtn.disabled = (page >= totalPages);
+            if (pageInfo) pageInfo.textContent = `${page} / ${totalPages}`;
+            const viewAllBtn = tabWorks.querySelector('.view-all-btn');
+            if (viewAllBtn) {
+                if (pageSize >= total) {
+                    viewAllBtn.textContent = '分页模式';
+                    viewAllBtn.classList.add('active');
+                } else {
+                    viewAllBtn.textContent = '查看全部';
+                    viewAllBtn.classList.remove('active');
+                }
+            }
+            const select = tabWorks.querySelector('.page-size-select');
+            if (select) {
+                if (pageSize >= total) {
+                    select.value = 'all';
+                } else {
+                    select.value = String(pageSize);
+                }
+            }
+        }
+
+        function bindWorksPaginationEvents(films) {
+            const tabWorks = document.getElementById('tabWorks');
+            tabWorks.addEventListener('click', (e) => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                let page = parseInt(tabWorks.dataset.page) || 1;
+                let pageSize = parseInt(tabWorks.dataset.pageSize) || 100;
+                const total = films.length;
+                if (btn.classList.contains('page-prev')) {
+                    page = Math.max(1, page - 1);
+                } else if (btn.classList.contains('page-next')) {
+                    page = Math.min(Math.ceil(total / pageSize), page + 1);
+                } else if (btn.classList.contains('view-all-btn')) {
+                    if (pageSize >= total) {
+                        pageSize = 100;
+                        page = 1;
+                    } else {
+                        pageSize = total;
+                        page = 1;
+                    }
+                }
+                updateWorksPagination(films, page, pageSize);
+            });
+            tabWorks.addEventListener('change', (e) => {
+                if (e.target.classList.contains('page-size-select')) {
+                    const val = e.target.value;
+                    let pageSize;
+                    if (val === 'all') {
+                        pageSize = films.length;
+                    } else {
+                        pageSize = parseInt(val);
+                        if (isNaN(pageSize) || pageSize <= 0) pageSize = 100;
+                    }
+                    updateWorksPagination(films, 1, pageSize);
+                }
+            });
+        }
+
+        async function renderDetail(data) {
             currentActress = data;
             const baike = data.baike || {};
             const channel = data.channel || 'default';
-
-            // ── Modal Header ──
             const bannerImg = data.images?.[0]?.url || '';
             document.getElementById('modalBanner').src = bannerImg;
             const chTagHtml = channel !== 'default' ?
-                `<span class="ch-tag ${channel}">${CH_LABELS[channel] || channel}</span>` :
+                `<span class="ch-tag ${channel}">${CH_LABELS[channel]||channel}</span>` : '';
+            const ageVal = baike.age != null ? baike.age : (data.birthday ? calculateAge(data.birthday) : null);
+            const ageEvalModal = evaluateAge(ageVal);
+            const ageTagModal = ageVal != null && ageEvalModal ?
+                `<span class="modal-age-eval ${ageEvalModal.tierClass}" style="color:${ageEvalModal.color}">${ageEvalModal.label}</span>` :
                 '';
-            document.getElementById('modalName').innerHTML = `${esc(data.name)}${chTagHtml}`;
+            document.getElementById('modalName').innerHTML = `${esc(data.name_zh || data.name)}${chTagHtml}`;
             document.getElementById('modalMeta').innerHTML = [
                 data.birthday ? `🎂 ${data.birthday}` : '',
-                (data.birthday && baike.age) ? `🔢 ${baike.age}岁` : '',
-                data.birthplace ? `📍 ${data.birthplace}` : ''
+                ageVal != null ? `🔢 ${ageVal}岁${ageTagModal}` : '',
+                data.birthplace ? `📍 ${data.birthplace}` : '',
             ].filter(Boolean).join(' &nbsp;·&nbsp; ');
 
-            // ── Dashboard Tab ──
             const cm = parseHeight(baike.bodyHeight || '');
             const kg = parseWeight(baike.bodyWeight || '');
-            const bust = parseNumeric(baike.bust || '');
-            const waist = parseNumeric(baike.waist || '');
-            const hip = parseNumeric(baike.hip || '');
-            const cup = baike.cup || '';
-            const bustRaw = baike.bust || '';
-            const waistRaw = baike.waist || '';
-            const hipRaw = baike.hip || '';
-            const hEval = cm ? evaluateHeight(cm) : null;
-            const bmi = calcBMI(cm, kg);
-            const bEval = evaluateBMI(bmi);
-            const whr = (waist && hip && hip > 0) ? waist / hip : null;
-            const whrEval = evaluateWHR(whr);
-            const bustEval = evaluateBust(bust);
-            const bodyShape = (bust && waist && hip && whr !== null) ? determineBodyShape(bust, waist, hip, whr) :
-                null;
+            const bustRaw = baike.bust || '',
+                waistRaw = baike.waist || '',
+                hipRaw = baike.hip || '',
+                cup = baike.cup || '';
+            const bustNum = parseNumeric(bustRaw),
+                waistNum = parseNumeric(waistRaw),
+                hipNum = parseNumeric(hipRaw);
+            const bodyEvalDetail = (bustNum && waistNum && hipNum) ? evaluateBody(bustNum, waistNum, hipNum) : null;
 
-            // Identity fields
+            let html = `<div class="dashboard">`;
             const idFields = [
                 ['本名', baike.name_cn || data.name],
                 ['英文名', baike.name_en || ''],
                 ['国籍', baike.nationality || ''],
-                ['民族', baike.ethnicity || ''],
                 ['出生地', baike.birthplace || data.birthplace || ''],
                 ['生日', baike.birthday || data.birthday || ''],
-                ['年龄', baike.age ? `${baike.age}岁` : ''],
+                ['年龄', ageVal != null ? `${ageVal}岁` : ''],
                 ['职业', baike.occupation || ''],
-                ['毕业院校', baike.education || ''],
                 ['经纪公司', baike.agency || ''],
-                ['别名', baike.alternateName || baike.aliases || ''],
             ].filter(([, v]) => v);
-
-            const works = data.filmography || [];
-            const topWorks = works.slice(0, 10);
-            const achievements = baike.achievements || '';
-
-            let html = `<div class="dashboard">`;
-
-            // Section 1: Identity Card
             if (idFields.length) {
                 html += `<div class="identity-card">`;
-                idFields.forEach(([k, v]) => {
-                    html +=
-                        `<div class="id-item"><div class="id-label">${k}</div><div class="id-value">${esc(String(v))}</div></div>`;
-                });
+                idFields.forEach(([k, v]) => html +=
+                    `<div class="id-item"><div class="id-label">${k}</div><div class="id-value">${esc(String(v))}</div></div>`
+                    );
                 html += `</div>`;
             }
-
-            // Section 2: Body Metrics Dashboard
-            const hasHeight = cm !== null;
-            const hasWeight = kg !== null && kg > 0;
-            const hasBWH = bust !== null || waist !== null || hip !== null;
-
-            if (hasHeight || hasWeight || hasBWH) {
+            if (cm || kg || bustRaw || waistRaw || hipRaw) {
                 html += `<div class="body-dashboard">`;
-
-                // Height gauge
-                if (hasHeight) {
-                    const hPct = gaugePercent(cm, REF.height_avg, 180);
-                    html += `
-    <div class="gauge-card height anim-in">
-      <div class="gauge-title">📏 身高</div>
-      <div class="gauge-value-group">
-        <span class="gauge-number">${cm}</span>
-        <span class="gauge-unit">cm</span>
-        <span class="gauge-eval">${hEval?.label||''}</span>
-      </div>
-      <div class="gauge-bar-wrap">
-        <div class="gauge-ref avg" style="left:${(REF.height_avg/180*100)}%">
-          <div class="gauge-ref-label">avg</div>
-        </div>
-        <div class="gauge-bar-bg">
-          <div class="gauge-bar-fill" style="width:0%" data-width="${hPct}%"></div>
-        </div>
-      </div>
-      <div class="gauge-ref-info">
-        <span class="avg-line">中国女性平均 158cm</span>
-        <span>${cm > REF.height_avg ? `↑ +${(cm-REF.height_avg).toFixed(1)}cm` : cm < REF.height_avg ? `↓ ${(cm-REF.height_avg).toFixed(1)}cm` : '≈ 平均值'}</span>
-      </div>
-    </div>`;
+                if (cm) html +=
+                    `<div class="gauge-card height"><div class="gauge-title">📏 身高</div><div class="gauge-value-group"><span class="gauge-number">${cm}</span><span class="gauge-unit">cm</span></div></div>`;
+                if (kg) html +=
+                    `<div class="gauge-card weight"><div class="gauge-title">⚖️ 体重</div><div class="gauge-value-group"><span class="gauge-number">${kg}</span><span class="gauge-unit">kg</span></div></div>`;
+                const bwh = [bustRaw, waistRaw, hipRaw].filter(Boolean);
+                if (bwh.length) {
+                    html +=
+                        `<div class="gauge-card bwh"><div class="gauge-title">📐 三围${cup?' · '+esc(cup)+'cup':''}</div><div class="gauge-value-group"><span class="gauge-number">${bustRaw||'?'}/${waistRaw||'?'}/${hipRaw||'?'}</span><span class="gauge-unit">cm</span></div>`;
+                    if (bodyEvalDetail) {
+                        html +=
+                            `<div class="bwh-eval-row" style="color:${bodyEvalDetail.color}">🏆 ${bodyEvalDetail.label} <span style="font-size:0.7rem;font-weight:500;">(${bodyEvalDetail.grade}级 · 综合${bodyEvalDetail.totalScore}/10分)</span></div>`;
+                        html +=
+                            `<div class="bwh-eval-detail">腰臀比 ${bodyEvalDetail.whr} — ${bodyEvalDetail.whrDesc} | 胸腰差 ${bodyEvalDetail.bwd}cm — ${bodyEvalDetail.bwdDesc}</div>`;
+                    }
+                    html += `</div>`;
                 }
-
-                // Weight/BMI gauge — 无数据时隐藏
-                if (hasWeight) {
-                    const bmiPct = bmi ? Math.min((bmi / 30) * 100, 95) : 0;
-                    html += `
-    <div class="gauge-card weight anim-in">
-      <div class="gauge-title">⚖️ 体重</div>
-      <div class="gauge-value-group">
-        <span class="gauge-number">${kg}</span>
-        <span class="gauge-unit">kg</span>
-        <span class="gauge-eval">${bEval?.label||''}</span>
-      </div>
-      <div class="gauge-bar-wrap">
-        <div class="gauge-bar-bg">
-          <div class="gauge-bar-fill" style="width:0%" data-width="${bmiPct}%"></div>
-        </div>
-      </div>
-      <div class="gauge-ref-info">
-        <span class="bmi-line">BMI ${bmi ? bmi.toFixed(1) : '—'}（${bEval?.label||'—'}）</span>
-        <span>${bEval?.risk ? `⚠ ${bEval.risk}` : ''}</span>
-      </div>
-    </div>`;
-                }
-
-                // BWH measurements — 优化三围评价
-                if (hasBWH) {
-                    const bwhDisplay = `${bustRaw||'?'}/${waistRaw||'?'}/${hipRaw||'?'}`;
-                    const bwhPct = bust ? Math.min((bust / 110) * 100, 98) : (hip ? Math.min((hip / 110) * 100,
-                        98) : 50);
-                    html += `
-    <div class="gauge-card bwh anim-in">
-      <div class="gauge-title">📐 三围 (B/W/H)${cup ? ' · ' + cup + 'cup' : ''}</div>
-      <div class="gauge-value-group">
-        <span class="gauge-number">${bwhDisplay}</span>
-        <span class="gauge-unit">cm</span>
-        ${bustEval ? `<span class="gauge-eval">${bustEval.label}</span>` : ''}
-      </div>
-      <div class="gauge-bar-wrap">
-        <div class="gauge-bar-bg">
-          <div class="gauge-bar-fill" style="width:0%" data-width="${bwhPct}%"></div>
-        </div>
-      </div>
-      <div class="gauge-ref-info">
-        <span>
-          ${whrEval ? `<span class="bwh-eval-tag">WHR ${whr.toFixed(2)} · ${whrEval.label}</span>` : ''}
-          ${bodyShape ? `<span class="bwh-shape-tag">${bodyShape.icon} ${bodyShape.name}</span>` : ''}
-        </span>
-        <span>${bustEval ? `胸围 ${bustEval.label}` : ''}${whrEval ? ` · 腰身 ${whrEval.label}` : ''}</span>
-      </div>
-    </div>`;
-                }
-
                 html += `</div>`;
             }
-
-            // Section 3: Works highlights (代表作品)
+            const works = data.filmography || [];
+            const topWorks = works.slice(0, 10);
             if (topWorks.length) {
-                html +=
-                    `<div class="works-mini" id="worksMini"><h4>🎬 代表作品</h4><div class="wm-list" id="wmList">`;
-                topWorks.forEach((w, idx) => {
-                    const titleText = esc(w.title);
+                html += `<div class="works-mini"><h4>🎬 代表作品</h4><div class="wm-list">`;
+                topWorks.forEach(w => {
+                    const zh = w.title_zh && w.title_zh !== w.title ? w.title_zh : null;
                     html +=
-                        `<span class="wm-item translatable-work" data-original-title="${escAttr(w.title)}" data-work-index="${idx}" title="${escAttr(w.title)}">${titleText}${w.role ? ' · ' + esc(w.role) : ''}</span>`;
+                        `<span class="wm-item">${zh ? esc(zh)+'<span class="wm-original">'+esc(w.title)+'</span>' : esc(w.title)}</span>`;
                 });
                 html += `</div></div>`;
             }
-
-            // Section 4: Achievements highlight
-            if (achievements) {
-                const achList = achievements.split(/\s{2,}|  /).filter(Boolean).slice(0, 6);
-                html += `<div class="highlights-strip">`;
-                achList.forEach(a => {
-                    html += `<span class="hl-tag accent">🏆 ${esc(a)}</span>`;
-                });
-                html += `</div>`;
-            }
-
-            // Section 5: More info
-            const extras = [];
-            if (baike.blood_type) extras.push(`🩸 ${baike.blood_type}`);
-            if (baike.constellation) extras.push(`♑ ${baike.constellation}`);
-            if (baike.customDefault) extras.push(`🐾 ${baike.customDefault}`);
-
-            if (extras.length) {
-                html += `
-    <div>
-      <div class="more-toggle" onclick="toggleMore(this)" title="更多信息">
-        更多信息 <span class="arrow">▾</span>
-      </div>
-      <div class="more-content">
-        <div class="more-inner">
-          ${extras.map(e => `<span class="more-chip">${e}</span>`).join('')}
-        </div>
-      </div>
-    </div>`;
-            }
-
-            if (data.tmdb_url) {
-                html += `<p style="font-size:0.76rem;margin-top:4px">
-      🔗 <a href="${data.tmdb_url}" target="_blank" style="color:var(--accent)">在 TMDB 查看完整档案</a>
-    </p>`;
-            }
-
             html += `</div>`;
             document.getElementById('tabDashboard').innerHTML = html;
 
-            requestAnimationFrame(() => {
-                document.querySelectorAll('.gauge-bar-fill[data-width]').forEach(bar => {
-                    bar.style.width = bar.dataset.width;
-                });
-                setTimeout(() => {
-                    document.querySelectorAll('.anim-in').forEach(el => el.classList.add(
-                        'visible'));
-                }, 50);
-            });
-
-            // 异步翻译代表作品标题
-            if (topWorks.length && TRANSLATION_CONFIG.enabled) {
-                const workTitles = topWorks.map(w => w.title).filter(t => t && t.trim());
-                if (workTitles.length) {
-                    scheduleTranslation(workTitles, (resultMap) => {
-                        updateWorksMiniTranslations(resultMap);
-                    });
-                }
-            }
-
-            // ── Gallery Tab ──
             if (data.images?.length) {
-                document.getElementById('tabGallery').innerHTML = `
-      <div class="gallery-tab"><div class="gallery">
-        ${data.images.slice(0,60).map(img => `
-          <img src="${img.url}" alt="${esc(img.filename)}"
-               onclick="openLightbox('${img.url}')"
-               onerror="this.style.display='none'" loading="lazy">
-        `).join('')}
-      </div></div>`;
+                document.getElementById('tabGallery').innerHTML =
+                    `<div class="gallery-tab"><div class="gallery">${data.images.slice(0,60).map(img=>`<img src="${img.url}" alt="${esc(img.filename)}" onclick="openLightbox('${img.url}')" onerror="this.style.display='none'" loading="lazy">`).join('')}</div></div>`;
             } else {
                 document.getElementById('tabGallery').innerHTML =
                     '<div class="gallery-tab"><p class="empty">暂无图片</p></div>';
             }
 
-            // ── Works Tab (全部作品标题，支持翻译) ──
-            if (works.length) {
-                const displayWorks = works.slice(0, 100);
-                document.getElementById('tabWorks').innerHTML = `
-      <div class="works-tab">
-        <p style="margin-bottom:14px;color:var(--text-dim);font-size:0.8rem">
-          共 ${data.filmography_total} 部作品，显示前 ${displayWorks.length} 部
-          ${TRANSLATION_CONFIG.enabled ? '<span style="color:var(--mint);margin-left:8px">🌐 标题实时翻译中…</span>' : ''}
-        </p>
-        <table class="film-table">
-          <thead><tr><th>番号</th><th>日期</th><th>作品</th><th>标签</th></tr></thead>
-          <tbody id="worksTableBody">
-            ${displayWorks.map((w, idx) => `
-              <tr>
-                <td class="code">${esc(w.code||'')}</td>
-                <td class="date">${w.date||w.year||'—'}</td>
-                <td class="title-cell">
-                  <span class="translatable-work-title" data-original-title="${escAttr(w.title)}" data-work-idx="${idx}">${esc(w.title)}</span>
-                  ${w.url ? `<a href="${w.url}" target="_blank" style="font-size:0.7rem;margin-left:6px;">🔗</a>` : ''}
-                </td>
-                <td class="tags">${(w.tags||[]).map(t => `<span class="work-tag">${esc(t)}</span>`).join(' ')}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>`;
+            // 作品分页构建 - 修复数量显示
+            const totalWorksInDB = data.filmography_total || works.length;
+            const displayedCount = works.length;
+            const isTruncated = displayedCount < totalWorksInDB;
 
-                // 异步翻译全部作品标题
-                if (TRANSLATION_CONFIG.enabled && displayWorks.length) {
-                    const allWorkTitles = displayWorks.map(w => w.title).filter(t => t && t.trim());
-                    if (allWorkTitles.length) {
-                        scheduleTranslation(allWorkTitles, (resultMap) => {
-                            updateWorksTabTranslations(resultMap);
-                        });
-                    }
-                }
+            if (displayedCount) {
+                const defaultPageSize = 100;
+                document.getElementById('tabWorks').innerHTML = `
+                <div class="works-tab">
+                  <div class="works-tab-header">
+                    <span>
+                      <span class="works-stats" style="color:var(--text-dim);font-size:0.8rem;"></span>
+                      ${isTruncated ? `<span class="works-stats-warning" style="color:var(--orange);font-size:0.7rem;margin-left:6px;">⚠️ 后端仅返回前${displayedCount}部 (共${totalWorksInDB}部)</span>` : ''}
+                    </span>
+                    <div class="pagination-bar">
+                      <button class="page-btn page-prev">◀ 上一页</button>
+                      <span class="page-info" style="font-size:0.8rem;color:var(--text-dim);min-width:50px;text-align:center;"></span>
+                      <button class="page-btn page-next">下一页 ▶</button>
+                      <button class="page-btn view-all-btn">查看全部</button>
+                      <select class="page-size-select">
+                        <option value="50">50条/页</option>
+                        <option value="100" selected>100条/页</option>
+                        <option value="200">200条/页</option>
+                        <option value="all">全部显示</option>
+                      </select>
+                    </div>
+                  </div>
+                  <table class="film-table">
+                    <thead><tr><th style="width:40px;">#</th><th>番号</th><th>日期</th><th>作品</th><th>标签</th></tr></thead>
+                    <tbody id="worksTableBody"></tbody>
+                  </table>
+                </div>`;
+                const tabWorks = document.getElementById('tabWorks');
+                tabWorks.dataset.page = 1;
+                tabWorks.dataset.pageSize = defaultPageSize;
+                updateWorksPagination(works, 1, defaultPageSize);
+                bindWorksPaginationEvents(works);
+                const untranslated = works.filter(w => !w.title_zh && !isPrimarilyChinese(w.title)).map(w => w.title);
+                if (untranslated.length) autoTranslateWorks(untranslated);
             } else {
                 document.getElementById('tabWorks').innerHTML =
-                '<div class="works-tab"><p class="empty">暂无作品数据</p></div>';
+                    '<div class="works-tab"><p class="empty">暂无作品数据</p></div>';
             }
 
-            // ── Bio Tab ──
             let bioText = data.biography || '';
             if (data.wiki_zh) bioText += '\n\n── Wikipedia 中文 ──\n' + data.wiki_zh;
             if (data.wiki_en) bioText += '\n\n── Wikipedia English ──\n' + data.wiki_en;
@@ -1708,66 +1661,55 @@
                 '<div class="bio-tab"><p class="empty">暂无简介</p></div>';
         }
 
-        /**
-         * 更新代表作品(works-mini)的翻译
-         */
-        function updateWorksMiniTranslations(resultMap) {
-            const wmItems = document.querySelectorAll('#wmList .wm-item.translatable-work');
-            wmItems.forEach(item => {
-                const originalTitle = item.getAttribute('data-original-title');
-                if (!originalTitle) return;
-                const translated = resultMap.get(originalTitle);
-                if (translated && translated !== originalTitle) {
-                    // 更新显示：翻译后标题 + 原文小字
-                    const rolePart = item.textContent.includes('·') ?
-                        ' · ' + item.textContent.split('·').pop().trim() : '';
-                    item.innerHTML =
-                        `${esc(translated)}${rolePart}<span class="wm-original">${esc(originalTitle)}</span>`;
-                    item.classList.add('translated');
-                    item.title = originalTitle;
-                }
-            });
+        async function autoTranslateWorks(titles) {
+            if (!titles.length) return;
+            try {
+                const resp = await fetch('/womenpic/api/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ texts: titles }),
+                });
+                const data = await resp.json();
+                const translations = data.translations || [];
+                const rows = document.querySelectorAll('#worksTableBody tr');
+                rows.forEach(row => {
+                    const span = row.querySelector('.translatable-work-title');
+                    if (!span) return;
+                    const orig = span.getAttribute('data-original-title');
+                    const idx = titles.indexOf(orig);
+                    if (idx !== -1 && translations[idx] && translations[idx] !== orig) {
+                        span.innerHTML =
+                            `${esc(translations[idx])} <span class="translate-badge">译</span><span class="title-original">${esc(orig)}</span>`;
+                    }
+                });
+            } catch (e) { console.warn('自动翻译失败:', e); }
         }
 
-        /**
-         * 更新全部作品表格的翻译
-         */
-        function updateWorksTabTranslations(resultMap) {
-            const titleSpans = document.querySelectorAll('#worksTableBody .translatable-work-title');
-            titleSpans.forEach(span => {
-                const originalTitle = span.getAttribute('data-original-title');
-                if (!originalTitle) return;
-                const translated = resultMap.get(originalTitle);
-                if (translated && translated !== originalTitle) {
-                    span.innerHTML =
-                        `${esc(translated)} <span class="translate-badge">译</span><span class="title-original">${esc(originalTitle)}</span>`;
-                    span.title = originalTitle;
-                }
-            });
-            // 更新提示文字
-            const infoP = document.querySelector('#tabWorks .works-tab p');
-            if (infoP && infoP.textContent.includes('翻译中')) {
-                infoP.innerHTML = infoP.innerHTML.replace('🌐 标题实时翻译中…',
-                    '<span style="color:var(--mint)">🌐 翻译完成</span>');
+        async function onGlobalTranslate() {
+            const btn = document.getElementById('globalTranslateBtn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = '⏳ 翻译中…';
+            try {
+                await fetch('/womenpic/api/translate/all', { method: 'POST' });
+                btn.textContent = '✅ 完成';
+            } catch (e) {
+                btn.textContent = '❌ 失败';
+            } finally {
+                setTimeout(() => { btn.disabled = false;
+                    btn.textContent = '🌐 全文翻译'; }, 2000);
             }
         }
 
-        // ====== Modal ======
         async function openDetail(name) {
             const overlay = document.getElementById('modalOverlay');
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             overlay.scrollTop = 0;
-
             document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === 0));
-            document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i ===
-                0));
-
-            ['tabDashboard', 'tabGallery', 'tabWorks', 'tabBio'].forEach(id => {
-                document.getElementById(id).innerHTML =
-                    '<div class="loading"><div class="spinner"></div></div>';
-            });
-
+            document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i === 0));
+            ['tabDashboard', 'tabGallery', 'tabWorks', 'tabBio'].forEach(id => document.getElementById(id).innerHTML =
+                '<div class="loading"><div class="spinner"></div></div>');
             try {
                 const data = await loadActressDetail(name);
                 renderDetail(data);
@@ -1777,100 +1719,38 @@
             }
         }
 
-        function closeModal() {
-            document.getElementById('modalOverlay').classList.remove('active');
+        function closeModal() { document.getElementById('modalOverlay').classList.remove('active');
             document.body.style.overflow = '';
-            currentActress = null;
-        }
+            currentActress = null; }
 
         function switchTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
-            const idMap = { dashboard: 'tabDashboard', gallery: 'tabGallery', works: 'tabWorks', bio: 'tabBio' };
-            const el = document.getElementById(idMap[name]);
-            if (el) el.classList.add('active');
-        }
-
-        function toggleMore(btn) {
-            btn.classList.toggle('open');
-            btn.nextElementSibling.classList.toggle('open');
+            const tabEl = document.querySelector(`[data-tab="${name}"]`);
+            if (tabEl) { tabEl.classList.add('active');
+                tabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
+            const contentId = { dashboard: 'tabDashboard', gallery: 'tabGallery', works: 'tabWorks',
+                bio: 'tabBio' }[name];
+            if (contentId) document.getElementById(contentId)?.classList.add('active');
         }
 
         function openLightbox(url) {
             document.getElementById('lightboxImg').src = url;
             document.getElementById('lightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
         }
 
-        // ====== Search ======
         function onSearch() {
             const q = document.getElementById('searchInput').value.trim();
             if (!q) { renderGrid(allActresses);
                 updateStats(); return; }
-            const filtered = getFilteredActresses().filter(a =>
-                a.name.toLowerCase().includes(q.toLowerCase()) ||
-                (a.birthplace || '').includes(q) ||
-                (a.summary || '').includes(q)
-            );
-            const grid = document.getElementById('grid');
-            if (!filtered.length) {
-                grid.innerHTML = '<div class="empty"><div class="icon">📭</div><p>没有匹配的女星</p></div>';
-                return;
-            }
-            renderGridInPlace(filtered);
-        }
-
-        function renderGridInPlace(actresses) {
-            const grid = document.getElementById('grid');
-            grid.innerHTML = actresses.map(a => {
-                const chTag = a.channel && a.channel !== 'default' ?
-                    `<span class="channel-tag ${a.channel}">${CH_LABELS[a.channel] || a.channel}</span>` :
-                    '';
-                return `
-    <div class="card" onclick="openDetail('${esc(a.name)}')">
-      <img class="card-img" src="${a.profile_image||''}" alt="${esc(a.name)}"
-           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22320%22><rect fill=%22%231c1c2e%22 width=%22300%22 height=%22320%22/><text fill=%22%23555570%22 x=%22150%22 y=%22160%22 text-anchor=%22middle%22 font-size=%2236%22>📷</text></svg>'">
-      ${chTag}
-      <div class="card-body">
-        <div class="card-name">${esc(a.name)}</div>
-        <div class="card-meta">
-          ${a.birthday ? `<span>🎂 ${a.birthday}</span>` : ''}
-          ${a.age ? `<span>🔢 ${a.age}岁</span>` : ''}
-          ${a.height_cm ? `<span>📏 ${a.height_cm}cm</span>` : ''}
-          ${a.birthplace ? `<span>📍 ${a.birthplace}</span>` : ''}
-        </div>
-        ${(a.bust_cm && a.waist_cm && a.hip_cm) ? `
-        <div class="card-meta">
-          <span>📐 B${a.bust_cm}/W${a.waist_cm}/H${a.hip_cm}${a.cup ? ' · '+a.cup+'cup' : ''}</span>
-        </div>` : ''}
-        <div class="card-meta">
-          <span class="card-badge">🖼 ${a.image_count||0}</span>
-          <span class="card-badge">🎬 ${a.works_count||0}</span>
-        </div>
-        ${a.summary ? `<div class="card-summary">${esc(a.summary)}</div>` : ''}
-      </div>
-    </div>`;
-            }).join('');
-        }
-
-        // ====== Utils ======
-        function esc(s) {
-            if (!s) return '';
-            const d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-        }
-
-        function escAttr(s) {
-            if (!s) return '';
-            return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/'/g, '&#39;');
-        }
-
-        function debounce(fn, ms) {
-            let t;
-            return (...args) => { clearTimeout(t);
-                t = setTimeout(() => fn(...args), ms); };
+            fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}&channel=${currentChannel}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.count) { document.getElementById('grid').innerHTML =
+                            '<div class="empty"><div class="icon">📭</div><p>没有匹配的女星</p></div>'; return; }
+                    renderGridInPlace(d.data);
+                });
         }
     </script>
 </body>
