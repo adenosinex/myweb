@@ -397,49 +397,49 @@ def get_pages_list():
     if not os.path.exists(PAGES_DIR):
         return jsonify([])
 
-    items = []  # 存放 (显示路径, 对应文件绝对路径) 用于排序
+    items = []
 
-    # 递归遍历 pages 目录
     for root, dirs, files in os.walk(PAGES_DIR):
         rel_dir = os.path.relpath(root, PAGES_DIR)
         if rel_dir == '.':
             rel_dir = ''
 
-        # 判断当前目录是否包含 index.html
-        has_index = 'index.html' in files
+        # 如果当前目录有 index.html，并且不是根目录，则先添加目录入口
+        if 'index.html' in files and rel_dir:
+            dir_name = os.path.basename(rel_dir)
+            if '-' not in dir_name:
+                index_file = os.path.join(root, 'index.html')
+                items.append((rel_dir, index_file))
 
-        if has_index:
-            # 目录入口：仅当不是根目录（根目录的 index.html 是主页面，不加入列表）
-            if rel_dir:
-                # 检查目录名是否含有 '-'
-                dir_name = os.path.basename(rel_dir)
-                if '-' not in dir_name:
-                    index_file = os.path.join(root, 'index.html')
-                    items.append((rel_dir, index_file))
-        else:
-            # 没有 index.html 的目录：列出普通 .html 文件
-            for f in files:
-                if f.endswith('.html') and f != 'index.html':
-                    # 保留原有规则：文件名包含 '-' 的不展示
-                    file_base = f[:-5]  # 去掉 .html
-                    if '-' in file_base:
-                        continue
+        # 同时遍历当前目录下的普通 .html 文件（排除 index.html）
+        for f in files:
+            if f.endswith('.html') and f != 'index.html':
+                file_base = f[:-5]  # 去掉 .html
+                if '-' in file_base:
+                    continue
 
-                    # 构建相对路径（不带 .html）
-                    if rel_dir:
-                        page_path = os.path.join(rel_dir, file_base).replace(os.sep, '/')
-                    else:
-                        page_path = file_base
+                if rel_dir:
+                    page_path = os.path.join(rel_dir, file_base).replace(os.sep, '/')
+                else:
+                    page_path = file_base
 
-                    full_path = os.path.join(root, f)
-                    items.append((page_path, full_path))
+                full_path = os.path.join(root, f)
+                items.append((page_path, full_path))
 
-    # 按文件修改时间降序排序（最新修改的排前面）
+    # 简单去重，避免目录入口和同名文件路径冲突
+    seen = set()
+    unique_items = []
+    for path, full_path in items:
+        if path not in seen:
+            seen.add(path)
+            unique_items.append((path, full_path))
+    items = unique_items
+
+    # 按文件修改时间降序排序
     items.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
 
-    # 返回路径列表
-    result = [item[0] for item in items]
-    return jsonify(result)
+    return jsonify([item[0] for item in items])
+
 # ================= 修改 3：serve_html_with_icon =================
 def serve_html_with_icon(filename):
     if not filename or not isinstance(filename, str):

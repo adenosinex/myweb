@@ -53,7 +53,7 @@ html, body {
 .brand .logo { color: var(--accent); font-size: 22px; }
 .brand h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .brand-sub { color: var(--muted); font-weight: 500; }
-.actions { display: flex; gap: 8px; align-items: center; }
+.actions { display: flex; gap: 8px; }
 
 /* ---------- 按钮 ---------- */
 .btn {
@@ -423,24 +423,8 @@ tbody tr:hover { background: var(--row-hover); }
 (function () {
     "use strict";
 
-    // 从 URL 查询参数获取模型 ID（首页链接格式：detail.html?id=...）
-    var MODEL_ID = new URLSearchParams(window.location.search).get('id') || '';
-    console.log('[Detail] 页面 URL:', window.location.href);
-    console.log('[Detail] 提取到的 MODEL_ID:', MODEL_ID);
-
-    // 使用固定的 openrouter 路径前缀，与后端部署保持一致
-    var BASE = window.BASE_PATH || "/openrouter/";
-    console.log('[Detail] BASE:', BASE);
-
-    // 路径拼接辅助函数：确保 BASE 与子路径之间只有一个斜杠
-    function api(path) {
-        var base = BASE.replace(/\/+$/, '');
-        var p = path.replace(/^\/+/, '');
-        var result = base + '/' + p;
-        console.log('[Detail] api() 拼接:', path, '=>', result);
-        return result;
-    }
-
+    var MODEL_ID = new URLSearchParams(window.location.search).get("model") || "";
+    var BASE = window.BASE_PATH || "/openrouter/"; // 蓝图 URL 前缀，形如 "/openrouter/"
     var state = {
         data: null,
         currencyMode: "both", // usd | cny | both
@@ -724,7 +708,6 @@ tbody tr:hover { background: var(--row-hover); }
 
     /* ---------- 加载 ---------- */
     function showNotFound() {
-        console.warn('[Detail] 模型未找到，MODEL_ID =', MODEL_ID);
         els.loading.classList.add("hidden");
         els.error.classList.remove("hidden");
         els.error.textContent = "Model not found";
@@ -736,36 +719,17 @@ tbody tr:hover { background: var(--row-hover); }
     }
 
     function load() {
-        console.log('[Detail] load() 开始执行');
-        if (!MODEL_ID) {
-            console.warn('[Detail] MODEL_ID 为空，无法请求');
-            showNotFound();
-            return;
-        }
-
-        var url = api('api/models/' + encodeURIComponent(MODEL_ID));
-        console.log('[Detail] 最终请求 URL:', url);
-
-        fetch(url).then(function (r) {
-            console.log('[Detail] 响应状态码:', r.status);
-            if (r.status === 404) {
-                showNotFound();
-                throw new Error("__404__");
-            }
+        fetch(BASE + "api/models/" + MODEL_ID).then(function (r) {
+            if (r.status === 404) { showNotFound(); throw new Error("__404__"); }
             return r.json();
         }).then(function (data) {
-            console.log('[Detail] 成功获取数据:', data);
-            if (!data || data.error) {
-                showNotFound();
-                return;
-            }
+            if (!data || data.error) { showNotFound(); return; }
             state.data = data;
             els.loading.classList.add("hidden");
             els.content.classList.remove("hidden");
             render();
         }).catch(function (err) {
             if (err && err.message === "__404__") return;
-            console.error('[Detail] 加载失败:', err);
             els.loading.classList.add("hidden");
             els.error.classList.remove("hidden");
             els.error.textContent = "加载失败：" + (err && err.message ? err.message : "无法连接本地服务");

@@ -22,17 +22,18 @@ import time
 from datetime import datetime, timezone
 
 import requests
-from flask import Blueprint, Flask, jsonify, request, send_from_directory
+from flask import Blueprint, Flask, jsonify, redirect, request, send_from_directory, url_for
+from urllib.parse import quote
 
 # ---------------------------------------------------------------------------
 # 常量与路径
 # ---------------------------------------------------------------------------
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # 后端数据目录（配置 + 缓存统一存放；相对项目根为 db/openrouter）
-openrouter_DIR = os.path.join(_BASE_DIR, "db", "openrouter")
+openrouter_DIR =  "db/openrouter"
 # 前端静态目录（纯静态 HTML，无 Jinja）
 STATIC_DIR = os.path.join(_BASE_DIR, "static")
- 
+
 MODELS_FILE = os.path.join(openrouter_DIR, "models.json")
 SETTINGS_FILE = os.path.join(openrouter_DIR, "config.json")
 CACHE_FILE = os.path.join(openrouter_DIR, "cache.json")
@@ -574,10 +575,16 @@ def settings():
     return send_from_directory(STATIC_DIR, "settings.html")
 
 
+@openrouter_bp.route("/detail")
+def detail():
+    """详情页：固定路径，model_id 通过 query 参数 ?model=<id> 传入。"""
+    return send_from_directory(STATIC_DIR, "detail.html")
+
+
 @openrouter_bp.route("/model/<path:model_id>")
 def model_detail(model_id):
-    # model_id 仅用于匹配 URL；前端从 window.location.pathname 自行解析
-    return send_from_directory(STATIC_DIR, "detail.html")
+    # 兼容旧长路由：重定向到 query 参数形式
+    return redirect(url_for("openrouter.detail") + "?model=" + quote(model_id, safe=""))
 
 
 # ---------------------------------------------------------------------------

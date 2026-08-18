@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>个人知识笔记系统</title>
     
     <script src="/static/cdn/vue3.5.global.prod.js"></script>
@@ -21,29 +21,30 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
         
-        /* 侧边栏搜索高亮 (DOM 级别) */
         .highlight-mark { background-color: #fef08a; color: #b91c1c; border-radius: 2px; padding: 0 2px; }
-        
-        /* 正文搜索无损高亮 (CSS Highlight API 级别) */
         ::highlight(search-results) { background-color: #fef08a; color: #b91c1c; font-weight: bold; }
         
-        /* Vditor 现代化样式覆盖 */
         .vditor { border: none !important; }
         .vditor-toolbar { border-bottom: 1px solid #f1f5f9 !important; background-color: #f8fafc !important; padding-left: 20px !important;}
-        /* 兼容 ir 模式与 wysiwyg 模式的内边距 */
         .vditor-ir, .vditor-wysiwyg { padding: 20px 40px !important; }
         .vditor-outline { border-right: 1px solid #f1f5f9; background: #fafafa; }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .vditor-ir, .vditor-wysiwyg { padding: 12px 16px !important; }
+            .vditor-toolbar { padding-left: 8px !important; }
+        }
     </style>
 </head>
 <body>
     <div id="app" class="h-full flex flex-col">
         <header v-show="!isFocusMode" class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10 shadow-sm transition-all">
             <div class="font-bold text-slate-700 flex items-center gap-3">
-                <span class="text-lg">📚 知识笔记</span>
+                <span class="text-lg hidden sm:block">📚 知识笔记</span>
                 <el-button size="small" type="primary" plain @click="rebuildIndex" :loading="syncing">同步索引</el-button>
             </div>
-            <div class="w-1/3 max-w-md">
-                <el-input v-model="searchQuery" placeholder="全局搜索(支持汉字)..." clearable @keyup.enter="forceSearch">
+            <div class="w-1/3 max-w-md sm:max-w-xs">
+                <el-input v-model="searchQuery" placeholder="搜索..." clearable @keyup.enter="forceSearch">
                     <template #prefix>
                         <el-icon><search></search></el-icon>
                     </template>
@@ -53,12 +54,15 @@
                 </el-input>
             </div>
             <div class="flex items-center gap-2">
-                <el-switch v-model="autoAiTags" active-text="静默 AI 补全" size="small"></el-switch>
+                <el-switch v-model="autoAiTags" active-text="静默 AI 补全" size="small" class="hidden sm:flex"></el-switch>
             </div>
         </header>
 
         <div class="flex-1 flex overflow-hidden">
-            <aside v-show="!isFocusMode" class="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all">
+            <!-- 左侧文档列表（移动端作为独立视图） -->
+            <aside v-show="!isFocusMode && (!isMobile || mobileView === 'list')"
+                   class="bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all w-64 sm:w-64 md:w-64"
+                   :class="{ 'w-full h-full': isMobile }">
                 <div class="p-3 border-b border-slate-200 bg-white">
                     <el-button class="w-full" type="primary" @click="createNew">
                         <el-icon class="mr-1"><edit-pen></edit-pen></el-icon> 快速记录
@@ -95,19 +99,25 @@
                 </div>
             </aside>
 
-            <main class="flex-1 flex flex-col bg-white relative shadow-[inset_0_0_20px_rgba(0,0,0,0.02)]">
+            <!-- 主编辑区（移动端作为独立视图） -->
+            <main v-show="!isMobile || mobileView === 'editor'"
+                  class="flex-1 flex flex-col bg-white relative shadow-[inset_0_0_20px_rgba(0,0,0,0.02)]">
                 <div v-show="!activeDocId && !isCreating" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50/50">
                     <div class="text-4xl mb-6 opacity-80">🌱 知识图谱轨迹</div>
-                    <div id="timeline-chart" style="width: 800px; height: 250px;"></div>
+                    <div id="timeline-chart" style="width: 100%; max-width: 800px; height: 250px;"></div>
                 </div>
 
                 <div v-show="activeDocId || isCreating" class="flex flex-col h-full w-full">
                     <div class="h-12 border-b border-slate-100 flex items-center justify-between px-4 bg-slate-50/50 shrink-0">
                         <div class="flex items-center gap-2">
+                            <!-- 移动端返回按钮 -->
+                            <el-button v-if="isMobile" size="small" circle plain @click="mobileView = 'list'">
+                                <el-icon><arrow-left></arrow-left></el-icon>
+                            </el-button>
                             <el-button size="small" circle plain @click="isFocusMode = !isFocusMode" :title="isFocusMode ? '退出沉浸' : '沉浸模式'">
                                 <el-icon><full-screen></full-screen></el-icon>
                             </el-button>
-                            <el-input v-model="docIdInput" :placeholder="isCreating ? '输入标识符(作为物理文件名)' : '文档ID(不可改)'" size="small" class="w-56" :disabled="!isCreating">
+                            <el-input v-model="docIdInput" :placeholder="isCreating ? '输入标识符(作为物理文件名)' : '文档ID(不可改)'" size="small" class="w-40 sm:w-56" :disabled="!isCreating">
                                 <template #prepend>ID</template>
                             </el-input>
                         </div>
@@ -122,7 +132,9 @@
                 </div>
             </main>
 
-            <aside v-show="(activeDocId || isCreating) && !isFocusMode" class="w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 transition-all">
+            <!-- 右侧信息面板（移动端隐藏） -->
+            <aside v-show="(activeDocId || isCreating) && !isFocusMode && !isMobile"
+                   class="w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 transition-all">
                 
                 <div class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex gap-2" v-if="activeDocId">
                     <el-button size="small" class="flex-1" :type="activeDocMeta.is_pinned ? 'warning' : 'default'" @click="toggleAction('toggle_pin')">
@@ -145,8 +157,32 @@
                         <div class="flex justify-between border-b border-slate-50 pb-2">
                             <span class="text-slate-400">创建时间</span><span :title="fullCreatedTime">{{ createdTimeAgo }}</span>
                         </div>
-                        <div class="flex justify-between">
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
                             <span class="text-slate-400">最后更新</span><span :title="fullUpdateTime">{{ updatedTimeAgo }}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">字数</span>
+                            <span>{{ charCount }} <span class="text-slate-400 text-xs">字</span></span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">总字符</span>
+                            <span>{{ totalChars }}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">行数</span>
+                            <span>{{ lineCount }} <span class="text-slate-400 text-xs">行</span></span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">换行符</span>
+                            <span>{{ newlineCount }} <span class="text-slate-400 text-xs">个</span></span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-50 pb-2">
+                            <span class="text-slate-400">段落数</span>
+                            <span>{{ paragraphCount }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">预计阅读</span>
+                            <span>{{ readTime }} <span class="text-slate-400 text-xs">分钟</span></span>
                         </div>
                     </div>
                 </div>
@@ -210,6 +246,18 @@
                 const autoAiTags = ref(localStorage.getItem('autoAiTags') === 'true');
                 watch(autoAiTags, (val) => localStorage.setItem('autoAiTags', val));
 
+                // 移动端响应式状态
+                const isMobile = ref(window.innerWidth <= 768);
+                const mobileView = ref('list'); // 'list' 或 'editor'
+                const updateIsMobile = () => {
+                    isMobile.value = window.innerWidth <= 768;
+                    if (!isMobile.value) {
+                        mobileView.value = 'list'; // 桌面端默认显示列表，不影响桌面布局
+                    }
+                };
+                window.addEventListener('resize', updateIsMobile);
+                onMounted(() => updateIsMobile());
+
                 let vditorInstance = null;
                 let isVditorReady = false;
                 let echartsInstance = null;
@@ -221,6 +269,15 @@
                         return `[提取] ${doc.tags_cache.replace(/,/g, ' | ')}`;
                     }
                     return title || doc.id || '未命名笔记';
+                };
+
+                const parseTitleFromContent = (content) => {
+                    const match = content.match(/^---\n([\s\S]*?)\n---/);
+                    if (match) {
+                        const titleLine = match[1].match(/^title:\s*(.+)$/m);
+                        if (titleLine) return titleLine[1].trim();
+                    }
+                    return '';
                 };
 
                 const escapeRegExp = (str) => str ? str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
@@ -266,7 +323,6 @@
                     }
                 };
 
-                // --- 搜索核心逻辑 ---
                 let searchTimer = null;
                 const executeSearch = async () => {
                     applyEditorHighlight();
@@ -297,21 +353,18 @@
                     }
                 };
 
-                // 供 v-model 监听调用的防抖函数（打字时触发）
                 const debouncedSearch = () => {
                     clearTimeout(searchTimer);
                     searchTimer = setTimeout(() => {
                         executeSearch();
-                    }, 400); // 增加到 400ms 避免频繁请求
+                    }, 400);
                 };
 
-                // 供点击按钮/回车键直接调用的函数
                 const forceSearch = () => {
                     clearTimeout(searchTimer);
                     executeSearch();
                 };
 
-                // 监听中文输入，只有当拼音结束，实际汉字落入变量时才会触发 watch
                 watch(searchQuery, () => {
                     debouncedSearch();
                 });
@@ -326,9 +379,31 @@
                 const fullCreatedTime = computed(() => activeDocMeta.value.created_time ? new Date(activeDocMeta.value.created_time * 1000).toLocaleString() : '');
                 const fullUpdateTime = computed(() => activeDocMeta.value.update_time ? new Date(activeDocMeta.value.update_time * 1000).toLocaleString() : '');
 
+                const contentWithoutFrontMatter = computed(() => {
+                    const content = editorContent.value || '';
+                    const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
+                    return match ? content.slice(match[0].length) : content;
+                });
+
+                const charCount = computed(() => contentWithoutFrontMatter.value.replace(/\s/g, '').length);
+                const totalChars = computed(() => contentWithoutFrontMatter.value.length);
+                const lineCount = computed(() => contentWithoutFrontMatter.value.split('\n').length);
+                const newlineCount = computed(() => lineCount.value - 1);
+                const paragraphCount = computed(() => contentWithoutFrontMatter.value.split(/\n\s*\n/).filter(p => p.trim().length > 0).length);
+                const readTime = computed(() => Math.max(1, Math.ceil(charCount.value / 500)));
+
                 const fetchDocuments = async () => {
                     const res = await fetch('/docapi/documents');
                     documents.value = (await res.json()).docs || [];
+                    if (activeDocId.value) {
+                        const frontTitle = parseTitleFromContent(editorContent.value);
+                        if (frontTitle) {
+                            const doc = documents.value.find(d => d.id === activeDocId.value);
+                            if (doc && doc.title !== frontTitle) {
+                                doc.title = frontTitle;
+                            }
+                        }
+                    }
                 };
 
                 const fetchRelated = async (id) => {
@@ -355,17 +430,20 @@
 
                const initOrUpdateVditor = (content) => {
                     if (vditorInstance && isVditorReady) {
-                        // 已经初始化且就绪，直接安全设值
                         vditorInstance.setValue(content);
                         setTimeout(applyEditorHighlight, 100);
                     } else if (!vditorInstance) {
-                        // 尚未初始化，开始创建
                         vditorInstance = new Vditor('vditor-container', {
                             cdn: '/static/cdn/vditor',
                             mode: 'ir',
                             height: '100%', 
                             cache: { enable: false }, 
                             outline: { enable: false, position: 'left' },
+                            preview: {
+                                hljs: false,
+                                math: false,
+                                mermaid: false
+                            },
                             toolbar: [
                                 'headings', 'bold', 'italic', 'strike', 'link', '|',
                                 'list', 'ordered-list', 'check', '|',
@@ -381,15 +459,13 @@
                             },
                             after: () => { 
                                 isVditorReady = true;
-                                // 确保 Vditor 真正就绪后，加载这期间可能已被切换的最新内容
                                 vditorInstance.setValue(editorContent.value);
                                 setTimeout(applyEditorHighlight, 100); 
                             }
                         });
                     }
-                    // 如果 vditorInstance 存在但 isVditorReady 为 false，说明正在异步加载中。
-                    // 此时上方外部逻辑已经更新了 editorContent.value，直接等待 after 回调执行即可。
                 };
+
                 const createNew = () => {
                     activeDocId.value = ''; isCreating.value = true; relatedDocs.value = []; generatedTags.value = [];
                     const ts = new Date().getTime();
@@ -398,6 +474,7 @@
                     editorContent.value = `---\ntitle: 随记_${ts}\ntags:\n  - 笔记\n---\n\n`;
                     saveStatus.value = '新建待存';
                     nextTick(() => initOrUpdateVditor(editorContent.value));
+                    if (isMobile.value) mobileView.value = 'editor';
                 };
 
                 const loadDocument = async (id) => {
@@ -413,6 +490,7 @@
                         nextTick(() => initOrUpdateVditor(data.content));
                         fetchRelated(id);
                     }
+                    if (isMobile.value) mobileView.value = 'editor';
                 };
 
                 const executeSave = async () => {
@@ -428,6 +506,13 @@
                             activeDocId.value = docIdInput.value;
                             isCreating.value = false;
                             activeDocMeta.value.update_time = Math.floor(Date.now() / 1000);
+                            
+                            const frontTitle = parseTitleFromContent(editorContent.value);
+                            if (frontTitle) {
+                                const doc = documents.value.find(d => d.id === activeDocId.value);
+                                if (doc) doc.title = frontTitle;
+                            }
+                            
                             await fetchDocuments();
                         }
                     } catch (e) { saveStatus.value = '保存失败'; } finally { saving.value = false; }
@@ -510,6 +595,8 @@
                     pinnedDocs, inboxDocs, archiveDocs, activeDocId, docIdInput, editorContent, relatedDocs,
                     isCreating, saving, syncing, isSearching, saveStatus, activeDocStatus, activeDocMeta, aiLoading, generatedTags,
                     createdTimeAgo, updatedTimeAgo, fullCreatedTime, fullUpdateTime,
+                    charCount, totalChars, lineCount, newlineCount, paragraphCount, readTime,
+                    isMobile, mobileView,
                     createNew, loadDocument, manualSave, handleInput, forceSearch, rebuildIndex, generateTags, toggleAction, getDocTitle, highlightText
                 };
             }

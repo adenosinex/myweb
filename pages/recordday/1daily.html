@@ -38,27 +38,85 @@
         <button type="submit" class="px-4 py-1 text-white rounded font-bold transition" 
                 :class="project === 'ejec' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'">记录</button>
     </form>
-
-    <div class="mb-6 relative">
-        <h3 class="absolute top-0 right-0 text-xs text-gray-400 font-mono">当前分析视角: ${ project }</h3>
-        <canvas id="statsChart" height="200"></canvas>
-    </div>
-
-    <div v-if="todayList.length" class="mb-4 bg-green-50 p-4 rounded-lg border border-green-100">
-        <h3 class="text-lg font-semibold mb-2 text-green-700 flex items-center gap-2">
-            今日足迹 <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">${ todayList.length } 条记录</span>
+   <!-- 最近一周详细记录 -->
+    <div v-if="recentWeekList.length" class="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+        <h3 class="text-lg font-semibold mb-2 text-blue-700 flex items-center gap-2">
+            最近一周记录 <span class="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">${ recentWeekList.length } 条</span>
         </h3>
         <ul>
-            <li v-for="item in todayList" :key="item.id || item._time" class="flex items-center mb-2 text-sm border-b border-green-100 pb-1 last:border-0">
+            <li v-for="item in recentWeekList" :key="item.id || item._time" class="flex items-center mb-2 text-sm border-b border-blue-100 pb-1 last:border-0">
                 <span class="font-bold w-24 truncate" :class="item.project === project ? 'text-blue-600' : 'text-gray-700'">${item.project}</span>
                 <span v-if="item.project === 'ejec'" class="text-blue-700 font-mono w-10">${item.count}次</span>
-                <span class="text-gray-500 font-mono mx-2">${item.time}</span>
-                <span v-if="item.project === 'downm'" class="text-orange-500 text-xs w-16">(${poopOffsetMinutes(item.time)})</span>
+                <span class="text-gray-500 font-mono mx-2">${item.date} ${item.time}</span>
                 <span v-if="item.remark" class="text-gray-500 flex-1 truncate text-xs">📝 ${item.remark}</span>
-                <button @click="deleteRecord(item.id)" class="ml-auto px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-xs">删除</button>
+                <button v-if="isToday(item.date)" @click="deleteRecord(item.id)" class="ml-auto px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-xs">删除</button>
             </li>
         </ul>
     </div>
+    <!-- 整体趋势图（固定高度容器） -->
+    <div class="mb-4 relative" style="height: 300px;">
+        <h3 class="text-sm font-semibold text-gray-600 mb-1">📈 整体趋势（全部日期）</h3>
+        <canvas id="overallChart"></canvas>
+    </div>
+
+    <!-- 最近趋势图（固定高度容器） -->
+    <div class="mb-4 relative" style="height: 300px;">
+        <h3 class="text-sm font-semibold text-gray-600 mb-1">📉 最近趋势（最近30天）</h3>
+        <div v-if="recentIntervalList.length" class="text-xs text-gray-500 mb-1">
+            最近间隔：<span v-for="(interval, idx) in recentIntervalList" :key="idx" class="mr-1">${ interval }天</span>
+        </div>
+        <canvas id="recentChart"></canvas>
+    </div>
+
+    <!-- 主统计卡片：基于记录条数 -->
+    <div v-if="overallStats" class="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <h3 class="text-lg font-semibold mb-2 text-gray-700">📊 统计数据（${ project }）</h3>
+        <div class="grid grid-cols-2 gap-2 text-sm">
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">总记录条数：</span>
+                <span class="font-bold text-blue-600">${ overallStats.totalRecords }</span>
+            </div>
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">有记录天数：</span>
+                <span class="font-bold">${ overallStats.activeDays } 天</span>
+            </div>
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">整体频率：</span>
+                <span class="font-bold">${ formatFrequency(overallStats.overallPerDay) }</span>
+            </div>
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">最近7天频率：</span>
+                <span class="font-bold">${ formatFrequency(overallStats.recentPerDay) }</span>
+                <span class="text-gray-500">（${ overallStats.recentRecords } 条）</span>
+            </div>
+        </div>
+    </div>
+    <div v-else class="mb-4 text-gray-400 text-sm">暂无数据</div>
+
+    <!-- 单次执行特点（仅当项目有 count 字段时显示） -->
+    <div v-if="overallStats && overallStats.isCountProject" class="mb-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+        <h3 class="text-lg font-semibold mb-2 text-yellow-800">⚡ 单次执行特点（基于 count 字段）</h3>
+        <div class="grid grid-cols-2 gap-2 text-sm">
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">总执行次数：</span>
+                <span class="font-bold">${ overallStats.totalCountSum }</span>
+            </div>
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">平均每次执行：</span>
+                <span class="font-bold">${ Math.round(overallStats.avgCountPerRecord) } 次</span>
+            </div>
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">有记录日平均总次数：</span>
+                <span class="font-bold">${ Math.round(overallStats.avgCountPerActiveDay) } 次/天</span>
+            </div>
+            <div class="bg-white p-2 rounded shadow-sm">
+                <span class="text-gray-500">平均每天记录条数（有记录日）：</span>
+                <span class="font-bold">${ Math.round(overallStats.avgRecordsPerActiveDay) } 条/天</span>
+            </div>
+        </div>
+    </div>
+
+ 
 
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-2xl font-bold text-blue-700">日常项目统计</h2>
@@ -85,23 +143,125 @@ createApp({
         }
     },
     computed: {
-        todayList() {
-            const today = new Date().toISOString().slice(0, 10);
-            return this.stats.filter(item => item.date === today);
+        projectStats() {
+            return this.stats.filter(i => i.project === this.project);
         },
-        avgPoopMinutes() {
-            const poops = this.todayList.filter(i => i.project === 'downm');
-            return poops.length ? poops.reduce((sum, i) => sum + this.timeToMin(i.time), 0) / poops.length : null;
+        recentWeekList() {
+            const today = this.localToday();
+            const start = new Date();
+            start.setDate(start.getDate() - 6);
+            const startStr = this.formatDate(start);
+            return this.stats
+                .filter(i => i.project === this.project && i.date >= startStr && i.date <= today)
+                .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+        },
+        overallStats() {
+            const data = this.projectStats;
+            if (!data.length) return null;
+
+            const dates = [...new Set(data.map(i => i.date))].sort();
+            const first = dates[0];
+            const last = dates[dates.length - 1];
+            const totalDays = Math.floor((this.parseDateUTC(last) - this.parseDateUTC(first)) / 86400000) + 1;
+            const activeDays = dates.length;
+
+            const isCountProject = data.some(i => i.count !== null && i.count !== undefined);
+            const totalRecords = data.length;
+            const totalCountSum = isCountProject
+                ? data.reduce((sum, i) => sum + (i.count || 0), 0)
+                : totalRecords;
+
+            const overallPerDay = totalRecords / totalDays;
+
+            const today = this.localToday();
+            const start7 = new Date();
+            start7.setDate(start7.getDate() - 6);
+            const start7Str = this.formatDate(start7);
+            const recent = data.filter(i => i.date >= start7Str && i.date <= today);
+            const recentRecords = recent.length;
+            const recentPerDay = recentRecords / 7;
+
+            const avgCountPerRecord = isCountProject ? totalCountSum / totalRecords : 1;
+            const avgRecordsPerActiveDay = totalRecords / activeDays;
+            const avgCountPerActiveDay = isCountProject ? totalCountSum / activeDays : 1;
+
+            return {
+                totalRecords,
+                totalCountSum,
+                activeDays,
+                totalDays,
+                overallPerDay,
+                recentRecords,
+                recentPerDay,
+                isCountProject,
+                avgCountPerRecord,
+                avgRecordsPerActiveDay,
+                avgCountPerActiveDay,
+                first,
+                last
+            };
+        },
+        // 最近30天有记录日期的间隔天数列表
+        recentIntervalList() {
+            const data = this.projectStats;
+            if (!data.length) return [];
+            const today = this.localToday();
+            const start = new Date();
+            start.setDate(start.getDate() - 29);
+            const startStr = this.formatDate(start);
+            const dates = [...new Set(data
+                .filter(i => i.date >= startStr && i.date <= today)
+                .map(i => i.date))]
+                .sort();
+            if (dates.length < 2) return [];
+            const intervals = [];
+            for (let i = 1; i < dates.length; i++) {
+                const diff = (this.parseDateUTC(dates[i]) - this.parseDateUTC(dates[i-1])) / 86400000;
+                intervals.push(diff);
+            }
+            return intervals;
         }
     },
     watch: {
-        project: 'drawChart'
+        project: 'drawCharts'
     },
     methods: {
-        // 核心时间处理函数提取：时分秒转分钟
-        timeToMin(timeStr) {
-            const [h, m, s] = (timeStr || '00:00:00').split(':').map(Number);
-            return (h || 0) * 60 + (m || 0) + ((s || 0) / 60);
+        formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        },
+        localToday() {
+            return this.formatDate(new Date());
+        },
+        isToday(dateStr) {
+            return dateStr === this.localToday();
+        },
+        parseDateUTC(dateStr) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return Date.UTC(y, m - 1, d);
+        },
+        generateDateRange(start, end) {
+            const arr = [];
+            const [sy, sm, sd] = start.split('-').map(Number);
+            const [ey, em, ed] = end.split('-').map(Number);
+            let cur = new Date(sy, sm - 1, sd);
+            const last = new Date(ey, em - 1, ed);
+            while (cur <= last) {
+                arr.push(this.formatDate(cur));
+                cur.setDate(cur.getDate() + 1);
+            }
+            return arr;
+        },
+        formatFrequency(perDay) {
+            if (!perDay || perDay === 0) return '暂无';
+            if (perDay >= 1) {
+                return `平均每天 ${Math.round(perDay)} 次`;
+            } else {
+                const interval = 1 / perDay;
+                return `平均每 ${Math.round(interval)} 天一次`;
+            }
         },
         exportCSV() {
             window.location.href = '/api/daily_stats/export';
@@ -124,7 +284,6 @@ createApp({
         async fetchStats() {
             try {
                 const res = await axios.get('/api/daily_stats');
-                // 流式处理：转换并排序
                 this.stats = (res.data || []).map(item => {
                     const [date = '1970-01-01', time = '00:00:00'] = (item._time || '').split(' ');
                     return { ...item, date, time, count: Number(item.count) || null };
@@ -132,12 +291,11 @@ createApp({
                     `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`) || b.project.localeCompare(a.project)
                 );
 
-                // 动态拉取项目列表去重
                 [...new Set(this.stats.map(i => i.project))].forEach(p => {
                     if (p && !this.allProjects.includes(p)) this.allProjects.push(p);
                 });
 
-                this.drawChart();
+                this.drawCharts();
             } catch (error) {
                 console.error("获取数据失败:", error);
             }
@@ -161,62 +319,142 @@ createApp({
             this.remark = "";
             await this.addRecord();
         },
-        poopOffsetMinutes(time) {
-            if (this.avgPoopMinutes === null || !time) return '';
-            const offset = this.timeToMin(time) - this.avgPoopMinutes;
-            return offset === 0 ? '0.0m' : `${offset > 0 ? '+' : ''}${offset.toFixed(1)}m`;
-        },
-        drawChart() {
-            if (window.statsChart?.destroy) window.statsChart.destroy();
-            const projectData = this.stats.filter(item => item.project === this.project);
-            const labels = [...new Set(projectData.map(i => i.date))].sort();
-            const isEjec = this.project === 'ejec';
+        drawCharts() {
+            // 销毁旧图表
+            if (window.overallChart?.destroy) window.overallChart.destroy();
+            if (window.recentChart?.destroy) window.recentChart.destroy();
 
-            // 动态映射数据点
-            const dataPoints = labels.map(d => {
+            const projectData = this.projectStats;
+            const canvasOverall = document.getElementById('overallChart');
+            const canvasRecent = document.getElementById('recentChart');
+            if (!canvasOverall || !canvasRecent) return;
+
+            const ctxOverall = canvasOverall.getContext('2d');
+            const ctxRecent = canvasRecent.getContext('2d');
+
+            if (!projectData.length) {
+                ctxOverall.clearRect(0, 0, canvasOverall.width, canvasOverall.height);
+                ctxRecent.clearRect(0, 0, canvasRecent.width, canvasRecent.height);
+                window.overallChart = null;
+                window.recentChart = null;
+                return;
+            }
+
+            const isEjec = this.project === 'ejec';
+            const allDates = this.generateDateRange(
+                [...new Set(projectData.map(i => i.date))].sort()[0],
+                [...new Set(projectData.map(i => i.date))].sort().slice(-1)[0]
+            );
+
+            // 构建整体数据点（每日总次数或记录条数）
+            const overallData = allDates.map(d => {
                 const dayRecords = projectData.filter(i => i.date === d);
-                return isEjec 
+                if (!dayRecords.length) return null;
+                return isEjec
                     ? dayRecords.reduce((sum, c) => sum + (c.count || 0), 0)
-                    : dayRecords.reduce((sum, c) => sum + this.timeToMin(c.time) / 60, 0) / dayRecords.length;
+                    : dayRecords.length;
             });
 
-            const ctx = document.getElementById('statsChart').getContext('2d');
-            window.statsChart = new Chart(ctx, {
+            // 最近30天数据
+            const today = this.localToday();
+            const start30 = new Date();
+            start30.setDate(start30.getDate() - 29);
+            const start30Str = this.formatDate(start30);
+            const recentDates = this.generateDateRange(start30Str, today);
+            const recentData = recentDates.map(d => {
+                const dayRecords = projectData.filter(i => i.date === d);
+                if (!dayRecords.length) return null;
+                return isEjec
+                    ? dayRecords.reduce((sum, c) => sum + (c.count || 0), 0)
+                    : dayRecords.length;
+            });
+
+            // 绘制整体图表
+            window.overallChart = new Chart(ctxOverall, {
                 type: 'line',
                 data: {
-                    labels,
+                    labels: allDates,
                     datasets: [{
-                        label: `${this.project} ${isEjec ? '每日总次数' : '发生时间点趋势'}`,
-                        data: dataPoints,
+                        label: `${this.project} ${isEjec ? '每日总次数' : '每日记录次数'}`,
+                        data: overallData,
                         borderColor: isEjec ? '#3b82f6' : '#10b981',
                         backgroundColor: isEjec ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
                         borderWidth: 2,
                         tension: 0.3,
-                        fill: true
+                        fill: true,
+                        spanGaps: false
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        tooltip: isEjec ? {} : {
+                        tooltip: {
                             callbacks: {
                                 label: (ctx) => {
-                                    const h = Math.floor(ctx.raw);
-                                    const m = Math.floor((ctx.raw - h) * 60);
-                                    return `时间点: ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                                    if (ctx.raw === null) return '无记录';
+                                    return `${ctx.raw} 次`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        y: isEjec ? { beginAtZero: true, ticks: { precision: 0 } } : {
-                            min: 0, max: 24,
-                            ticks: {
-                                stepSize: 4,
-                                callback: val => `${Math.floor(val).toString().padStart(2, '0')}:${Math.floor((val % 1) * 60).toString().padStart(2, '0')}`
+                        y: { beginAtZero: true, ticks: { precision: 0 } },
+                        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } }
+                    }
+                }
+            });
+
+            // 绘制最近趋势图，并在 tooltip 中显示间隔
+            const intervalMap = {};
+            const activeRecentDates = recentDates.filter(d => {
+                const dayRecords = projectData.filter(i => i.date === d);
+                return dayRecords.length > 0;
+            });
+            activeRecentDates.forEach((d, idx) => {
+                if (idx > 0) {
+                    const diff = (this.parseDateUTC(d) - this.parseDateUTC(activeRecentDates[idx - 1])) / 86400000;
+                    intervalMap[d] = diff;
+                }
+            });
+
+            window.recentChart = new Chart(ctxRecent, {
+                type: 'line',
+                data: {
+                    labels: recentDates,
+                    datasets: [{
+                        label: `${this.project} ${isEjec ? '每日总次数' : '每日记录次数'}`,
+                        data: recentData,
+                        borderColor: isEjec ? '#3b82f6' : '#10b981',
+                        backgroundColor: isEjec ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true,
+                        spanGaps: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                title: (ctx) => `日期：${ctx[0].label}`,
+                                label: (ctx) => {
+                                    if (ctx.raw === null) return '无记录';
+                                    let label = `${ctx.raw} 次`;
+                                    const date = ctx.label;
+                                    if (intervalMap[date] !== undefined) {
+                                        label += `，距上次间隔 ${intervalMap[date]} 天`;
+                                    }
+                                    return label;
+                                }
                             }
                         }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 } },
+                        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 15 } }
                     }
                 }
             });

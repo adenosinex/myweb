@@ -1,8 +1,0 @@
-{
-    "usd_cny_rate": 7.2,
-    "proxy": "",
-    "refresh_interval_seconds": 86400,
-    "manual_refresh_cooldown_seconds": 60,
-    "auto_check_interval_seconds": 3600,
-    "api_timeout_seconds": 15
-}
