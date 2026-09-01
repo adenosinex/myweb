@@ -2,609 +2,4202 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
     <title>个人知识笔记系统</title>
-    
+
     <script src="/static/cdn/vue3.5.global.prod.js"></script>
-    <link rel="stylesheet" href="/static/cdn/element-plus2.14.3.css" />
+    <link rel="stylesheet" href="/static/cdn/element-plus2.14.3.css">
     <script src="/static/cdn/element-plus2.14.3.js"></script>
     <script src="/static/cdn/element.vue.js"></script>
     <script src="/static/cdn/tailwindcss3.4.17.js"></script>
-    
-    <script src="/static/cdn/echarts.min.js"></script>
-    <link rel="stylesheet" href="/static/cdn/vditor.css" />
-    <script src="/static/cdn/vditor.js"></script>
-    
-    <style>
-        body { margin: 0; padding: 0; height: 100vh; overflow: hidden; background: #f8fafc; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        
-        .highlight-mark { background-color: #fef08a; color: #b91c1c; border-radius: 2px; padding: 0 2px; }
-        ::highlight(search-results) { background-color: #fef08a; color: #b91c1c; font-weight: bold; }
-        
-        .vditor { border: none !important; }
-        .vditor-toolbar { border-bottom: 1px solid #f1f5f9 !important; background-color: #f8fafc !important; padding-left: 20px !important;}
-        .vditor-ir, .vditor-wysiwyg { padding: 20px 40px !important; }
-        .vditor-outline { border-right: 1px solid #f1f5f9; background: #fafafa; }
 
-        /* 移动端适配 */
+    <link rel="stylesheet" href="/static/cdn/vditor.css">
+    <script src="/static/cdn/vditor.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body,
+        #app {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .highlight-mark {
+            background: #fef08a;
+            color: #b91c1c;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+
+        ::highlight(search-results) {
+            background: #fef08a;
+            color: #b91c1c;
+            font-weight: bold;
+        }
+
+        /* =====================================================
+           Vditor
+           ===================================================== */
+
+        .vditor {
+            border: none !important;
+        }
+
+        .vditor-toolbar {
+            border-bottom: 1px solid #f1f5f9 !important;
+            background: #f8fafc !important;
+            padding-left: 20px !important;
+        }
+
+        .vditor-ir,
+        .vditor-wysiwyg {
+            padding: 20px 40px !important;
+        }
+
+        /* =====================================================
+           侧栏
+           ===================================================== */
+
+        .document-aside {
+            width: 320px;
+            min-width: 320px;
+            max-width: 320px;
+        }
+
+        .timeline-aside {
+            width: 430px;
+            min-width: 430px;
+            max-width: 430px;
+        }
+
+        /* =====================================================
+           时间线
+           ===================================================== */
+
+        .timeline-panel {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        .timeline-header {
+            flex-shrink: 0;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .timeline-header-main {
+            min-height: 47px;
+            padding: 7px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .timeline-main-title {
+            min-width: 0;
+            font-size: 14px;
+            line-height: 1.3;
+            color: #334155;
+            font-weight: 700;
+        }
+
+        .timeline-main-count {
+            margin-top: 2px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .timeline-options {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px 7px;
+        }
+
+        /* =====================================================
+           月历
+           ===================================================== */
+
+        .calendar-container {
+            flex-shrink: 0;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 7px 9px 8px;
+        }
+
+        .calendar-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .calendar-month {
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .calendar-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 2px;
+        }
+
+        .calendar-weekday {
+            height: 17px;
+            line-height: 17px;
+            text-align: center;
+            font-size: 9px;
+            color: #94a3b8;
+        }
+
+        .calendar-cell {
+            height: 30px;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            padding: 1px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .calendar-cell:hover {
+            background: #f8fafc;
+        }
+
+        .calendar-cell.other-month {
+            opacity: 0.35;
+        }
+
+        .calendar-cell.today {
+            border-color: #93c5fd;
+        }
+
+        .calendar-cell.selected {
+            background: #eff6ff;
+            border-color: #3b82f6;
+        }
+
+        .calendar-number {
+            height: 15px;
+            line-height: 15px;
+            text-align: center;
+            font-size: 10px;
+            color: #475569;
+        }
+
+        .calendar-cell.selected .calendar-number {
+            color: #2563eb;
+            font-weight: 700;
+        }
+
+        .calendar-count {
+            height: 10px;
+            line-height: 10px;
+            text-align: center;
+            font-size: 8px;
+            color: transparent;
+        }
+
+        .calendar-cell.has-docs .calendar-count {
+            color: #2563eb;
+            font-weight: 700;
+        }
+
+        .calendar-cell.heavy .calendar-count {
+            color: #7c3aed;
+        }
+
+        .timeline-calendar-collapsed {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 37px;
+            padding: 5px 10px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            flex-shrink: 0;
+        }
+
+        .collapsed-month {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+        }
+
+        .collapsed-info {
+            margin-left: 8px;
+            color: #94a3b8;
+            font-size: 10px;
+        }
+
+        /* =====================================================
+           时间线文章
+           ===================================================== */
+
+        .timeline-document-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 9px;
+        }
+
+        .timeline-group {
+            margin-bottom: 14px;
+        }
+
+        .timeline-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 1px 2px 6px;
+        }
+
+        .timeline-group-title {
+            min-width: 0;
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+        }
+
+        .timeline-group-count {
+            flex-shrink: 0;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .timeline-document {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 9px 10px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: background 0.12s, border-color 0.12s;
+        }
+
+        .timeline-document:hover {
+            background: #f8fbff;
+            border-color: #93c5fd;
+        }
+
+        .timeline-document:active {
+            background: #eff6ff;
+        }
+
+        .timeline-document.active {
+            background: #eff6ff;
+            border-color: #60a5fa;
+        }
+
+        .timeline-document-title {
+            font-size: 13px;
+            line-height: 1.45;
+            color: #334155;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .timeline-document-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 4px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .timeline-document-preview {
+            margin-top: 4px;
+            color: #94a3b8;
+            font-size: 10px;
+            line-height: 1.45;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+        }
+
+        .timeline-empty {
+            padding: 36px 10px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        /* =====================================================
+           文档 ID
+           ===================================================== */
+
+        .doc-id-input {
+            width: 210px;
+        }
+
+        .rename-hint {
+            font-size: 10px;
+            color: #94a3b8;
+            white-space: nowrap;
+        }
+
+        /* =====================================================
+           手机底部
+           ===================================================== */
+
+        .mobile-bottom-nav {
+            display: none;
+        }
+
+        .mobile-nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 2px;
+            color: #94a3b8;
+            font-size: 11px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .mobile-nav-item.active {
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        /* =====================================================
+           移动端
+           ===================================================== */
+
         @media (max-width: 768px) {
-            .vditor-ir, .vditor-wysiwyg { padding: 12px 16px !important; }
-            .vditor-toolbar { padding-left: 8px !important; }
+            header {
+                height: auto !important;
+                min-height: 56px;
+                padding: 7px 9px !important;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            header > div:nth-child(1) {
+                flex: 1;
+                min-width: 0;
+            }
+
+            header > div:nth-child(2) {
+                width: 100% !important;
+                max-width: none !important;
+                order: 3;
+            }
+
+            header > div:nth-child(3) {
+                flex-shrink: 0;
+            }
+
+            .timeline-aside,
+            .document-aside {
+                width: 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .vditor-ir,
+            .vditor-wysiwyg {
+                padding: 12px 16px !important;
+            }
+
+            .vditor-toolbar {
+                padding-left: 7px !important;
+            }
+
+            .mobile-editor-header {
+                min-height: 48px !important;
+                height: auto !important;
+                padding: 4px 7px !important;
+            }
+
+            .mobile-save-status {
+                display: none;
+            }
+
+            .doc-id-input {
+                width: 115px !important;
+            }
+
+            .rename-hint {
+                display: none;
+            }
+
+            .timeline-document-list {
+                padding: 7px;
+            }
+
+            .calendar-container {
+                padding: 6px 7px 7px;
+            }
+
+            .calendar-cell {
+                height: 28px;
+            }
+
+            .mobile-bottom-nav {
+                display: flex;
+                height: 54px;
+                flex-shrink: 0;
+                background: #ffffff;
+                border-top: 1px solid #e5e7eb;
+                padding-bottom: env(safe-area-inset-bottom);
+            }
         }
     </style>
 </head>
+
 <body>
-    <div id="app" class="h-full flex flex-col">
-        <header v-show="!isFocusMode" class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10 shadow-sm transition-all">
-            <div class="font-bold text-slate-700 flex items-center gap-3">
-                <span class="text-lg hidden sm:block">📚 知识笔记</span>
-                <el-button size="small" type="primary" plain @click="rebuildIndex" :loading="syncing">同步索引</el-button>
-            </div>
-            <div class="w-1/3 max-w-md sm:max-w-xs">
-                <el-input v-model="searchQuery" placeholder="搜索..." clearable @keyup.enter="forceSearch">
-                    <template #prefix>
-                        <el-icon><search></search></el-icon>
-                    </template>
-                    <template #append>
-                        <el-button @click="forceSearch" :loading="isSearching">搜索</el-button>
-                    </template>
-                </el-input>
-            </div>
-            <div class="flex items-center gap-2">
-                <el-switch v-model="autoAiTags" active-text="静默 AI 补全" size="small" class="hidden sm:flex"></el-switch>
-            </div>
-        </header>
 
-        <div class="flex-1 flex overflow-hidden">
-            <!-- 左侧文档列表（移动端作为独立视图） -->
-            <aside v-show="!isFocusMode && (!isMobile || mobileView === 'list')"
-                   class="bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all w-64 sm:w-64 md:w-64"
-                   :class="{ 'w-full h-full': isMobile }">
-                <div class="p-3 border-b border-slate-200 bg-white">
-                    <el-button class="w-full" type="primary" @click="createNew">
-                        <el-icon class="mr-1"><edit-pen></edit-pen></el-icon> 快速记录
-                    </el-button>
-                </div>
-                <div class="flex-1 overflow-y-auto p-2">
-                    <div v-if="searchResults.length > 0" class="mb-4">
-                        <div class="text-xs text-slate-400 mb-2 px-2 font-medium">搜索结果</div>
-                        <div v-for="doc in searchResults" :key="doc.id" @click="loadDocument(doc.id)"
-                             class="px-3 py-2 text-sm cursor-pointer rounded hover:bg-slate-200 truncate" v-html="highlightText(getDocTitle(doc))"></div>
-                    </div>
-                    
-                    <div v-else>
-                        <div v-if="pinnedDocs.length > 0">
-                            <div class="text-[11px] text-orange-500 mb-1 mt-2 px-2 font-bold tracking-wider">📌 PINNED</div>
-                            <div v-for="doc in pinnedDocs" :key="doc.id" @click="loadDocument(doc.id)"
-                                 :class="['px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5', activeDocId === doc.id ? 'bg-orange-100 text-orange-700 font-medium' : 'hover:bg-slate-200 text-slate-700']">
-                                {{ getDocTitle(doc) }}
-                            </div>
-                        </div>
+<div id="app" class="h-full flex flex-col">
 
-                        <div class="text-[11px] text-slate-400 mb-1 mt-4 px-2 font-bold tracking-wider">📝 INBOX</div>
-                        <div v-for="doc in inboxDocs" :key="doc.id" @click="loadDocument(doc.id)"
-                             :class="['px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5', activeDocId === doc.id ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-slate-200 text-slate-700']">
-                            {{ getDocTitle(doc) }}
-                        </div>
+    <!-- =========================================================
+         HEADER
+         ========================================================= -->
+    <header
+        v-show="!isFocusMode"
+        class="bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10 shadow-sm">
 
-                        <div class="text-[11px] text-slate-400 mb-1 mt-4 px-2 font-bold tracking-wider">📦 ARCHIVE</div>
-                        <div v-for="doc in archiveDocs" :key="doc.id" @click="loadDocument(doc.id)"
-                             :class="['px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5', activeDocId === doc.id ? 'bg-slate-200 text-slate-800 font-medium' : 'hover:bg-slate-200 text-slate-500']">
-                            {{ getDocTitle(doc) }}
-                        </div>
-                    </div>
-                </div>
-            </aside>
+        <div class="font-bold text-slate-700 flex items-center gap-3 min-w-0">
 
-            <!-- 主编辑区（移动端作为独立视图） -->
-            <main v-show="!isMobile || mobileView === 'editor'"
-                  class="flex-1 flex flex-col bg-white relative shadow-[inset_0_0_20px_rgba(0,0,0,0.02)]">
-                <div v-show="!activeDocId && !isCreating" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50/50">
-                    <div class="text-4xl mb-6 opacity-80">🌱 知识图谱轨迹</div>
-                    <div id="timeline-chart" style="width: 100%; max-width: 800px; height: 250px;"></div>
-                </div>
+            <span class="text-lg hidden sm:block whitespace-nowrap">
+                📚 知识笔记
+            </span>
 
-                <div v-show="activeDocId || isCreating" class="flex flex-col h-full w-full">
-                    <div class="h-12 border-b border-slate-100 flex items-center justify-between px-4 bg-slate-50/50 shrink-0">
-                        <div class="flex items-center gap-2">
-                            <!-- 移动端返回按钮 -->
-                            <el-button v-if="isMobile" size="small" circle plain @click="mobileView = 'list'">
-                                <el-icon><arrow-left></arrow-left></el-icon>
-                            </el-button>
-                            <el-button size="small" circle plain @click="isFocusMode = !isFocusMode" :title="isFocusMode ? '退出沉浸' : '沉浸模式'">
-                                <el-icon><full-screen></full-screen></el-icon>
-                            </el-button>
-                            <el-input v-model="docIdInput" :placeholder="isCreating ? '输入标识符(作为物理文件名)' : '文档ID(不可改)'" size="small" class="w-40 sm:w-56" :disabled="!isCreating">
-                                <template #prepend>ID</template>
-                            </el-input>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs" :class="saveStatus === '保存失败' ? 'text-red-500' : 'text-slate-400'">{{ saveStatus }}</span>
-                            <el-button size="small" type="success" @click="manualSave" :loading="saving">保存</el-button>
-                        </div>
-                    </div>
-                    <div class="flex-1 overflow-hidden relative">
-                        <div id="vditor-container" class="absolute inset-0"></div>
-                    </div>
-                </div>
-            </main>
+            <el-button
+                size="small"
+                type="primary"
+                plain
+                @click="rebuildIndex"
+                :loading="syncing">
+                同步索引
+            </el-button>
 
-            <!-- 右侧信息面板（移动端隐藏） -->
-            <aside v-show="(activeDocId || isCreating) && !isFocusMode && !isMobile"
-                   class="w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 transition-all">
-                
-                <div class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex gap-2" v-if="activeDocId">
-                    <el-button size="small" class="flex-1" :type="activeDocMeta.is_pinned ? 'warning' : 'default'" @click="toggleAction('toggle_pin')">
-                        {{ activeDocMeta.is_pinned ? '取消置顶' : '📌 置顶' }}
-                    </el-button>
-                    <el-button size="small" class="flex-1" :type="activeDocStatus === 'archive' ? 'primary' : 'info'" plain @click="toggleAction('toggle_archive')">
-                        {{ activeDocStatus === 'archive' ? '还原活跃' : '📦 归档' }}
-                    </el-button>
-                </div>
-
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-                    <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1"><el-icon><document></document></el-icon> 文档状态</h3>
-                    <div class="text-[13px] text-slate-600 space-y-3">
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">生命周期</span>
-                            <el-tag :type="activeDocStatus === 'archive' ? 'info' : 'success'" size="small" effect="dark">
-                                {{ activeDocStatus.toUpperCase() }}
-                            </el-tag>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">创建时间</span><span :title="fullCreatedTime">{{ createdTimeAgo }}</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">最后更新</span><span :title="fullUpdateTime">{{ updatedTimeAgo }}</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">字数</span>
-                            <span>{{ charCount }} <span class="text-slate-400 text-xs">字</span></span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">总字符</span>
-                            <span>{{ totalChars }}</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">行数</span>
-                            <span>{{ lineCount }} <span class="text-slate-400 text-xs">行</span></span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">换行符</span>
-                            <span>{{ newlineCount }} <span class="text-slate-400 text-xs">个</span></span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-50 pb-2">
-                            <span class="text-slate-400">段落数</span>
-                            <span>{{ paragraphCount }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-400">预计阅读</span>
-                            <span>{{ readTime }} <span class="text-slate-400 text-xs">分钟</span></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-col">
-                    <h3 class="text-sm font-bold text-slate-700 mb-3 flex justify-between items-center">
-                        <div class="flex items-center gap-1"><el-icon><cpu></cpu></el-icon> 标签提取</div>
-                        <el-button size="small" type="primary" :loading="aiLoading" @click="generateTags">提取</el-button>
-                    </h3>
-                    <div class="text-[11px] text-slate-400 mb-2">使用 AI 自动阅读提炼标签</div>
-                    
-                    <div v-if="relatedDocs.length > 0" class="mt-4 border-t border-slate-100 pt-3">
-                        <h4 class="text-xs font-bold text-slate-600 mb-2">🔗 相关关联推荐</h4>
-                        <div class="space-y-1.5">
-                            <div v-for="rd in relatedDocs" :key="rd.id" @click="loadDocument(rd.id)" class="text-[12px] text-blue-600 hover:text-blue-800 cursor-pointer truncate">
-                                {{ rd.title }} <span class="text-slate-400 text-[10px]">({{ rd.overlap }} 标签重合)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </aside>
         </div>
+
+        <div class="w-1/3 max-w-md sm:max-w-xs">
+
+            <el-input
+                v-model="searchQuery"
+                placeholder="搜索文章..."
+                clearable
+                @keyup.enter="forceSearch">
+
+                <template #prefix>
+                    <el-icon>
+                        <search></search>
+                    </el-icon>
+                </template>
+
+                <template #append>
+                    <el-button
+                        @click="forceSearch"
+                        :loading="isSearching">
+                        搜索
+                    </el-button>
+                </template>
+
+            </el-input>
+
+        </div>
+
+        <div class="flex items-center gap-2">
+
+            <el-switch
+                v-model="autoAiTags"
+                active-text="静默 AI 补全"
+                size="small"
+                class="hidden sm:flex">
+            </el-switch>
+
+            <el-button
+                v-if="isMobile"
+                size="small"
+                circle
+                @click="createNew">
+
+                <el-icon>
+                    <edit-pen></edit-pen>
+                </el-icon>
+
+            </el-button>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================================================
+         主体
+         ========================================================= -->
+    <div class="flex-1 flex overflow-hidden">
+
+        <!-- =====================================================
+             左侧
+             ===================================================== -->
+        <aside
+            v-show="!isFocusMode && (!isMobile || mobileView === 'list')"
+            class="bg-slate-50 border-r border-slate-200 flex flex-col shrink-0"
+            :class="sidebarMode === 'timeline'
+                ? 'timeline-aside'
+                : 'document-aside'">
+
+            <!-- =================================================
+                 顶部模式
+                 ================================================= -->
+            <div class="p-2 border-b border-slate-200 bg-white">
+
+                <div class="flex gap-1">
+
+                    <el-button
+                        class="flex-1"
+                        size="small"
+                        :type="sidebarMode === 'docs'
+                            ? 'primary'
+                            : 'default'"
+                        @click="sidebarMode = 'docs'">
+
+                        文档
+
+                    </el-button>
+
+
+                    <!--
+                        第一次点击：
+                        进入时间线。
+
+                        已经在时间线：
+                        再次点击折叠/展开日历。
+                    -->
+                    <el-button
+                        class="flex-1"
+                        size="small"
+                        :type="sidebarMode === 'timeline'
+                            ? 'primary'
+                            : 'default'"
+                        @click="toggleTimelinePanel">
+
+                        时间线
+
+                        <span
+                            v-if="sidebarMode === 'timeline'"
+                            class="ml-1 text-[10px] opacity-80">
+
+                            {{ calendarCollapsed ? '▼' : '▲' }}
+
+                        </span>
+
+                    </el-button>
+
+                </div>
+
+
+                <el-button
+                    v-if="sidebarMode === 'docs'"
+                    type="primary"
+                    class="w-full mt-2"
+                    @click="createNew">
+
+                    <el-icon class="mr-1">
+                        <edit-pen></edit-pen>
+                    </el-icon>
+
+                    快速记录
+
+                </el-button>
+
+            </div>
+
+
+            <!-- =================================================
+                 文档列表
+                 ================================================= -->
+            <div
+                v-if="sidebarMode === 'docs'"
+                class="flex-1 overflow-y-auto p-2">
+
+                <template v-if="searchResults.length > 0">
+
+                    <div class="text-xs text-slate-400 mb-2 px-2 font-medium">
+                        搜索结果 · {{ searchResults.length }}
+                    </div>
+
+                    <div
+                        v-for="doc in searchResults"
+                        :key="doc.id"
+                        @click="loadDocument(doc.id)"
+                        :class="[
+                            'px-3 py-2 text-sm cursor-pointer rounded truncate mb-0.5',
+                            activeDocId === doc.id
+                                ? 'bg-blue-100 text-blue-700 font-medium'
+                                : 'hover:bg-slate-200 text-slate-700'
+                        ]"
+                        v-html="highlightText(getDocTitle(doc))">
+                    </div>
+
+                </template>
+
+
+                <template v-else>
+
+                    <div v-if="pinnedDocs.length > 0">
+
+                        <div class="text-[11px] text-orange-500 mb-1 mt-2 px-2 font-bold">
+                            📌 PINNED
+                        </div>
+
+                        <div
+                            v-for="doc in pinnedDocs"
+                            :key="doc.id"
+                            @click="loadDocument(doc.id)"
+                            :class="[
+                                'px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5',
+                                activeDocId === doc.id
+                                    ? 'bg-orange-100 text-orange-700 font-medium'
+                                    : 'text-slate-700 hover:bg-slate-200'
+                            ]">
+
+                            {{ getDocTitle(doc) }}
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="text-[11px] text-slate-400 mb-1 mt-4 px-2 font-bold">
+                        📝 INBOX
+                    </div>
+
+                    <div
+                        v-for="doc in inboxDocs"
+                        :key="doc.id"
+                        @click="loadDocument(doc.id)"
+                        :class="[
+                            'px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5',
+                            activeDocId === doc.id
+                                ? 'bg-blue-100 text-blue-700 font-medium'
+                                : 'text-slate-700 hover:bg-slate-200'
+                        ]">
+
+                        {{ getDocTitle(doc) }}
+
+                    </div>
+
+
+                    <div class="text-[11px] text-slate-400 mb-1 mt-4 px-2 font-bold">
+                        📦 ARCHIVE
+                    </div>
+
+                    <div
+                        v-for="doc in archiveDocs"
+                        :key="doc.id"
+                        @click="loadDocument(doc.id)"
+                        :class="[
+                            'px-3 py-1.5 text-[13px] cursor-pointer rounded truncate mb-0.5',
+                            activeDocId === doc.id
+                                ? 'bg-slate-200 text-slate-800 font-medium'
+                                : 'text-slate-500 hover:bg-slate-200'
+                        ]">
+
+                        {{ getDocTitle(doc) }}
+
+                    </div>
+
+                </template>
+
+            </div>
+
+
+            <!-- =================================================
+                 时间线
+                 ================================================= -->
+            <div
+                v-else
+                class="timeline-panel">
+
+                <!-- 时间线头部 -->
+
+                <div class="timeline-header">
+
+                    <div class="timeline-header-main">
+
+                        <div class="min-w-0">
+
+                            <div class="timeline-main-title">
+                                {{ timelineTitle }}
+                            </div>
+
+                            <div class="timeline-main-count">
+                                {{ timelineDocs.length }} 篇
+                            </div>
+
+                        </div>
+
+
+                        <div class="flex items-center gap-1">
+
+                            <el-button
+                                size="small"
+                                circle
+                                @click="moveTimelineMonth(-1)">
+
+                                <el-icon>
+                                    <arrow-left></arrow-left>
+                                </el-icon>
+
+                            </el-button>
+
+
+                            <el-button
+                                size="small"
+                                @click="timelineToday">
+
+                                今天
+
+                            </el-button>
+
+
+                            <el-button
+                                size="small"
+                                circle
+                                @click="moveTimelineMonth(1)">
+
+                                <el-icon>
+                                    <arrow-right></arrow-right>
+                                </el-icon>
+
+                            </el-button>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="timeline-options">
+
+                        <el-radio-group
+                            v-model="timelineTimeField"
+                            size="small">
+
+                            <el-radio-button label="created">
+                                创建
+                            </el-radio-button>
+
+                            <el-radio-button label="updated">
+                                修改
+                            </el-radio-button>
+
+                        </el-radio-group>
+
+
+                        <el-radio-group
+                            v-model="timelineRangeMode"
+                            size="small">
+
+                            <el-radio-button label="day">
+                                日
+                            </el-radio-button>
+
+                            <el-radio-button label="week">
+                                周
+                            </el-radio-button>
+
+                        </el-radio-group>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     展开日历
+                     ================================================= -->
+                <div
+                    v-show="!calendarCollapsed"
+                    class="calendar-container">
+
+                    <div class="calendar-toolbar">
+
+                        <span class="calendar-month">
+                            {{ calendarTitle }}
+                        </span>
+
+                        <div class="flex items-center gap-1">
+
+                            <el-button
+                                link
+                                size="small"
+                                @click="moveTimelineMonth(-1)">
+                                ‹
+                            </el-button>
+
+                            <el-button
+                                link
+                                size="small"
+                                @click="timelineToday">
+                                今天
+                            </el-button>
+
+                            <el-button
+                                link
+                                size="small"
+                                @click="moveTimelineMonth(1)">
+                                ›
+                            </el-button>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="calendar-grid">
+
+                        <div
+                            v-for="day in weekNames"
+                            :key="day"
+                            class="calendar-weekday">
+
+                            {{ day }}
+
+                        </div>
+
+
+                        <div
+                            v-for="cell in calendarCells"
+                            :key="cell.key"
+                            class="calendar-cell"
+                            :class="{
+                                'other-month': !cell.currentMonth,
+                                'today': cell.today,
+                                'selected': cell.selected,
+                                'has-docs': cell.count > 0,
+                                'heavy': cell.count >= 5
+                            }"
+                            @click="selectCalendarDay(cell.date)">
+
+                            <div class="calendar-number">
+                                {{ cell.day }}
+                            </div>
+
+                            <div class="calendar-count">
+                                <span v-if="cell.count > 0">
+                                    {{ cell.count }}
+                                </span>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     折叠日历
+                     ================================================= -->
+                <div
+                    v-show="calendarCollapsed"
+                    class="timeline-calendar-collapsed">
+
+                    <div class="flex items-center min-w-0">
+
+                        <span class="collapsed-month">
+                            {{ calendarTitle }}
+                        </span>
+
+                        <span class="collapsed-info">
+                            本月 {{ currentMonthDocCount }} 篇
+                        </span>
+
+                    </div>
+
+                    <span class="text-[10px] text-slate-400">
+                        再点“时间线”展开
+                    </span>
+
+                </div>
+
+
+                <!-- =================================================
+                     文档时间线
+                     ================================================= -->
+                <div class="timeline-document-list">
+
+                    <!-- 日 -->
+
+                    <template v-if="timelineRangeMode === 'day'">
+
+                        <div class="timeline-group">
+
+                            <div class="timeline-group-header">
+
+                                <span class="timeline-group-title">
+                                    {{ selectedDateLabel }}
+                                </span>
+
+                                <span class="timeline-group-count">
+                                    {{ timelineDocs.length }} 篇
+                                </span>
+
+                            </div>
+
+
+                            <div
+                                v-for="doc in timelineDocs"
+                                :key="doc.id"
+                                class="timeline-document"
+                                :class="{
+                                    active: activeDocId === doc.id
+                                }"
+                                @click="loadDocumentFromTimeline(doc.id)">
+
+                                <div class="timeline-document-title">
+                                    {{ getDocTitle(doc) }}
+                                </div>
+
+                                <div class="timeline-document-meta">
+
+                                    <span>
+                                        {{ formatTimelineTime(doc) }}
+                                    </span>
+
+                                    <span>
+
+                                        <span v-if="doc.is_pinned === 1">
+                                            📌
+                                        </span>
+
+                                        <span v-if="doc.status === 'archive'">
+                                            📦
+                                        </span>
+
+                                    </span>
+
+                                </div>
+
+                                <div
+                                    v-if="getDocPreview(doc)"
+                                    class="timeline-document-preview">
+
+                                    {{ getDocPreview(doc) }}
+
+                                </div>
+
+                            </div>
+
+
+                            <div
+                                v-if="timelineDocs.length === 0"
+                                class="timeline-empty">
+
+                                这一天没有文章
+
+                            </div>
+
+                        </div>
+
+                    </template>
+
+
+                    <!-- 周 -->
+
+                    <template v-else>
+
+                        <div class="timeline-group">
+
+                            <div class="timeline-group-header">
+
+                                <span class="timeline-group-title">
+                                    {{ selectedWeekLabel }}
+                                </span>
+
+                                <span class="timeline-group-count">
+                                    {{ timelineDocs.length }} 篇
+                                </span>
+
+                            </div>
+
+
+                            <div
+                                v-for="group in timelineDayGroups"
+                                :key="group.key">
+
+                                <div class="timeline-group-header mt-3">
+
+                                    <span class="timeline-group-title">
+                                        {{ group.label }}
+                                    </span>
+
+                                    <span class="timeline-group-count">
+                                        {{ group.docs.length }} 篇
+                                    </span>
+
+                                </div>
+
+
+                                <div
+                                    v-for="doc in group.docs"
+                                    :key="doc.id"
+                                    class="timeline-document"
+                                    :class="{
+                                        active: activeDocId === doc.id
+                                    }"
+                                    @click="loadDocumentFromTimeline(doc.id)">
+
+                                    <div class="timeline-document-title">
+                                        {{ getDocTitle(doc) }}
+                                    </div>
+
+                                    <div class="timeline-document-meta">
+
+                                        <span>
+                                            {{ formatTimelineTime(doc) }}
+                                        </span>
+
+                                        <span>
+
+                                            <span v-if="doc.is_pinned === 1">
+                                                📌
+                                            </span>
+
+                                            <span v-if="doc.status === 'archive'">
+                                                📦
+                                            </span>
+
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div
+                                v-if="timelineDocs.length === 0"
+                                class="timeline-empty">
+
+                                这一周没有文章
+
+                            </div>
+
+                        </div>
+
+                    </template>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+
+        <!-- =====================================================
+             主编辑区
+             ===================================================== -->
+
+        <main
+            v-show="!isMobile || mobileView === 'editor'"
+            class="flex-1 flex flex-col bg-white relative min-w-0">
+
+            <!-- 空状态 -->
+
+            <div
+                v-show="!activeDocId && !isCreating"
+                class="absolute inset-0 flex items-center justify-center bg-slate-50/50 text-slate-500">
+
+                <div class="text-4xl opacity-80">
+                    🌱 知识图谱轨迹
+                </div>
+
+            </div>
+
+
+            <!-- 编辑器 -->
+
+            <div
+                v-show="activeDocId || isCreating"
+                class="flex flex-col h-full w-full">
+
+                <div
+                    class="h-12 border-b border-slate-100 flex items-center justify-between px-4 bg-slate-50/50 shrink-0 mobile-editor-header">
+
+                    <div class="flex items-center gap-2 min-w-0">
+
+                        <el-button
+                            v-if="isMobile"
+                            size="small"
+                            circle
+                            plain
+                            @click="flushAndBack">
+
+                            <el-icon>
+                                <arrow-left></arrow-left>
+                            </el-icon>
+
+                        </el-button>
+
+
+                        <el-button
+                            size="small"
+                            circle
+                            plain
+                            @click="isFocusMode = !isFocusMode">
+
+                            <el-icon>
+                                <full-screen></full-screen>
+                            </el-icon>
+
+                        </el-button>
+
+
+                        <!-- 文件名 -->
+
+                        <el-input
+                            v-model="docIdInput"
+                            class="doc-id-input"
+                            size="small"
+                            :disabled="isCreating || renaming"
+                            @keyup.enter="commitRename"
+                            @blur="commitRename">
+
+                            <template #prepend>
+                                ID
+                            </template>
+
+                        </el-input>
+
+
+                        <span class="rename-hint">
+                            回车或失焦重命名文件
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex items-center gap-3 shrink-0">
+
+                        <span
+                            class="text-xs mobile-save-status"
+                            :class="{
+                                'text-red-500':
+                                    saveStatus === '保存失败',
+
+                                'text-blue-500':
+                                    saveStatus === '保存中...',
+
+                                'text-orange-500':
+                                    saveStatus === '有未保存修改',
+
+                                'text-slate-400':
+                                    ![
+                                        '保存失败',
+                                        '保存中...',
+                                        '有未保存修改'
+                                    ].includes(saveStatus)
+                            }">
+
+                            {{ saveStatus }}
+
+                        </span>
+
+
+                        <el-button
+                            size="small"
+                            type="success"
+                            @click="manualSave"
+                            :loading="saving">
+
+                            保存
+
+                        </el-button>
+
+                    </div>
+
+                </div>
+
+
+                <div class="flex-1 overflow-hidden relative">
+
+                    <div
+                        id="vditor-container"
+                        class="absolute inset-0">
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+
+
+        <!-- =====================================================
+             右侧信息
+             ===================================================== -->
+
+        <aside
+            v-show="(activeDocId || isCreating) && !isFocusMode && !isMobile"
+            class="w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0">
+
+            <!-- 操作 -->
+
+            <div
+                v-if="activeDocId"
+                class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex gap-2">
+
+                <el-button
+                    size="small"
+                    class="flex-1"
+                    :type="activeDocMeta.is_pinned ? 'warning' : 'default'"
+                    @click="toggleAction('toggle_pin')">
+
+                    {{ activeDocMeta.is_pinned
+                        ? '取消置顶'
+                        : '📌 置顶' }}
+
+                </el-button>
+
+
+                <el-button
+                    size="small"
+                    class="flex-1"
+                    plain
+                    :type="activeDocStatus === 'archive'
+                        ? 'primary'
+                        : 'info'"
+                    @click="toggleAction('toggle_archive')">
+
+                    {{ activeDocStatus === 'archive'
+                        ? '还原活跃'
+                        : '📦 归档' }}
+
+                </el-button>
+
+            </div>
+
+
+            <!-- 状态 -->
+
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+
+                <h3 class="text-sm font-bold text-slate-700 mb-3">
+                    文档状态
+                </h3>
+
+                <div class="text-[13px] text-slate-600 space-y-3">
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            生命周期
+                        </span>
+
+                        <el-tag
+                            :type="activeDocStatus === 'archive'
+                                ? 'info'
+                                : 'success'"
+                            size="small"
+                            effect="dark">
+
+                            {{ activeDocStatus.toUpperCase() }}
+
+                        </el-tag>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            创建时间
+                        </span>
+
+                        <span :title="fullCreatedTime">
+                            {{ createdTimeAgo }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            最后更新
+                        </span>
+
+                        <span :title="fullUpdateTime">
+                            {{ updatedTimeAgo }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            字数
+                        </span>
+
+                        <span>
+                            {{ charCount }} 字
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            总字符
+                        </span>
+
+                        <span>
+                            {{ totalChars }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            行数
+                        </span>
+
+                        <span>
+                            {{ lineCount }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between">
+
+                        <span class="text-slate-400">
+                            预计阅读
+                        </span>
+
+                        <span>
+                            {{ readTime }} 分钟
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- AI -->
+
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+
+                <h3 class="text-sm font-bold text-slate-700 mb-3 flex justify-between items-center">
+
+                    <span>
+                        🧠 标签提取
+                    </span>
+
+                    <el-button
+                        size="small"
+                        type="primary"
+                        :loading="aiLoading"
+                        @click="generateTags">
+
+                        提取
+
+                    </el-button>
+
+                </h3>
+
+                <div class="text-[11px] text-slate-400">
+                    使用 AI 自动阅读提炼标签
+                </div>
+
+
+                <div
+                    v-if="relatedDocs.length > 0"
+                    class="mt-4 border-t border-slate-100 pt-3">
+
+                    <h4 class="text-xs font-bold text-slate-600 mb-2">
+                        🔗 相关关联推荐
+                    </h4>
+
+                    <div class="space-y-1.5">
+
+                        <div
+                            v-for="rd in relatedDocs"
+                            :key="rd.id"
+                            @click="loadDocument(rd.id)"
+                            class="text-[12px] text-blue-600 cursor-pointer truncate">
+
+                            {{ rd.title }}
+
+                            <span class="text-slate-400 text-[10px]">
+                                ({{ rd.overlap }} 标签重合)
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </aside>
+
     </div>
 
-    <script>
-        const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
-        
-        const formatTimeAgo = (timestamp) => {
-            if (!timestamp) return '-';
-            const seconds = Math.floor((new Date() - new Date(timestamp * 1000)) / 1000);
-            if (seconds < 60) return "刚刚";
-            const intervals = [{ limit: 31536000, label: "年" }, { limit: 2592000, label: "个月" }, { limit: 86400, label: "天" }, { limit: 3600, label: "小时" }, { limit: 60, label: "分钟" }];
-            for (let i of intervals) {
-                const count = Math.floor(seconds / i.limit);
-                if (count >= 1) return count + " " + i.label + "前";
-            }
-        };
 
-        const app = createApp({
-            setup() {
-                const documents = ref([]);
-                const searchResults = ref([]);
-                const searchQuery = ref('');
-                
-                const activeDocId = ref('');
-                const docIdInput = ref('');
-                const editorContent = ref('');
-                const isCreating = ref(false);
-                const activeDocMeta = ref({ created_time: null, update_time: null, is_pinned: 0 });
-                const relatedDocs = ref([]);
-                
-                const saving = ref(false);
-                const syncing = ref(false);
-                const isSearching = ref(false);
-                const saveStatus = ref('');
-                let debounceTimer = null;
-                const aiLoading = ref(false);
-                const generatedTags = ref([]);
-                
-                const isFocusMode = ref(false);
-                const autoAiTags = ref(localStorage.getItem('autoAiTags') === 'true');
-                watch(autoAiTags, (val) => localStorage.setItem('autoAiTags', val));
+    <!-- =========================================================
+         移动端底部
+         ========================================================= -->
 
-                // 移动端响应式状态
-                const isMobile = ref(window.innerWidth <= 768);
-                const mobileView = ref('list'); // 'list' 或 'editor'
-                const updateIsMobile = () => {
-                    isMobile.value = window.innerWidth <= 768;
-                    if (!isMobile.value) {
-                        mobileView.value = 'list'; // 桌面端默认显示列表，不影响桌面布局
-                    }
-                };
-                window.addEventListener('resize', updateIsMobile);
-                onMounted(() => updateIsMobile());
+    <div
+        v-if="isMobile && !isFocusMode"
+        class="mobile-bottom-nav">
 
-                let vditorInstance = null;
-                let isVditorReady = false;
-                let echartsInstance = null;
+        <div
+            class="mobile-nav-item"
+            :class="{
+                active:
+                    mobileView === 'list' &&
+                    sidebarMode === 'docs'
+            }"
+            @click="
+                mobileView = 'list';
+                sidebarMode = 'docs'
+            ">
 
-                const getDocTitle = (doc) => {
-                    let title = doc.title || '';
-                    const isDefault = !title || title.trim() === '' || title === '新文档标题' || title.startsWith('随记_') || title.startsWith('note_');
-                    if (isDefault && doc.tags_cache && doc.tags_cache !== '未分类' && doc.tags_cache !== '笔记') {
-                        return `[提取] ${doc.tags_cache.replace(/,/g, ' | ')}`;
-                    }
-                    return title || doc.id || '未命名笔记';
-                };
+            <el-icon>
+                <document></document>
+            </el-icon>
 
-                const parseTitleFromContent = (content) => {
-                    const match = content.match(/^---\n([\s\S]*?)\n---/);
-                    if (match) {
-                        const titleLine = match[1].match(/^title:\s*(.+)$/m);
-                        if (titleLine) return titleLine[1].trim();
-                    }
-                    return '';
-                };
+            <span>
+                文档
+            </span>
 
-                const escapeRegExp = (str) => str ? str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+        </div>
 
-                const highlightText = (text) => {
-                    if (!searchQuery.value) return text;
-                    const regex = new RegExp(`(${escapeRegExp(searchQuery.value)})`, 'gi');
-                    return text.replace(regex, '<mark class="highlight-mark">$1</mark>');
-                };
 
-                const applyEditorHighlight = () => {
-                    try {
-                        if (!CSS.highlights) return;
-                        CSS.highlights.clear();
-                        if (!searchQuery.value) return;
+        <div
+            class="mobile-nav-item"
+            :class="{
+                active:
+                    mobileView === 'list' &&
+                    sidebarMode === 'timeline'
+            }"
+            @click="
+                mobileView = 'list';
+                sidebarMode = 'timeline'
+            ">
 
-                        const editorDom = document.querySelector('.vditor-ir') || document.querySelector('.vditor-wysiwyg');
-                        if (!editorDom) return;
+            <el-icon>
+                <calendar></calendar>
+            </el-icon>
 
-                        const treeWalker = document.createTreeWalker(editorDom, NodeFilter.SHOW_TEXT);
-                        const ranges = [];
-                        let currentNode;
-                        const regex = new RegExp(escapeRegExp(searchQuery.value), 'gi');
+            <span>
+                时间线
+            </span>
 
-                        while ((currentNode = treeWalker.nextNode())) {
-                            const text = currentNode.textContent;
-                            let match;
-                            while ((match = regex.exec(text)) !== null) {
-                                if (match[0].length === 0) break; 
-                                const range = new Range();
-                                range.setStart(currentNode, match.index);
-                                range.setEnd(currentNode, match.index + match[0].length);
-                                ranges.push(range);
-                            }
-                        }
+        </div>
 
-                        if (ranges.length > 0) {
-                            const highlight = new Highlight(...ranges);
-                            CSS.highlights.set('search-results', highlight);
-                        }
-                    } catch (e) {
-                        console.warn("编辑器内搜索高亮渲染异常 (已被捕获，不影响全局搜索逻辑):", e);
-                    }
-                };
 
-                let searchTimer = null;
-                const executeSearch = async () => {
-                    applyEditorHighlight();
-                    
-                    const q = searchQuery.value.trim();
-                    if (!q) { 
-                        searchResults.value = []; 
-                        return; 
-                    }
+        <div
+            class="mobile-nav-item"
+            @click="createNew">
 
-                    isSearching.value = true;
-                    try {
-                        const res = await fetch(`/docapi/search?q=${encodeURIComponent(q)}`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            searchResults.value = data.results || [];
-                            if (searchResults.value.length === 0) {
-                                ElementPlus.ElMessage.info('没有匹配的搜索结果');
-                            }
-                        } else {
-                            ElementPlus.ElMessage.error(`搜索接口返回异常: 状态码 ${res.status}`);
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        ElementPlus.ElMessage.error(`请求后端失败，请检查网络或后端是否开启: ${e.message}`);
-                    } finally {
-                        isSearching.value = false;
-                    }
-                };
+            <el-icon>
+                <edit-pen></edit-pen>
+            </el-icon>
 
-                const debouncedSearch = () => {
-                    clearTimeout(searchTimer);
-                    searchTimer = setTimeout(() => {
-                        executeSearch();
-                    }, 400);
-                };
+            <span>
+                记录
+            </span>
 
-                const forceSearch = () => {
-                    clearTimeout(searchTimer);
-                    executeSearch();
-                };
+        </div>
 
-                watch(searchQuery, () => {
-                    debouncedSearch();
-                });
+    </div>
 
-                const pinnedDocs = computed(() => documents.value.filter(d => d.is_pinned === 1));
-                const inboxDocs = computed(() => documents.value.filter(d => d.status === 'active' && d.is_pinned === 0));
-                const archiveDocs = computed(() => documents.value.filter(d => d.status === 'archive' && d.is_pinned === 0));
+</div>
 
-                const activeDocStatus = computed(() => activeDocId.value ? (documents.value.find(d => d.id === activeDocId.value)?.status || '-') : (isCreating.value ? 'active' : '-'));
-                const createdTimeAgo = computed(() => formatTimeAgo(activeDocMeta.value.created_time));
-                const updatedTimeAgo = computed(() => formatTimeAgo(activeDocMeta.value.update_time));
-                const fullCreatedTime = computed(() => activeDocMeta.value.created_time ? new Date(activeDocMeta.value.created_time * 1000).toLocaleString() : '');
-                const fullUpdateTime = computed(() => activeDocMeta.value.update_time ? new Date(activeDocMeta.value.update_time * 1000).toLocaleString() : '');
 
-                const contentWithoutFrontMatter = computed(() => {
-                    const content = editorContent.value || '';
-                    const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
-                    return match ? content.slice(match[0].length) : content;
-                });
+<script>
+const {
+    createApp,
+    ref,
+    computed,
+    watch,
+    nextTick,
+    onMounted
+} = Vue;
 
-                const charCount = computed(() => contentWithoutFrontMatter.value.replace(/\s/g, '').length);
-                const totalChars = computed(() => contentWithoutFrontMatter.value.length);
-                const lineCount = computed(() => contentWithoutFrontMatter.value.split('\n').length);
-                const newlineCount = computed(() => lineCount.value - 1);
-                const paragraphCount = computed(() => contentWithoutFrontMatter.value.split(/\n\s*\n/).filter(p => p.trim().length > 0).length);
-                const readTime = computed(() => Math.max(1, Math.ceil(charCount.value / 500)));
 
-                const fetchDocuments = async () => {
-                    const res = await fetch('/docapi/documents');
-                    documents.value = (await res.json()).docs || [];
-                    if (activeDocId.value) {
-                        const frontTitle = parseTitleFromContent(editorContent.value);
-                        if (frontTitle) {
-                            const doc = documents.value.find(d => d.id === activeDocId.value);
-                            if (doc && doc.title !== frontTitle) {
-                                doc.title = frontTitle;
-                            }
-                        }
-                    }
-                };
+/* =========================================================
+   APP
+   ========================================================= */
 
-                const fetchRelated = async (id) => {
-                    const res = await fetch(`/docapi/document/${id}/related`);
-                    relatedDocs.value = await res.json();
-                };
+const app = createApp({
 
-                const initECharts = async () => {
-                    const chartDom = document.getElementById('timeline-chart');
-                    if (!chartDom) return;
-                    if (!echartsInstance) echartsInstance = echarts.init(chartDom);
-                    
-                    const res = await fetch('/docapi/timeline');
-                    const heatmapData = await res.json();
-                    
-                    const year = new Date().getFullYear();
-                    echartsInstance.setOption({
-                        tooltip: { formatter: p => `${p.value[0]}: ${p.value[1]} 篇` },
-                        visualMap: { min: 0, max: 5, show: false, inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] } },
-                        calendar: { top: 30, left: 30, right: 30, range: year, itemStyle: { borderWidth: 3, borderColor: '#f8fafc' }, splitLine: { show: false }, yearLabel: { show: false } },
-                        series: { type: 'heatmap', coordinateSystem: 'calendar', data: heatmapData }
-                    });
-                };
+    setup() {
 
-               const initOrUpdateVditor = (content) => {
-                    if (vditorInstance && isVditorReady) {
-                        vditorInstance.setValue(content);
-                        setTimeout(applyEditorHighlight, 100);
-                    } else if (!vditorInstance) {
-                        vditorInstance = new Vditor('vditor-container', {
-                            cdn: '/static/cdn/vditor',
-                            mode: 'ir',
-                            height: '100%', 
-                            cache: { enable: false }, 
-                            outline: { enable: false, position: 'left' },
-                            preview: {
-                                hljs: false,
-                                math: false,
-                                mermaid: false
-                            },
-                            toolbar: [
-                                'headings', 'bold', 'italic', 'strike', 'link', '|',
-                                'list', 'ordered-list', 'check', '|',
-                                'quote', 'line', 'code', 'inline-code', '|',
-                                'table', 'undo', 'redo', '|',
-                                'outline', 'fullscreen'
-                            ],
-                            value: content,
-                            input: (val) => { 
-                                editorContent.value = val; 
-                                handleInput();
-                                applyEditorHighlight();
-                            },
-                            after: () => { 
-                                isVditorReady = true;
-                                vditorInstance.setValue(editorContent.value);
-                                setTimeout(applyEditorHighlight, 100); 
-                            }
-                        });
-                    }
-                };
+        /* =====================================================
+           基础状态
+           ===================================================== */
 
-                const createNew = () => {
-                    activeDocId.value = ''; isCreating.value = true; relatedDocs.value = []; generatedTags.value = [];
-                    const ts = new Date().getTime();
-                    docIdInput.value = `note_${ts}`;
-                    activeDocMeta.value = { created_time: Math.floor(ts / 1000), update_time: Math.floor(ts / 1000), is_pinned: 0 };
-                    editorContent.value = `---\ntitle: 随记_${ts}\ntags:\n  - 笔记\n---\n\n`;
-                    saveStatus.value = '新建待存';
-                    nextTick(() => initOrUpdateVditor(editorContent.value));
-                    if (isMobile.value) mobileView.value = 'editor';
-                };
+        const documents = ref([]);
+        const searchResults = ref([]);
+        const searchQuery = ref('');
 
-                const loadDocument = async (id) => {
-                    isCreating.value = false; generatedTags.value = [];
-                    const res = await fetch(`/docapi/document/${id}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        activeDocId.value = id;
-                        docIdInput.value = id;
-                        editorContent.value = data.content;
-                        activeDocMeta.value = data.meta;
-                        saveStatus.value = '已加载';
-                        nextTick(() => initOrUpdateVditor(data.content));
-                        fetchRelated(id);
-                    }
-                    if (isMobile.value) mobileView.value = 'editor';
-                };
+        const activeDocId = ref('');
+        const docIdInput = ref('');
+        const editorContent = ref('');
 
-                const executeSave = async () => {
-                    if (!docIdInput.value) return;
-                    saving.value = true;
-                    try {
-                        const res = await fetch('/docapi/document/save', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: docIdInput.value, content: editorContent.value })
-                        });
-                        if (res.ok) {
-                            saveStatus.value = `已保存 ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
-                            activeDocId.value = docIdInput.value;
-                            isCreating.value = false;
-                            activeDocMeta.value.update_time = Math.floor(Date.now() / 1000);
-                            
-                            const frontTitle = parseTitleFromContent(editorContent.value);
-                            if (frontTitle) {
-                                const doc = documents.value.find(d => d.id === activeDocId.value);
-                                if (doc) doc.title = frontTitle;
-                            }
-                            
-                            await fetchDocuments();
-                        }
-                    } catch (e) { saveStatus.value = '保存失败'; } finally { saving.value = false; }
-                };
+        const isCreating = ref(false);
 
-                const manualSave = () => { clearTimeout(debounceTimer); executeSave(); };
-                const handleInput = () => { saveStatus.value = '等待自动保存...'; clearTimeout(debounceTimer); debounceTimer = setTimeout(executeSave, 1200); };
-
-                const toggleAction = async (actionStr) => {
-                    if (!activeDocId.value) return;
-                    await fetch('/docapi/document/action', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: activeDocId.value, action: actionStr })
-                    });
-                    await loadDocument(activeDocId.value);
-                    await fetchDocuments();
-                };
-
-                const generateTags = async () => {
-                    if (!editorContent.value.trim()) return;
-                    aiLoading.value = true;
-                    try {
-                        const res = await fetch('/docapi/document/ai/tags', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ content: editorContent.value })
-                        });
-                        const data = await res.json();
-                        
-                        if (data.tags && Array.isArray(data.tags) && data.tags.length > 0 && !data.tags[0].includes("ERROR") && !data.tags[0].includes("MISSING")) {
-                            generatedTags.value = data.tags; 
-                            let content = editorContent.value;
-                            
-                            const match = content.match(/^---\n([\s\S]*?)\n---/);
-                            if (match) {
-                                let metaStr = match[1];
-                                const tagYaml = 'tags:\n' + data.tags.map(t => `  - ${t}`).join('\n');
-                                
-                                if (metaStr.match(/^tags:.*(?:\n\s*-.*)*/m)) {
-                                    metaStr = metaStr.replace(/^tags:.*(?:\n\s*-.*)*/m, tagYaml);
-                                } else {
-                                    metaStr += '\n' + tagYaml;
-                                }
-                                
-                                editorContent.value = `---\n${metaStr.trim()}\n---\n` + content.slice(match[0].length).trimStart();
-                                initOrUpdateVditor(editorContent.value);
-                                handleInput();
-                            }
-                        } else {
-                            ElementPlus.ElMessage.warning('未能提取出有效标签');
-                        }
-                    } catch (e) {
-                        ElementPlus.ElMessage.error('AI 解析故障');
-                    } finally { 
-                        aiLoading.value = false; 
-                    }
-                };
-
-                const runSilentAiBatch = async () => {
-                    try {
-                        const res = await fetch('/docapi/ai/batch_tags', { method: 'POST' });
-                        const data = await res.json();
-                        if (data.processed > 0) fetchDocuments();
-                    } catch(e){}
-                };
-
-                const rebuildIndex = async () => {
-                    syncing.value = true;
-                    try { await fetch('/docapi/init', { method: 'POST' }); await fetchDocuments(); initECharts(); }
-                    finally { syncing.value = false; }
-                };
-
-                onMounted(() => { 
-                    fetchDocuments(); 
-                    initECharts(); 
-                    if (autoAiTags.value) setTimeout(runSilentAiBatch, 3000); 
-                });
-
-                return {
-                    documents, searchResults, searchQuery, autoAiTags, isFocusMode,
-                    pinnedDocs, inboxDocs, archiveDocs, activeDocId, docIdInput, editorContent, relatedDocs,
-                    isCreating, saving, syncing, isSearching, saveStatus, activeDocStatus, activeDocMeta, aiLoading, generatedTags,
-                    createdTimeAgo, updatedTimeAgo, fullCreatedTime, fullUpdateTime,
-                    charCount, totalChars, lineCount, newlineCount, paragraphCount, readTime,
-                    isMobile, mobileView,
-                    createNew, loadDocument, manualSave, handleInput, forceSearch, rebuildIndex, generateTags, toggleAction, getDocTitle, highlightText
-                };
-            }
+        const activeDocMeta = ref({
+            id: '',
+            title: '',
+            created_time: null,
+            update_time: null,
+            is_pinned: 0,
+            status: 'active'
         });
 
-        for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
-        app.use(ElementPlus);
-        app.mount('#app');
-    </script>
+        const relatedDocs = ref([]);
+
+        const saving = ref(false);
+        const syncing = ref(false);
+        const isSearching = ref(false);
+        const renaming = ref(false);
+
+        const saveStatus = ref('');
+
+        const aiLoading = ref(false);
+        const generatedTags = ref([]);
+
+        const isFocusMode = ref(false);
+
+        const autoAiTags = ref(
+            localStorage.getItem('autoAiTags') === 'true'
+        );
+
+
+        watch(
+            autoAiTags,
+            value => {
+                localStorage.setItem(
+                    'autoAiTags',
+                    value
+                );
+            }
+        );
+
+
+        /* =====================================================
+           保存系统
+           ===================================================== */
+
+        const dirty = ref(false);
+
+        let saveTimer = null;
+        let saveSequence = 0;
+
+        const pendingSnapshot = ref(null);
+
+        /*
+         * 保存队列必须串行。
+         */
+        let saveQueue = Promise.resolve();
+
+
+        /* =====================================================
+           移动端
+           ===================================================== */
+
+        const isMobile = ref(
+            window.innerWidth <= 768
+        );
+
+        const mobileView = ref('list');
+
+
+        const updateIsMobile = () => {
+            isMobile.value =
+                window.innerWidth <= 768;
+        };
+
+
+        window.addEventListener(
+            'resize',
+            updateIsMobile
+        );
+
+
+        /* =====================================================
+           侧栏
+           ===================================================== */
+
+        const sidebarMode =
+            ref('docs');
+
+
+        /* =====================================================
+           时间线
+           ===================================================== */
+
+        const timelineCursor =
+            ref(new Date());
+
+        const timelineTimeField =
+            ref('created');
+
+        const timelineRangeMode =
+            ref('day');
+
+        const calendarCollapsed =
+            ref(false);
+
+        const weekNames = [
+            '一',
+            '二',
+            '三',
+            '四',
+            '五',
+            '六',
+            '日'
+        ];
+
+
+        /* =====================================================
+           Vditor
+           ===================================================== */
+
+        let vditorInstance = null;
+        let isVditorReady = false;
+
+        let searchTimer = null;
+
+
+        /* =====================================================
+           时间工具
+           ===================================================== */
+
+        const getTimelineTimestamp = doc => {
+
+            if (
+                timelineTimeField.value ===
+                'updated'
+            ) {
+                return Number(
+                    doc.update_time || 0
+                );
+            }
+
+            return Number(
+                doc.created_time || 0
+            );
+        };
+
+
+        const dateKey = date => {
+
+            const d =
+                new Date(date);
+
+            return [
+                d.getFullYear(),
+                String(
+                    d.getMonth() + 1
+                ).padStart(2, '0'),
+                String(
+                    d.getDate()
+                ).padStart(2, '0')
+            ].join('-');
+        };
+
+
+        const startOfDay = date => {
+
+            const d =
+                new Date(date);
+
+            d.setHours(
+                0,
+                0,
+                0,
+                0
+            );
+
+            return d;
+        };
+
+
+        const startOfWeek = date => {
+
+            const d =
+                startOfDay(date);
+
+            const day =
+                d.getDay();
+
+            const diff =
+                day === 0
+                    ? -6
+                    : 1 - day;
+
+            d.setDate(
+                d.getDate() + diff
+            );
+
+            return d;
+        };
+
+
+        const formatTimeAgo = timestamp => {
+
+            if (!timestamp) {
+                return '-';
+            }
+
+            const seconds =
+                Math.floor(
+                    (
+                        Date.now() -
+                        Number(timestamp) * 1000
+                    ) / 1000
+                );
+
+            if (seconds < 60) {
+                return '刚刚';
+            }
+
+            const ranges = [
+                [31536000, '年'],
+                [2592000, '个月'],
+                [86400, '天'],
+                [3600, '小时'],
+                [60, '分钟']
+            ];
+
+            for (
+                const [limit, label]
+                of ranges
+            ) {
+
+                const count =
+                    Math.floor(
+                        seconds / limit
+                    );
+
+                if (count >= 1) {
+                    return `${count} ${label}前`;
+                }
+            }
+
+            return '-';
+        };
+
+
+        const formatDateTime = timestamp => {
+
+            if (!timestamp) {
+                return '-';
+            }
+
+            return new Date(
+                Number(timestamp) * 1000
+            ).toLocaleString(
+                'zh-CN'
+            );
+        };
+
+
+        const formatTimelineTime = doc => {
+
+            const ts =
+                getTimelineTimestamp(doc);
+
+            if (!ts) {
+                return '';
+            }
+
+            return new Date(
+                ts * 1000
+            ).toLocaleTimeString(
+                'zh-CN',
+                {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }
+            );
+        };
+
+
+        /* =====================================================
+           标题
+           ===================================================== */
+
+        const getDocTitle = doc => {
+
+            let title =
+                doc.title || '';
+
+            const isDefault =
+                !title ||
+                title.trim() === '' ||
+                title === '新文档标题' ||
+                title.startsWith('随记_') ||
+                title.startsWith('note_');
+
+            if (
+                isDefault &&
+                doc.tags_cache &&
+                doc.tags_cache !== '未分类' &&
+                doc.tags_cache !== '笔记'
+            ) {
+
+                return (
+                    '[提取] ' +
+                    doc.tags_cache.replace(
+                        /,/g,
+                        ' | '
+                    )
+                );
+            }
+
+            return (
+                title ||
+                doc.id ||
+                '未命名笔记'
+            );
+        };
+
+
+        const getDocPreview = doc => {
+
+            const text =
+                doc.preview ||
+                doc.summary ||
+                doc.snippet ||
+                doc.content_preview ||
+                '';
+
+            if (!text) {
+                return '';
+            }
+
+            return text
+                .replace(
+                    /```[\s\S]*?```/g,
+                    ''
+                )
+                .replace(
+                    /[#>*_`~\[\]]/g,
+                    ''
+                )
+                .replace(
+                    /\s+/g,
+                    ' '
+                )
+                .trim();
+        };
+
+
+        /*
+         * 从 Markdown frontmatter 中读取 title。
+         */
+        const parseTitleFromContent =
+            content => {
+
+                const match =
+                    content.match(
+                        /^---\n([\s\S]*?)\n---/
+                    );
+
+                if (!match) {
+                    return '';
+                }
+
+                const titleMatch =
+                    match[1].match(
+                        /^title:\s*(.+)$/m
+                    );
+
+                if (!titleMatch) {
+                    return '';
+                }
+
+                return titleMatch[1]
+                    .trim()
+                    .replace(
+                        /^['"]|['"]$/g,
+                        ''
+                    );
+            };
+
+
+        /* =====================================================
+           标题同步
+           ===================================================== */
+
+        const syncCurrentTitleToList =
+            title => {
+
+                if (
+                    !activeDocId.value ||
+                    !title
+                ) {
+                    return;
+                }
+
+                const index =
+                    documents.value.findIndex(
+                        doc =>
+                            doc.id ===
+                            activeDocId.value
+                    );
+
+                if (index === -1) {
+                    return;
+                }
+
+                documents.value[index] = {
+                    ...documents.value[index],
+                    title
+                };
+            };
+
+
+        /*
+         * 后端保存后返回完整 meta，
+         * 直接同步列表。
+         */
+        const syncDocumentMetaToList =
+            meta => {
+
+                if (!meta || !meta.id) {
+                    return;
+                }
+
+                const index =
+                    documents.value.findIndex(
+                        doc =>
+                            doc.id === meta.id
+                    );
+
+                if (index >= 0) {
+
+                    documents.value[index] = {
+                        ...documents.value[index],
+                        ...meta
+                    };
+
+                } else {
+
+                    documents.value.unshift({
+                        ...meta
+                    });
+                }
+            };
+
+
+        /* =====================================================
+           文档分类
+           ===================================================== */
+
+        const pinnedDocs =
+            computed(() =>
+                documents.value.filter(
+                    doc =>
+                        doc.is_pinned === 1
+                )
+            );
+
+
+        const inboxDocs =
+            computed(() =>
+                documents.value.filter(
+                    doc =>
+                        doc.status === 'active' &&
+                        doc.is_pinned === 0
+                )
+            );
+
+
+        const archiveDocs =
+            computed(() =>
+                documents.value.filter(
+                    doc =>
+                        doc.status === 'archive' &&
+                        doc.is_pinned === 0
+                )
+            );
+
+
+        const activeDocStatus =
+            computed(() => {
+
+                if (!activeDocId.value) {
+
+                    return isCreating.value
+                        ? 'active'
+                        : '-';
+                }
+
+                return (
+                    documents.value.find(
+                        doc =>
+                            doc.id ===
+                            activeDocId.value
+                    )?.status ||
+                    activeDocMeta.value.status ||
+                    '-'
+                );
+            });
+
+
+        /* =====================================================
+           文档状态
+           ===================================================== */
+
+        const createdTimeAgo =
+            computed(() =>
+                formatTimeAgo(
+                    activeDocMeta.value
+                        .created_time
+                )
+            );
+
+
+        const updatedTimeAgo =
+            computed(() =>
+                formatTimeAgo(
+                    activeDocMeta.value
+                        .update_time
+                )
+            );
+
+
+        const fullCreatedTime =
+            computed(() =>
+                formatDateTime(
+                    activeDocMeta.value
+                        .created_time
+                )
+            );
+
+
+        const fullUpdateTime =
+            computed(() =>
+                formatDateTime(
+                    activeDocMeta.value
+                        .update_time
+                )
+            );
+
+
+        /* =====================================================
+           内容统计
+           ===================================================== */
+
+        const contentWithoutFrontMatter =
+            computed(() => {
+
+                const content =
+                    editorContent.value || '';
+
+                const match =
+                    content.match(
+                        /^---\n([\s\S]*?)\n---\n?/
+                    );
+
+                return match
+                    ? content.slice(
+                        match[0].length
+                    )
+                    : content;
+            });
+
+
+        const charCount =
+            computed(() =>
+                contentWithoutFrontMatter.value
+                    .replace(/\s/g, '')
+                    .length
+            );
+
+
+        const totalChars =
+            computed(() =>
+                contentWithoutFrontMatter.value.length
+            );
+
+
+        const lineCount =
+            computed(() =>
+                contentWithoutFrontMatter.value
+                    .split('\n')
+                    .length
+            );
+
+
+        const paragraphCount =
+            computed(() =>
+                contentWithoutFrontMatter.value
+                    .split(/\n\s*\n/)
+                    .filter(
+                        p =>
+                            p.trim().length > 0
+                    )
+                    .length
+            );
+
+
+        const readTime =
+            computed(() =>
+                Math.max(
+                    1,
+                    Math.ceil(
+                        charCount.value / 500
+                    )
+                )
+            );
+
+
+        /* =====================================================
+           搜索
+           ===================================================== */
+
+        const escapeRegExp =
+            str =>
+                str
+                    ? str.replace(
+                        /[.*+?^${}()|[\]\\]/g,
+                        '\\$&'
+                    )
+                    : '';
+
+
+        const highlightText =
+            text => {
+
+                if (!searchQuery.value) {
+                    return text;
+                }
+
+                const regex =
+                    new RegExp(
+                        `(${escapeRegExp(
+                            searchQuery.value
+                        )})`,
+                        'gi'
+                    );
+
+                return text.replace(
+                    regex,
+                    '<mark class="highlight-mark">$1</mark>'
+                );
+            };
+
+
+        const forceSearch =
+            async () => {
+
+                clearTimeout(searchTimer);
+
+                const q =
+                    searchQuery.value.trim();
+
+                if (!q) {
+
+                    searchResults.value = [];
+
+                    return;
+                }
+
+                isSearching.value = true;
+
+                try {
+
+                    const res =
+                        await fetch(
+                            `/docapi/search?q=${encodeURIComponent(q)}`
+                        );
+
+                    if (!res.ok) {
+                        throw new Error(
+                            `HTTP ${res.status}`
+                        );
+                    }
+
+                    const data =
+                        await res.json();
+
+                    searchResults.value =
+                        data.results || [];
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    ElementPlus.ElMessage.error(
+                        '搜索失败'
+                    );
+
+                } finally {
+
+                    isSearching.value = false;
+                }
+            };
+
+
+        watch(
+            searchQuery,
+            () => {
+
+                clearTimeout(searchTimer);
+
+                searchTimer =
+                    setTimeout(
+                        forceSearch,
+                        400
+                    );
+            }
+        );
+
+
+        /* =====================================================
+           月历
+           ===================================================== */
+
+        const calendarMonth =
+            computed(() => {
+
+                const date =
+                    new Date(
+                        timelineCursor.value
+                    );
+
+                return new Date(
+                    date.getFullYear(),
+                    date.getMonth(),
+                    1
+                );
+            });
+
+
+        const calendarTitle =
+            computed(() =>
+                calendarMonth.value
+                    .toLocaleDateString(
+                        'zh-CN',
+                        {
+                            year: 'numeric',
+                            month: 'long'
+                        }
+                    )
+            );
+
+
+        const monthDocCounts =
+            computed(() => {
+
+                const result = {};
+
+                const month =
+                    calendarMonth.value;
+
+                const year =
+                    month.getFullYear();
+
+                const monthIndex =
+                    month.getMonth();
+
+                documents.value.forEach(
+                    doc => {
+
+                        const timestamp =
+                            getTimelineTimestamp(
+                                doc
+                            );
+
+                        if (!timestamp) {
+                            return;
+                        }
+
+                        const date =
+                            new Date(
+                                timestamp * 1000
+                            );
+
+                        if (
+                            date.getFullYear() !== year ||
+                            date.getMonth() !== monthIndex
+                        ) {
+                            return;
+                        }
+
+                        const key =
+                            dateKey(date);
+
+                        result[key] =
+                            (result[key] || 0) + 1;
+                    }
+                );
+
+                return result;
+            });
+
+
+        const currentMonthDocCount =
+            computed(() =>
+                Object.values(
+                    monthDocCounts.value
+                ).reduce(
+                    (sum, value) =>
+                        sum + value,
+                    0
+                )
+            );
+
+
+        const makeCalendarCell =
+            (date, currentMonth) => {
+
+                const key =
+                    dateKey(date);
+
+                const todayKey =
+                    dateKey(new Date());
+
+                const selectedKey =
+                    dateKey(
+                        timelineCursor.value
+                    );
+
+                const count =
+                    monthDocCounts.value[key] || 0;
+
+                return {
+                    key,
+                    date,
+                    day: date.getDate(),
+                    currentMonth,
+                    today: key === todayKey,
+                    selected: key === selectedKey,
+                    count
+                };
+            };
+
+
+        const calendarCells =
+            computed(() => {
+
+                const month =
+                    calendarMonth.value;
+
+                const year =
+                    month.getFullYear();
+
+                const monthIndex =
+                    month.getMonth();
+
+                const first =
+                    new Date(
+                        year,
+                        monthIndex,
+                        1
+                    );
+
+                const firstDay =
+                    first.getDay() === 0
+                        ? 6
+                        : first.getDay() - 1;
+
+                const daysInMonth =
+                    new Date(
+                        year,
+                        monthIndex + 1,
+                        0
+                    ).getDate();
+
+                const previousMonthDays =
+                    new Date(
+                        year,
+                        monthIndex,
+                        0
+                    ).getDate();
+
+                const cells = [];
+
+                for (
+                    let i = firstDay - 1;
+                    i >= 0;
+                    i--
+                ) {
+
+                    const date =
+                        new Date(
+                            year,
+                            monthIndex - 1,
+                            previousMonthDays - i
+                        );
+
+                    cells.push(
+                        makeCalendarCell(
+                            date,
+                            false
+                        )
+                    );
+                }
+
+                for (
+                    let day = 1;
+                    day <= daysInMonth;
+                    day++
+                ) {
+
+                    const date =
+                        new Date(
+                            year,
+                            monthIndex,
+                            day
+                        );
+
+                    cells.push(
+                        makeCalendarCell(
+                            date,
+                            true
+                        )
+                    );
+                }
+
+                let nextDay = 1;
+
+                while (
+                    cells.length < 42
+                ) {
+
+                    const date =
+                        new Date(
+                            year,
+                            monthIndex + 1,
+                            nextDay++
+                        );
+
+                    cells.push(
+                        makeCalendarCell(
+                            date,
+                            false
+                        )
+                    );
+                }
+
+                return cells;
+            });
+
+
+        /* =====================================================
+           时间线范围
+           ===================================================== */
+
+        const timelineRange =
+            computed(() => {
+
+                if (
+                    timelineRangeMode.value ===
+                    'day'
+                ) {
+
+                    const start =
+                        startOfDay(
+                            timelineCursor.value
+                        );
+
+                    const end =
+                        new Date(start);
+
+                    end.setDate(
+                        end.getDate() + 1
+                    );
+
+                    return {
+                        start,
+                        end
+                    };
+                }
+
+                const start =
+                    startOfWeek(
+                        timelineCursor.value
+                    );
+
+                const end =
+                    new Date(start);
+
+                end.setDate(
+                    end.getDate() + 7
+                );
+
+                return {
+                    start,
+                    end
+                };
+            });
+
+
+        const timelineDocs =
+            computed(() => {
+
+                const start =
+                    timelineRange.value.start
+                        .getTime() / 1000;
+
+                const end =
+                    timelineRange.value.end
+                        .getTime() / 1000;
+
+                return documents.value
+                    .filter(
+                        doc => {
+
+                            const timestamp =
+                                getTimelineTimestamp(
+                                    doc
+                                );
+
+                            return (
+                                timestamp >= start &&
+                                timestamp < end
+                            );
+                        }
+                    )
+                    .sort(
+                        (a, b) =>
+                            getTimelineTimestamp(b) -
+                            getTimelineTimestamp(a)
+                    );
+            });
+
+
+        const timelineDayGroups =
+            computed(() => {
+
+                const groups = {};
+
+                timelineDocs.value.forEach(
+                    doc => {
+
+                        const date =
+                            new Date(
+                                getTimelineTimestamp(
+                                    doc
+                                ) * 1000
+                            );
+
+                        const key =
+                            dateKey(date);
+
+                        if (!groups[key]) {
+
+                            const names = [
+                                '周日',
+                                '周一',
+                                '周二',
+                                '周三',
+                                '周四',
+                                '周五',
+                                '周六'
+                            ];
+
+                            groups[key] = {
+                                key,
+                                label:
+                                    `${date.getMonth() + 1}月` +
+                                    `${date.getDate()}日 ` +
+                                    `${names[date.getDay()]}`,
+                                docs: []
+                            };
+                        }
+
+                        groups[key].docs.push(doc);
+                    }
+                );
+
+                return Object.values(groups)
+                    .sort(
+                        (a, b) =>
+                            b.key.localeCompare(a.key)
+                    );
+            });
+
+
+        const selectedDateLabel =
+            computed(() =>
+                timelineCursor.value
+                    .toLocaleDateString(
+                        'zh-CN',
+                        {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            weekday: 'short'
+                        }
+                    )
+            );
+
+
+        const selectedWeekLabel =
+            computed(() => {
+
+                const start =
+                    startOfWeek(
+                        timelineCursor.value
+                    );
+
+                const end =
+                    new Date(start);
+
+                end.setDate(
+                    end.getDate() + 6
+                );
+
+                return (
+                    `${start.toLocaleDateString(
+                        'zh-CN',
+                        {
+                            month: 'long',
+                            day: 'numeric'
+                        }
+                    )} ～ ${end.toLocaleDateString(
+                        'zh-CN',
+                        {
+                            month: 'long',
+                            day: 'numeric'
+                        }
+                    )}`
+                );
+            });
+
+
+        const timelineTitle =
+            computed(() =>
+                timelineRangeMode.value ===
+                'day'
+                    ? selectedDateLabel.value
+                    : selectedWeekLabel.value
+            );
+
+
+        /* =====================================================
+           时间线导航
+           ===================================================== */
+
+        const moveTimelineMonth =
+            offset => {
+
+                const date =
+                    new Date(
+                        timelineCursor.value
+                    );
+
+                const originalDay =
+                    date.getDate();
+
+                date.setDate(1);
+
+                date.setMonth(
+                    date.getMonth() + offset
+                );
+
+                const maxDay =
+                    new Date(
+                        date.getFullYear(),
+                        date.getMonth() + 1,
+                        0
+                    ).getDate();
+
+                date.setDate(
+                    Math.min(
+                        originalDay,
+                        maxDay
+                    )
+                );
+
+                timelineCursor.value =
+                    date;
+            };
+
+
+        const timelineToday =
+            () => {
+                timelineCursor.value =
+                    new Date();
+            };
+
+
+        const selectCalendarDay =
+            date => {
+
+                timelineCursor.value =
+                    new Date(date);
+
+                timelineRangeMode.value =
+                    'day';
+            };
+
+
+        /*
+         * 第一次点击：
+         * 进入时间线。
+         *
+         * 再次点击：
+         * 折叠/展开日历。
+         */
+        const toggleTimelinePanel =
+            () => {
+
+                if (
+                    sidebarMode.value !== 'timeline'
+                ) {
+
+                    sidebarMode.value =
+                        'timeline';
+
+                    calendarCollapsed.value =
+                        false;
+
+                    return;
+                }
+
+                calendarCollapsed.value =
+                    !calendarCollapsed.value;
+            };
+
+
+        /* =====================================================
+           获取文档
+           ===================================================== */
+
+        const fetchDocuments =
+            async () => {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            '/docapi/documents'
+                        );
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+                    const data =
+                        await response.json();
+
+                    documents.value =
+                        data.docs || [];
+
+                } catch (error) {
+
+                    console.error(
+                        '加载文档失败:',
+                        error
+                    );
+
+                    ElementPlus.ElMessage.error(
+                        '文档列表加载失败'
+                    );
+                }
+            };
+
+
+        const fetchRelated =
+            async id => {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            `/docapi/document/${id}/related`
+                        );
+
+                    if (response.ok) {
+
+                        relatedDocs.value =
+                            await response.json();
+
+                    } else {
+
+                        relatedDocs.value = [];
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '相关文档加载失败:',
+                        error
+                    );
+
+                    relatedDocs.value = [];
+                }
+            };
+
+
+        /* =====================================================
+           保存快照
+           ===================================================== */
+
+        const createSaveSnapshot =
+            () => {
+
+                return {
+                    id: docIdInput.value,
+                    content: editorContent.value,
+                    sequence: ++saveSequence
+                };
+            };
+
+
+        /* =====================================================
+           真正保存
+           ===================================================== */
+
+        const executeSave =
+            async snapshot => {
+
+                if (
+                    !snapshot ||
+                    !snapshot.id
+                ) {
+                    return false;
+                }
+
+                const targetId =
+                    snapshot.id;
+
+                const targetSequence =
+                    snapshot.sequence;
+
+                saving.value = true;
+                saveStatus.value =
+                    '保存中...';
+
+                try {
+
+                    const response =
+                        await fetch(
+                            '/docapi/document/save',
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type':
+                                        'application/json'
+                                },
+                                body:
+                                    JSON.stringify({
+                                        id: targetId,
+                                        content:
+                                            snapshot.content
+                                    })
+                            }
+                        );
+
+                    if (!response.ok) {
+
+                        const detail =
+                            await response.text()
+                                .catch(
+                                    () => ''
+                                );
+
+                        throw new Error(
+                            `HTTP ${response.status} ${detail}`
+                        );
+                    }
+
+                    const data =
+                        await response.json()
+                            .catch(
+                                () => ({})
+                            );
+
+
+                    /*
+                     * 保存成功后立即同步侧边栏。
+                     */
+                    if (data.meta) {
+
+                        syncDocumentMetaToList(
+                            data.meta
+                        );
+
+                        if (
+                            activeDocId.value ===
+                            targetId
+                        ) {
+
+                            activeDocMeta.value = {
+                                ...activeDocMeta.value,
+                                ...data.meta
+                            };
+                        }
+                    }
+
+
+                    /*
+                     * 只有没有新的编辑版本产生，
+                     * 才清除 dirty。
+                     */
+                    if (
+                        docIdInput.value ===
+                            targetId &&
+                        targetSequence ===
+                            saveSequence
+                    ) {
+
+                        dirty.value = false;
+
+                        pendingSnapshot.value =
+                            null;
+
+                        saveStatus.value =
+                            `已保存 ${new Date().toLocaleTimeString(
+                                'zh-CN',
+                                {
+                                    hour12: false
+                                }
+                            )}`;
+                    }
+
+                    return true;
+
+                } catch (error) {
+
+                    console.error(
+                        '保存失败:',
+                        error
+                    );
+
+                    if (
+                        docIdInput.value ===
+                        targetId
+                    ) {
+
+                        saveStatus.value =
+                            '保存失败';
+                    }
+
+                    return false;
+
+                } finally {
+
+                    if (
+                        docIdInput.value ===
+                        targetId
+                    ) {
+
+                        saving.value =
+                            false;
+                    }
+                }
+            };
+
+
+        /* =====================================================
+           保存队列
+           ===================================================== */
+
+        const queueSave =
+            snapshot => {
+
+                saveQueue =
+                    saveQueue
+                        .catch(
+                            () => {}
+                        )
+                        .then(
+                            () =>
+                                executeSave(
+                                    snapshot
+                                )
+                        );
+
+                return saveQueue;
+            };
+
+
+        /* =====================================================
+           Flush
+           ===================================================== */
+
+        const flushCurrentDocument =
+            async () => {
+
+                clearTimeout(
+                    saveTimer
+                );
+
+                /*
+                 * 没有脏数据，只等待正在执行的队列。
+                 */
+                if (!dirty.value) {
+
+                    try {
+                        await saveQueue;
+                    } catch (error) {
+                        console.error(error);
+                    }
+
+                    return true;
+                }
+
+
+                const snapshot =
+                    pendingSnapshot.value ||
+                    createSaveSnapshot();
+
+                pendingSnapshot.value =
+                    null;
+
+                return await queueSave(
+                    snapshot
+                );
+            };
+
+
+        /* =====================================================
+           自动保存
+           ===================================================== */
+
+        const handleInput =
+            () => {
+
+                dirty.value = true;
+
+                saveStatus.value =
+                    '有未保存修改';
+
+                clearTimeout(
+                    saveTimer
+                );
+
+                const snapshot =
+                    createSaveSnapshot();
+
+                pendingSnapshot.value =
+                    snapshot;
+
+                /*
+                 * 800ms 防抖。
+                 */
+                saveTimer =
+                    setTimeout(
+                        () => {
+
+                            const pending =
+                                pendingSnapshot.value;
+
+                            pendingSnapshot.value =
+                                null;
+
+                            if (pending) {
+
+                                queueSave(
+                                    pending
+                                );
+                            }
+
+                        },
+                        800
+                    );
+            };
+
+
+        /* =====================================================
+           手动保存
+           ===================================================== */
+
+        const manualSave =
+            async () => {
+
+                clearTimeout(
+                    saveTimer
+                );
+
+                const snapshot =
+                    pendingSnapshot.value ||
+                    createSaveSnapshot();
+
+                pendingSnapshot.value =
+                    null;
+
+                await queueSave(
+                    snapshot
+                );
+            };
+
+
+        /* =====================================================
+           Vditor
+           ===================================================== */
+
+        const initOrUpdateVditor =
+            content => {
+
+                if (
+                    vditorInstance &&
+                    isVditorReady
+                ) {
+
+                    vditorInstance
+                        .setValue(content);
+
+                    return;
+                }
+
+                if (vditorInstance) {
+                    return;
+                }
+
+                vditorInstance =
+                    new Vditor(
+                        'vditor-container',
+                        {
+                            cdn:
+                                '/static/cdn/vditor',
+
+                            mode:
+                                'ir',
+
+                            height:
+                                '100%',
+
+                            cache: {
+                                enable:
+                                    false
+                            },
+
+                            outline: {
+                                enable:
+                                    false,
+                                position:
+                                    'left'
+                            },
+
+                            preview: {
+                                hljs:
+                                    false,
+                                math:
+                                    false,
+                                mermaid:
+                                    false
+                            },
+
+                            toolbar: [
+                                'headings',
+                                'bold',
+                                'italic',
+                                'strike',
+                                'link',
+                                '|',
+                                'list',
+                                'ordered-list',
+                                'check',
+                                '|',
+                                'quote',
+                                'line',
+                                'code',
+                                'inline-code',
+                                '|',
+                                'table',
+                                'undo',
+                                'redo',
+                                '|',
+                                'outline',
+                                'fullscreen'
+                            ],
+
+                            value:
+                                content,
+
+                            input:
+                                value => {
+
+                                    editorContent.value =
+                                        value;
+
+                                    handleInput();
+
+                                    /*
+                                     * title 修改后，
+                                     * 立即同步侧栏。
+                                     */
+                                    if (
+                                        activeDocId.value
+                                    ) {
+
+                                        const title =
+                                            parseTitleFromContent(
+                                                value
+                                            );
+
+                                        if (title) {
+
+                                            syncCurrentTitleToList(
+                                                title
+                                            );
+
+                                            activeDocMeta.value = {
+                                                ...activeDocMeta.value,
+                                                title
+                                            };
+                                        }
+                                    }
+                                },
+
+                            after:
+                                () => {
+
+                                    isVditorReady =
+                                        true;
+
+                                    vditorInstance
+                                        .setValue(
+                                            editorContent.value
+                                        );
+                                }
+                        }
+                    );
+            };
+
+
+        /* =====================================================
+           创建新文档
+           ===================================================== */
+
+        const createNew =
+            async () => {
+
+                /*
+                 * 创建新文章前，
+                 * 先确保当前文章保存完成。
+                 */
+                if (
+                    activeDocId.value ||
+                    dirty.value
+                ) {
+
+                    const success =
+                        await flushCurrentDocument();
+
+                    if (!success) {
+
+                        ElementPlus.ElMessage.error(
+                            '当前文章保存失败，无法创建新文章'
+                        );
+
+                        return;
+                    }
+                }
+
+
+                const timestamp =
+                    Date.now();
+
+                activeDocId.value =
+                    '';
+
+                isCreating.value =
+                    true;
+
+                docIdInput.value =
+                    `note_${timestamp}`;
+
+                activeDocMeta.value = {
+
+                    id:
+                        `note_${timestamp}`,
+
+                    title:
+                        `随记_${timestamp}`,
+
+                    created_time:
+                        Math.floor(
+                            timestamp / 1000
+                        ),
+
+                    update_time:
+                        Math.floor(
+                            timestamp / 1000
+                        ),
+
+                    is_pinned:
+                        0,
+
+                    status:
+                        'active'
+                };
+
+                relatedDocs.value = [];
+
+                generatedTags.value = [];
+
+                dirty.value = false;
+
+                pendingSnapshot.value =
+                    null;
+
+                editorContent.value =
+`---
+title: 随记_${timestamp}
+tags:
+  - 笔记
+---
+
+`;
+
+                saveStatus.value =
+                    '新建待存';
+
+                sidebarMode.value =
+                    'docs';
+
+                nextTick(
+                    () => {
+                        initOrUpdateVditor(
+                            editorContent.value
+                        );
+                    }
+                );
+
+                if (isMobile.value) {
+                    mobileView.value =
+                        'editor';
+                }
+            };
+
+
+        /* =====================================================
+           加载文档
+           ===================================================== */
+
+        const loadDocument =
+            async id => {
+
+                /*
+                 * 切换文档之前保存旧文档。
+                 */
+                if (
+                    activeDocId.value &&
+                    activeDocId.value !== id
+                ) {
+
+                    const success =
+                        await flushCurrentDocument();
+
+                    if (!success) {
+
+                        ElementPlus.ElMessage.error(
+                            '当前文章保存失败，已取消切换'
+                        );
+
+                        return;
+                    }
+                }
+
+
+                try {
+
+                    const response =
+                        await fetch(
+                            `/docapi/document/${encodeURIComponent(id)}`
+                        );
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+                    const data =
+                        await response.json();
+
+                    activeDocId.value =
+                        id;
+
+                    docIdInput.value =
+                        id;
+
+                    editorContent.value =
+                        data.content || '';
+
+                    activeDocMeta.value =
+                        data.meta || {
+                            id,
+                            title: '',
+                            created_time:
+                                null,
+                            update_time:
+                                null,
+                            is_pinned:
+                                0
+                        };
+
+                    isCreating.value =
+                        false;
+
+                    dirty.value = false;
+
+                    pendingSnapshot.value =
+                        null;
+
+                    saveStatus.value =
+                        '已加载';
+
+                    relatedDocs.value =
+                        [];
+
+                    generatedTags.value =
+                        [];
+
+                    /*
+                     * 加载时同步列表。
+                     */
+                    if (data.meta) {
+
+                        syncDocumentMetaToList(
+                            data.meta
+                        );
+                    }
+
+                    nextTick(
+                        () => {
+
+                            initOrUpdateVditor(
+                                editorContent.value
+                            );
+                        }
+                    );
+
+                    fetchRelated(id);
+
+                    if (isMobile.value) {
+
+                        mobileView.value =
+                            'editor';
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '加载文档失败:',
+                        error
+                    );
+
+                    ElementPlus.ElMessage.error(
+                        '文档加载失败'
+                    );
+                }
+            };
+
+
+        const loadDocumentFromTimeline =
+            async id => {
+
+                await loadDocument(id);
+            };
+
+
+        /* =====================================================
+           手机返回
+           ===================================================== */
+
+        const flushAndBack =
+            async () => {
+
+                const success =
+                    await flushCurrentDocument();
+
+                if (!success) {
+
+                    ElementPlus.ElMessage.error(
+                        '保存失败，暂不返回'
+                    );
+
+                    return;
+                }
+
+                mobileView.value =
+                    'list';
+            };
+
+
+        /* =====================================================
+           重命名
+           ===================================================== */
+
+        const commitRename =
+            async () => {
+
+                /*
+                 * 新文章尚未保存，
+                 * 当前 ID 只是临时文件名，
+                 * 不走 rename 接口。
+                 */
+                if (isCreating.value) {
+                    return;
+                }
+
+                if (renaming.value) {
+                    return;
+                }
+
+                const oldId =
+                    activeDocId.value;
+
+                if (!oldId) {
+                    return;
+                }
+
+                const newId =
+                    String(
+                        docIdInput.value || ''
+                    ).trim();
+
+                if (!newId) {
+
+                    docIdInput.value =
+                        oldId;
+
+                    return;
+                }
+
+                if (newId === oldId) {
+                    return;
+                }
+
+
+                /*
+                 * 重命名前先保存正文。
+                 */
+                const saved =
+                    await flushCurrentDocument();
+
+                if (!saved) {
+
+                    docIdInput.value =
+                        oldId;
+
+                    ElementPlus.ElMessage.error(
+                        '当前文章保存失败，无法重命名'
+                    );
+
+                    return;
+                }
+
+
+                renaming.value =
+                    true;
+
+
+                try {
+
+                    const response =
+                        await fetch(
+                            '/docapi/document/rename',
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type':
+                                        'application/json'
+                                },
+                                body:
+                                    JSON.stringify({
+                                        old_id:
+                                            oldId,
+                                        new_id:
+                                            newId
+                                    })
+                            }
+                        );
+
+
+                    const data =
+                        await response.json()
+                            .catch(
+                                () => ({})
+                            );
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            data.error ||
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+
+                    /*
+                     * 后端成功后切换当前 ID。
+                     */
+                    activeDocId.value =
+                        newId;
+
+                    docIdInput.value =
+                        newId;
+
+
+                    if (data.meta) {
+
+                        activeDocMeta.value = {
+                            ...activeDocMeta.value,
+                            ...data.meta
+                        };
+
+                        /*
+                         * 删除旧 ID。
+                         */
+                        documents.value =
+                            documents.value.filter(
+                                doc =>
+                                    doc.id !==
+                                    oldId
+                            );
+
+                        /*
+                         * 添加新 ID。
+                         */
+                        syncDocumentMetaToList(
+                            data.meta
+                        );
+                    }
+
+
+                    saveStatus.value =
+                        '重命名成功';
+
+
+                    /*
+                     * 最后拉取一次，
+                     * 确保前端索引完全一致。
+                     */
+                    await fetchDocuments();
+
+                } catch (error) {
+
+                    console.error(
+                        '重命名失败:',
+                        error
+                    );
+
+                    docIdInput.value =
+                        oldId;
+
+                    ElementPlus.ElMessage.error(
+                        error.message ||
+                        '文件名修改失败'
+                    );
+
+                } finally {
+
+                    renaming.value =
+                        false;
+                }
+            };
+
+
+        /* =====================================================
+           置顶 / 归档
+           ===================================================== */
+
+        const toggleAction =
+            async action => {
+
+                if (!activeDocId.value) {
+                    return;
+                }
+
+                /*
+                 * 先保存当前内容。
+                 */
+                const saved =
+                    await flushCurrentDocument();
+
+                if (!saved) {
+
+                    ElementPlus.ElMessage.error(
+                        '当前文章保存失败，操作已取消'
+                    );
+
+                    return;
+                }
+
+                const currentId =
+                    activeDocId.value;
+
+                try {
+
+                    const response =
+                        await fetch(
+                            '/docapi/document/action',
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type':
+                                        'application/json'
+                                },
+                                body:
+                                    JSON.stringify({
+                                        id:
+                                            currentId,
+                                        action
+                                    })
+                            }
+                        );
+
+
+                    const data =
+                        await response.json()
+                            .catch(
+                                () => ({})
+                            );
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            data.error ||
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+
+                    if (data.meta) {
+
+                        activeDocMeta.value = {
+                            ...activeDocMeta.value,
+                            ...data.meta
+                        };
+
+                        syncDocumentMetaToList(
+                            data.meta
+                        );
+                    }
+
+
+                    await fetchDocuments();
+
+
+                    /*
+                     * 重新读取文章。
+                     */
+                    const reloadResponse =
+                        await fetch(
+                            `/docapi/document/${encodeURIComponent(currentId)}`
+                        );
+
+
+                    if (reloadResponse.ok) {
+
+                        const reloadData =
+                            await reloadResponse.json();
+
+                        editorContent.value =
+                            reloadData.content || '';
+
+                        activeDocMeta.value =
+                            reloadData.meta || activeDocMeta.value;
+
+                        dirty.value =
+                            false;
+
+                        pendingSnapshot.value =
+                            null;
+
+                        nextTick(
+                            () => {
+                                initOrUpdateVditor(
+                                    editorContent.value
+                                );
+                            }
+                        );
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '操作失败:',
+                        error
+                    );
+
+                    ElementPlus.ElMessage.error(
+                        error.message ||
+                        '操作失败'
+                    );
+                }
+            };
+
+
+        /* =====================================================
+           AI 标签
+           ===================================================== */
+
+        const generateTags =
+            async () => {
+
+                if (
+                    !editorContent.value.trim()
+                ) {
+                    return;
+                }
+
+                aiLoading.value =
+                    true;
+
+                try {
+
+                    const response =
+                        await fetch(
+                            '/docapi/document/ai/tags',
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type':
+                                        'application/json'
+                                },
+                                body:
+                                    JSON.stringify({
+                                        content:
+                                            editorContent.value
+                                    })
+                            }
+                        );
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+
+                    const data =
+                        await response.json();
+
+
+                    if (
+                        data.tags &&
+                        Array.isArray(data.tags) &&
+                        data.tags.length > 0
+                    ) {
+
+                        generatedTags.value =
+                            data.tags;
+
+                    } else {
+
+                        ElementPlus.ElMessage.warning(
+                            '未能提取有效标签'
+                        );
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        error
+                    );
+
+                    ElementPlus.ElMessage.error(
+                        'AI 解析失败'
+                    );
+
+                } finally {
+
+                    aiLoading.value =
+                        false;
+                }
+            };
+
+
+        /* =====================================================
+           重建索引
+           ===================================================== */
+
+        const rebuildIndex =
+            async () => {
+
+                syncing.value =
+                    true;
+
+                try {
+
+                    const saved =
+                        await flushCurrentDocument();
+
+                    if (!saved) {
+
+                        ElementPlus.ElMessage.error(
+                            '当前文章保存失败，无法同步'
+                        );
+
+                        return;
+                    }
+
+
+                    const response =
+                        await fetch(
+                            '/docapi/init',
+                            {
+                                method: 'POST'
+                            }
+                        );
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+
+                    await fetchDocuments();
+
+
+                    ElementPlus.ElMessage.success(
+                        '索引同步完成'
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        error
+                    );
+
+                    ElementPlus.ElMessage.error(
+                        '索引同步失败'
+                    );
+
+                } finally {
+
+                    syncing.value =
+                        false;
+                }
+            };
+
+
+        /* =====================================================
+           页面关闭提醒
+           ===================================================== */
+
+        const handleBeforeUnload =
+            event => {
+
+                if (
+                    dirty.value ||
+                    saving.value
+                ) {
+
+                    event.preventDefault();
+                    event.returnValue = '';
+                }
+            };
+
+
+        window.addEventListener(
+            'beforeunload',
+            handleBeforeUnload
+        );
+
+
+        /* =====================================================
+           初始化
+           ===================================================== */
+
+        onMounted(
+            async () => {
+
+                updateIsMobile();
+
+                await fetchDocuments();
+            }
+        );
+
+
+        /* =====================================================
+           Return
+           ===================================================== */
+
+        return {
+
+            documents,
+            searchResults,
+            searchQuery,
+
+            activeDocId,
+            docIdInput,
+            editorContent,
+            isCreating,
+
+            activeDocMeta,
+            relatedDocs,
+
+            saving,
+            syncing,
+            isSearching,
+            renaming,
+
+            saveStatus,
+            dirty,
+
+            aiLoading,
+            generatedTags,
+
+            isFocusMode,
+            autoAiTags,
+
+            isMobile,
+            mobileView,
+
+            sidebarMode,
+
+            pinnedDocs,
+            inboxDocs,
+            archiveDocs,
+
+            activeDocStatus,
+
+            createdTimeAgo,
+            updatedTimeAgo,
+
+            fullCreatedTime,
+            fullUpdateTime,
+
+            charCount,
+            totalChars,
+            lineCount,
+            paragraphCount,
+            readTime,
+
+            timelineCursor,
+            timelineTimeField,
+            timelineRangeMode,
+            calendarCollapsed,
+
+            weekNames,
+
+            calendarTitle,
+            calendarCells,
+            currentMonthDocCount,
+
+            timelineTitle,
+            selectedDateLabel,
+            selectedWeekLabel,
+
+            timelineDocs,
+            timelineDayGroups,
+
+            getDocTitle,
+            getDocPreview,
+            highlightText,
+
+            createNew,
+            loadDocument,
+            loadDocumentFromTimeline,
+
+            manualSave,
+            handleInput,
+
+            forceSearch,
+            rebuildIndex,
+
+            toggleAction,
+            generateTags,
+
+            commitRename,
+
+            moveTimelineMonth,
+            timelineToday,
+            selectCalendarDay,
+
+            toggleTimelinePanel,
+
+            flushAndBack,
+
+            formatTimelineTime
+        };
+    }
+});
+
+
+/* =========================================================
+   Element Plus Icons
+   ========================================================= */
+
+for (
+    const [key, component]
+    of Object.entries(
+        ElementPlusIconsVue
+    )
+) {
+    app.component(
+        key,
+        component
+    );
+}
+
+app.use(ElementPlus);
+
+app.mount('#app');
+</script>
+
 </body>
 </html>

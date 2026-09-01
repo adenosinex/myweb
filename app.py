@@ -394,52 +394,141 @@ def get_html_path(filename):
 # ================= 修改 2：页面列表 API =================
 @app.route('/api2/_sys/pages', methods=['GET'])
 def get_pages_list():
-    if not os.path.exists(PAGES_DIR):
+    """
+    首页页面列表规则：
+
+    1. 默认显示所有 HTML。
+    2. 如果一个目录中存在 index.html：
+       - 显示该目录的 index.html
+       - 不显示该目录中的其他 HTML
+    3. 子目录独立判断，不受父目录是否存在 index.html 影响。
+    4. 不限制目录深度。
+    5. 实际页面路由与首页展示规则无关，隐藏的 HTML 仍然可以正常访问。
+    """
+
+    if not os.path.isdir(PAGES_DIR):
         return jsonify([])
 
     items = []
 
+    # ==================================================
+    # 遍历所有目录
+    # ==================================================
     for root, dirs, files in os.walk(PAGES_DIR):
-        rel_dir = os.path.relpath(root, PAGES_DIR)
+
+        # 当前目录相对于 pages 的路径
+        rel_dir = os.path.relpath(
+            root,
+            PAGES_DIR
+        )
+
         if rel_dir == '.':
             rel_dir = ''
 
-        # 如果当前目录有 index.html，并且不是根目录，则先添加目录入口
-        if 'index.html' in files and rel_dir:
-            dir_name = os.path.basename(rel_dir)
-            if '-' not in dir_name:
-                index_file = os.path.join(root, 'index.html')
-                items.append((rel_dir, index_file))
+        # 统一为 /
+        rel_dir = rel_dir.replace(os.sep, '/')
 
-        # 同时遍历当前目录下的普通 .html 文件（排除 index.html）
-        for f in files:
-            if f.endswith('.html') and f != 'index.html':
-                file_base = f[:-5]  # 去掉 .html
-                if '-' in file_base:
-                    continue
+        # ==================================================
+        # 当前目录是否存在 index.html
+        # ==================================================
+        has_index = 'index.html' in files
 
-                if rel_dir:
-                    page_path = os.path.join(rel_dir, file_base).replace(os.sep, '/')
-                else:
-                    page_path = file_base
+        # ==================================================
+        # 情况 1：
+        # 当前目录存在 index.html
+        #
+        # 只显示 index.html
+        # ==================================================
+        if has_index:
 
-                full_path = os.path.join(root, f)
-                items.append((page_path, full_path))
+            # 根目录的 index.html 通常作为总首页，
+            # 不加入页面列表
+            if rel_dir:
+                dir_name = os.path.basename(rel_dir)
 
-    # 简单去重，避免目录入口和同名文件路径冲突
+                # 保留原来的规则：
+                # 目录名带 "-" 不显示
+                if '-' not in dir_name:
+
+                    index_file = os.path.join(
+                        root,
+                        'index.html'
+                    )
+
+                    items.append((
+                        rel_dir,
+                        index_file
+                    ))
+
+            # 当前目录其他 html 全部跳过
+            continue
+
+        # ==================================================
+        # 情况 2：
+        # 当前目录没有 index.html
+        #
+        # 默认显示当前目录全部 html
+        # ==================================================
+        for filename in files:
+
+            if not filename.lower().endswith('.html'):
+                continue
+
+            file_base = filename[:-5]
+
+            # 文件名带 "-" 的继续跳过
+            if '-' in file_base:
+                continue
+
+            full_path = os.path.join(
+                root,
+                filename
+            )
+
+            # 构造页面路径
+            if rel_dir:
+                page_path = (
+                    f'{rel_dir}/{file_base}'
+                )
+            else:
+                page_path = file_base
+
+            items.append((
+                page_path,
+                full_path
+            ))
+
+    # ==================================================
+    # 去重
+    # ==================================================
     seen = set()
     unique_items = []
-    for path, full_path in items:
-        if path not in seen:
-            seen.add(path)
-            unique_items.append((path, full_path))
-    items = unique_items
 
-    # 按文件修改时间降序排序
-    items.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+    for page_path, full_path in items:
 
-    return jsonify([item[0] for item in items])
+        if page_path in seen:
+            continue
 
+        seen.add(page_path)
+
+        unique_items.append((
+            page_path,
+            full_path
+        ))
+
+    # ==================================================
+    # 按修改时间倒序
+    # ==================================================
+    unique_items.sort(
+        key=lambda x: os.path.getmtime(x[1]),
+        reverse=True
+    )
+
+    return jsonify([
+        page_path
+        for page_path, _ in unique_items
+    ])
+    
 # ================= 修改 3：serve_html_with_icon =================
 def serve_html_with_icon(filename):
     if not filename or not isinstance(filename, str):

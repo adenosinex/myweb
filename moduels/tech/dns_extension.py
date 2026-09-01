@@ -61,7 +61,7 @@ HOSTS = {
         "last_seen": 0
     },
     "one2": {
-        "lan_ipv4": "192.168.31.19",
+        "lan_ipv4": "192.168.31.18",
         "ipv4dns": "one24.su7.dpdns.org",
         "ipv6dns": "one2.su7.dpdns.org",
         "last_ipv6": None,

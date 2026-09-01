@@ -67,3 +67,19 @@ GET /api/kv/<key>
 3. **标签管理**：从预设标签池中挑选，支持手动点击添加/删除。
 4. **AI 智能标注**：内置一个模拟的 AI 算法，一键随机挑选合适的标签（你可以随时替换为你真实的 AI 接口请求）。
 5. **保存同步**：调用你现有的 `/api/song_tags` 接口进行持久化保存。
+
+pages/
+├─ a.html                         ✅ 首页显示
+│
+├─ folder1/                       ← 第一层目录
+│  ├─ index.html                  ✅ 首页显示
+│  ├─ a.html                     ✅ 首页显示
+│  ├─ b.html                     ✅ 首页显示
+│  │
+│  └─ folder2/                    ← 第二层目录
+│     ├─ index.html               ✅ 首页显示，作为 folder1/folder2
+│     ├─ a.html                   ❌ 首页不显示
+│     ├─ b.html                   ❌ 首页不显示
+│     │
+│     └─ folder3/                 ← 更深
+│        └─ index.html             ❌ 首页不显示
