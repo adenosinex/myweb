@@ -694,6 +694,10 @@ def init_system():
     '/docapi/documents',
     methods=['GET']
 )
+@document_bp.route(
+    '/docapi/skip/documents',
+    methods=['GET']
+)
 def list_documents():
 
     docs = list(
@@ -719,6 +723,10 @@ def list_documents():
 
 @document_bp.route(
     '/docapi/document/<doc_id>',
+    methods=['GET']
+)
+@document_bp.route(
+    '/docapi/skip/document/<doc_id>',
     methods=['GET']
 )
 def get_document(doc_id):
@@ -784,6 +792,10 @@ def get_document(doc_id):
 
 @document_bp.route(
     '/docapi/document/save',
+    methods=['POST']
+)
+@document_bp.route(
+    '/docapi/skip/document/save',
     methods=['POST']
 )
 def save_document():

@@ -1208,6 +1208,18 @@
                         </el-input>
 
 
+                        <el-button
+                            size="small"
+                            plain
+                            :loading="clipboardTitleLoading"
+                            :disabled="!activeDocId && !isCreating"
+                            @click="setTitleFromClipboard">
+
+                            📌 提取标题
+
+                        </el-button>
+
+
                         <span class="rename-hint">
                             回车或失焦重命名文件
                         </span>
@@ -1611,6 +1623,7 @@ const app = createApp({
         const syncing = ref(false);
         const isSearching = ref(false);
         const renaming = ref(false);
+        const clipboardTitleLoading = ref(false);
 
         const saveStatus = ref('');
 
@@ -1975,6 +1988,145 @@ const app = createApp({
                         /^['"]|['"]$/g,
                         ''
                     );
+            };
+
+
+        /* =====================================================
+           从文章开头提取主题设置标题
+           格式：
+           【主题】** 标题内容。
+           只检查文章开头前 300 个字符。
+           ===================================================== */
+
+        const setTitleFromClipboard =
+            async () => {
+
+                if (
+                    !activeDocId.value &&
+                    !isCreating.value
+                ) {
+                    ElementPlus.ElMessage.warning(
+                        '请先打开一个文档'
+                    );
+                    return;
+                }
+
+                if (clipboardTitleLoading.value) {
+                    return;
+                }
+
+                clipboardTitleLoading.value = true;
+
+                try {
+
+                    const source =
+                        (editorContent.value || '').slice(0, 300);
+
+                    const match =
+                        source.match(
+                            /【主题】\s*\*\*\s*([\s\S]*?)\s*\*\*/
+                        );
+
+                    const title = match
+                        ? match[1]
+                            .replace(/[\r\n]+/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim()
+                        : '';
+
+                    if (!title) {
+                        ElementPlus.ElMessage.warning(
+                            '文章开头 300 字内未找到“【主题】** 标题 **”格式'
+                        );
+                        return;
+                    }
+
+                    const lines =
+                        editorContent.value.split('\n');
+
+                    const frontMatterEnd =
+                        lines.findIndex(
+                            (line, index) =>
+                                index > 0 &&
+                                line.trim() === '---'
+                        );
+
+                    if (
+                        lines.length > 0 &&
+                        lines[0].trim() === '---' &&
+                        frontMatterEnd > 0
+                    ) {
+
+                        const titleIndex =
+                            lines.findIndex(
+                                (line, index) =>
+                                    index > 0 &&
+                                    index < frontMatterEnd &&
+                                    /^title\s*:/i.test(line)
+                            );
+
+                        const titleLine =
+                            `title: ${JSON.stringify(title)}`;
+
+                        if (titleIndex >= 0) {
+                            lines[titleIndex] = titleLine;
+                        } else {
+                            lines.splice(
+                                1,
+                                0,
+                                titleLine
+                            );
+                        }
+
+                        editorContent.value =
+                            lines.join('\n');
+
+                    } else {
+
+                        editorContent.value =
+`---
+title: ${JSON.stringify(title)}
+---\n\n${editorContent.value}`;
+                    }
+
+                    activeDocMeta.value = {
+                        ...activeDocMeta.value,
+                        title
+                    };
+
+                    if (activeDocId.value) {
+                        syncCurrentTitleToList(title);
+                    }
+
+                    if (vditorInstance && isVditorReady) {
+                        vditorInstance.setValue(
+                            editorContent.value
+                        );
+                    }
+
+                    handleInput();
+
+                    ElementPlus.ElMessage.success(
+                        `标题已更新：${title}`
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        '提取标题失败:',
+                        error
+                    );
+
+                    ElementPlus.ElMessage.error(
+                        error.message ||
+                        '提取标题失败'
+                    );
+
+                } finally {
+
+                    clipboardTitleLoading.value =
+                        false;
+                }
             };
 
 
@@ -4094,6 +4246,7 @@ tags:
             syncing,
             isSearching,
             renaming,
+            clipboardTitleLoading,
 
             saveStatus,
             dirty,
@@ -4155,6 +4308,7 @@ tags:
 
             manualSave,
             handleInput,
+            setTitleFromClipboard,
 
             forceSearch,
             rebuildIndex,

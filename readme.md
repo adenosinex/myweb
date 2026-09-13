@@ -1,5 +1,14 @@
 # 轻量级万能数据存储后端 (Universal Flask Backend)
+tar -czvf db.tar.gz db
 
+tar -czvf dball.tar.gz \
+  --exclude='./.git' \
+  --exclude='*.pyc' \
+  --exclude='__pycache__' \
+  --exclude='*.pyo' \
+  --exclude='.pytest_cache' \
+  --exclude='.mypy_cache' \
+  ./
 这是一个基于 Flask 和 SQLite 的轻量级后端服务，提供通用的数据存储与提取功能。采用“前端驱动”的设计理念，后端只负责提供万能数据接口和静态页面托管，极大提升了小型项目和原型开发的效率。
 
 ## 🌟 核心特性
