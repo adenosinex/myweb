@@ -21,3 +21,6 @@ nohup.out
 moduels/note.py
 moduels/note.py
 dball.tar.gz
+pys/test/新建 文本文档.txt
+.gitignore
+pys/test/chat_log.txt
