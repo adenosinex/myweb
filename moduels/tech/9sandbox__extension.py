@@ -11,7 +11,11 @@ from typing import List, Dict, Optional
 from flask import Blueprint, request, jsonify, abort, send_file
 
 # ================= 基础配置与目录初始化 =================
-BASE_DIR = os.path.abspath("db/sandbox")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = os.path.abspath(
+    os.path.join(_HERE,   "..", "..", "db", "sandbox")
+)
 PAGES_DIR = os.path.join(BASE_DIR, "pages_data")
 DB_FILE = os.path.join(BASE_DIR, "sandbox_index.db")
 ORDER_FILE = os.path.join(BASE_DIR, "layout_order.json")

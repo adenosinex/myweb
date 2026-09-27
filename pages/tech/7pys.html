@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python Runner Pro</title>
+<style>
+    :root { --primary:#2563eb; --success:#16a34a; --danger:#dc2626; --warning:#ea580c; --bg:#f8fafc; }
+    * { box-sizing:border-box; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+           margin:0; padding:20px; background:var(--bg); color:#334155; }
+    h2 { margin:0 0 4px; }
+    .subtitle { margin:0 0 14px; color:#64748b; font-size:13px; }
+    .connbar { display:flex; align-items:center; gap:10px; margin:0 0 12px;
+               font-size:12.5px; color:#64748b; }
+    .conn { font-size:12px; padding:3px 10px; border-radius:20px; white-space:nowrap;
+            background:#e2e8f0; color:#475569; }
+    .conn.ok   { background:#dcfce7; color:#166534; }
+    .conn.err  { background:#fee2e2; color:#991b1b; }
+
+    .portbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+               background:#fff; padding:10px 14px; border-radius:8px;
+               box-shadow:0 1px 3px rgba(0,0,0,0.05); margin:0 0 18px;
+               position: sticky; top: 0; z-index: 50; }
+    .portbar label { font-size:13px; font-weight:600; color:#475569; }
+    .portbar input { width:130px; padding:6px 10px; border:1px solid #cbd5e1;
+                     border-radius:6px; font-family:ui-monospace, monospace; font-size:13px; }
+    .portbar .hint { font-size:11.5px; color:#94a3b8; }
+    .portbar .divider { display:inline-block; width:1px; height:20px;
+                        background:#e2e8f0; margin:0 6px; }
+
+    .group-title { font-size:14px; font-weight:700; color:#64748b; margin:20px 0 10px;
+                   border-left:4px solid #cbd5e1; padding-left:8px; }
+    .card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px;
+            box-shadow:0 1px 3px rgba(0,0,0,0.05); border-left:4px solid transparent; transition:all .2s; }
+    .card.running  { border-left-color:var(--primary); background:#eff6ff; }
+    .card.finished { border-left-color:var(--success); }
+    .card.error    { border-left-color:var(--danger);  background:#fef2f2; }
+    .header { display:flex; justify-content:space-between; align-items:center;
+              margin-bottom:12px; flex-wrap:wrap; gap:10px; }
+    .file-name { font-weight:600; font-size:15px; }
+    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    .btn { padding:6px 14px; border:none; border-radius:6px; cursor:pointer;
+           font-size:13px; font-weight:600; color:#fff; transition:all .2s; text-decoration:none;
+           display:inline-flex; align-items:center; gap:4px; }
+    .btn:hover:not(:disabled) { transform:translateY(-1px); filter:brightness(110%); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-run  { background:var(--primary); }
+    .btn-stop { background:var(--danger); }
+    .btn-kill { background:var(--warning); }
+    .btn-edit { background:#7c3aed; }
+    .btn-log  { background:#fff; color:#475569; border:1px solid #cbd5e1; }
+    .btn-link { background:var(--success); }
+    .btn-proxy { background:#0891b2; }
+
+    .tag { font-size:11px; padding:3px 8px; border-radius:4px;
+           background:#e2e8f0; color:#475569; }
+    .tag-running { background:#dcfce7; color:#166534; }
+    .tag-busy { background:#fee2e2; color:#991b1b; }
+    .tag-editable { cursor:pointer; }
+    .tag-editable:hover { background:#cbd5e1; }
+    .tag-manual { background:#dbeafe; color:#1e40af; }
+
+    .log-box { background:#1e293b; color:#e2e8f0; padding:12px; border-radius:6px;
+               max-height:340px; min-height:80px; overflow-y:auto;
+               font-family:ui-monospace, Menlo, Consolas, monospace;
+               font-size:12px; white-space:pre-wrap; margin-top:12px; display:none;
+               line-height:1.5; word-break:break-word; }
+    .log-box.show { display:block; }
+    .log-box:empty::before { content:"（暂无日志输出）"; color:#64748b; }
+
+    .others-toggle {
+        display:inline-flex; align-items:center; gap:6px;
+        margin:4px 0 12px; padding:6px 14px;
+        font-size:12.5px; color:#475569;
+        background:#fff; border:1px dashed #cbd5e1; border-radius:6px;
+        cursor:pointer; user-select:none;
+    }
+    .others-toggle:hover { border-color:var(--primary); color:var(--primary); }
+    .others-toggle .chev { transition:transform .18s; display:inline-block; }
+    .others-toggle.open .chev { transform:rotate(90deg); }
+    .others-group { display:none; }
+    .others-group.open { display:block; }
+
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none;
+             justify-content:center; align-items:center; z-index:1000; backdrop-filter:blur(2px); }
+    .modal-content { background:#fff; padding:24px; border-radius:12px; width:90%;
+                     max-width:400px; box-shadow:0 10px 25px rgba(0,0,0,.2); }
+    .modal-edit .modal-content { max-width:1000px; width:94%; padding:20px; }
+    .modal-edit h3 { margin:0 0 10px; font-size:16px; }
+    .modal-edit .meta { font-size:12px; color:#94a3b8; margin-bottom:10px; }
+    .modal-edit textarea {
+        width:100%; height:62vh; min-height:280px;
+        padding:12px; border:1px solid #cbd5e1; border-radius:6px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size:13px; line-height:1.55; resize:vertical;
+        background:#0f172a; color:#e2e8f0; tab-size:4;
+    }
+    .modal-edit textarea:focus { outline:none; border-color:var(--primary);
+                                 box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+    .modal-edit .footer { display:flex; align-items:center; gap:10px;
+                          margin-top:12px; flex-wrap:wrap; }
+    .modal-edit .footer .spacer { flex:1; }
+    .modal-edit .status { font-size:12.5px; color:#64748b; }
+    .modal-edit .status.ok  { color:var(--success); }
+    .modal-edit .status.err { color:var(--danger); }
+    .modal-edit .btn-save { background:var(--primary); }
+    .modal-edit .btn-cancel { background:#94a3b8; }
+
+    .modal-port .modal-content { max-width:420px; }
+    .modal-port h3 { margin:0 0 10px; }
+    .modal-port .filelabel { font-size:12.5px; color:#94a3b8; margin-bottom:10px;
+                             word-break:break-all; font-family:ui-monospace, monospace; }
+    .modal-port input[type=number] { width:100%; padding:9px 12px;
+        border:1px solid #cbd5e1; border-radius:6px; font-size:14px;
+        font-family:ui-monospace, monospace; }
+    .modal-port .tip { font-size:12px; color:#94a3b8; margin-top:8px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<h2>🐍 Python Runner Pro</h2>
+<p class="subtitle">与本机后端同源，API 固定使用 <code>/pys</code></p>
+
+<div class="connbar">
+    <span>后端状态：</span>
+    <span id="connStatus" class="conn">未连接</span>
+</div>
+
+<div class="portbar">
+    <label for="forcePort">强制停止端口：</label>
+    <input id="forcePort" type="number" min="1" max="65535"
+           placeholder="例如 5000" spellcheck="false">
+    <button class="btn btn-stop" onclick="forceKillPort()">🛑 停止端口</button>
+
+    <span class="divider"></span>
+
+    <label for="proxyPort">转发打开：</label>
+    <input id="proxyPort" type="number" min="1" max="65535"
+           placeholder="例如 5000" spellcheck="false">
+    <button class="btn btn-proxy" onclick="openProxy()">🔗 打开</button>
+
+    <span class="hint">通过本服务转发到 127.0.0.1:&lt;端口&gt;，使 HTTP 服务也能走 HTTPS 访问。</span>
+</div>
+
+<div id="app"></div>
+
+<div id="killModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0;">⚠️ 端口被占用</h3>
+        <p>端口 <b id="mPort" style="color:var(--danger)"></b> 正被以下进程占用：</p>
+        <pre id="mInfo" style="background:#f8fafc; padding:10px; border-radius:6px;
+                               font-size:12px; max-height:100px; overflow:auto;"></pre>
+        <div style="text-align:right; margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn" style="background:#94a3b8" onclick="closeModal()">取消</button>
+            <button class="btn btn-kill" onclick="confirmKill()">🔪 强制杀死</button>
+        </div>
+    </div>
+</div>
+
+<div id="portModal" class="modal modal-port">
+    <div class="modal-content">
+        <h3>🔢 设置推荐端口</h3>
+        <div class="filelabel" id="pmFile">-</div>
+        <input id="pmInput" type="number" min="1" max="65535"
+               placeholder="输入端口号（1-65535），留空则清除">
+        <div class="tip">
+            端口会保存到该文件所在目录的 <code>_pys_ports.txt</code>。<br>
+            端口已被占用时，卡片显示"运行中"，不会重复启动。
+        </div>
+        <div style="text-align:right; margin-top:18px; display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn" style="background:#94a3b8" onclick="closePortModal()">取消</button>
+            <button class="btn" style="background:#94a3b8" onclick="clearPort()">🗑 清除</button>
+            <button class="btn btn-run" onclick="savePort()">💾 保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="editModal" class="modal modal-edit">
+    <div class="modal-content">
+        <h3>✏️ 编辑文件：<span id="editFileName" style="color:#7c3aed;"></span></h3>
+        <div class="meta">
+            编码：<span id="editEncoding">-</span> ｜
+            大小：<span id="editSize">-</span> ｜
+            <span style="color:#94a3b8;">保存时会自动备份为同名 .bak 文件</span>
+        </div>
+        <textarea id="editContent" spellcheck="false"></textarea>
+        <div class="footer">
+            <span id="editStatus" class="status"></span>
+            <span class="spacer"></span>
+            <button class="btn btn-cancel" onclick="closeEditor()">取消 (Esc)</button>
+            <button class="btn btn-save" id="editSaveBtn" onclick="saveEditor()">💾 保存 (Ctrl+S)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_BASE = '/pys';
+const CACHE_KEY = 'py_runner_tasks';
+const LOG_VIS_KEY = 'py_runner_log_visible';
+const OTHERS_VIS_KEY = 'py_runner_others_visible';
+
+let killTarget = null;
+let editingFile = null;
+let editingEncoding = 'utf-8';
+let editingDirty = false;
+let portTargetFile = null;
+
+const pollingTimers = {};
+const logCache = {};
+let logVisible = (() => {
+    try { return JSON.parse(localStorage.getItem(LOG_VIS_KEY)) || {}; } catch { return {}; }
+})();
+let othersVisible = (() => {
+    try { return JSON.parse(localStorage.getItem(OTHERS_VIS_KEY)) || {}; } catch { return {}; }
+})();
+
+function saveLogVisible() {
+    try { localStorage.setItem(LOG_VIS_KEY, JSON.stringify(logVisible)); } catch (e) {}
+}
+function saveOthersVisible() {
+    try { localStorage.setItem(OTHERS_VIS_KEY, JSON.stringify(othersVisible)); } catch (e) {}
+}
+function safeIdOf(fileId) {
+    return String(fileId).replace(/[^a-zA-Z0-9]/g, '_');
+}
+function safeGroupId(g) {
+    return 'g_' + String(g).replace(/[^a-zA-Z0-9]/g, '_');
+}
+function getCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; } catch { return {}; } }
+function setCache(c) { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); }
+
+function setConn(state, text) {
+    const el = document.getElementById('connStatus');
+    el.textContent = text;
+    el.classList.remove('ok', 'err');
+    if (state === 'ok')  el.classList.add('ok');
+    if (state === 'err') el.classList.add('err');
+}
+
+async function api(path, options = {}) {
+    const url = API_BASE + path;
+    try {
+        const res = await fetch(url, options);
+        setConn('ok', '已连接');
+        let data = null;
+        try { data = await res.json(); } catch { data = null; }
+        return { ok: res.ok, status: res.status, data };
+    } catch (e) {
+        setConn('err', '未连接');
+        throw e;
+    }
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+}
+function escapeAttr(s) {
+    return String(s).replace(/'/g, "\\'");
+}
+
+function updateLogBox(fileId, autoScroll) {
+    const safeId = safeIdOf(fileId);
+    const el = document.getElementById(`log_${safeId}`);
+    if (!el) return;
+    const text = logCache[fileId] || '';
+    if (el.textContent !== text) el.textContent = text;
+    if (autoScroll && logVisible[fileId] !== false) {
+        el.scrollTop = el.scrollHeight;
+    }
+}
+
+async function ensureLog(fileId) {
+    if (logCache[fileId] !== undefined) return;
+    try {
+        const resp = await api('/log?file=' + encodeURIComponent(fileId));
+        const d = resp.data || {};
+        if (d.ok) {
+            logCache[fileId] = d.output || '';
+            updateLogBox(fileId, false);
+        }
+    } catch (e) {}
+}
+
+function renderCard(f) {
+    const safeId = safeIdOf(f.id);
+    const isRunning = !!f.is_running;
+    const isOccupied = f.occupied && !f.active_task;
+    const port = f.port;
+
+    let cardClass = 'card';
+    if (isRunning) cardClass += ' running';
+
+    let runBtn;
+    if (isRunning) {
+        runBtn = `<button class="btn btn-run" disabled title="端口已被占用，视为正在运行">✔ 正在运行</button>`;
+    } else {
+        runBtn = `<button class="btn btn-run" onclick="run('${escapeAttr(f.id)}')">▶ 运行</button>`;
+    }
+
+    let stopBtn = '';
+    if (f.active_task) {
+        stopBtn = `<button class="btn btn-stop" onclick="stop('${escapeAttr(f.id)}','${f.active_task}')">■ 停止</button>`;
+    } else if (f.external_running && port) {
+        stopBtn = `<button class="btn btn-stop" onclick="stopPort('${escapeAttr(f.id)}', ${port})">■ 停止 :${port}</button>`;
+    }
+
+    let killBtn = '';
+    if (isOccupied && f.occupier_info) {
+        killBtn = `<button class="btn btn-kill" onclick='showKillModal(${f.occupier_info.pid}, ${JSON.stringify(f.occupier_info.name)}, ${port})'>🔪 杀死占用</button>`;
+    }
+
+    // 打开按钮：直连 + 转发
+    let linkBtn = '';
+    if (1 || port && isRunning) {
+        const directHref = `${window.location.protocol}//${window.location.hostname}:${port}`;
+        const proxyHref = `/pys/port/${port}/`;
+        linkBtn =
+            `<a href="${directHref}" target="_blank" class="btn btn-link" title="直连 IP:端口">🚀 打开 :${port}</a>` +
+            `<a href="${proxyHref}" target="_blank" class="btn btn-proxy" title="通过本服务转发">🔗 转发打开</a>`;
+    }
+
+    let portTag = '';
+    if (port) {
+        let cls = 'tag';
+        let title = '点击编辑推荐端口';
+        if (f.external_running && f.occupier_info) {
+            cls = 'tag tag-running';
+            title = '端口被占用（外部进程运行中），点击编辑推荐端口';
+        } else if (isOccupied && f.occupier_info) {
+            cls = 'tag tag-busy';
+            title = '端口被占用，点击查看/编辑';
+        } else if (f.manual_port) {
+            cls = 'tag tag-manual';
+            title = '手动设置的推荐端口，点击编辑';
+        }
+        portTag = `<span class="${cls} tag-editable" title="${title}"
+                         onclick='editPort("${escapeAttr(f.id)}", ${f.manual_port != null ? f.manual_port : 'null'})'>Port: ${port} ✏️</span>`;
+    } else {
+        portTag = `<span class="tag tag-editable" title="点击设置推荐端口"
+                         onclick='editPort("${escapeAttr(f.id)}", null)'>Port: — ✏️</span>`;
+    }
+
+    const userVisible = logVisible[f.id];
+    const isLogVisible = userVisible !== undefined
+        ? userVisible
+        : (isRunning || !!logCache[f.id] || !!f.has_log);
+
+    return `
+    <div class="${cardClass}" id="card_${safeId}">
+        <div class="header">
+            <span class="file-name" title="cwd: ${escapeHtml(f.run_cwd || '')}">${escapeHtml(f.file)}</span>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                ${portTag}
+                ${linkBtn}
+            </div>
+        </div>
+        <div class="controls">
+            <input id="arg_${safeId}" placeholder="启动参数 (可选)"
+                   style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; width:160px;">
+            ${runBtn}
+            ${stopBtn}
+            ${killBtn}
+            <button class="btn btn-edit" onclick="openEditor('${escapeAttr(f.id)}', ${JSON.stringify(f.file)})">✏️ 编辑</button>
+            <button class="btn btn-log" onclick="toggleLog('${escapeAttr(f.id)}')">📄 日志</button>
+        </div>
+        <div id="log_${safeId}" class="log-box ${isLogVisible ? 'show' : ''}"></div>
+    </div>`;
+}
+
+async function load() {
+    let resp;
+    try {
+        resp = await api('/list');
+    } catch (e) {
+        document.getElementById('app').innerHTML =
+            `<div style="padding:20px; background:#fee2e2; color:#991b1b; border-radius:8px;">
+               无法连接后端 <code>${API_BASE}</code>。
+             </div>`;
+        return;
+    }
+
+    const data = resp.data || {};
+    const app = document.getElementById('app');
+
+    let html = '';
+
+    for (const [group, files] of Object.entries(data)) {
+        html += `<div class="group-title">${escapeHtml(group)}</div>`;
+
+        const primaries = files.filter(f => f.is_primary);
+        const others = files.filter(f => !f.is_primary);
+        const hasFold = primaries.length > 0 && others.length > 0;
+
+        if (hasFold) {
+            primaries.forEach(f => { html += renderCard(f); });
+
+            const gid = safeGroupId(group);
+            const opened = !!othersVisible[gid];
+            html += `
+                <div class="others-toggle ${opened ? 'open' : ''}"
+                     id="othersToggle_${gid}"
+                     onclick="toggleOthers('${gid}')">
+                    <span class="chev">${opened ? '▼' : '▶'}</span>
+                    <span>${opened ? '收起' : '显示'}其他 ${others.length} 个 py 文件</span>
+                </div>
+                <div class="others-group ${opened ? 'open' : ''}" id="othersGroup_${gid}">
+                    ${others.map(f => renderCard(f)).join('')}
+                </div>`;
+        } else {
+            files.forEach(f => { html += renderCard(f); });
+        }
+    }
+    app.innerHTML = html;
+
+    for (const files of Object.values(data)) {
+        for (const f of files) {
+            if (logCache[f.id] !== undefined) {
+                updateLogBox(f.id, false);
+            } else if (f.has_log) {
+                ensureLog(f.id);
+            }
+            if (f.active_task && f.is_running) {
+                startPolling(f.id, f.active_task);
+            }
+        }
+    }
+}
+
+function toggleOthers(gid) {
+    const t = document.getElementById(`othersToggle_${gid}`);
+    const g = document.getElementById(`othersGroup_${gid}`);
+    if (!t || !g) return;
+    const nowOpen = !g.classList.contains('open');
+    g.classList.toggle('open', nowOpen);
+    t.classList.toggle('open', nowOpen);
+    const chev = t.querySelector('.chev');
+    const label = t.querySelector('span:last-child');
+    if (chev) chev.textContent = nowOpen ? '▼' : '▶';
+    if (label) label.textContent = (nowOpen ? '收起' : '显示') +
+        label.textContent.replace(/^(收起|显示)/, '');
+    othersVisible[gid] = nowOpen;
+    saveOthersVisible();
+}
+
+async function run(id) {
+    const safeId = safeIdOf(id);
+    const arg = document.getElementById(`arg_${safeId}`).value;
+
+    logCache[id] = '';
+    logVisible[id] = true;
+    saveLogVisible();
+    updateLogBox(id, true);
+    const logEl = document.getElementById(`log_${safeId}`);
+    if (logEl) logEl.classList.add('show');
+
+    let resp;
+    try {
+        resp = await api('/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: id, args: arg })
+        });
+    } catch (e) {
+        alert('请求失败：' + e.message);
+        return;
+    }
+
+    const d = resp.data || {};
+    if (d.task) {
+        let c = getCache(); c[id] = d.task; setCache(c);
+        startPolling(id, d.task);
+        await load();
+    } else if (resp.status === 409 && d.already_running) {
+        alert(d.message || `端口 ${d.port} 已被占用，未重复启动。`);
+        await load();
+    } else if (d.error) {
+        alert(d.error);
+        await load();
+    }
+}
+
+async function stop(id, taskId) {
+    if (!taskId) return;
+    try {
+        await api('/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task: taskId })
+        });
+    } catch (e) {}
+    let c = getCache(); delete c[id]; setCache(c);
+    setTimeout(load, 400);
+}
+
+async function stopPort(id, port) {
+    if (!port) return;
+    if (!confirm(`确定停止占用端口 ${port} 的程序吗？`)) return;
+    try {
+        const resp = await api('/stop-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ port: port })
+        });
+        if (!resp.data || !resp.data.ok) {
+            alert((resp.data && resp.data.error) || '停止失败');
+        }
+    } catch (e) {
+        alert('停止请求失败: ' + e.message);
+    }
+    await load();
+}
+
+async function forceKillPort() {
+    const input = document.getElementById('forcePort');
+    const port = parseInt(input.value, 10);
+    if (!port || port < 1 || port > 65535) {
+        alert('请输入 1-65535 之间的端口号');
+        input.focus();
+        return;
+    }
+    if (!confirm(`确定强制停止占用端口 ${port} 的进程吗？`)) return;
+
+    try {
+        const resp = await api('/stop-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ port: port })
+        });
+        const d = resp.data || {};
+        if (d.ok) {
+            alert(`✓ 端口 ${port} 已停止（进程: ${d.process || '未知'}，PID: ${d.pid}）`);
+            input.value = '';
+        } else {
+            alert(d.error || '停止失败');
+        }
+    } catch (e) {
+        alert('请求失败: ' + e.message);
+    }
+    await load();
+}
+
+function editPort(fileId, currentManual) {
+    portTargetFile = fileId;
+    document.getElementById('pmFile').textContent = fileId;
+    const input = document.getElementById('pmInput');
+    input.value = currentManual != null ? currentManual : '';
+    document.getElementById('portModal').style.display = 'flex';
+    setTimeout(() => input.focus(), 50);
+}
+
+function closePortModal() {
+    document.getElementById('portModal').style.display = 'none';
+    portTargetFile = null;
+}
+
+async function savePort() {
+    if (!portTargetFile) return;
+    const raw = document.getElementById('pmInput').value.trim();
+    if (raw === '') return clearPort();
+    const port = parseInt(raw, 10);
+    if (!port || port < 1 || port > 65535) {
+        alert('端口必须是 1-65535 之间的数字');
+        return;
+    }
+
+    try {
+        const resp = await api('/set-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: portTargetFile, port: port })
+        });
+        const d = resp.data || {};
+        if (d.ok) {
+            closePortModal();
+            await load();
+        } else {
+            alert(d.error || '保存失败');
+        }
+    } catch (e) {
+        alert('请求失败: ' + e.message);
+    }
+}
+
+async function clearPort() {
+    if (!portTargetFile) return;
+    if (!confirm('清除该文件的手动端口配置？')) return;
+    try {
+        const resp = await api('/set-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: portTargetFile, port: null })
+        });
+        const d = resp.data || {};
+        if (d.ok) {
+            closePortModal();
+            await load();
+        } else {
+            alert(d.error || '清除失败');
+        }
+    } catch (e) {
+        alert('请求失败: ' + e.message);
+    }
+}
+
+document.getElementById('pmInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') savePort();
+    if (e.key === 'Escape') closePortModal();
+});
+
+function openProxy() {
+    const input = document.getElementById('proxyPort');
+    const port = parseInt(input.value, 10);
+    if (!port || port < 1 || port > 65535) {
+        alert('请输入 1-65535 之间的端口号');
+        input.focus();
+        return;
+    }
+    window.open(`/pys/port/${port}/`, '_blank');
+    input.value = '';
+}
+document.getElementById('proxyPort').addEventListener('keydown', e => {
+    if (e.key === 'Enter') openProxy();
+});
+
+function startPolling(fileId, taskId) {
+    if (!taskId) return;
+    if (pollingTimers[taskId]) return;
+
+    let timer = null;
+
+    const tick = async () => {
+        try {
+            const resp = await api(`/status/${taskId}`);
+            const d = resp.data || {};
+
+            if (typeof d.output === 'string') {
+                logCache[fileId] = d.output;
+                updateLogBox(fileId, true);
+            }
+
+            const safeId = safeIdOf(fileId);
+            const cardEl = document.getElementById(`card_${safeId}`);
+
+            if (d.status === 'completed') {
+                if (cardEl) cardEl.className = 'card finished';
+                if (timer) clearInterval(timer);
+                delete pollingTimers[taskId];
+                let c = getCache(); delete c[fileId]; setCache(c);
+                setTimeout(load, 300);
+            } else if (d.status === 'error' || d.status === 'stopped') {
+                if (cardEl) cardEl.className = 'card error';
+                if (timer) clearInterval(timer);
+                delete pollingTimers[taskId];
+                setTimeout(load, 300);
+            } else if (d.status === 'not_found') {
+                if (timer) clearInterval(timer);
+                delete pollingTimers[taskId];
+            }
+        } catch (e) {
+            if (timer) clearInterval(timer);
+            delete pollingTimers[taskId];
+        }
+    };
+
+    timer = setInterval(tick, 500);
+    pollingTimers[taskId] = timer;
+    tick();
+}
+
+function toggleLog(fileId) {
+    const safeId = safeIdOf(fileId);
+    const el = document.getElementById(`log_${safeId}`);
+    if (!el) return;
+    const nowVisible = !el.classList.contains('show');
+    el.classList.toggle('show', nowVisible);
+    logVisible[fileId] = nowVisible;
+    saveLogVisible();
+    if (nowVisible && logCache[fileId] === undefined) {
+        ensureLog(fileId);
+    }
+}
+
+function showKillModal(pid, name, port) {
+    killTarget = pid;
+    document.getElementById('mPort').innerText = port;
+    document.getElementById('mInfo').innerText = `进程名: ${name}\nPID: ${pid}`;
+    document.getElementById('killModal').style.display = 'flex';
+}
+function closeModal() {
+    document.getElementById('killModal').style.display = 'none';
+    killTarget = null;
+}
+async function confirmKill() {
+    if (!killTarget) return;
+    try {
+        await api('/kill-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: killTarget })
+        });
+    } catch (e) {}
+    closeModal();
+    load();
+}
+
+async function openEditor(fileId, fileName) {
+    document.getElementById('editStatus').textContent = '读取中…';
+    document.getElementById('editStatus').className = 'status';
+    document.getElementById('editFileName').innerText = fileName;
+    document.getElementById('editEncoding').innerText = '-';
+    document.getElementById('editSize').innerText = '-';
+    document.getElementById('editContent').value = '';
+    document.getElementById('editModal').style.display = 'flex';
+
+    try {
+        const resp = await api('/read?file=' + encodeURIComponent(fileId));
+        const d = resp.data || {};
+        if (!d.ok) {
+            document.getElementById('editStatus').textContent =
+                '读取失败：' + (d.error || '未知错误');
+            document.getElementById('editStatus').className = 'status err';
+            return;
+        }
+        editingFile = fileId;
+        editingEncoding = d.encoding || 'utf-8';
+        editingDirty = false;
+        document.getElementById('editContent').value = d.content || '';
+        document.getElementById('editEncoding').innerText = editingEncoding;
+        document.getElementById('editSize').innerText = (d.size || 0) + ' 字节';
+        document.getElementById('editStatus').textContent = '已加载';
+        document.getElementById('editStatus').className = 'status ok';
+        document.getElementById('editContent').focus();
+    } catch (e) {
+        document.getElementById('editStatus').textContent = '请求失败：' + e.message;
+        document.getElementById('editStatus').className = 'status err';
+    }
+}
+
+function closeEditor() {
+    if (editingDirty) {
+        if (!confirm('有未保存的修改，确定关闭吗？')) return;
+    }
+    document.getElementById('editModal').style.display = 'none';
+    editingFile = null;
+    editingDirty = false;
+}
+
+async function saveEditor() {
+    if (!editingFile) return;
+    const btn = document.getElementById('editSaveBtn');
+    const statusEl = document.getElementById('editStatus');
+    const content = document.getElementById('editContent').value;
+
+    btn.disabled = true;
+    statusEl.textContent = '保存中…';
+    statusEl.className = 'status';
+
+    try {
+        const resp = await api('/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file: editingFile,
+                content: content,
+                encoding: editingEncoding
+            })
+        });
+        const d = resp.data || {};
+        if (d.ok) {
+            editingDirty = false;
+            statusEl.textContent = `✓ 已保存（${d.size || content.length} 字节，${d.encoding || editingEncoding}）`;
+            statusEl.className = 'status ok';
+            setTimeout(() => {
+                document.getElementById('editModal').style.display = 'none';
+                editingFile = null;
+            }, 600);
+        } else {
+            statusEl.textContent = '保存失败：' + (d.error || '未知错误');
+            statusEl.className = 'status err';
+        }
+    } catch (e) {
+        statusEl.textContent = '请求失败：' + e.message;
+        statusEl.className = 'status err';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+document.addEventListener('keydown', e => {
+    const editOpen = document.getElementById('editModal').style.display === 'flex';
+    const portOpen = document.getElementById('portModal').style.display === 'flex';
+
+    if (editOpen && e.key === 'Escape') { e.preventDefault(); closeEditor(); return; }
+    if (editOpen && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault(); saveEditor(); return;
+    }
+    if (portOpen && e.key === 'Escape') { e.preventDefault(); closePortModal(); return; }
+});
+
+document.getElementById('editContent').addEventListener('input', () => {
+    editingDirty = true;
+    const statusEl = document.getElementById('editStatus');
+    statusEl.textContent = '● 未保存';
+    statusEl.className = 'status';
+});
+
+document.getElementById('editContent').addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const ta = e.target;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, start) + '    ' + ta.value.substring(end);
+        ta.selectionStart = ta.selectionEnd = start + 4;
+        editingDirty = true;
+    }
+});
+
+document.getElementById('forcePort').addEventListener('keydown', e => {
+    if (e.key === 'Enter') forceKillPort();
+});
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

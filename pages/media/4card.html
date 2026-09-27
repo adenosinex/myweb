@@ -17,6 +17,9 @@
                 <input type="text" id="searchInput" placeholder="检索认知库..." 
                     class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 transition text-lg">
                 <button onclick="fetchCards()" class="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg transition font-medium text-lg shadow-lg shadow-green-900/20">搜索</button>
+                <div id="searchCount" 
+                     class="px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">
+                </div>
                 <button onclick="openModal('uploadModal', true)" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition font-medium text-lg">录入新卡片</button>
                 <button onclick="resetHome()" class="px-6 py-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded-lg transition text-lg">回到首页</button>
             </div>
@@ -35,6 +38,7 @@
             </div>
         </header>
 
+        <div id="keyResult" class="hidden mb-6 bg-gray-800 border border-gray-700 rounded-xl p-5"></div>
         <div id="cardGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
     </div>
 
@@ -210,7 +214,7 @@
         // --- 懒加载核心状态变量 ---
         let allCardsData = [];          // 存储从后端拿到的所有数据
         let currentRenderIndex = 0;     // 当前已渲染的数量
-        const RENDER_CHUNK_SIZE = 12;   // 每次滚动加载的卡片数 (24是2,3,4列的公倍数，排版最整齐)
+        const RENDER_CHUNK_SIZE = 12;   // 每次滚动加载的卡片数
         let observer = null;            // 滚动监听器
 
         window.addEventListener('resize', () => {
@@ -224,11 +228,11 @@
             document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') fetchCards(); });
             document.addEventListener('paste', handlePaste);
             
-            // 初始化滚动监听器：距离底部 300px 时提前触发加载，保证丝滑
+            // 初始化滚动监听器：距离底部 300px 时提前触发加载
             observer = new IntersectionObserver((entries) => {
                 if (entries[0].isIntersecting) {
-                    observer.disconnect(); // 暂停监听当前元素
-                    renderNextChunk();     // 渲染下一批
+                    observer.disconnect();
+                    renderNextChunk();
                 }
             }, { rootMargin: '300px' });
         });
@@ -272,7 +276,6 @@
 
 async function fetchTags() {
             try {
-                // 替换为调用频次统计接口
                 const res = await fetch(`${API_BASE}api/tags_freq`);
                 const data = await res.json();
                 const tagsList = data.tag_frequencies || []; 
@@ -303,11 +306,9 @@ async function fetchTags() {
             const badge = el.querySelector('.count-badge');
             
             if (isActive) {
-                // 激活状态：容器变绿，数字角标同步变亮绿色
                 el.className = "px-4 py-2 text-sm md:text-base font-bold rounded-full border-2 border-green-500 bg-green-500/20 text-green-400 transition cursor-pointer shadow-md shadow-green-900/30 scale-105 transform flex items-center gap-1.5";
                 if (badge) badge.className = "count-badge text-xs bg-green-500/30 text-green-300 px-1.5 py-0.5 rounded-full font-sans";
             } else {
-                // 默认状态：恢复暗灰
                 el.className = "px-4 py-2 text-sm md:text-base font-medium rounded-full border border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition cursor-pointer shadow-sm flex items-center gap-1.5";
                 if (badge) badge.className = "count-badge text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full font-sans";
             }
@@ -326,7 +327,105 @@ async function fetchTags() {
             }[tag]));
         }
 
-        // --- 核心改造：分步渲染 ---
+        /**
+         * 跳转到外部搜索页面
+         * 若 key 包含空格分隔的多个关键词，默认只跳转第一个
+         */
+        function jumpSearch(key) {
+            if (!key) return;
+            const keys = String(key).split(/\s+/).filter(Boolean);
+            if (keys.length === 0) return;
+            const first = keys[0]; // 默认跳转第一个空格分隔的关键词
+            window.open(`http://192.168.31.124/?search=${encodeURIComponent(first)}`, '_blank');
+        }
+
+        /**
+         * 查询 key 候选数量，在 h4 内部末尾追加显示；数量为 0 时不显示
+         * 支持空格分隔的多关键词：
+         *  - 总数 = 各关键词候选数量之和
+         *  - 多关键词时，候选数量后追加每个关键词明细，每个明细可点击跳转对应关键词
+         * @param {string} key
+         * @param {HTMLElement} parentEl 父元素（h4）
+         */
+        async function countByKey(key, parentEl) {
+            if (!key || !parentEl) return;
+
+            // 1. 清掉上一次的结果（重复点击/重复初始化都不会堆积）
+            parentEl.querySelectorAll('.key-count-result').forEach(el => el.remove());
+
+            // 2. 空格分隔拆分为多个关键词
+            const keys = String(key).split(/\s+/).filter(Boolean);
+            if (keys.length === 0) return;
+
+            try {
+                // 3. 多次并发请求（每个关键词一个请求）
+                const results = await Promise.all(keys.map(k =>
+                    fetch(`http://192.168.31.124/videos/count?key=${encodeURIComponent(k)}`)
+                        .then(r => r.json())
+                        .then(d => Number(d.total) || 0)
+                        .catch(() => 0)
+                ));
+
+                // 4. 整体数量之和
+                const total = results.reduce((sum, n) => sum + n, 0);
+
+                // 5. 数量为 0 直接不显示
+                if (total <= 0) return;
+
+                // 6. 有数量时才追加结果节点
+                const box = document.createElement('div');
+                box.className = 'key-count-result text-sm font-normal mt-1';
+
+                // 6.1 总数
+                const totalSpan = document.createElement('span');
+                totalSpan.className = 'text-green-400';
+                totalSpan.textContent = `候选数量：${total}`;
+                box.appendChild(totalSpan);
+
+                // 6.2 多关键词时，在总数后追加每个关键词的明细（可点击跳转）
+                if (keys.length > 1) {
+                    const detailWrap = document.createElement('span');
+                    detailWrap.className = 'text-green-400';
+                    detailWrap.appendChild(document.createTextNode('（'));
+
+                    keys.forEach((k, i) => {
+                        if (i > 0) {
+                            const sep = document.createElement('span');
+                            sep.className = 'text-gray-500 mx-1';
+                            sep.textContent = '|';
+                            detailWrap.appendChild(sep);
+                        }
+                        const link = document.createElement('span');
+                        link.className = 'hover:text-green-300 underline cursor-pointer';
+                        link.textContent = `${k}: ${results[i]}`;
+                        // 点击明细跳转对应关键词，阻止冒泡避免重新触发 h4 的查询
+                        link.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            jumpSearch(k);
+                        });
+                        detailWrap.appendChild(link);
+                    });
+
+                    detailWrap.appendChild(document.createTextNode('）'));
+                    box.appendChild(detailWrap);
+                }
+
+                parentEl.appendChild(box);
+            } catch (e) {
+                console.error('countByKey 查询失败:', e);
+            }
+        }
+
+        /**
+         * 遍历指定范围内所有 h4.query-title，触发一次数量查询
+         */
+        function initQueryCounts(root = document) {
+            root.querySelectorAll('h4.query-title[data-query]').forEach(h4 => {
+                countByKey(h4.dataset.query, h4);
+            });
+        }
+
+        // --- 核心：分步渲染 ---
         async function fetchCards() {
             try {
                 const q = document.getElementById('searchInput').value;
@@ -362,11 +461,19 @@ async function fetchTags() {
                 <div onclick='openDetail(${safeCardInfo})' 
                      class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden cursor-pointer hover:-translate-y-1.5 hover:border-gray-500 transition-all duration-200 shadow-lg flex flex-col group relative">
                     <div class="h-52 overflow-hidden bg-gray-900/80 relative flex justify-center items-center p-1">
-                        <img src="${coverUrl}" loading="lazy" class="w-full h-full object-contain group-hover:scale-[1.02] transition duration-300" onerror="this.style.display='none'">
+                        <img src="${coverUrl}" 
+     loading="lazy"
+     onclick="event.stopPropagation(); jumpSearch('${queryStr}')"
+     class="w-full h-full object-contain group-hover:scale-[1.02] transition duration-300 cursor-pointer"
+     onerror="this.style.display='none'">
                     </div>
                     <div class="p-5 flex-1 flex flex-col">
                         <div class="flex justify-between items-start mb-3">
-                            <h4 class="font-bold text-lg text-gray-100 leading-tight">${escapeHTML(card.query)}</h4>
+                            <h4 data-query="${escapeHTML(card.query)}"
+                                onclick="event.stopPropagation(); countByKey(this.dataset.query, this)"
+                                class="query-title font-bold text-lg text-gray-100 leading-tight cursor-pointer hover:text-green-400">
+                                ${escapeHTML(card.query)}
+                            </h4>
                             ${card.stats_data ? '<span class="text-[10px] bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded whitespace-nowrap">已校验</span>' : ''}
                         </div>
                         <div class="flex justify-between items-end mt-auto pt-3 border-t border-gray-700/50 relative">
@@ -385,6 +492,13 @@ async function fetchTags() {
             // 追加渲染到 DOM，而不是覆盖
             grid.insertAdjacentHTML('beforeend', html);
             currentRenderIndex += RENDER_CHUNK_SIZE;
+
+            // 默认加载：对本批新渲染的卡片自动触发数量查询
+            const newCardEls = Array.from(grid.children).slice(-chunk.length);
+            newCardEls.forEach(cardEl => {
+                const h4 = cardEl.querySelector('h4.query-title[data-query]');
+                if (h4) countByKey(h4.dataset.query, h4);
+            });
 
             // 如果还有没渲染完的数据，把监听器挂在当前最后一张卡片上
             if (currentRenderIndex < allCardsData.length) {
@@ -501,7 +615,6 @@ async function fetchTags() {
             document.getElementById('upTags').value = tagsStr; 
         }
 
-        // 修改此处：增加 query 参数支持
         function openEditModal(cardId, queryStr, tagsStr) {
             document.getElementById('editCardId').value = cardId;
             document.getElementById('editQueryInput').value = queryStr;
@@ -525,7 +638,6 @@ async function fetchTags() {
             } 
         }
 
-        // 修改此处：提交时同时传输 tags 和 query
         async function submitEdit() {
             const cardId = document.getElementById('editCardId').value;
             const fd = new FormData();
@@ -546,7 +658,6 @@ async function fetchTags() {
             const query = document.getElementById('upQuery').value.trim();
             if (!files.length || !query) return alert("截图和Key为必填");
 
-            // 获取按钮，在压缩和上传期间锁定状态，防止重复点击
             const submitBtn = document.querySelector('#uploadModal button.bg-green-600');
             const originalBtnText = submitBtn.innerText;
             submitBtn.innerText = "压缩处理中...";
@@ -554,19 +665,16 @@ async function fetchTags() {
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                // 1. 执行前端压缩 (限制最大宽度 800px，画质 80%)
                 const compressedFile = await compressImage(files[0], 800, 0.8);
 
-                // 2. 组装表单
                 const fd = new FormData();
-                fd.append('cover', compressedFile); // 传入已被压缩的 File 对象
+                fd.append('cover', compressedFile);
                 fd.append('query', query);
                 fd.append('tags', document.getElementById('upTags').value);
                 fd.append('description', document.getElementById('upDesc').value);
 
                 submitBtn.innerText = "高速上传中...";
 
-                // 3. 提交至服务器
                 const res = await fetch(`${API_BASE}api/upload`, { method: 'POST', body: fd });
                 if ((await res.json()).status === 'success') {
                     closeModal('uploadModal'); 
@@ -580,7 +688,6 @@ async function fetchTags() {
                 alert('处理异常: ' + e.message); 
                 console.error(e);
             } finally {
-                // 恢复按钮状态
                 submitBtn.innerText = originalBtnText;
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');

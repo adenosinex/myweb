@@ -1,0 +1,17 @@
+services:
+  zhihu-text:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # 方式一：直接把 Cookie 写进环境变量（注意不要提交到 Git）
+      # ZHIHU_COOKIE: "d_c0=xxx; z_c0=yyy; _xsrf=zzz"
+      ZHIHU_COOKIE_FILE: /app/data/cookies.txt
+      # 方式二：改用浏览器模式（需在镜像中安装 playwright，较慢但抗风控）
+      # ZHIHU_BROWSER: "1"
+      # ZHIHU_HEADLESS: "1"
+      PORT: "8000"
+    volumes:
+      # 把本地 cookies.txt 挂进来；不要打进镜像
+      - ./data:/app/data:ro
+    restart: unless-stopped

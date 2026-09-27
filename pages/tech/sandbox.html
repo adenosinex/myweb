@@ -1022,10 +1022,10 @@
             <button class="search-clear" id="search-clear" onclick="clearSearch()" title="清除搜索">✕</button>
             <span class="result-count" id="result-count"></span>
             <div class="view-tabs" id="view-tabs">
-                <button class="view-tab active" data-view="grid" onclick="switchDisplayView('grid')" title="网格卡片">
+                <button class="view-tab " data-view="grid" onclick="switchDisplayView('grid')" title="网格卡片">
                     <span>▦</span> 网格
                 </button>
-                <button class="view-tab" data-view="timeline" onclick="switchDisplayView('timeline')" title="时间线">
+                <button class="view-tab active" data-view="timeline" onclick="switchDisplayView('timeline')" title="时间线">
                     <span>📅</span> 时间线
                 </button>
                 <button class="view-tab" data-view="list" onclick="switchDisplayView('list')" title="紧凑列表">
@@ -1157,7 +1157,7 @@
 
         let currentPagesData = [];
         let backendOrder = { group_order: [], item_order: [] };
-        let currentDisplayView = 'grid'; // 'grid' | 'timeline' | 'list' | 'graph'
+        let currentDisplayView = 'timeline'; // 'grid' | 'timeline' | 'list' | 'graph'
         let chartInstance = null;
         let toolboxVisible = false;
         let selectedIds = new Set();
@@ -2199,13 +2199,12 @@
         window.addEventListener('resize', () => { if (chartInstance && currentDisplayView === 'graph') chartInstance
                 .resize(); });
         window.onload = () => {
-            switchView('list');
-            currentDisplayView = 'grid';
-            document.querySelectorAll('#view-tabs .view-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.getAttribute('data-view') === 'grid');
-            });
-        };
-
+    switchView('list');
+    currentDisplayView = 'timeline';
+    document.querySelectorAll('#view-tabs .view-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.getAttribute('data-view') === 'timeline');
+    });
+};
         // 点击弹窗遮罩关闭
         document.getElementById('move-modal').addEventListener('click', function(e) {
             if (e.target === this) closeMoveModal();
