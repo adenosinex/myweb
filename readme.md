@@ -1,4 +1,7 @@
 # 轻量级万能数据存储后端 (Universal Flask Backend)
+source .venv/bin/activate.fish
+./pocketbase serve --http="0.0.0.0:8790"
+
 tar -czvf db.tar.gz db
 
 tar -czvf dball.tar.gz \

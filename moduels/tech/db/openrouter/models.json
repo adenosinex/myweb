@@ -1,0 +1,24 @@
+{
+  "models": [
+    {
+      "id": "openai/gpt-6-luna",
+      "name": "openai/gpt-6-luna",
+      "enabled": true
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "name": "openai/gpt-6.1-sol",
+      "enabled": true
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash",
+      "name": "deepseek/deepseek-v4.1-flash",
+      "enabled": true
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-pro",
+      "name": "xiaomi/mimo-v2.6-pro",
+      "enabled": true
+    }
+  ]
+}

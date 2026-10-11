@@ -11,13 +11,14 @@ Python 文件网页执行器 —— 后端蓝图（完整版）
   - 透明端口转发 /pys/port/<port>/...
       · 支持子路径（HTML / JS / CSS / 图片 / JSON / 任意）
       · 注入 <base> 与 JS 补丁（fetch / XHR / sendBeacon / createElement）
-      
       · Location 重写
   - Windows 隐藏子进程控制台窗口
   - 运行时上下文：cwd=脚本目录，PYTHONPATH=脚本目录+PY_ROOT
+  - 所有 JSON API 统一返回 HTTP 200，用 ok/error 字段表达结果
+  - 端口占用检测：psutil → lsof → netstat 三级回退
 """
 
-import os, time, sys, re, subprocess, threading, uuid, json
+import os, time, sys, re, subprocess, threading, uuid, json, signal
 from flask import Blueprint, jsonify, request, Response
 
 try:
@@ -127,37 +128,143 @@ def write_folder_ports(folder, cfg):
 # 工具
 # =========================================================
 def kill_process_tree(pid):
-    if not HAS_PSUTIL:
+    """杀掉 pid 及其子进程。
+    优先 psutil（能连子进程一起杀），回退 taskkill / SIGKILL。"""
+    if pid is None:
         return False
+
+    # 1) 优先 psutil
+    if HAS_PSUTIL:
+        try:
+            parent = psutil.Process(pid)
+            for child in parent.children(recursive=True):
+                try:
+                    child.kill()
+                except Exception:
+                    pass
+            parent.kill()
+            return True
+        except Exception:
+            pass
+
+    # 2) Windows taskkill
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                           capture_output=True, timeout=5)
+            return True
+        except Exception:
+            return False
+
+    # 3) POSIX SIGKILL
     try:
-        parent = psutil.Process(pid)
-        children = parent.children(recursive=True)
-        for child in children:
-            try:
-                child.kill()
-            except Exception:
-                pass
-        parent.kill()
+        os.kill(pid, signal.SIGKILL)
         return True
+    except ProcessLookupError:
+        return True          # 已经死了
     except Exception:
         return False
+
+
+def _psutil_port_occupier(port):
+    if not HAS_PSUTIL:
+        return None
+    try:
+        conns = psutil.net_connections(kind='inet')
+    except Exception:
+        return None
+    for conn in conns:
+        try:
+            if conn.status != 'LISTEN':
+                continue
+            if not conn.laddr or conn.laddr.port != port:
+                continue
+            pid = conn.pid
+            if pid is None:
+                continue
+            try:
+                proc = psutil.Process(pid)
+                return {"pid": pid, "name": proc.name(),
+                        "cmdline": " ".join(proc.cmdline())[:200],
+                        "source": "psutil"}
+            except Exception:
+                return {"pid": pid, "name": "Unknown",
+                        "cmdline": "", "source": "psutil"}
+        except Exception:
+            continue
+    return None
+
+
+def _lsof_port_occupier(port):
+    """macOS / Linux 上最可靠的兜底。"""
+    if sys.platform == "win32":
+        return None
+    cmd = ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-F", "pcn"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+    if r.returncode != 0 or not (r.stdout or "").strip():
+        return None
+
+    pid, name = None, ""
+    for line in r.stdout.splitlines():
+        if not line:
+            continue
+        if line[0] == "p" and pid is None:
+            try:
+                pid = int(line[1:])
+            except ValueError:
+                pass
+        elif line[0] == "c" and not name:
+            name = line[1:]
+    if pid is not None:
+        return {"pid": pid, "name": name or "Unknown",
+                "cmdline": "", "source": "lsof"}
+    return None
+
+
+def _netstat_port_occupier(port):
+    if sys.platform != "win32":
+        return None
+    try:
+        r = subprocess.run(["netstat", "-ano", "-p", "TCP"],
+                           capture_output=True, text=True, timeout=5)
+    except Exception:
+        return None
+    for line in (r.stdout or "").splitlines():
+        parts = line.split()
+        if len(parts) < 5 or parts[3].upper() != "LISTENING":
+            continue
+        try:
+            if int(parts[1].rsplit(":", 1)[-1]) != port:
+                continue
+            pid = int(parts[4])
+        except (ValueError, IndexError):
+            continue
+        return {"pid": pid, "name": "Unknown",
+                "cmdline": "", "source": "netstat"}
+    return None
 
 
 def get_port_occupier(port_str):
-    if not port_str or not HAS_PSUTIL:
+    """psutil → lsof → netstat，谁先拿到 pid 就用谁。"""
+    if not port_str:
         return None
     try:
         port = int(port_str)
-        for conn in psutil.net_connections(kind='inet'):
-            if conn.laddr.port == port and conn.status == 'LISTEN':
-                try:
-                    proc = psutil.Process(conn.pid)
-                    return {"pid": conn.pid, "name": proc.name(),
-                            "cmdline": " ".join(proc.cmdline())[:100]}
-                except Exception:
-                    return {"pid": conn.pid, "name": "Unknown", "cmdline": ""}
-    except Exception:
-        pass
+    except (TypeError, ValueError):
+        return None
+
+    for fn in (_psutil_port_occupier, _lsof_port_occupier, _netstat_port_occupier):
+        try:
+            info = fn(port)
+        except Exception:
+            info = None
+        if info and info.get("pid"):
+            return info
     return None
 
 
@@ -444,7 +551,6 @@ _PROXY_PATCH_JS = r"""
         };
     }
 
-    // 动态创建元素的 src / href
     (function(){
         var origCreate = document.createElement.bind(document);
         var REWRITE_TAGS = ['script','link','img','iframe','source','video','audio'];
@@ -516,13 +622,20 @@ _PROXY_FLOATING_BAR = r"""
     content: "⚡"; font-size: 22px; cursor: pointer;
 }
 </style>
+
  
+
 <script>
 (function(){
     if (window.__pys_float_bar_loaded) return;
     window.__pys_float_bar_loaded = true;
-    window.__pys_open_port = function() {
-        var input = document.getElementById('__pys_port_input');
+
+    function bar(){ return document.getElementById('__pys_float_bar'); }
+    function inputEl(){ return document.getElementById('__pys_port_input'); }
+
+    window.__pys_open_port = function(){
+        var input = inputEl();
+        if (!input) return;
         var port = parseInt(input.value, 10);
         if (!port || port < 1 || port > 65535) {
             alert('请输入 1-65535 之间的端口号'); input.focus(); return;
@@ -530,33 +643,57 @@ _PROXY_FLOATING_BAR = r"""
         window.open('/pys/port/' + port + '/', '_blank');
         input.value = '';
     };
-    window.__pys_toggle_min = function(e) {
+
+    window.__pys_toggle_min = function(e){
         if (e) e.stopPropagation();
-        var bar = document.getElementById('__pys_float_bar');
-        var min = bar.classList.toggle('__pys_minimized');
+        var b = bar();
+        if (!b) return;
+        var min = b.classList.toggle('__pys_minimized');
         try { sessionStorage.setItem('__pys_float_min', min ? '1' : '0'); } catch (err) {}
     };
+
+    var b = bar();
+    if (!b) return;
+
     try {
         if (sessionStorage.getItem('__pys_float_min') === '1') {
-            document.getElementById('__pys_float_bar').classList.add('__pys_minimized');
+            b.classList.add('__pys_minimized');
         }
     } catch (err) {}
-    document.getElementById('__pys_float_bar').addEventListener('click', function() {
+
+    b.addEventListener('click', function(){
         if (this.classList.contains('__pys_minimized')) {
             this.classList.remove('__pys_minimized');
             try { sessionStorage.setItem('__pys_float_min', '0'); } catch (err) {}
             setTimeout(function(){
-                var inp = document.getElementById('__pys_port_input');
+                var inp = inputEl();
                 if (inp) inp.focus();
             }, 30);
         }
     });
-    setTimeout(function(){
-        var inp = document.getElementById('__pys_port_input');
-        if (inp) inp.addEventListener('keydown', function(e){
+
+    var openBtn = b.querySelector('.__pys_open');
+    if (openBtn) {
+        openBtn.addEventListener('click', function(e){
+            e.stopPropagation();
+            window.__pys_open_port();
+        });
+    }
+
+    var minBtn = b.querySelector('.__pys_min');
+    if (minBtn) {
+        minBtn.addEventListener('click', function(e){
+            e.stopPropagation();
+            window.__pys_toggle_min(e);
+        });
+    }
+
+    var inp = inputEl();
+    if (inp) {
+        inp.addEventListener('keydown', function(e){
             if (e.key === 'Enter') { e.preventDefault(); window.__pys_open_port(); }
         });
-    }, 0);
+    }
 })();
 </script>
 """
@@ -592,7 +729,6 @@ def _rewrite_html(text, port):
         repl_attr, text, flags=re.IGNORECASE,
     )
 
-    # ---- 注入 head：base + JS 补丁 ----
     patch_js = _PROXY_PATCH_JS.replace("__PROXY_PREFIX__", prefix)
     patch_tag = f'<script data-pys-proxy="1">{patch_js}</script>'
 
@@ -607,7 +743,6 @@ def _rewrite_html(text, port):
     else:
         text = head_inject + text
 
-    # ---- 注入 body 尾部：浮动工具栏 ----
     if re.search(r'</body\s*>', text, re.IGNORECASE):
         text = re.sub(r'(</body\s*>)', _PROXY_FLOATING_BAR + r'\1',
                       text, count=1, flags=re.IGNORECASE)
@@ -617,7 +752,7 @@ def _rewrite_html(text, port):
     return text
 
 
-# ---------- 关键：三条路由，覆盖 /port/<p>、/port/<p>/、/port/<p>/<sub> ----------
+# ---------- 三条路由，覆盖 /port/<p>、/port/<p>/、/port/<p>/<sub> ----------
 @py_runner_bp.route(
     "/port/<int:port>",
     defaults={"subpath": ""},
@@ -634,12 +769,10 @@ def _rewrite_html(text, port):
 )
 def proxy_to_port(port, subpath):
     if not (1 <= port <= 65535):
-        return jsonify({"ok": False, "error": "端口范围 1-65535"}), 400
+        return Response("端口范围 1-65535", status=200, mimetype="text/plain")
     if not HAS_REQUESTS:
-        return jsonify({
-            "ok": False,
-            "error": "服务器未安装 requests，请运行: pip install requests"
-        }), 500
+        return Response("服务器未安装 requests，请运行: pip install requests",
+                        status=200, mimetype="text/plain")
 
     target = f"http://127.0.0.1:{port}/"
     if subpath:
@@ -668,10 +801,13 @@ def proxy_to_port(port, subpath):
             allow_redirects=False, stream=True, timeout=60,
         )
     except _requests.RequestException as e:
-        return jsonify({
-            "ok": False,
-            "error": f"无法连接 127.0.0.1:{port}：{e}"
-        }), 502
+        html = (
+            f"<!doctype html><meta charset='utf-8'>"
+            f"<div style='font:14px/1.6 system-ui;padding:24px;color:#b91c1c'>"
+            f"<h2>无法连接 127.0.0.1:{port}</h2>"
+            f"<pre>{e}</pre></div>"
+        )
+        return Response(html, status=200, mimetype="text/html")
 
     out_headers = []
     content_type = resp.headers.get("Content-Type", "")
@@ -689,7 +825,12 @@ def proxy_to_port(port, subpath):
         try:
             raw = resp.content
         except Exception as e:
-            return jsonify({"ok": False, "error": f"读取响应失败: {e}"}), 502
+            html = (
+                f"<!doctype html><meta charset='utf-8'>"
+                f"<div style='font:14px/1.6 system-ui;padding:24px;color:#b91c1c'>"
+                f"<h2>读取响应失败</h2><pre>{e}</pre></div>"
+            )
+            return Response(html, status=200, mimetype="text/html")
         enc = resp.encoding or "utf-8"
         try:
             text = raw.decode(enc, errors="replace")
@@ -820,7 +961,7 @@ def run():
 
     target_path = _safe_target(rel, must_exist=True)
     if not target_path:
-        return jsonify({'error': '非法路径或文件不存在'}), 400
+        return jsonify({'ok': False, 'error': '非法路径或文件不存在'})
 
     folder = os.path.dirname(target_path)
     filename = os.path.basename(target_path)
@@ -831,11 +972,12 @@ def run():
     )
     if occupied_info:
         return jsonify({
+            'ok': False,
             'already_running': True,
             'port': occupied_port,
             'occupier': occupied_info,
             'message': f'端口 {occupied_port} 已被占用，视为正在运行，未重复启动。'
-        }), 409
+        })
 
     task_id = str(uuid.uuid4())
     log_file = _log_path_for(rel)
@@ -852,14 +994,14 @@ def run():
     )
     t.start()
 
-    return jsonify({'task': task_id})
+    return jsonify({'ok': True, 'task': task_id})
 
 
 @py_runner_bp.route("/status/<task>")
 def status(task):
     info = PROCESS_POOL.get(task)
     if not info:
-        return jsonify({"status": "not_found", "output": ""})
+        return jsonify({"ok": False, "status": "not_found", "output": ""})
 
     output = ""
     log_file = info.get("log_file")
@@ -868,6 +1010,7 @@ def status(task):
             output = f.read()
 
     return jsonify({
+        "ok": True,
         "status": info.get("status"),
         "output": output,
         "port": info.get("port")
@@ -878,9 +1021,9 @@ def status(task):
 def get_log():
     rel = (request.args.get("file") or "").strip()
     if not rel:
-        return jsonify({"ok": False, "error": "缺少 file 参数"}), 400
+        return jsonify({"ok": False, "error": "缺少 file 参数"})
     if not _safe_target(rel, must_exist=False):
-        return jsonify({"ok": False, "error": "非法路径"}), 400
+        return jsonify({"ok": False, "error": "非法路径"})
 
     log_file = _log_path_for(rel)
     if not os.path.exists(log_file):
@@ -890,7 +1033,7 @@ def get_log():
         with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
             output = f.read()
     except Exception as e:
-        return jsonify({"ok": False, "error": f"读取日志失败: {e}"}), 500
+        return jsonify({"ok": False, "error": f"读取日志失败: {e}"})
 
     return jsonify({"ok": True, "exists": True, "file": rel,
                     "output": output, "log_path": log_file})
@@ -910,45 +1053,60 @@ def stop():
 @py_runner_bp.route("/stop-port", methods=["POST"])
 def stop_port():
     data = request.json or {}
-    port = data.get("port")
+    port_raw = data.get("port")
 
     try:
-        port = int(port)
+        port = int(port_raw)
         if not (1 <= port <= 65535):
             raise ValueError
     except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "端口必须是 1-65535 之间的数字"}), 400
+        return jsonify({"ok": False,
+                        "error": "端口必须是 1-65535 之间的数字",
+                        "port": port_raw})
 
     occupier = get_port_occupier(str(port))
     if not occupier:
         return jsonify({
             "ok": False,
             "error": f"端口 {port} 当前没有监听进程",
-            "port": port
-        }), 404
+            "port": port,
+            "released": True,
+        })
 
     pid = occupier.get("pid")
+    if not pid:
+        return jsonify({
+            "ok": False,
+            "error": f"端口 {port} 被占用，但拿不到 PID（权限不足？）",
+            "port": port,
+            "occupier": occupier,
+        })
+
     success = kill_process_tree(pid)
 
-    if success:
-        for tid, info in PROCESS_POOL.items():
-            proc = info.get("process")
-            same_pid = False
-            try:
-                same_pid = bool(proc and proc.pid == pid)
-            except Exception:
-                pass
-            if same_pid or str(info.get("port")) == str(port):
-                info["status"] = "stopped"
+    for info in PROCESS_POOL.values():
+        proc = info.get("process")
+        same = False
+        try:
+            same = bool(proc and proc.pid == pid)
+        except Exception:
+            pass
+        if same or str(info.get("port")) == str(port):
+            info["status"] = "stopped"
 
     time.sleep(0.15)
     released = get_port_occupier(str(port)) is None
 
     return jsonify({
         "ok": success and released,
-        "port": port, "pid": pid,
+        "port": port,
+        "pid": pid,
         "process": occupier.get("name", ""),
-        "released": released
+        "source": occupier.get("source", ""),
+        "released": released,
+        "message": (f"已终止 PID {pid}" if success else f"终止 PID {pid} 失败")
+                   + (f"，端口 {port} 已释放" if released
+                      else f"，端口 {port} 仍被占用"),
     })
 
 
@@ -957,9 +1115,12 @@ def kill_port():
     data = request.json or {}
     pid = data.get("pid")
     if pid:
-        success = kill_process_tree(int(pid))
-        return jsonify({"ok": success})
-    return jsonify({"error": "no pid"}), 400
+        try:
+            success = kill_process_tree(int(pid))
+            return jsonify({"ok": success})
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "pid 必须是整数"})
+    return jsonify({"ok": False, "error": "缺少 pid"})
 
 
 # =========================================================
@@ -973,7 +1134,7 @@ def set_port():
 
     target_path = _safe_target(rel, must_exist=True)
     if not target_path:
-        return jsonify({"ok": False, "error": "非法路径或文件不存在"}), 400
+        return jsonify({"ok": False, "error": "非法路径或文件不存在"})
 
     folder = os.path.dirname(target_path)
     filename = os.path.basename(target_path)
@@ -988,14 +1149,14 @@ def set_port():
     try:
         port = int(port_raw)
     except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "端口必须是数字"}), 400
+        return jsonify({"ok": False, "error": "端口必须是数字"})
 
     if not (1 <= port <= 65535):
-        return jsonify({"ok": False, "error": "端口必须在 1-65535 之间"}), 400
+        return jsonify({"ok": False, "error": "端口必须在 1-65535 之间"})
 
     cfg[filename] = port
     if not write_folder_ports(folder, cfg):
-        return jsonify({"ok": False, "error": "写入端口配置失败"}), 500
+        return jsonify({"ok": False, "error": "写入端口配置失败"})
 
     return jsonify({
         "ok": True, "file": rel.replace("\\", "/"),
@@ -1012,7 +1173,7 @@ def read_file():
     rel = request.args.get("file", "")
     target_path = _safe_target(rel, must_exist=True)
     if not target_path:
-        return jsonify({"ok": False, "error": "非法路径或文件不存在"}), 400
+        return jsonify({"ok": False, "error": "非法路径或文件不存在"})
 
     try:
         size = os.path.getsize(target_path)
@@ -1020,16 +1181,16 @@ def read_file():
         size = 0
     if size > MAX_EDIT_SIZE:
         return jsonify({"ok": False,
-                        "error": f"文件过大（{size} 字节，上限 {MAX_EDIT_SIZE} 字节）"}), 413
+                        "error": f"文件过大（{size} 字节，上限 {MAX_EDIT_SIZE} 字节）"})
 
     ext = os.path.splitext(target_path)[1].lower()
     if ext and ext not in EDITABLE_EXT:
-        return jsonify({"ok": False, "error": f"暂不支持编辑 {ext} 类型的文件"}), 400
+        return jsonify({"ok": False, "error": f"暂不支持编辑 {ext} 类型的文件"})
 
     try:
         content, encoding = _read_text_with_encoding(target_path)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"读取失败: {e}"}), 500
+        return jsonify({"ok": False, "error": f"读取失败: {e}"})
 
     return jsonify({"ok": True, "file": rel.replace('\\', '/'),
                     "size": size, "encoding": encoding, "content": content})
@@ -1044,17 +1205,17 @@ def save_file():
 
     target_path = _safe_target(rel, must_exist=True)
     if not target_path:
-        return jsonify({"ok": False, "error": "非法路径或文件不存在"}), 400
+        return jsonify({"ok": False, "error": "非法路径或文件不存在"})
 
     ext = os.path.splitext(target_path)[1].lower()
     if ext and ext not in EDITABLE_EXT:
-        return jsonify({"ok": False, "error": f"暂不支持编辑 {ext} 类型的文件"}), 400
+        return jsonify({"ok": False, "error": f"暂不支持编辑 {ext} 类型的文件"})
 
     if not isinstance(content, str):
-        return jsonify({"ok": False, "error": "content 必须是字符串"}), 400
+        return jsonify({"ok": False, "error": "content 必须是字符串"})
 
     if len(content.encode("utf-8")) > MAX_EDIT_SIZE:
-        return jsonify({"ok": False, "error": "内容超出大小上限"}), 413
+        return jsonify({"ok": False, "error": "内容超出大小上限"})
 
     if encoding not in ("utf-8", "gbk"):
         encoding = "utf-8"
@@ -1072,7 +1233,7 @@ def save_file():
         with open(target_path, "w", encoding=encoding) as f:
             f.write(content)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"保存失败: {e}"}), 500
+        return jsonify({"ok": False, "error": f"保存失败: {e}"})
 
     return jsonify({"ok": True, "file": rel.replace('\\', '/'),
                     "encoding": encoding,

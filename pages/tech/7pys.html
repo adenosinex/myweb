@@ -316,7 +316,7 @@ function renderCard(f) {
     // 打开按钮：直连 + 转发
     let linkBtn = '';
     if (1 || port && isRunning) {
-        const directHref = `${window.location.protocol}//${window.location.hostname}:${port}`;
+        const directHref = `http://apple4.su7.dpdns.org:${port}`;
         const proxyHref = `/pys/port/${port}/`;
         linkBtn =
             `<a href="${directHref}" target="_blank" class="btn btn-link" title="直连 IP:端口">🚀 打开 :${port}</a>` +

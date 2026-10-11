@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html data-page-node-id="IE01aYitapqRyRPEriIhic" lang="zh-CN">
-<head data-page-node-id="hehH2hD6ps3huZyzFFKKl2">
-<script data-page-node-id="zXIW1Z9JWnHfvR6nOXzhXM" src="/page/page_comm/inject.js"></script>
-<meta data-page-node-id="DaOfn1Qnwrjl5wNKdId4G8" charset="UTF-8">
-<meta data-page-node-id="qb1eANjHqrQijjpKapyPcm" content="width=device-width, initial-scale=1" name="viewport">
-<title data-page-node-id="Iv3vkdZ4E3SVVf6fc2aH02" data-pnid-children="Arbcxb7Hfosx6424Iggfpt">知乎链接转文本</title>
-<style data-page-node-id="LpBGmg2eUnbptDrpbmtkHV" data-pnid-children="kgFGGhrzZm1rAQC5y2T41f">
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<title>知乎 / 微信文章转文本</title>
+<style>
   :root{
     --bg:#f5f7fa; --card:#fff; --ink:#14171c; --sub:#69707d;
     --line:#e4e8ee; --blue:#0b6bcb; --blue-soft:#eaf2fd;
@@ -27,6 +26,22 @@
   header{margin-bottom:22px}
   header h1{margin:0 0 6px;font-size:25px;letter-spacing:-.4px}
   header p{margin:0;color:var(--sub);font-size:13.5px}
+
+  /* ---- 无感模式开关 ---- */
+  .zenbar{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .zenSwitch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;
+    user-select:none;padding:9px 15px;border:1px solid var(--line);
+    border-radius:11px;background:var(--card);font-size:13.5px;font-weight:650;
+    transition:border-color .15s,background .15s,color .15s;
+    -webkit-tap-highlight-color:transparent;position:relative}
+  .zenSwitch:hover{border-color:var(--blue)}
+  .zenSwitch.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
+  .zenSwitch input{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
+  .zenSwitch .dot{width:8px;height:8px;border-radius:50%;background:var(--sub);
+    transition:background .15s,box-shadow .15s;flex:none}
+  .zenSwitch.on .dot{background:var(--ok);box-shadow:0 0 0 3px rgba(15,138,77,.18)}
+  .zenSwitch .sub{font-weight:500;color:var(--sub);font-size:12px}
+  .zenSwitch.on .sub{color:var(--blue);opacity:.85}
 
   .card{background:var(--card);border:1px solid var(--line);
         border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
@@ -57,7 +72,6 @@
   .row{display:flex;gap:12px;flex-wrap:wrap}
   .row>div{flex:1;min-width:180px}
 
-  /* ---- 标签行（标签 + 右侧操作按钮） ---- */
   .labelrow{display:flex;align-items:center;gap:10px;margin-bottom:7px;flex-wrap:wrap}
   .labelrow label{margin-bottom:0}
   .labelrow .spacer{margin-left:auto}
@@ -74,7 +88,6 @@
   .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
   .status{margin-left:auto;font-size:12.5px;color:var(--sub)}
 
-  /* ---- 识别到的链接 ---- */
   .links{margin-top:14px;padding:13px 14px;background:var(--bg);
          border:1px solid var(--line);border-radius:10px}
   .linkshead{font-size:12.5px;color:var(--sub);margin-bottom:9px}
@@ -90,7 +103,6 @@
   .chip.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
   .chip.on .tail{color:var(--blue);opacity:.85}
 
-  /* ---- 结果区：居于视图中间 ---- */
   .result{display:flex;justify-content:center}
   .result .card{width:100%;margin-top:4px}
   .reshead{margin-bottom:14px}
@@ -103,7 +115,7 @@
       padding:16px;overflow:auto;max-height:62vh;margin:0;
       font:13px/1.75 ui-monospace,Menlo,Consolas,monospace;
       white-space:pre-wrap;word-break:break-word;
-      text-align:left}
+      text-align:left;cursor:text}
 
   .msg{padding:13px 16px;border-radius:10px;font-size:14px;margin-bottom:16px;white-space:pre-line}
   .msg.err{background:#fdecea;color:#a9261a;border:1px solid #f5c6c0}
@@ -113,7 +125,6 @@
     .msg.ok{background:#12301f;color:#7ddba8;border-color:#245c39}
   }
 
-  /* ---- 末尾可折叠的 Cookie ---- */
   details.cookiewrap{padding:0;overflow:hidden}
   details.cookiewrap>summary{list-style:none;cursor:pointer;
     padding:16px 20px;display:flex;align-items:center;gap:10px;
@@ -135,7 +146,7 @@
         animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes sp{to{transform:rotate(360deg)}}
 
-  /* ===================== 全局复制提示条 ===================== */
+  /* 全局点击复制提示条 */
   #copyHint{
     display:none; position:fixed; top:0; left:0; right:0;
     background:linear-gradient(90deg,#0f8a4d,#0d6b3d);
@@ -161,6 +172,18 @@
     #copyHint{background:linear-gradient(90deg,#166534,#14532d);}
   }
 
+  /* Toast */
+  #toast{
+    position:fixed; bottom:34px; left:50%; transform:translate(-50%,12px);
+    background:rgba(20,23,28,.94); color:#fff; padding:10px 20px;
+    border-radius:11px; font-size:13.5px; font-weight:600;
+    z-index:2147483000; opacity:0; pointer-events:none;
+    transition:opacity .18s, transform .18s;
+    box-shadow:0 8px 24px -8px rgba(0,0,0,.5);
+    white-space:nowrap; max-width:88vw; overflow:hidden; text-overflow:ellipsis;
+  }
+  #toast.show{opacity:1; transform:translate(-50%,0)}
+
   @media (max-width:640px){
     .wrap{padding:22px 14px 48px}
     header h1{font-size:21px}
@@ -172,126 +195,152 @@
     pre{max-height:56vh;font-size:12.5px}
     .labelrow .btn{width:100%;justify-content:center}
     #copyHint{font-size:13px;padding:10px 12px}
+    .zenSwitch{width:100%;justify-content:center}
   }
 </style>
 </head>
-<body data-page-node-id="QK0hHReW4HubwgnNtF3ETD">
+<body>
 
-<!-- ===================== 全局复制提示条 ===================== -->
-<div id="copyHint" data-page-node-id="copyHintBar">
+<!-- 全局点击复制提示条（非无感模式下由「一键获取」使用） -->
+<div id="copyHint">
   <span class="hintIcon">📋</span>正文已就绪，点击页面任意处复制
   <span class="dismiss" onclick="cancelGlobalCopy(event)">取消</span>
 </div>
 
-<div data-page-node-id="LngM4FSPoP7AnpjkmGu92t" class="wrap">
-  <header data-page-node-id="FZW6DOpXlD5NguD16lT0QK">
-    <h1 data-page-node-id="KyyOV173oLUDuaQ5lNERMh">知乎链接转文本</h1>
-    <p data-page-node-id="yP158fqb0p0WJC6n8J1ZTW">粘贴链接或整段文本，自动识别其中的知乎链接，提取标题、作者与正文为 Markdown / 纯文本 / JSON</p>
+<!-- Toast -->
+<div id="toast"></div>
+
+<div class="wrap">
+  <header>
+    <h1>知乎 / 微信文章转文本</h1>
+    <p>粘贴链接或整段文本，自动识别其中的知乎 / 微信公众号链接，提取标题、作者与正文为 Markdown / 纯文本 / JSON</p>
+
+    <div class="zenbar">
+      <label class="zenSwitch" id="zenSwitch" for="zenMode">
+        <input type="checkbox" id="zenMode">
+        <span class="dot"></span>
+        <span>无感模式</span>
+        <span class="sub">复制链接 → 点页面任意处提取 → 再点任意处复制</span>
+      </label>
+    </div>
   </header>
 
-  <!-- ===================== ① 粘贴链接 / 文本 ===================== -->
-  <div data-page-node-id="mfyRBCWpRTO5qCuw8Ykri6" class="card">
-    <div data-page-node-id="1HKASwpfchVDt7GlS9RzIW" class="cardhead"><h2 data-page-node-id="dsWpAQfrU87UxGtEMlWwMa">① 粘贴链接或文本</h2></div>
+  <!-- ① 粘贴链接 / 文本 -->
+  <div class="card">
+    <div class="cardhead"><h2>① 粘贴链接或文本</h2></div>
 
     <div class="labelrow">
-      <label data-page-node-id="mlOG9JTdsdYXZm5Ca0J4gT" for="url">知乎链接 / 含链接的文本</label>
+      <label for="url">链接 / 含链接的文本</label>
       <span class="spacer"></span>
       <button type="button" class="btn btn-ghost btn-sm" id="pasteBtn"
               title="从剪贴板读取内容并自动识别其中的链接">📋 一键粘贴</button>
     </div>
 
-    <textarea data-page-node-id="tZRQNHappo10eNUqljxMg1" id="url" placeholder="直接粘贴整段文字也行，例如：&#10;看到一篇讲得很清楚的文章 https://www.zhihu.com/question/28696373/answer/2835848212 推荐你看看" rows="4" spellcheck="false"></textarea>
-    <div data-page-node-id="37QOy0D5ucK5hglaLXpDZF" class="hint" style="margin-top:8px">
-      粘贴后会自动挑出其中可用的链接。支持：回答 <code data-page-node-id="S0lQjQzSWsIomMFxnCNNE9">/question/&lt;qid&gt;/answer/&lt;aid&gt;</code>、
-      专栏文章 <code data-page-node-id="33W1hEcNe6qqQeaE4arPle">zhuanlan.zhihu.com/p/&lt;id&gt;</code>、
-      问题 <code data-page-node-id="PBOPbT5o0R7uL7GsizyPqc">/question/&lt;qid&gt;</code>
+    <textarea id="url" placeholder="直接粘贴整段文字也行，例如：&#10;看到一篇讲得很清楚的文章 https://www.zhihu.com/question/28696373/answer/2835848212 推荐你看看&#10;或者微信文章：https://mp.weixin.qq.com/s/xxxxxxxxxxxx" rows="4" spellcheck="false"></textarea>
+    <div class="hint" style="margin-top:8px">
+      粘贴后会自动挑出其中可用的链接。支持：
+      知乎回答 <code>/question/&lt;qid&gt;/answer/&lt;aid&gt;</code>、
+      知乎专栏 <code>zhuanlan.zhihu.com/p/&lt;id&gt;</code>、
+      知乎问题 <code>/question/&lt;qid&gt;</code>、
+      微信公众号 <code>mp.weixin.qq.com/s/…</code>
     </div>
 
-    <div data-page-node-id="BBqLCh8XgGD1cJoCzWWSyN" class="links" hidden id="links">
-      <div data-page-node-id="pPNEcw8kvYynoICLqDsQ6q" class="linkshead" id="linkCount"></div>
-      <div data-page-node-id="qRhBOftULPEXqi3Ph7ZLIU" class="chips" id="linkChips"></div>
+    <div class="links" hidden id="links">
+      <div class="linkshead" id="linkCount"></div>
+      <div class="chips" id="linkChips"></div>
     </div>
 
-    <div data-page-node-id="ELUDDVQ10qbMoZVk05KLY8" class="row" style="margin-top:18px">
-      <div data-page-node-id="7svyXgIudmp2b4toxqE12v">
-        <label data-page-node-id="OHEuQ7SoIdbgdPfC4YdSeg" for="format">输出格式</label>
-        <select data-page-node-id="b2jQ0B2FH457HQkzuIs08x" id="format">
-          <option data-page-node-id="SO4h6HYfbdNsI3K9KSD9af" value="text">纯文本（推荐，喂 LLM / 检索）</option>
-          <option data-page-node-id="cuDGc8FVfAy9Lh9Zt92tPC" value="markdown">Markdown（含格式）</option>
-          <option data-page-node-id="XQ3X5WtbP9AUbdWwA0Lbvb" value="json">JSON（含元数据）</option>
+    <div class="row" style="margin-top:18px">
+      <div>
+        <label for="format">输出格式</label>
+        <select id="format">
+          <option value="text">纯文本（推荐，喂 LLM / 检索）</option>
+          <option value="markdown">Markdown（含格式）</option>
+          <option value="json">JSON（含元数据）</option>
         </select>
       </div>
     </div>
 
-    <div data-page-node-id="Keq6HudVby7VJ7BzDzHzjz" class="actions">
-      <button data-page-node-id="ctEpoa6tsf3GedjvqqFLoi" class="btn btn-primary" id="go">提取文本</button>
-      <button data-page-node-id="oneClickBtnId" class="btn btn-primary" id="oneClick" title="读取剪贴板链接 → 自动提取 → 点击任意处复制">⚡ 一键获取</button>
-      <button data-page-node-id="cuBvYSUWAqpsAIUGhau28C" class="btn btn-ghost" disabled id="dl">下载</button>
-      <button data-page-node-id="gacPm2RUcK5Wr0DZbG7whn" class="btn btn-ghost" id="reset">清空</button>
-      <span data-page-node-id="x98RibxpmfpJMTP90YjcOx" class="status" id="status"></span>
+    <div class="actions">
+      <button class="btn btn-primary" id="go">提取文本</button>
+      <button class="btn btn-primary" id="oneClick" title="读取剪贴板链接 → 自动提取 → 点击任意处复制">⚡ 一键获取</button>
+      <button class="btn btn-ghost" disabled id="dl">下载</button>
+      <button class="btn btn-ghost" id="reset">清空</button>
+      <span class="status" id="status"></span>
     </div>
   </div>
 
-  <div data-page-node-id="nm87jtXZorhoT2p5veBevf" id="msg"></div>
+  <div id="msg"></div>
 
-  <!-- ===================== ② 结果（居于视图中间） ===================== -->
-  <div data-page-node-id="fSWBlla9GO1klrqu7Pu6DE" class="result" id="result" style="display:none">
-    <div data-page-node-id="hoxKn7iA7ZI4iPTN828Rt4" class="card">
-      <div data-page-node-id="HtcQmxRuvYqPz8LsNwEaJt" class="cardhead reshead">
-        <h2 data-page-node-id="VkFdn0RoB4WpYt2XhUmSLc">② 提取结果</h2>
-        <span data-page-node-id="aRJ6bg8hznur3wfxBWtJYb" class="spacer"></span>
-        <button data-page-node-id="ehq3wrvkDczZWS31VO1VUq" class="btn btn-primary btn-sm" disabled id="copy">一键复制</button>
+  <!-- ② 结果 -->
+  <div class="result" id="result" style="display:none">
+    <div class="card">
+      <div class="cardhead reshead">
+        <h2>② 提取结果</h2>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" disabled id="copy">一键复制</button>
       </div>
-      <div data-page-node-id="yWTNJ5Uww0NyOiLgOdykzq" class="meta" id="meta"></div>
-      <pre data-page-node-id="ABZnQnTpz4j4afhkwleRS9" id="content"></pre>
+      <div class="meta" id="meta"></div>
+      <pre id="content"></pre>
     </div>
   </div>
 
-  <!-- ===================== 末尾：可折叠的 Cookie ===================== -->
-  <details data-page-node-id="1c80oVaUpOCJNydPPK9G1e" class="card cookiewrap" id="cookieDetails">
-    <summary data-page-node-id="wOoAUPbWp8OAZ3P1Qr85x1">
-      <span data-page-node-id="Mg9ZJO5t9AcTo8BkFFUTZc" class="sumtitle">知乎 Cookie</span>
-      <span data-page-node-id="Tjo6U9gf572EisbvTMicKk" class="badge" id="cookieBadge">未配置</span>
-      <span data-page-node-id="WsvQ7kCmBx4nLdRfPuYo2G" class="chev">▾</span>
+  <!-- 末尾：可折叠的 Cookie -->
+  <details class="card cookiewrap" id="cookieDetails">
+    <summary>
+      <span class="sumtitle">知乎 Cookie</span>
+      <span class="badge" id="cookieBadge">未配置</span>
+      <span class="chev">▾</span>
     </summary>
 
-    <div data-page-node-id="CkQt0XmYvRsPbJ9wLaEnD3" class="cookiebody">
-      <textarea data-page-node-id="TnEETAiLjjHJn8AITETdWl" id="cookie" placeholder="粘贴整行 Cookie：d_c0=…; z_c0=…（留空则用服务器已保存的）" rows="3" spellcheck="false"></textarea>
+    <div class="cookiebody">
+      <textarea id="cookie" placeholder="粘贴整行 Cookie：d_c0=…; z_c0=…（留空则用服务器已保存的）" rows="3" spellcheck="false"></textarea>
 
-      <div data-page-node-id="U1s3ZjdHHBm7gOHvUkNG5g" class="hint" style="margin-top:9px">
-        浏览器登录知乎 → <b data-page-node-id="d1NTweO0hoiVarJt8MFsfI">F12</b> → Network → 刷新 → 点任意请求 → Headers → 复制
-        <b data-page-node-id="fESkZrFV89DLhopxkdJEWw">Cookie</b> 整行（务必含 <code data-page-node-id="OQGNfMkakx14DGQiXiMuTr">d_c0</code> 和 <code data-page-node-id="DojZk1H0fevU0bDxdYyenK">z_c0</code>）。
-        点「保存到服务器」后会写入<b data-page-node-id="70T3k3H4qj95G1KO5HpFT9">服务器本地</b>的 cookies.txt，之后任何浏览器打开本页都自动复用，不用重复粘贴。该文件等同于你的登录凭证，别提交到公开仓库或分享给别人。
+      <div class="hint" style="margin-top:9px">
+        <b>微信公众号文章无需 Cookie</b>，仅抓知乎时需要。浏览器登录知乎 → <b>F12</b> → Network → 刷新 → 点任意请求 → Headers → 复制
+        <b>Cookie</b> 整行（务必含 <code>d_c0</code> 和 <code>z_c0</code>）。
+        点「保存到服务器」后会写入<b>服务器本地</b>的 cookies.txt，之后任何浏览器打开本页都自动复用。该文件等同于你的登录凭证，别提交到公开仓库或分享给别人。
       </div>
 
-      <div data-page-node-id="BJ9G9BKNC6VVUvaMQu2dxJ" class="actions">
-        <button data-page-node-id="SL6rDFNZ47yy6l5tlL5ym2" class="btn btn-primary" id="saveCookie">保存到服务器</button>
-        <button data-page-node-id="1kmQL3RqWhb4zgJ4bm12b7" class="btn btn-ghost" id="clearCookie">删除服务器 Cookie</button>
-        <span data-page-node-id="zPmwBCqAz3fq1LfSMLkWTq" class="status" id="cookieStatus"></span>
+      <div class="actions">
+        <button class="btn btn-primary" id="saveCookie">保存到服务器</button>
+        <button class="btn btn-ghost" id="clearCookie">删除服务器 Cookie</button>
+        <span class="status" id="cookieStatus"></span>
       </div>
     </div>
   </details>
 </div>
 
-<script data-page-node-id="zTaLcW5wUpUGXV09bt9U42" data-pnid-children="tFBcSXaduerhmd1Ea5NDJA">
+<script>
 const $ = id => document.getElementById(id);
-const state = { content:"", title:"", ext:"md", links:[], url:"" };
-const COOKIE_TIP = "请先在页面末尾的「知乎 Cookie」中粘贴整行 Cookie，点「保存到服务器」。";
-/* Cookie 统一由服务器本地文件（cookies.txt）持有，浏览器不再保存明文凭证 */
+const state = { content:"", title:"", ext:"md", links:[], url:"", busy:false };
+const COOKIE_TIP = "请先在页面末尾的「知乎 Cookie」中粘贴整行 Cookie，点「保存到服务器」。（微信文章无需 Cookie）";
 const serverCookie = { configured:false, source:"", masked:"", file:"", envOverride:false, reachable:null };
+const zen = { on:false, busy:false, phase:"idle", lastClip:"" };
+
+/* ==================== 通用 UI ==================== */
 
 function setMsg(text, cls){
   const box = $("msg");
   box.textContent = "";
   if(!text) return;
   const div = document.createElement("div");
-  div.className = "msg " + cls;
+  div.className = "msg " + (cls || "");
   div.textContent = text;
   box.appendChild(div);
 }
 
 function centerInView(el){
   try{ el.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){ el.scrollIntoView(); }
+}
+
+function toast(text, ms){
+  const t = $("toast");
+  if(!t) return;
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), ms || 2000);
 }
 
 function openCookiePanel(){
@@ -301,10 +350,38 @@ function openCookiePanel(){
   centerInView(d);
 }
 
-/* ==================== 全局点击自动复制 ==================== */
+/* ==================== 复制工具 ==================== */
 
-let pendingCopyText = null;      // 待复制的文本
-let globalCopyHandler = null;    // 全局一次性监听器
+async function copyText(text){
+  if(!text) return false;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    try{
+      await navigator.clipboard.writeText(text);
+      return true;
+    }catch(e){ /* 降级 */ }
+  }
+  return fallbackCopy(text);
+}
+
+function fallbackCopy(text){
+  try{
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){ return false; }
+}
+
+/* ==================== 全局点击自动复制（非无感模式：由「一键获取」挂载） ==================== */
+
+let pendingCopyText = null;
+let globalCopyHandler = null;
 
 function showCopyHint(text){
   pendingCopyText = text;
@@ -312,35 +389,32 @@ function showCopyHint(text){
   if(!hint) return;
   hint.style.display = "block";
 
-  /* 移除旧的监听器，避免叠加 */
   if(globalCopyHandler){
     document.removeEventListener("click", globalCopyHandler, true);
     globalCopyHandler = null;
   }
 
-  /* 挂载新的一次性监听器（capture 阶段，先于业务逻辑） */
   globalCopyHandler = function(ev){
-    /* 点提示条自身 → 交给 cancelGlobalCopy 处理，不复制 */
     if(ev.target && ev.target.closest && ev.target.closest("#copyHint")) return;
 
     if(pendingCopyText){
       const textToCopy = pendingCopyText;
       pendingCopyText = null;
-
       hint.style.display = "none";
       document.removeEventListener("click", globalCopyHandler, true);
       globalCopyHandler = null;
 
-      /* 同步调用 —— 此刻用户手势仍然有效 */
       if(navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(textToCopy).then(() => {
           setMsg("✓ 已复制到剪贴板", "ok");
           $("status").textContent = "已复制到剪贴板 ✓";
         }).catch(() => {
-          fallbackCopy(textToCopy);
+          const ok = fallbackCopy(textToCopy);
+          setMsg(ok ? "✓ 已复制到剪贴板" : "复制失败，请手动选择", ok ? "ok" : "err");
         });
       }else{
-        fallbackCopy(textToCopy);
+        const ok = fallbackCopy(textToCopy);
+        setMsg(ok ? "✓ 已复制到剪贴板" : "复制失败，请手动选择", ok ? "ok" : "err");
       }
     }
   };
@@ -368,27 +442,10 @@ function clearGlobalCopySilently(){
   if(hint) hint.style.display = "none";
 }
 
-function fallbackCopy(text){
-  try{
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.top = "-1000px";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    setMsg(ok ? "✓ 已复制到剪贴板" : "复制失败，请手动选择", ok ? "ok" : "err");
-    if(ok) $("status").textContent = "已复制到剪贴板 ✓";
-  }catch(e){
-    setMsg("复制失败，请手动选择", "err");
-  }
-}
-
 /* ==================== 从文本中识别有效链接 ==================== */
 
-const URL_RE = /(?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)*zhihu\.com\/[^\s\u0022\u0027<>《》「」『』【】（）()[\]{}，,。；;、！!？?…]+/gi;
+/* 同时匹配 zhihu.com 与 mp.weixin.qq.com / weixin.qq.com */
+const URL_RE = /(?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)*(?:zhihu\.com|weixin\.qq\.com)\/[^\s\u0022\u0027<>《》「」『』【】（）()[\]{}，,。；;、！!？?…]+/gi;
 
 const KINDS = [
   { name:"回答", re:/\/question\/(\d+)\/answer\/(\d+)/, idx:[1,2] },
@@ -407,7 +464,20 @@ function tidyUrl(raw){
 function classify(u){
   let parsed;
   try{ parsed = new URL(u); }catch(e){ return null; }
-  const host = parsed.hostname.toLowerCase();
+  const host = (parsed.hostname || "").toLowerCase();
+
+  /* ---- 微信公众号 ---- */
+  if(/(^|\.)weixin\.qq\.com$/.test(host)){
+    const p = parsed.pathname || "";
+    if(/^\/s(?:\/|$)/.test(p)){
+      const sid = p.replace(/^\/s\/?/, "").replace(/\/+$/, "");
+      const tail = sid || (parsed.searchParams.get("sn") || "").slice(0, 16) || "article";
+      return { url:u, kind:"微信", nums:[tail] };
+    }
+    return null;
+  }
+
+  /* ---- 知乎 ---- */
   if(host !== "zhihu.com" && !/\.zhihu\.com$/.test(host)) return null;
   for(const k of KINDS){
     const m = k.re.exec(parsed.pathname);
@@ -431,6 +501,9 @@ function extractLinks(text){
 }
 
 function chipLabel(info){
+  if(info.kind === "微信"){
+    return { kind:"微信", tail: String(info.nums[0] || "").slice(0, 22) };
+  }
   if(info.kind === "回答") return { kind:"回答", tail:"answer/" + info.nums[1] };
   if(info.kind === "专栏") return { kind:"专栏", tail:"p/" + info.nums[0] };
   return { kind:"问题", tail:"question/" + info.nums[0] };
@@ -488,25 +561,22 @@ $("url").addEventListener("input", () => {
   linkTimer = setTimeout(renderLinks, 140);
 });
 
-/* ==================== 输入框体验优化：点击全选 + 一键粘贴 ==================== */
+/* ==================== 输入框体验优化 ==================== */
 
 const urlEl = $("url");
 
-/* 用鼠标点进输入框：已有内容时自动全选，直接输入 / 粘贴即可整体覆盖 */
 urlEl.addEventListener("mousedown", e => {
-  if(document.activeElement === urlEl) return;   // 已聚焦 → 保留正常的点击定位光标
-  if(!urlEl.value) return;                       // 空内容无需全选
-  e.preventDefault();                            // 阻止默认光标落点，避免全选被取消
+  if(document.activeElement === urlEl) return;
+  if(!urlEl.value) return;
+  e.preventDefault();
   urlEl.focus();
   urlEl.select();
 });
 
-/* Tab 键 / 代码聚焦时同样全选 */
 urlEl.addEventListener("focus", () => {
   if(urlEl.value) urlEl.select();
 });
 
-/* 一键粘贴：直接读剪贴板 → 填入 → 自动识别链接 */
 $("pasteBtn").addEventListener("click", async () => {
   const btn = $("pasteBtn");
   const label = btn.textContent;
@@ -530,18 +600,15 @@ $("pasteBtn").addEventListener("click", async () => {
     $("result").style.display = "none";
     renderLinks();
 
-    /* 焦点移到输入框末尾，方便直接 Ctrl+Enter 提取 */
-    urlEl.focus();
     const n = urlEl.value.length;
     try{ urlEl.setSelectionRange(n, n); }catch(err){}
 
     if(state.links.length){
       setMsg(`已粘贴，识别到 ${state.links.length} 个可用链接。`, "ok");
     }else{
-      setMsg("已粘贴，但没有识别到可用的知乎链接。", "err");
+      setMsg("已粘贴，但没有识别到可用的知乎 / 微信链接。", "err");
     }
   }catch(e){
-    urlEl.focus();
     setMsg("无法读取剪贴板：" + (e && e.message ? e.message : "权限被拒绝") +
            "\n请在浏览器地址栏允许剪贴板权限后重试，或直接用 Ctrl / ⌘ + V 手动粘贴。", "err");
   }finally{
@@ -588,7 +655,6 @@ function refreshCookieBadge(){
   }
 }
 
-/* 把 Cookie 写入服务器本地文件 */
 async function postCookie(c){
   const r = await fetch("/api/cookie", {
     method:"POST",
@@ -670,7 +736,7 @@ $("cookie").addEventListener("input", refreshCookieBadge);
 /* ==================== 健康检查 + 初始化 ==================== */
 
 async function loadCookieState(){
-  try{ localStorage.removeItem("zhihu_cookie_v1"); }catch(e){}   // 清理旧版本残留
+  try{ localStorage.removeItem("zhihu_cookie_v1"); }catch(e){}
   try{
     const r = await fetch("/api/cookie");
     const d = await r.json();
@@ -705,25 +771,26 @@ async function loadHealth(){
   }
 }
 
-/* ==================== 提取（返回值：true 成功 / false 失败） ==================== */
+/* ==================== 提取 ==================== */
 
 async function extract(){
-  /* 每次发起新的提取，先清掉可能残留的全局复制状态 */
   clearGlobalCopySilently();
 
   if(!$("url").value.trim()){
-    setMsg("请粘贴知乎链接，或一段包含链接的文本。", "err");
+    setMsg("请粘贴知乎 / 微信链接，或一段包含链接的文本。", "err");
     $("url").focus();
     return false;
   }
 
   renderLinks();
   if(!state.links.length){
-    setMsg("没有识别到可用的知乎链接。支持回答、专栏文章、问题三种地址。", "err");
+    setMsg("没有识别到可用的链接。支持知乎回答 / 专栏 / 问题，以及微信公众号文章。", "err");
     $("url").focus();
     return false;
   }
   if(!state.url) state.url = state.links[0].url;
+
+  const isWechat = /weixin\.qq\.com/i.test(state.url);
 
   let cookie = $("cookie").value.trim();
   if(cookie && !hasCookie(cookie)){
@@ -731,14 +798,14 @@ async function extract(){
     openCookiePanel();
     return false;
   }
-  if(!cookie && !serverCookie.configured){
+  /* 微信文章不需要登录态；只有抓知乎时才强制要求 Cookie */
+  if(!isWechat && !cookie && !serverCookie.configured){
     setMsg(COOKIE_TIP, "err");
     openCookiePanel();
     $("cookie").focus();
     return false;
   }
 
-  // 输入框里是新 Cookie：先落到服务器本地，之后每次打开都自动复用
   if(cookie){
     try{
       await postCookie(cookie);
@@ -774,7 +841,7 @@ async function extract(){
     return true;
   }catch(e){
     setMsg("请求出错：" + e.message +
-           "\n请确认后端服务已启动：本机运行 python app.py，再从 http://127.0.0.1:8000 打开本页。", "err");
+           "\n请确认后端服务已启动：本机运行 python app.py，再从 http://127.0.0.1:8320 打开本页。", "err");
     $("status").textContent = "失败";
     return false;
   }finally{
@@ -786,10 +853,10 @@ async function extract(){
 function render(d){
   const fmt = $("format").value;
   state.content = d.content || "";
-  state.title = d.title || d.id || "zhihu";
+  state.title = d.title || d.id || "article";
   state.ext = fmt === "markdown" ? "md" : (fmt === "json" ? "json" : "txt");
 
-  const kindMap = {article:"专栏文章", answer:"回答", question:"问题"};
+  const kindMap = { article:"专栏文章", answer:"回答", question:"问题", wechat:"微信文章" };
   const cells = [
     ["类型", kindMap[d.kind] || d.kind],
     ["标题", d.title || "—"],
@@ -816,7 +883,6 @@ function render(d){
   $("dl").disabled = false;
   $("status").textContent = "完成 ✓";
   setMsg("提取成功", "ok");
-  centerInView($("result"));
 }
 
 $("go").onclick = extract;
@@ -833,35 +899,15 @@ $("reset").onclick = () => {
   $("dl").disabled = true;
   $("status").textContent = "";
   setMsg("");
+  state.content = "";
+  zen.phase = "idle";
+  zen.lastClip = "";
   $("url").focus();
 };
 
 /* ==================== 一键复制 ==================== */
 
-async function copyText(text){
-  try{
-    await navigator.clipboard.writeText(text);
-    return true;
-  }catch(e){
-    try{
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.position = "fixed";
-      ta.style.top = "-1000px";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    }catch(err){
-      return false;
-    }
-  }
-}
-
 $("copy").onclick = async () => {
-  /* 按钮点击本身就是用户手势 → 先清掉全局监听器避免冲突 */
   clearGlobalCopySilently();
 
   const text = state.content || "";
@@ -900,12 +946,10 @@ $("oneClick").onclick = async () => {
     return;
   }
 
-  /* 清掉上一轮的全局复制状态 */
   clearGlobalCopySilently();
 
   btn.disabled = true;
   try{
-    /* 1. 读剪贴板 */
     btn.textContent = "读取剪贴板…";
     let text = "";
     try{
@@ -921,19 +965,17 @@ $("oneClick").onclick = async () => {
       return;
     }
 
-    /* 2. 填入输入框并识别链接 */
     urlEl.value = text;
     $("result").style.display = "none";
-    state.content = "";          // 防止旧结果被误复制
+    state.content = "";
     renderLinks();
 
     if(!state.links.length){
-      setMsg("剪贴板里没有识别到可用的知乎链接。支持回答、专栏文章、问题三种地址。", "err");
+      setMsg("剪贴板里没有识别到可用的链接。支持知乎回答 / 专栏 / 问题，以及微信公众号文章。", "err");
       urlEl.focus();
       return;
     }
 
-    /* 3. 自动提取 */
     btn.textContent = "抓取中…";
     setMsg(
       state.links.length === 1
@@ -943,12 +985,8 @@ $("oneClick").onclick = async () => {
     );
 
     const ok = await extract();
-    if(!ok || !state.content){
-      // extract() 内部已提示失败原因，这里不再覆盖
-      return;
-    }
+    if(!ok || !state.content) return;
 
-    /* 4. 提取成功 → 挂载全局点击复制提示（不再尝试异步自动复制） */
     showCopyHint(state.content);
     setMsg("✓ 正文已提取。点击页面任意处即可复制到剪贴板（或点结果区「一键复制」）。", "ok");
     $("status").textContent = "点击任意处复制";
@@ -957,6 +995,145 @@ $("oneClick").onclick = async () => {
     btn.textContent = label;
   }
 };
+
+/* ==================== 无感模式 ==================== */
+
+/* 判断元素是否为交互控件 —— 命中则跳过全局点击逻辑 */
+function isInteractive(el){
+  if(!el || !el.closest) return false;
+  return !!el.closest(
+    "button, a, input, textarea, select, summary, label, " +
+    ".chip, #copyHint, #toast, details"
+  );
+}
+
+function hasSelection(){
+  try{
+    const s = window.getSelection && window.getSelection();
+    return !!(s && String(s).trim());
+  }catch(e){ return false; }
+}
+
+function setZenOn(on, silent){
+  zen.on = !!on;
+  $("zenMode").checked = zen.on;
+  $("zenSwitch").classList.toggle("on", zen.on);
+  try{ localStorage.setItem("zen_mode", zen.on ? "1" : "0"); }catch(e){}
+  zen.phase = state.content ? "ready" : "idle";
+
+  if(!silent){
+    if(zen.on){
+      toast("无感模式已开启", 1600);
+      setMsg("无感模式：复制链接后点击页面任意处即提取；提取完成后点击任意处即复制。", "ok");
+    }else{
+      toast("无感模式已关闭", 1600);
+      setMsg("");
+    }
+  }
+}
+
+$("zenMode").addEventListener("change", e => {
+  setZenOn(e.target.checked, false);
+});
+
+/* 无感模式核心：读剪贴板 → 提取 */
+async function zenExtractFromClipboard(){
+  if(!navigator.clipboard || !navigator.clipboard.readText){
+    toast("浏览器不支持自动读取剪贴板");
+    return;
+  }
+
+  let text = "";
+  try{
+    text = String(await navigator.clipboard.readText() || "").trim();
+  }catch(e){
+    toast("无法读取剪贴板，请允许权限");
+    return;
+  }
+  if(!text){
+    toast("剪贴板为空，请先复制链接");
+    return;
+  }
+
+  /* 剪贴板内容和上次相同，且已有结果 → 直接进入待复制状态 */
+  if(state.content && text === zen.lastClip){
+    zen.phase = "ready";
+    toast("结果已就绪，点击页面任意处复制");
+    return;
+  }
+
+  const links = extractLinks(text);
+  if(!links.length){
+    toast("剪贴板里没有识别到知乎 / 微信链接");
+    return;
+  }
+
+  zen.lastClip = text;
+  urlEl.value = text;
+  $("result").style.display = "none";
+  state.content = "";
+  renderLinks();
+
+  if(!state.links.length){
+    toast("没有识别到可用链接");
+    return;
+  }
+
+  toast("正在提取…", 1200);
+  const ok = await extract();
+  if(ok && state.content){
+    zen.phase = "ready";
+    toast("✓ 已提取，点击页面任意处复制正文", 2600);
+    $("status").textContent = "点击任意处复制";
+  }else{
+    zen.phase = "idle";
+  }
+}
+
+/* 全局点击：无感模式下的“点击即粘贴 / 点击即复制” */
+document.addEventListener("click", async function(ev){
+  if(!zen.on || zen.busy) return;
+  if(ev.button !== 0) return;
+  if(ev.defaultPrevented) return;
+  if(isInteractive(ev.target)) return;
+  if(hasSelection()) return;
+
+  /* 阶段二：已有正文 → 复制 */
+  if(zen.phase === "ready" && state.content){
+    zen.busy = true;
+    try{
+      const ok = await copyText(state.content);
+      if(ok){
+        toast("✓ 已复制正文到剪贴板");
+        setMsg("✓ 已复制正文到剪贴板。复制下一条链接后再点页面任意处即可继续提取。", "ok");
+        $("status").textContent = "已复制 ✓";
+        zen.phase = "idle";
+      }else{
+        toast("复制失败，请手动选择");
+      }
+    }finally{
+      zen.busy = false;
+    }
+    return;
+  }
+
+  /* 阶段一：读剪贴板 → 提取 */
+  zen.busy = true;
+  try{
+    await zenExtractFromClipboard();
+  }finally{
+    zen.busy = false;
+  }
+}, false);
+
+/* 恢复上次的无感模式开关状态 */
+try{
+  if(localStorage.getItem("zen_mode") === "1"){
+    setZenOn(true, true);
+  }
+}catch(e){}
+
+/* ==================== 启动 ==================== */
 
 loadHealth();
 </script>

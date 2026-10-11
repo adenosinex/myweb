@@ -56,6 +56,9 @@ class Doc:
     markdown: str = ""
     text: str = ""
     images: list[str] = field(default_factory=list)
+    source: str = ""           # 来源类型描述，如「知乎专栏文章」「知乎问答（回答）」
+    question_id: str = ""      # 关联问题 ID（回答/问题）
+    question_detail: str = ""  # 问题描述（Markdown）
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -146,8 +149,6 @@ class HtmlToMarkdown:
 
     # -- 递归遍历
     def _walk(self, node, depth: int) -> str:
-        from html.parser import HTMLParser  # noqa: F401  (类型提示占位)
-
         if isinstance(node, str):
             return _unescape(node)
 
@@ -402,51 +403,149 @@ class ZhihuExtractor:
                 return None
             return self._doc_from_answer(ans, entities)
 
+        if kind == "question":
+            qid = ids[0]
+            q = (entities.get("questions") or {}).get(qid)
+            if not q:
+                return None
+            return self._doc_from_question(q, entities)
+
         return None
 
     def _doc_from_article(self, art: dict, entities: dict) -> Doc:
-        author = (entities.get("users") or {}).get(str(art.get("author", {}).get("id", ""))) or {}
+        author = (entities.get("users") or {}).get(
+            str(art.get("author", {}).get("id", ""))) or {}
         name = art.get("author", {}).get("name") or author.get("name", "")
         content = art.get("content", "") or art.get("excerpt", "")
-        md = self.conv.convert(content)
-        doc = Doc(
-            url=f"https://zhuanlan.zhihu.com/p/{art.get('id', '')}",
+        body_md = self.conv.convert(content)
+        images = list(self.conv.images)
+
+        url = f"https://zhuanlan.zhihu.com/p/{art.get('id', '')}"
+        title = art.get("title", "")
+        published = _ts_to_str(art.get("created") or art.get("updated"))
+        voteup = int(art.get("voteupCount", 0) or 0)
+        comment_count = int(art.get("commentCount", 0) or 0)
+
+        markdown = _build_markdown(
+            title=title,
+            source="知乎专栏文章",
+            body=body_md,
+            author=name,
+            published=published,
+            voteup=voteup,
+            comment_count=comment_count,
+            url=url,
+        )
+        return Doc(
+            url=url,
             kind="article",
             id=str(art.get("id", "")),
-            title=art.get("title", ""),
+            title=title,
             author=name,
-            published=_ts_to_str(art.get("created") or art.get("updated")),
-            voteup=int(art.get("voteupCount", 0) or 0),
-            comment_count=int(art.get("commentCount", 0) or 0),
-            markdown=_with_title(art.get("title", ""), name, md),
-            text=_md_to_text(md),
-            images=list(self.conv.images),
+            published=published,
+            voteup=voteup,
+            comment_count=comment_count,
+            markdown=markdown,
+            text=_md_to_text(markdown),
+            images=images,
+            source="知乎专栏文章",
         )
-        return doc
 
     def _doc_from_answer(self, ans: dict, entities: dict) -> Doc:
         author = ans.get("author", {}) or {}
         question = ans.get("question", {}) or {}
+
+        # 补全问题信息（answers 里嵌套的 question 通常只有 id/title，
+        # 问题描述在 entities["questions"] 里）
+        qid = str(question.get("id", ""))
+        full_q = (entities.get("questions") or {}).get(qid) or {}
+        title = question.get("title") or full_q.get("title", "")
+        q_detail_html = (full_q.get("detail")
+                         or question.get("detail", "") or "")
+
+        # 先转换正文，保留正文图片；再转换问题描述，追加描述图片
         content = ans.get("content", "")
-        md = self.conv.convert(content)
-        title = question.get("title", "")
+        body_md = self.conv.convert(content)
+        images = list(self.conv.images)
+
+        q_detail_md = ""
+        if q_detail_html:
+            q_detail_md = self.conv.convert(q_detail_html)
+            images.extend(self.conv.images)
+
         name = author.get("name", "")
+        url = (f"https://www.zhihu.com/question/{qid}"
+               f"/answer/{ans.get('id', '')}")
+        published = _ts_to_str(ans.get("createdTime") or ans.get("updatedTime"))
+        voteup = int(ans.get("voteupCount", 0) or 0)
+        comment_count = int(ans.get("commentCount", 0) or 0)
+
+        markdown = _build_markdown(
+            title=title,
+            source="知乎问答（回答）",
+            body=body_md,
+            author=name,
+            published=published,
+            voteup=voteup,
+            comment_count=comment_count,
+            url=url,
+            question_detail=q_detail_md,
+        )
         doc = Doc(
-            url=f"https://www.zhihu.com/question/{question.get('id', '')}"
-                f"/answer/{ans.get('id', '')}",
+            url=url,
             kind="answer",
             id=str(ans.get("id", "")),
             title=title,
             author=name,
-            published=_ts_to_str(ans.get("createdTime") or ans.get("updatedTime")),
-            voteup=int(ans.get("voteupCount", 0) or 0),
-            comment_count=int(ans.get("commentCount", 0) or 0),
-            markdown=_with_title(title, name, md),
-            text=_md_to_text(md),
-            images=list(self.conv.images),
+            published=published,
+            voteup=voteup,
+            comment_count=comment_count,
+            markdown=markdown,
+            text=_md_to_text(markdown),
+            images=images,
+            source="知乎问答（回答）",
+            question_id=qid,
+            question_detail=q_detail_md,
         )
-        doc.extra["question_id"] = str(question.get("id", ""))
+        doc.extra["question_id"] = qid
         return doc
+
+    def _doc_from_question(self, q: dict, entities: dict) -> Doc:
+        qid = str(q.get("id", ""))
+        title = q.get("title", "")
+        detail_html = q.get("detail", "") or ""
+        detail_md = self.conv.convert(detail_html) if detail_html else ""
+        images = list(self.conv.images)
+
+        url = f"https://www.zhihu.com/question/{qid}"
+        published = _ts_to_str(q.get("created") or q.get("updatedTime"))
+        voteup = int(q.get("voteupCount", 0) or 0)
+        comment_count = int(q.get("commentCount", 0) or 0)
+
+        markdown = _build_markdown(
+            title=title,
+            source="知乎问答（问题）",
+            body=detail_md,
+            published=published,
+            voteup=voteup,
+            comment_count=comment_count,
+            url=url,
+        )
+        return Doc(
+            url=url,
+            kind="question",
+            id=qid,
+            title=title,
+            published=published,
+            voteup=voteup,
+            comment_count=comment_count,
+            markdown=markdown,
+            text=_md_to_text(markdown),
+            images=images,
+            source="知乎问答（问题）",
+            question_id=qid,
+            question_detail=detail_md,
+        )
 
     # ---------- 从渲染后的 DOM 文本提取（兜底）
     def from_dom(self, html_text: str, kind: str, url: str) -> Optional[Doc]:
@@ -485,14 +584,33 @@ class ZhihuExtractor:
         if body is None:
             return None
 
-        md = self.conv.convert(_serialize(body))
-        if len(md) < 80:
+        body_md = self.conv.convert(_serialize(body))
+        if len(body_md) < 80:
             return None
 
+        source_map = {
+            "article": "知乎专栏文章",
+            "answer": "知乎问答（回答）",
+            "question": "知乎问答（问题）",
+        }
+        source = source_map.get(kind, "知乎")
+
+        markdown = _build_markdown(
+            title=title,
+            source=source,
+            body=body_md,
+            url=url,
+        )
+
         return Doc(
-            url=url, kind=kind, id=url.rstrip("/").rsplit("/", 1)[-1],
-            title=title, markdown=_with_title(title, "", md),
-            text=_md_to_text(md), images=list(self.conv.images),
+            url=url,
+            kind=kind,
+            id=url.rstrip("/").rsplit("/", 1)[-1],
+            title=title,
+            markdown=markdown,
+            text=_md_to_text(markdown),
+            images=list(self.conv.images),
+            source=source,
         )
 
 
@@ -521,15 +639,71 @@ def _serialize(node: _Node) -> str:
     return f"<{node.tag}{attrs}>{inner}</{node.tag}>"
 
 
-def _with_title(title: str, author: str, md: str) -> str:
-    head = []
+def _build_markdown(
+    *,
+    title: str,
+    source: str,
+    body: str,
+    author: str = "",
+    published: str = "",
+    voteup: int = 0,
+    comment_count: int = 0,
+    url: str = "",
+    question_detail: str = "",
+) -> str:
+    """构建带有来源元信息头的 Markdown 文档。
+
+    头部结构：
+        # 标题
+        > **来源**：知乎专栏文章 / 知乎问答（回答）
+        > **作者**：xxx
+        > **发布时间**：YYYY-MM-DD
+        > **互动数据**：赞同 N · 评论 M
+        > **原文链接**：https://...
+
+        ## 问题描述（仅回答）
+        ...
+
+        ---
+        正文
+    """
+    parts: list[str] = []
     if title:
-        head.append(f"# {title}")
+        parts.append(f"# {title}")
+
+    meta_lines: list[str] = [f"**来源**：{source}"]
     if author:
-        head.append(f"作者：{author}")
-    if head:
-        return "\n\n".join(head) + "\n\n" + md
-    return md
+        meta_lines.append(f"**作者**：{author}")
+    if published:
+        meta_lines.append(f"**发布时间**：{published}")
+
+    stats: list[str] = []
+    if voteup:
+        stats.append(f"赞同 {voteup}")
+    if comment_count:
+        stats.append(f"评论 {comment_count}")
+    if stats:
+        meta_lines.append(f"**互动数据**：{' · '.join(stats)}")
+
+    if url:
+        meta_lines.append(f"**原文链接**：{url}")
+
+    parts.append("")
+    parts.extend(f"> {line}" for line in meta_lines)
+
+    if question_detail.strip():
+        parts.append("")
+        parts.append("## 问题描述")
+        parts.append("")
+        parts.append(question_detail.strip())
+
+    if body.strip():
+        parts.append("")
+        parts.append("---")
+        parts.append("")
+        parts.append(body.strip())
+
+    return "\n".join(parts).strip() + "\n"
 
 
 def _md_to_text(md: str) -> str:
@@ -538,12 +712,14 @@ def _md_to_text(md: str) -> str:
     t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", t)
     t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)
     t = re.sub(r"`([^`]*)`", r"\1", t)
+    t = re.sub(r"\*{1,3}([^*\n]+?)\*{1,3}", r"\1", t)   # 去掉 **bold** / *italic*
     t = re.sub(r"^\s*#{1,6}\s*", "", t, flags=re.M)
     t = re.sub(r"^\s*>\s?", "", t, flags=re.M)
     t = re.sub(r"^\s*[-*+]\s+", "", t, flags=re.M)
     # 表格：把 | 分隔的行转成空格分隔，去掉分隔线
     t = re.sub(r"^\s*\|[\s:|-]+\|\s*$", "", t, flags=re.M)
-    t = re.sub(r"^\s*\|(.*)\|\s*$", lambda m: m.group(1).replace("|", " "), t, flags=re.M)
+    t = re.sub(r"^\s*\|(.*)\|\s*$",
+               lambda m: m.group(1).replace("|", " "), t, flags=re.M)
     t = re.sub(r"[ \t]+\n", "\n", t)
     t = re.sub(r"\n{3,}", "\n\n", t)
     return t.strip()

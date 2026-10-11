@@ -1229,6 +1229,23 @@
 
                     <div class="flex items-center gap-3 shrink-0">
 
+                        <!-- 【新增】移动端删除按钮 -->
+                        <el-button
+                            v-if="isMobile && activeDocId"
+                            size="small"
+                            type="danger"
+                            plain
+                            circle
+                            :loading="deleting"
+                            @click="deleteDocument">
+
+                            <el-icon>
+                                <delete></delete>
+                            </el-icon>
+
+                        </el-button>
+
+
                         <span
                             class="text-xs mobile-save-status"
                             :class="{
@@ -1291,37 +1308,56 @@
             v-show="(activeDocId || isCreating) && !isFocusMode && !isMobile"
             class="w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0">
 
-            <!-- 操作 -->
+            <!-- 【修复】操作区：置顶 / 归档 / 删除 -->
 
             <div
                 v-if="activeDocId"
-                class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex gap-2">
+                class="bg-white p-3 rounded-lg shadow-sm border border-slate-200">
+
+                <div class="flex gap-2">
+
+                    <el-button
+                        size="small"
+                        class="flex-1"
+                        :type="activeDocMeta.is_pinned ? 'warning' : 'default'"
+                        @click="toggleAction('toggle_pin')">
+
+                        {{ activeDocMeta.is_pinned
+                            ? '取消置顶'
+                            : '📌 置顶' }}
+
+                    </el-button>
+
+
+                    <el-button
+                        size="small"
+                        class="flex-1"
+                        plain
+                        :type="activeDocStatus === 'archive'
+                            ? 'primary'
+                            : 'info'"
+                        @click="toggleAction('toggle_archive')">
+
+                        {{ activeDocStatus === 'archive'
+                            ? '还原活跃'
+                            : '📦 归档' }}
+
+                    </el-button>
+
+                </div>
+
+
+                <!-- 【新增】删除按钮 -->
 
                 <el-button
                     size="small"
-                    class="flex-1"
-                    :type="activeDocMeta.is_pinned ? 'warning' : 'default'"
-                    @click="toggleAction('toggle_pin')">
-
-                    {{ activeDocMeta.is_pinned
-                        ? '取消置顶'
-                        : '📌 置顶' }}
-
-                </el-button>
-
-
-                <el-button
-                    size="small"
-                    class="flex-1"
+                    type="danger"
                     plain
-                    :type="activeDocStatus === 'archive'
-                        ? 'primary'
-                        : 'info'"
-                    @click="toggleAction('toggle_archive')">
+                    class="w-full mt-2"
+                    :loading="deleting"
+                    @click="deleteDocument">
 
-                    {{ activeDocStatus === 'archive'
-                        ? '还原活跃'
-                        : '📦 归档' }}
+                    🗑 删除笔记
 
                 </el-button>
 
@@ -1624,6 +1660,9 @@ const app = createApp({
         const isSearching = ref(false);
         const renaming = ref(false);
         const clipboardTitleLoading = ref(false);
+
+        /* 【新增】删除中状态 */
+        const deleting = ref(false);
 
         const saveStatus = ref('');
 
@@ -3731,7 +3770,204 @@ tags:
 
 
         /* =====================================================
-           重命名
+           【新增】清空编辑器状态
+           ===================================================== */
+
+        const resetEditorState =
+            () => {
+
+                activeDocId.value = '';
+                docIdInput.value = '';
+                editorContent.value = '';
+                isCreating.value = false;
+
+                dirty.value = false;
+                pendingSnapshot.value = null;
+
+                relatedDocs.value = [];
+                generatedTags.value = [];
+
+                saveStatus.value = '';
+
+                activeDocMeta.value = {
+                    id: '',
+                    title: '',
+                    created_time: null,
+                    update_time: null,
+                    is_pinned: 0,
+                    status: 'active'
+                };
+
+                if (vditorInstance && isVditorReady) {
+                    vditorInstance.setValue('');
+                }
+
+                if (isMobile.value) {
+                    mobileView.value = 'list';
+                }
+            };
+
+
+        /* =====================================================
+           【新增】删除笔记
+           ===================================================== */
+
+        const deleteDocument =
+            async () => {
+
+                /* ---------- 新建但从未保存 ---------- */
+
+                if (isCreating.value && !activeDocId.value) {
+
+                    let confirmed = false;
+
+                    try {
+
+                        await ElementPlus.ElMessageBox.confirm(
+                            '放弃这篇尚未保存的笔记？',
+                            '提示',
+                            {
+                                type: 'warning',
+                                confirmButtonText: '放弃',
+                                cancelButtonText: '继续编辑'
+                            }
+                        );
+
+                        confirmed = true;
+
+                    } catch (e) {
+                        confirmed = false;
+                    }
+
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    clearTimeout(saveTimer);
+                    pendingSnapshot.value = null;
+
+                    resetEditorState();
+
+                    ElementPlus.ElMessage.success('已放弃草稿');
+
+                    return;
+                }
+
+
+                const id = activeDocId.value;
+
+                if (!id) {
+                    return;
+                }
+
+
+                /* ---------- 二次确认 ---------- */
+
+                let confirmed = false;
+
+                try {
+
+                    await ElementPlus.ElMessageBox.confirm(
+                        `确定删除「${getDocTitle(activeDocMeta.value || { id })}」吗？\n` +
+                        '文件会移入服务器回收站，可手动找回。',
+                        '删除确认',
+                        {
+                            type: 'warning',
+                            confirmButtonText: '删除',
+                            cancelButtonText: '取消',
+                            confirmButtonClass: 'el-button--danger'
+                        }
+                    );
+
+                    confirmed = true;
+
+                } catch (e) {
+                    confirmed = false;
+                }
+
+                if (!confirmed) {
+                    return;
+                }
+
+
+                /* ---------- 阻止残留的自动保存把文件写回来 ---------- */
+
+                clearTimeout(saveTimer);
+
+                pendingSnapshot.value = null;
+                dirty.value = false;
+
+                try {
+                    await saveQueue;
+                } catch (e) {
+                    console.error(e);
+                }
+
+
+                deleting.value = true;
+
+                try {
+
+                    const response = await fetch(
+                        '/docapi/document/delete',
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ id })
+                        }
+                    );
+
+
+                    const data = await response.json()
+                        .catch(() => ({}));
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            data.error ||
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+
+                    /* 本地列表立即移除 */
+
+                    documents.value =
+                        documents.value.filter(
+                            doc => doc.id !== id
+                        );
+
+                    searchResults.value =
+                        searchResults.value.filter(
+                            doc => doc.id !== id
+                        );
+
+                    resetEditorState();
+
+                    ElementPlus.ElMessage.success('已删除');
+
+                } catch (error) {
+
+                    console.error('删除失败:', error);
+
+                    ElementPlus.ElMessage.error(
+                        error.message || '删除失败'
+                    );
+
+                } finally {
+
+                    deleting.value = false;
+                }
+            };
+
+
+        /* =====================================================
+           【修复】重命名
+           - 使用后端返回的 meta.id 作为最终 ID
+           - 老 ID 从列表移除，新 ID 加回
            ===================================================== */
 
         const commitRename =
@@ -3780,7 +4016,6 @@ tags:
                  */
                 const saved =
                     await flushCurrentDocument();
-
                 if (!saved) {
 
                     docIdInput.value =
@@ -3837,13 +4072,18 @@ tags:
 
 
                     /*
-                     * 后端成功后切换当前 ID。
+                     * 【修复】使用后端返回的最终 ID，
+                     * 而不是前端输入的原始字符串。
                      */
-                    activeDocId.value =
+                    const actualNewId =
+                        (data.meta && data.meta.id) ||
                         newId;
 
+                    activeDocId.value =
+                        actualNewId;
+
                     docIdInput.value =
-                        newId;
+                        actualNewId;
 
 
                     if (data.meta) {
@@ -4248,6 +4488,9 @@ tags:
             renaming,
             clipboardTitleLoading,
 
+            /* 【新增】 */
+            deleting,
+
             saveStatus,
             dirty,
 
@@ -4317,6 +4560,10 @@ tags:
             generateTags,
 
             commitRename,
+
+            /* 【新增】删除相关 */
+            deleteDocument,
+            resetEditorState,
 
             moveTimelineMonth,
             timelineToday,

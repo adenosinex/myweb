@@ -26,3 +26,7 @@ pys/test/新建 文本文档.txt
 pys/test/chat_log.txt
 *.log
 pys/zhihu-extract/cookies.txt
+.venv 
+dbserver
+pys
+pys/*

@@ -6,7 +6,9 @@
 - 所有消息保存在服务器进程内存中（不落库）
 - 客户端定时轮询接口拉取增量消息
 - 点击消息自动复制内容到剪贴板
-- 快捷短语按钮：点击后自动粘贴到输入框并发送
+- 快捷按钮：点击后自动读取剪贴板 → 粘贴到输入框 → 立即发送
+  · 若浏览器限制直接读取剪贴板，则提示按 Ctrl/⌘+V，
+    用户手动粘贴后自动发送（无需再点发送按钮）
 - 作为 Flask Blueprint 被其他应用注册使用
 
 用法：
@@ -18,6 +20,9 @@
     # app.register_blueprint(chat_bp, url_prefix="/live")  # 也可自定义前缀
 
 然后访问 http://127.0.0.1:5000/chat/
+
+注意：浏览器读取剪贴板要求「安全上下文」（HTTPS 或 localhost），
+      否则会自动走手动粘贴的兜底流程。
 """
 
 from __future__ import annotations
@@ -38,14 +43,10 @@ MAX_MESSAGES = 500      # 内存中最多保留的消息条数（滚动丢弃旧
 MAX_NAME_LEN = 20       # 昵称最大长度
 MAX_TEXT_LEN = 1000     # 单条消息最大长度
 
-# 快捷回复短语：点击按钮后自动粘贴到输入框并发送。按需要自由增删。
-QUICK_REPLIES = [
-    "你好 👋",
-    "收到 ✅",
-    "稍等，我看一下",
-    "好的，没问题",
-    "感谢！",
-    "哈哈 😂",
+# 快捷按钮：每个按钮点击后都是「读取剪贴板 → 粘贴 → 发送」。
+# 这里只是按钮的显示文字，可按需要自由增删（一般留一个就够）。
+QUICK_BUTTONS = [
+    "📋 发送剪贴板内容",
 ]
 
 _lock = threading.Lock()          # 多线程（多请求）下保护内存数据
@@ -83,7 +84,11 @@ def _snapshot(since_id: int) -> tuple[list[dict], int]:
 @bp.route("/")
 def index():
     """聊天页面。"""
-    return render_template_string(PAGE_HTML, quick_replies=QUICK_REPLIES)
+    return render_template_string(
+        PAGE_HTML,
+        quick_buttons=QUICK_BUTTONS,
+        max_text_len=MAX_TEXT_LEN,
+    )
 
 
 @bp.get("/api/messages")
@@ -216,7 +221,7 @@ PAGE_HTML = r"""<!doctype html>
   .empty { color: #5d6577; font-size: 13px; margin: auto; }
   @keyframes pop { from { opacity: 0; transform: translateY(4px); } }
 
-  /* ---------------- 快捷短语 ---------------- */
+  /* ---------------- 快捷按钮 ---------------- */
   .quick { display: flex; flex-wrap: wrap; gap: 6px; }
   .quick button {
     background: #1e2430;
@@ -234,6 +239,12 @@ PAGE_HTML = r"""<!doctype html>
   .quick button:hover  { background: #26303f; border-color: #3d6ea8; color: #fff; }
   .quick button:active { transform: scale(.96); }
   .quick button:disabled { opacity: .45; cursor: default; }
+  .quick button.waiting {
+    border-color: #d09a2f;
+    color: #ffd479;
+    animation: breathe 1.2s ease-in-out infinite;
+  }
+  @keyframes breathe { 50% { opacity: .55; } }
 
   /* ---------------- 输入区 ---------------- */
   form { display: flex; gap: 8px; }
@@ -255,6 +266,29 @@ PAGE_HTML = r"""<!doctype html>
   }
   button[type="submit"]:hover { background: #3a80e8; }
   button[type="submit"]:disabled { opacity: .5; cursor: default; }
+
+  /* ---------------- 浮动提示 ---------------- */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 92px;
+    transform: translateX(-50%) translateY(10px);
+    background: #232a37;
+    color: #e6e8ee;
+    border: 1px solid #2f3a4c;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 8px 16px;
+    border-radius: 99px;
+    max-width: 88vw;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 50;
+    box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -266,22 +300,25 @@ PAGE_HTML = r"""<!doctype html>
 
   <div id="messages"><div class="empty">还没有消息，来说第一句吧 ~</div></div>
 
-  <!-- 快捷短语：点击自动粘贴并发送 -->
+  <!-- 快捷按钮：点击后读取剪贴板 → 粘贴 → 自动发送 -->
   <div class="quick" id="quick"></div>
 
   <form id="form" autocomplete="off">
     <input id="name" maxlength="20" placeholder="昵称">
-    <input id="text" maxlength="1000" placeholder="说点什么…（点击上方气泡可复制消息）" required>
+    <input id="text" maxlength="{{ max_text_len }}"
+           placeholder="说点什么…（点击上方气泡可复制消息）" required>
     <button id="send" type="submit">发送</button>
   </form>
 </div>
+
+<div id="toast"></div>
 
 <script>
 (function () {
   "use strict";
 
-  const API      = {{ url_for('.api_messages')|tojson }};
-  const QUICK    = {{ quick_replies|tojson }};
+  const API    = {{ url_for('.api_messages')|tojson }};
+  const QUICK  = {{ quick_buttons|tojson }};
 
   const box      = document.getElementById("messages");
   const form     = document.getElementById("form");
@@ -290,15 +327,18 @@ PAGE_HTML = r"""<!doctype html>
   const sendEl   = document.getElementById("send");
   const status   = document.getElementById("status");
   const quickBox = document.getElementById("quick");
+  const toastEl  = document.getElementById("toast");
 
   const POLL_MS = 1000;      // 轮询间隔（毫秒）
   const COPY_HL = 1100;      // “已复制”徽标显示时长（毫秒）
 
-  let lastId   = 0;          // 已收到的最大消息 id
-  let myName   = localStorage.getItem("chat_name") || "";
-  let inFlight = false;      // 拉取中标记
-  let sending  = false;      // 发送中标记
-  let timer    = null;
+  let lastId      = 0;       // 已收到的最大消息 id
+  let myName      = localStorage.getItem("chat_name") || "";
+  let inFlight    = false;   // 拉取中标记
+  let sending     = false;   // 发送中标记
+  let pendingPaste = false;  // 等待用户手动粘贴（剪贴板读取失败时的兜底）
+  let timer       = null;
+  let toastTimer  = null;
 
   nameEl.value = myName;
 
@@ -323,6 +363,23 @@ PAGE_HTML = r"""<!doctype html>
 
   function scrollToBottom() {
     box.scrollTop = box.scrollHeight;
+  }
+
+  function toast(msg, ms) {
+    ms = ms || 2200;
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastEl.classList.remove("show");
+    }, ms);
+  }
+
+  function flashPaste() {
+    textEl.classList.remove("pasted");
+    void textEl.offsetWidth;              // 强制重排以重启动画
+    textEl.classList.add("pasted");
+    setTimeout(function () { textEl.classList.remove("pasted"); }, 500);
   }
 
   /* ------------------------------------------------------------------ */
@@ -356,7 +413,8 @@ PAGE_HTML = r"""<!doctype html>
 
   async function copyText(text) {
     // 优先使用异步剪贴板 API（需要 HTTPS 或 localhost）
-    if (navigator.clipboard && window.isSecureContext) {
+    if (navigator.clipboard && navigator.clipboard.writeText
+        && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
       return true;
     }
@@ -402,6 +460,7 @@ PAGE_HTML = r"""<!doctype html>
       textEl.focus();
       textEl.select();
       setStatus(false);
+      toast("复制失败，已填入输入框，可手动复制");
     }
   });
 
@@ -468,7 +527,6 @@ PAGE_HTML = r"""<!doctype html>
       sending = false;
       sendEl.disabled = false;
       setQuickDisabled(false);
-      textEl.focus();
       poll();               // 立刻补拉一次，减少等待感
     }
     return ok;
@@ -484,41 +542,120 @@ PAGE_HTML = r"""<!doctype html>
     const ok = await sendMessage(text);
     if (!ok) {
       textEl.value = text;   // 失败把内容还回去
-      alert("发送失败，请检查网络后重试");
+      toast("发送失败，请检查网络后重试");
     }
   });
 
   /* ------------------------------------------------------------------ */
-  /* 快捷短语按钮：点击 → 自动粘贴 → 自动发送                            */
+  /* 快捷按钮：读取剪贴板 → 粘贴 → 自动发送                              */
   /* ------------------------------------------------------------------ */
 
   const quickBtns = [];
 
   function setQuickDisabled(disabled) {
-    for (const b of quickBtns) b.disabled = disabled;
+    for (const b of quickBtns) {
+      if (disabled) b.disabled = true;
+      if (!disabled) b.disabled = false;
+    }
   }
 
-  async function quickSend(text) {
-    if (sending) return;
+  function setQuickWaiting(waiting) {
+    for (const b of quickBtns) {
+      b.classList.toggle("waiting", waiting);
+    }
+  }
 
-    // 1) 自动“粘贴”到输入框，并闪一下作为视觉反馈
+  // 读取系统剪贴板文本。浏览器要求在安全上下文 + 用户手势下调用。
+  async function readClipboardText() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      throw new Error("Clipboard API 不可用");
+    }
+    if (!window.isSecureContext) {
+      throw new Error("非安全上下文（需 HTTPS 或 localhost）");
+    }
+    return await navigator.clipboard.readText();
+  }
+
+  // 把文本「粘贴」到输入框并发送
+  async function pasteAndSend(text) {
+    text = (text || "").trim();
+    if (!text) {
+      toast("剪贴板是空的，没有可发送的内容");
+      return false;
+    }
+
+    // 1) 自动“粘贴”到输入框，闪烁一下作为视觉反馈
     textEl.value = text;
-    textEl.classList.remove("pasted");
-    void textEl.offsetWidth;              // 强制重排以重启动画
-    textEl.classList.add("pasted");
-    setTimeout(function () { textEl.classList.remove("pasted"); }, 500);
+    flashPaste();
 
     // 2) 自动发送；成功后清空输入框，失败则保留内容便于手动重试
     const ok = await sendMessage(text);
-    if (ok) textEl.value = "";
+    if (ok) {
+      textEl.value = "";
+      pendingPaste = false;
+      setQuickWaiting(false);
+    } else {
+      toast("发送失败，内容已保留在输入框，可手动重试");
+    }
+    return ok;
   }
 
-  QUICK.forEach(function (q) {
+  async function quickSendFromClipboard() {
+    if (sending) return;
+
+    let text = "";
+    try {
+      text = await readClipboardText();
+    } catch (err) {
+      // 兜底：无法直接读取剪贴板 → 引导用户手动粘贴，粘贴后自动发送
+      pendingPaste = true;
+      setQuickWaiting(true);
+      textEl.value = "";
+      textEl.focus();
+      toast("浏览器不允许直接读取剪贴板，请按 Ctrl/⌘+V 粘贴，将自动发送", 4000);
+      return;
+    }
+
+    await pasteAndSend(text);
+  }
+
+  // 手动粘贴兜底：捕获 paste 事件后直接发送
+  textEl.addEventListener("paste", function (e) {
+    if (!pendingPaste) return;
+
+    const cd = e.clipboardData || window.clipboardData;
+    if (!cd) return;
+
+    const t = cd.getData("text");
+    if (!t || !t.trim()) return;
+
+    e.preventDefault();          // 阻止默认插入，改用统一流程
+    pendingPaste = false;
+    pasteAndSend(t);
+  });
+
+  // 用户主动输入 / 按 Esc 时取消等待状态
+  textEl.addEventListener("input", function () {
+    if (pendingPaste && textEl.value.trim()) {
+      pendingPaste = false;
+      setQuickWaiting(false);
+    }
+  });
+  textEl.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && pendingPaste) {
+      pendingPaste = false;
+      setQuickWaiting(false);
+      toast("已取消", 1200);
+    }
+  });
+
+  // 创建快捷按钮
+  QUICK.forEach(function (label) {
     const b = document.createElement("button");
     b.type = "button";
-    b.textContent = q;
-    b.title = "点击自动发送：" + q;
-    b.addEventListener("click", function () { quickSend(q); });
+    b.textContent = label;
+    b.title = "点击读取剪贴板并自动发送";
+    b.addEventListener("click", quickSendFromClipboard);
     quickBox.appendChild(b);
     quickBtns.push(b);
   });

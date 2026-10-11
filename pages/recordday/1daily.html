@@ -2,129 +2,198 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>日常项目统计</title>
     <script src="/static/cdn/vue3.5.global.prod.js"></script>
     <script src="/static/cdn/axios1.1.min.js"></script>
     <script src="/static/cdn/tailwindcss3.4.17.js"></script>
     <script src="/static/cdn/chart.min.3.9.1.js"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-<div id="app" class="max-w-xl mx-auto mt-8 p-6 bg-white rounded-lg shadow">
-    <h2 class="text-2xl font-bold mb-4 text-blue-700">日常项目统计</h2>
-    
-    <div class="flex flex-wrap gap-2 mb-6 border-b pb-4">
-        <button v-for="pp in allProjects" :key="pp" @click="project = pp"
-                :class="project === pp ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                class="px-4 py-2 rounded-full font-medium transition-all duration-200 text-sm">
-            ${ pp }
-        </button>
-    </div>
+<div id="app" class="mx-auto w-full max-w-xl px-3 py-4 sm:px-6 sm:py-8">
+    <div class="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
 
-    <form @submit.prevent="addRecord" class="flex flex-wrap gap-2 items-center mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
-        <span class="text-lg font-bold w-auto min-w-[64px]" :class="project === 'ejec' ? 'text-blue-700' : 'text-green-700'">
-            ${ project }
-        </span>
-        
-        <template v-if="project === 'ejec'">
-            <input type="number" v-model="count" min="1" class="w-20 px-2 py-1 border rounded" placeholder="次数">
-            <span class="text-gray-400 text-sm">快捷：</span>
-            <div class="flex gap-1">
+        <!-- 顶部：标题 + 导入导出 -->
+        <div class="mb-4 flex items-center justify-between gap-3">
+            <h1 class="text-xl font-bold text-blue-700 sm:text-2xl">日常项目统计</h1>
+            <div class="flex shrink-0 gap-1.5">
+                <button @click="exportCSV"
+                        class="rounded-lg bg-green-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-green-600 active:scale-95 sm:text-sm">
+                    导出
+                </button>
+                <input type="file" ref="fileInput" @change="importCSV" class="hidden" accept=".csv">
+                <button @click="$refs.fileInput.click()"
+                        class="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-amber-600 active:scale-95 sm:text-sm">
+                    导入
+                </button>
+            </div>
+        </div>
+
+        <!-- 项目切换（移动端横向滚动） -->
+        <div class="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto border-b border-gray-100 px-4 pb-3 sm:mx-0 sm:px-0">
+            <button v-for="pp in allProjects" :key="pp" @click="project = pp"
+                    :class="project === pp
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                    class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 active:scale-95">
+                ${ pp }
+            </button>
+        </div>
+
+        <!-- 记录表单 -->
+        <form @submit.prevent="addRecord" class="mb-5 rounded-2xl border border-gray-100 bg-gray-50 p-3 sm:p-4">
+            <div class="mb-3 flex items-center gap-2">
+                <span class="text-base font-bold sm:text-lg"
+                      :class="project === 'ejec' ? 'text-blue-700' : 'text-green-700'">${ project }</span>
+                <span class="text-xs text-gray-400">记录一条新数据</span>
+            </div>
+
+            <div class="mb-3 flex gap-2">
+                <template v-if="project === 'ejec'">
+                    <input type="number" v-model="count" min="1" inputmode="numeric"
+                           class="w-20 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-bold text-blue-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                           placeholder="次数">
+                </template>
+                <input v-model="remark"
+                       class="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                       placeholder="备注（可选）">
+            </div>
+
+            <!-- 快捷次数 -->
+            <div v-if="project === 'ejec'" class="mb-3 flex gap-2">
                 <button v-for="n in squatOptions" :key="n" type="button" @click="quickSquat(n)"
-                        class="px-2 py-1 bg-blue-100 rounded hover:bg-blue-300 text-blue-700 text-sm font-semibold">${ n }</button>
+                        class="flex-1 rounded-xl bg-blue-100 py-2 text-base font-bold text-blue-700 transition hover:bg-blue-200 active:scale-95">
+                    ${ n }
+                </button>
             </div>
-        </template>
 
-        <input v-model="remark" class="flex-1 px-2 py-1 border rounded min-w-[120px]" placeholder="备注（可选）">
-        <button type="submit" class="px-4 py-1 text-white rounded font-bold transition" 
-                :class="project === 'ejec' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'">记录</button>
-    </form>
-   <!-- 最近一周详细记录 -->
-    <div v-if="recentWeekList.length" class="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
-        <h3 class="text-lg font-semibold mb-2 text-blue-700 flex items-center gap-2">
-            最近一周记录 <span class="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">${ recentWeekList.length } 条</span>
-        </h3>
-        <ul>
-            <li v-for="item in recentWeekList" :key="item.id || item._time" class="flex items-center mb-2 text-sm border-b border-blue-100 pb-1 last:border-0">
-                <span class="font-bold w-24 truncate" :class="item.project === project ? 'text-blue-600' : 'text-gray-700'">${item.project}</span>
-                <span v-if="item.project === 'ejec'" class="text-blue-700 font-mono w-10">${item.count}次</span>
-                <span class="text-gray-500 font-mono mx-2">${item.date} ${item.time}</span>
-                <span v-if="item.remark" class="text-gray-500 flex-1 truncate text-xs">📝 ${item.remark}</span>
-                <button v-if="isToday(item.date)" @click="deleteRecord(item.id)" class="ml-auto px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-xs">删除</button>
-            </li>
-        </ul>
-    </div>
-    <!-- 整体趋势图（固定高度容器） -->
-    <div class="mb-4 relative" style="height: 300px;">
-        <h3 class="text-sm font-semibold text-gray-600 mb-1">📈 整体趋势（全部日期）</h3>
-        <canvas id="overallChart"></canvas>
-    </div>
+            <!-- 大号记录按钮 -->
+            <button type="submit"
+                    class="w-full rounded-xl py-3.5 text-lg font-bold text-white transition-all duration-150 active:scale-[0.98]"
+                    :class="project === 'ejec'
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700'
+                        : 'bg-gradient-to-r from-green-500 to-emerald-600 shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700'">
+                ✍️ 记录 ${ project }
+            </button>
+        </form>
 
-    <!-- 最近趋势图（固定高度容器） -->
-    <div class="mb-4 relative" style="height: 300px;">
-        <h3 class="text-sm font-semibold text-gray-600 mb-1">📉 最近趋势（最近30天）</h3>
-        <div v-if="recentIntervalList.length" class="text-xs text-gray-500 mb-1">
-            最近间隔：<span v-for="(interval, idx) in recentIntervalList" :key="idx" class="mr-1">${ interval }天</span>
-        </div>
-        <canvas id="recentChart"></canvas>
-    </div>
+        <!-- 最近一周记录（分页） -->
+        <div v-if="recentWeekList.length" class="mb-4 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50">
+            <div class="flex items-center justify-between gap-2 border-b border-blue-100 px-3 py-2.5">
+                <h3 class="flex items-center gap-2 text-base font-semibold text-blue-700">
+                    最近一周记录
+                    <span class="rounded-full bg-blue-200 px-2 py-0.5 text-xs text-blue-800">${ recentWeekList.length } 条</span>
+                </h3>
+            </div>
 
-    <!-- 主统计卡片：基于记录条数 -->
-    <div v-if="overallStats" class="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
-        <h3 class="text-lg font-semibold mb-2 text-gray-700">📊 统计数据（${ project }）</h3>
-        <div class="grid grid-cols-2 gap-2 text-sm">
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">总记录条数：</span>
-                <span class="font-bold text-blue-600">${ overallStats.totalRecords }</span>
-            </div>
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">有记录天数：</span>
-                <span class="font-bold">${ overallStats.activeDays } 天</span>
-            </div>
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">整体频率：</span>
-                <span class="font-bold">${ formatFrequency(overallStats.overallPerDay) }</span>
-            </div>
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">最近7天频率：</span>
-                <span class="font-bold">${ formatFrequency(overallStats.recentPerDay) }</span>
-                <span class="text-gray-500">（${ overallStats.recentRecords } 条）</span>
-            </div>
-        </div>
-    </div>
-    <div v-else class="mb-4 text-gray-400 text-sm">暂无数据</div>
+            <ul class="divide-y divide-blue-100">
+                <li v-for="item in pagedWeekList" :key="item.id || item._time"
+                    class="flex items-start gap-2 px-3 py-2.5">
+                    <span class="w-16 shrink-0 truncate text-sm font-bold sm:w-20"
+                          :class="item.project === project ? 'text-blue-600' : 'text-gray-700'">${ item.project }</span>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-x-2">
+                            <span v-if="item.count" class="font-mono text-sm font-bold text-blue-700">${ item.count }次</span>
+                            <span class="font-mono text-xs text-gray-400">${ item.date.slice(5) } ${ item.time.slice(0,5) }</span>
+                        </div>
+                        <div v-if="item.remark" class="mt-0.5 truncate text-xs text-gray-500">📝 ${ item.remark }</div>
+                    </div>
+                    <button v-if="isToday(item.date)" @click="deleteRecord(item.id)"
+                            class="shrink-0 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-500 transition hover:bg-red-500 hover:text-white active:scale-95">
+                        删除
+                    </button>
+                </li>
+            </ul>
 
-    <!-- 单次执行特点（仅当项目有 count 字段时显示） -->
-    <div v-if="overallStats && overallStats.isCountProject" class="mb-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-        <h3 class="text-lg font-semibold mb-2 text-yellow-800">⚡ 单次执行特点（基于 count 字段）</h3>
-        <div class="grid grid-cols-2 gap-2 text-sm">
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">总执行次数：</span>
-                <span class="font-bold">${ overallStats.totalCountSum }</span>
-            </div>
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">平均每次执行：</span>
-                <span class="font-bold">${ Math.round(overallStats.avgCountPerRecord) } 次</span>
-            </div>
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">有记录日平均总次数：</span>
-                <span class="font-bold">${ Math.round(overallStats.avgCountPerActiveDay) } 次/天</span>
-            </div>
-            <div class="bg-white p-2 rounded shadow-sm">
-                <span class="text-gray-500">平均每天记录条数（有记录日）：</span>
-                <span class="font-bold">${ Math.round(overallStats.avgRecordsPerActiveDay) } 条/天</span>
+            <!-- 翻页控件 -->
+            <div v-if="totalPages > 1"
+                 class="flex items-center justify-between gap-2 border-t border-blue-100 bg-blue-100/40 px-3 py-2">
+                <button @click="goPage(currentPage - 1)" :disabled="currentPage <= 1"
+                        class="rounded-lg bg-white px-3 py-2 text-sm font-medium text-blue-600 shadow-sm transition active:scale-95 disabled:opacity-40 disabled:active:scale-100">
+                    ‹ 上一页
+                </button>
+                <span class="text-xs font-medium text-gray-500">
+                    第 <b class="text-blue-600">${ currentPage }</b> / ${ totalPages } 页
+                </span>
+                <button @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages"
+                        class="rounded-lg bg-white px-3 py-2 text-sm font-medium text-blue-600 shadow-sm transition active:scale-95 disabled:opacity-40 disabled:active:scale-100">
+                    下一页 ›
+                </button>
             </div>
         </div>
-    </div>
 
- 
-
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-2xl font-bold text-blue-700">日常项目统计</h2>
-        <div class="flex gap-2">
-            <button @click="exportCSV" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm shadow-sm transition">导出 CSV</button>
-            <input type="file" ref="fileInput" @change="importCSV" class="hidden" accept=".csv">
-            <button @click="$refs.fileInput.click()" class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm shadow-sm transition">导入 CSV</button>
+        <!-- 整体趋势图 -->
+        <div class="mb-4">
+            <h3 class="mb-1 text-sm font-semibold text-gray-600">📈 整体趋势（全部日期）</h3>
+            <div class="relative h-56 sm:h-72">
+                <canvas id="overallChart"></canvas>
+            </div>
         </div>
+
+        <!-- 最近趋势图 -->
+        <div class="mb-4">
+            <h3 class="mb-1 text-sm font-semibold text-gray-600">📉 最近趋势（最近30天）</h3>
+            <div v-if="recentIntervalList.length" class="mb-1 text-xs text-gray-500">
+                最近间隔：<span v-for="(interval, idx) in recentIntervalList" :key="idx" class="mr-1">${ interval }天</span>
+            </div>
+            <div class="relative h-56 sm:h-72">
+                <canvas id="recentChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 主统计卡片 -->
+        <div v-if="overallStats" class="mb-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <h3 class="mb-2 text-lg font-semibold text-gray-700">📊 统计数据（${ project }）</h3>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">总记录条数：</span>
+                    <span class="font-bold text-blue-600">${ overallStats.totalRecords }</span>
+                </div>
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">有记录天数：</span>
+                    <span class="font-bold">${ overallStats.activeDays } 天</span>
+                </div>
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">整体频率：</span>
+                    <span class="font-bold">${ formatFrequency(overallStats.overallPerDay) }</span>
+                </div>
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">最近7天频率：</span>
+                    <span class="font-bold">${ formatFrequency(overallStats.recentPerDay) }</span>
+                    <span class="text-gray-500">（${ overallStats.recentRecords } 条）</span>
+                </div>
+            </div>
+        </div>
+        <div v-else class="mb-4 text-sm text-gray-400">暂无数据</div>
+
+        <!-- 单次执行特点 -->
+        <div v-if="overallStats && overallStats.isCountProject"
+             class="mb-4 rounded-2xl border border-yellow-200 bg-yellow-50 p-4">
+            <h3 class="mb-2 text-lg font-semibold text-yellow-800">⚡ 单次执行特点（基于 count 字段）</h3>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">总执行次数：</span>
+                    <span class="font-bold">${ overallStats.totalCountSum }</span>
+                </div>
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">平均每次执行：</span>
+                    <span class="font-bold">${ Math.round(overallStats.avgCountPerRecord) } 次</span>
+                </div>
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">有记录日平均总次数：</span>
+                    <span class="font-bold">${ Math.round(overallStats.avgCountPerActiveDay) } 次/天</span>
+                </div>
+                <div class="rounded-xl bg-white p-2.5 shadow-sm">
+                    <span class="text-gray-500">平均每天记录条数：</span>
+                    <span class="font-bold">${ Math.round(overallStats.avgRecordsPerActiveDay) } 条/天</span>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -139,7 +208,10 @@ createApp({
             remark: "",
             stats: [],
             squatOptions: [4, 5, 6, 7],
-            allProjects: ["downm", "ejec", "mountain-15"]
+            allProjects: ["downm", "ejec", "mountain-15"],
+            // 分页
+            currentPage: 1,
+            pageSize: 5
         }
     },
     computed: {
@@ -154,6 +226,14 @@ createApp({
             return this.stats
                 .filter(i => i.project === this.project && i.date >= startStr && i.date <= today)
                 .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+        },
+        // 当前页的数据
+        pagedWeekList() {
+            const start = (this.currentPage - 1) * this.pageSize;
+            return this.recentWeekList.slice(start, start + this.pageSize);
+        },
+        totalPages() {
+            return Math.max(1, Math.ceil(this.recentWeekList.length / this.pageSize));
         },
         overallStats() {
             const data = this.projectStats;
@@ -201,7 +281,6 @@ createApp({
                 last
             };
         },
-        // 最近30天有记录日期的间隔天数列表
         recentIntervalList() {
             const data = this.projectStats;
             if (!data.length) return [];
@@ -216,16 +295,27 @@ createApp({
             if (dates.length < 2) return [];
             const intervals = [];
             for (let i = 1; i < dates.length; i++) {
-                const diff = (this.parseDateUTC(dates[i]) - this.parseDateUTC(dates[i-1])) / 86400000;
+                const diff = (this.parseDateUTC(dates[i]) - this.parseDateUTC(dates[i - 1])) / 86400000;
                 intervals.push(diff);
             }
             return intervals;
         }
     },
     watch: {
-        project: 'drawCharts'
+        project() {
+            this.currentPage = 1;
+            this.$nextTick(() => this.drawCharts());
+        },
+        // 数据变化导致总页数变少时，自动回到最后一页
+        totalPages() {
+            if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+        }
     },
     methods: {
+        goPage(p) {
+            if (p < 1 || p > this.totalPages) return;
+            this.currentPage = p;
+        },
         formatDate(date) {
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -271,7 +361,7 @@ createApp({
             if (!file) return;
             const formData = new FormData();
             formData.append('file', file);
-            
+
             try {
                 const res = await axios.post('/api/daily_stats/import', formData);
                 alert(`成功导入 ${res.data.imported_rows} 条记录`);
@@ -287,7 +377,7 @@ createApp({
                 this.stats = (res.data || []).map(item => {
                     const [date = '1970-01-01', time = '00:00:00'] = (item._time || '').split(' ');
                     return { ...item, date, time, count: Number(item.count) || null };
-                }).sort((a, b) => 
+                }).sort((a, b) =>
                     `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`) || b.project.localeCompare(a.project)
                 );
 
@@ -304,12 +394,13 @@ createApp({
             if (!this.project) return;
             const payload = { project: this.project, remark: this.remark };
             if (this.project === 'ejec') payload.count = this.count;
-            
+
             try {
                 await axios.post('/api/daily_stats', payload);
                 this.remark = "";
                 if (this.project === 'ejec') this.count = 6;
                 await this.fetchStats();
+                this.currentPage = 1;   // 新增记录后回到第一页查看最新
             } catch {
                 alert("记录添加失败");
             }
@@ -320,7 +411,6 @@ createApp({
             await this.addRecord();
         },
         drawCharts() {
-            // 销毁旧图表
             if (window.overallChart?.destroy) window.overallChart.destroy();
             if (window.recentChart?.destroy) window.recentChart.destroy();
 
@@ -341,12 +431,9 @@ createApp({
             }
 
             const isEjec = this.project === 'ejec';
-            const allDates = this.generateDateRange(
-                [...new Set(projectData.map(i => i.date))].sort()[0],
-                [...new Set(projectData.map(i => i.date))].sort().slice(-1)[0]
-            );
+            const sortedDates = [...new Set(projectData.map(i => i.date))].sort();
+            const allDates = this.generateDateRange(sortedDates[0], sortedDates[sortedDates.length - 1]);
 
-            // 构建整体数据点（每日总次数或记录条数）
             const overallData = allDates.map(d => {
                 const dayRecords = projectData.filter(i => i.date === d);
                 if (!dayRecords.length) return null;
@@ -355,7 +442,6 @@ createApp({
                     : dayRecords.length;
             });
 
-            // 最近30天数据
             const today = this.localToday();
             const start30 = new Date();
             start30.setDate(start30.getDate() - 29);
@@ -369,7 +455,6 @@ createApp({
                     : dayRecords.length;
             });
 
-            // 绘制整体图表
             window.overallChart = new Chart(ctxOverall, {
                 type: 'line',
                 data: {
@@ -391,10 +476,7 @@ createApp({
                     plugins: {
                         tooltip: {
                             callbacks: {
-                                label: (ctx) => {
-                                    if (ctx.raw === null) return '无记录';
-                                    return `${ctx.raw} 次`;
-                                }
+                                label: (ctx) => ctx.raw === null ? '无记录' : `${ctx.raw} 次`
                             }
                         }
                     },
@@ -405,12 +487,10 @@ createApp({
                 }
             });
 
-            // 绘制最近趋势图，并在 tooltip 中显示间隔
             const intervalMap = {};
-            const activeRecentDates = recentDates.filter(d => {
-                const dayRecords = projectData.filter(i => i.date === d);
-                return dayRecords.length > 0;
-            });
+            const activeRecentDates = recentDates.filter(d =>
+                projectData.some(i => i.date === d)
+            );
             activeRecentDates.forEach((d, idx) => {
                 if (idx > 0) {
                     const diff = (this.parseDateUTC(d) - this.parseDateUTC(activeRecentDates[idx - 1])) / 86400000;

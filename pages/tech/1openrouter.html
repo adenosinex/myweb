@@ -1,0 +1,890 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenRouter 模型价格与热度监控</title>
+<style>
+:root{
+  --bg:#f5f7fb;--panel:#fff;--panel2:#f8fafc;
+  --text:#172033;--muted:#718096;--border:#e4eaf2;
+  --blue:#2563eb;--bluebg:#eff6ff;
+  --green:#059669;--greenbg:#ecfdf5;
+  --red:#dc2626;--redbg:#fef2f2;
+  --amber:#d97706;--amberbg:#fffbeb;
+  --radius:12px
+}
+[data-theme=dark]{
+  --bg:#101827;--panel:#192436;--panel2:#243146;
+  --text:#e5eaf3;--muted:#9aa9bd;--border:#34445c;
+  --blue:#85b4ff;--bluebg:#223958;
+  --green:#50deb0;--greenbg:#163c34;
+  --red:#ff9292;--redbg:#492729;
+  --amber:#ffca74;--amberbg:#443527
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,
+  "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif
+}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+a{text-decoration:none;color:var(--blue)}
+a:hover{text-decoration:underline}
+.hidden{display:none!important}
+.layout{display:flex;min-height:100vh}
+.sidebar{
+  width:225px;flex-shrink:0;background:var(--panel);
+  border-right:1px solid var(--border);padding:24px 14px
+}
+.brand{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:800;margin:0 6px 30px}
+.logo{background:#2563eb;color:#fff;border-radius:9px;padding:5px 7px}
+.nav{display:flex;flex-direction:column;gap:5px}
+.nav a{color:var(--muted);padding:11px 13px;border-radius:9px;font-weight:600}
+.nav a:hover,.nav a.active{background:var(--bluebg);color:var(--blue);text-decoration:none}
+.side-note{margin:30px 10px;color:var(--muted);font-size:12px}
+.main{flex:1;min-width:0;max-width:1600px;margin:0 auto;padding:28px}
+.topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+h1{font-size:23px;margin:0}
+h2{font-size:17px;margin:0 0 12px}
+.subtitle,.muted{color:var(--muted)}
+.small{font-size:12px}
+.mono{font-family:ui-monospace,Consolas,monospace}
+.actions,.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.btn,.input,.select{
+  background:var(--panel);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;min-height:37px;padding:8px 12px
+}
+.input:focus,.select:focus{outline:2px solid var(--bluebg);border-color:var(--blue)}
+.btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+.btn.danger{color:var(--red)}
+.btn.small{min-height:29px;padding:4px 10px;font-size:12px}
+.panel,.stat{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--radius);padding:19px;margin-bottom:16px
+}
+.panel-header{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:15px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{margin-bottom:16px;min-width:0}
+.stat-label{color:var(--muted);font-size:12px}
+.stat-value{font-size:23px;font-weight:800;overflow-wrap:anywhere;margin-top:5px}
+.stat-note{font-size:11px;color:var(--muted)}
+.toolbar{margin-bottom:14px}
+.toolbar .input{flex:1;min-width:180px;max-width:350px}
+.table-scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;text-align:left}
+th{color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap}
+th,td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:hover{background:var(--panel2)}
+tbody tr:last-child td{border-bottom:0}
+.model-name{font-weight:700}
+.model-id{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.price{font-family:ui-monospace,Consolas,monospace;font-weight:700;white-space:nowrap}
+.badge{display:inline-block;border-radius:20px;padding:3px 9px;background:var(--panel2);color:var(--muted);font-size:11px;font-weight:650;margin:2px}
+.badge.green{background:var(--greenbg);color:var(--green)}
+.badge.red{background:var(--redbg);color:var(--red)}
+.badge.amber{background:var(--amberbg);color:var(--amber)}
+.badge.blue{background:var(--bluebg);color:var(--blue)}
+.price-cell{border-radius:7px;padding:5px 7px;display:inline-block}
+.price-cell.free,.price-cell.low{background:var(--greenbg);color:var(--green)}
+.price-cell.high{background:var(--redbg);color:var(--red)}
+.price-cell .annotation{display:block;font-size:10px;font-family:inherit}
+.heat-wrap{min-width:115px}
+.heat-bar{height:5px;border-radius:4px;background:var(--border);margin-top:6px;overflow:hidden}
+.heat-fill{height:100%;background:var(--blue);border-radius:4px}
+.section{display:none}
+.section.active{display:block}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:12px;color:var(--muted);font-weight:600}
+.field .input,.field .select{width:100%}
+.kv{background:var(--panel2);border-radius:9px;padding:13px;overflow-wrap:anywhere}
+.kv .value{font-weight:700;margin-top:4px}
+.empty{padding:35px;text-align:center;color:var(--muted)}
+.notice{border-radius:9px;padding:11px 14px;background:var(--amberbg);color:var(--amber);margin-bottom:15px}
+.model-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border);padding:12px 0}
+.model-row:last-child{border-bottom:0}
+.model-row .field{flex:1;min-width:190px;margin:0}
+.chart{width:100%;height:190px}
+.chart-line{fill:none;stroke:var(--blue);stroke-width:2.5}
+.chart-grid{stroke:var(--border)}
+.toast{display:none;position:fixed;bottom:24px;right:24px;background:#172033;color:#fff;border-radius:9px;padding:13px 17px;z-index:50;max-width:340px}
+.toast.show{display:block}
+.mobile-list{display:none}
+.mobile-card{border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px}
+.mobile-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+@media(max-width:1100px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sidebar{width:195px}
+}
+@media(max-width:760px){
+  .layout{display:block}
+  .sidebar{width:100%;padding:12px;border-right:0;border-bottom:1px solid var(--border)}
+  .brand{margin:0 0 8px}
+  .nav{flex-direction:row;overflow:auto}
+  .nav a{white-space:nowrap;padding:8px 11px}
+  .side-note{display:none}
+  .main{padding:14px}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .table-scroll.overview-table{display:none}
+  .mobile-list{display:block}
+  .stats{gap:8px}
+  .stat{padding:13px}
+  .stat-value{font-size:19px}
+  .toolbar .input{max-width:none}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand"><span class="logo">OR</span> OpenRouter Monitor</div>
+  <nav class="nav">
+    <a href="#overview" data-page="overview">价格总览</a>
+    <a href="#popularity" data-page="popularity">模型热度</a>
+    <a href="#compare" data-page="compare">模型对比</a>
+    <a href="#settings" data-page="settings">模型管理</a>
+  </nav>
+  <div class="side-note">全平台公开热度 · 官方价格 · Provider 对比</div>
+</aside>
+
+<main class="main">
+  <header class="topbar">
+    <div>
+      <h1 id="page-title">模型价格总览</h1>
+      <div class="subtitle" id="page-subtitle">OpenRouter 模型监控</div>
+    </div>
+    <div class="actions">
+      <select id="currency" class="select">
+        <option value="cny">人民币</option>
+        <option value="usd">美元</option>
+        <option value="both">双币</option>
+      </select>
+      <button class="btn" id="theme">主题</button>
+      <button class="btn primary" id="refresh">立即刷新</button>
+    </div>
+  </header>
+
+  <div id="notice" class="notice hidden"></div>
+
+  <section id="page-overview" class="section">
+    <div class="stats">
+      <div class="stat"><div class="stat-label">监控模型</div><div class="stat-value" id="s-total">—</div><div class="stat-note">已配置模型</div></div>
+      <div class="stat"><div class="stat-label">正常模型</div><div class="stat-value" id="s-found">—</div><div class="stat-note">已获取价格</div></div>
+      <div class="stat"><div class="stat-label">最低输入价格</div><div class="stat-value" id="s-input">—</div><div class="stat-note">USD / 1M Tokens 换算</div></div>
+      <div class="stat"><div class="stat-label">进入热度榜</div><div class="stat-value" id="s-ranked">—</div><div class="stat-note">监控模型中已匹配榜单的数量</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div><h2>模型价格列表</h2><div class="muted small" id="updated">—</div></div>
+        <span id="status-badge" class="badge">加载中</span>
+      </div>
+      <div class="toolbar">
+        <input class="input" id="search" placeholder="搜索模型名称或 ID">
+        <select class="select" id="status-filter">
+          <option value="enabled">已启用</option>
+          <option value="all">全部</option>
+          <option value="found">有价格</option>
+          <option value="unranked">热度未上榜</option>
+          <option value="disabled">已禁用</option>
+        </select>
+        <select class="select" id="sort">
+          <option value="name">模型名称</option>
+          <option value="popularity">热度最高</option>
+          <option value="input_price">输入价格升序</option>
+          <option value="output_price">输出价格升序</option>
+          <option value="context_length">上下文降序</option>
+        </select>
+        <span class="muted small" id="count"></span>
+      </div>
+      <div class="table-scroll overview-table">
+        <table>
+          <thead><tr>
+            <th>模型</th><th>输入 / 1M</th><th>输出 / 1M</th>
+            <th>缓存读</th><th>上下文</th><th>7 日热度</th>
+            <th>状态</th><th></th>
+          </tr></thead>
+          <tbody id="models-body"></tbody>
+        </table>
+      </div>
+      <div class="mobile-list" id="models-mobile"></div>
+      <div class="empty hidden" id="empty-models">暂无模型</div>
+    </div>
+  </section>
+
+  <section id="page-popularity" class="section">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>模型受欢迎程度</h2>
+          <div class="muted small" id="pop-period"></div>
+        </div>
+        <a href="https://openrouter.ai/rankings" target="_blank" rel="noopener noreferrer">官方排行榜 ↗</a>
+      </div>
+      <p class="muted">
+        按 OpenRouter 公开模型 Token 用量衡量受欢迎程度。
+        统计最近 7 个完整 UTC 日的每日 Top 50 模型；
+        数据并非全平台精确请求次数。未上榜不代表没有调用。
+      </p>
+      <div id="pop-warning" class="notice hidden"></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>样本名次</th><th>模型</th><th>7 日已观测 Tokens</th>
+            <th>入榜天数</th><th>热度</th><th>价格 / 1M</th>
+          </tr></thead>
+          <tbody id="pop-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-compare" class="section">
+    <div class="panel">
+      <h2>模型价格与热度对比</h2>
+      <div class="grid2">
+        <div class="field"><label>模型 A</label><select id="compare-a" class="select"></select></div>
+        <div class="field"><label>模型 B</label><select id="compare-b" class="select"></select></div>
+      </div>
+      <div id="compare-result"></div>
+    </div>
+    <div class="panel">
+      <h2>Token 费用估算</h2>
+      <div class="grid2">
+        <div class="field"><label>输入 Tokens</label><input type="number" min="0" id="calc-in" class="input" value="1000000"></div>
+        <div class="field"><label>输出 Tokens</label><input type="number" min="0" id="calc-out" class="input" value="500000"></div>
+      </div>
+      <div id="calc-result"></div>
+    </div>
+  </section>
+
+  <section id="page-detail" class="section">
+    <div class="panel">
+      <div class="panel-header">
+        <a href="#overview" class="btn small">返回列表</a>
+        <a id="official-model" target="_blank" rel="noopener noreferrer">OpenRouter 官方模型页 ↗</a>
+      </div>
+      <h2 id="detail-name">加载中</h2>
+      <div id="detail-id" class="muted mono"></div>
+      <div class="grid3" id="detail-stats" style="margin-top:15px"></div>
+    </div>
+    <div class="panel">
+      <h2>模型介绍和能力</h2>
+      <div id="description" class="muted" style="white-space:pre-wrap"></div>
+      <div id="parameters" style="margin-top:14px"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>历史价格</h2>
+        <select id="history-field" class="select">
+          <option value="input_price">输入价格</option>
+          <option value="output_price">输出价格</option>
+          <option value="cache_read_price">缓存读价格</option>
+        </select>
+      </div>
+      <div id="history-chart"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div><h2>Provider 价格和性能</h2>
+          <div class="muted small">红色为价格明显偏高，绿色为免费或低价</div>
+        </div>
+        <span id="provider-count" class="muted small"></span>
+      </div>
+      <div class="toolbar">
+        <input id="provider-search" class="input" placeholder="搜索供应商">
+        <select id="provider-sort" class="select">
+          <option value="input_price">输入价格最低</option>
+          <option value="output_price">输出价格最低</option>
+          <option value="latency_ms">延迟最低</option>
+          <option value="throughput_tps">吞吐量最高</option>
+        </select>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>特殊供应商 / Provider</th><th>输入 / 1M</th>
+            <th>输出 / 1M</th><th>缓存读 / 1M</th>
+            <th>延迟</th><th>吞吐量</th><th>可用率</th>
+          </tr></thead>
+          <tbody id="provider-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-settings" class="section">
+    <div class="panel">
+      <h2>添加模型</h2>
+      <form id="add-form">
+        <div class="grid2">
+          <div class="field"><label>Model ID</label><input id="add-id" class="input" required placeholder="provider/model"></div>
+          <div class="field"><label>显示名称</label><input id="add-name" class="input" placeholder="可选"></div>
+        </div>
+        <label><input type="checkbox" id="add-enabled" checked> 启用</label>
+        <button class="btn primary" type="submit">添加</button>
+      </form>
+    </div>
+    <div class="panel">
+      <h2>模型管理</h2>
+      <div id="manage-list"></div>
+    </div>
+    <div class="panel">
+      <h2>系统与价格高亮规则</h2>
+      <form id="config-form">
+        <div class="grid2">
+          <div class="field"><label>美元兑人民币汇率</label><input id="c-rate" class="input" type="number" step="0.0001" required></div>
+          <div class="field"><label>自动刷新间隔（秒）</label><input id="c-interval" class="input" type="number" required></div>
+          <div class="field"><label>手动刷新冷却（秒）</label><input id="c-cooldown" class="input" type="number" required></div>
+          <div class="field"><label>API 超时（秒）</label><input id="c-timeout" class="input" type="number" required></div>
+          <div class="field"><label>低价判定：低于中位数倍数</label><input id="c-low" class="input" type="number" step="0.01" required></div>
+          <div class="field"><label>高价判定：高于中位数倍数</label><input id="c-high" class="input" type="number" step="0.01" required></div>
+          <div class="field"><label>高延迟阈值（ms）</label><input id="c-latency" class="input" type="number" required></div>
+          <div class="field"><label>低可用率阈值（%）</label><input id="c-uptime" class="input" type="number" required></div>
+          <div class="field"><label>网络代理（可选）</label><input id="c-proxy" class="input"></div>
+          <div class="field"><label>管理令牌（本标签页保存）</label><input id="admin-token" type="password" class="input"></div>
+        </div>
+        <button type="submit" class="btn primary">保存配置</button>
+        <button type="button" id="load-config" class="btn">重新读取</button>
+      </form>
+    </div>
+  </section>
+  <div class="muted small" style="text-align:center;margin:28px 0">
+    价格来源：OpenRouter Official API · 热度来源：OpenRouter Rankings Daily
+  </div>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+"use strict";
+
+const BASE="/openrouter";
+const $=s=>document.querySelector(s);
+const state={
+  models:[],rate:7.2,status:"empty",updated:null,error:null,
+  refreshing:false,popularity:{},page:"overview",
+  detailId:null,detail:null,history:[],
+  currency:localStorage.getItem("or-currency")||"cny",
+  theme:localStorage.getItem("or-theme")||"light",
+  token:sessionStorage.getItem("or-admin-token")||""
+};
+
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+
+const num=v=>(v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)))
+  ?Number(v):null;
+
+const compact=v=>{
+  const n=num(v);if(n===null)return "—";
+  const abs=Math.abs(n);
+  for(const [size,suffix] of [[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]]){
+    if(abs>=size)return (n/size).toFixed(2).replace(/\.?0+$/,"")+suffix;
+  }
+  return String(n);
+};
+
+const timeText=v=>v&&Number.isFinite(Date.parse(v))
+  ?new Date(v).toLocaleString("zh-CN",{hour12:false}):"—";
+
+function fmtMoney(value,unit=state.currency){
+  const n=num(value);if(n===null)return "—";
+  function fmt(v,prefix){
+    if(v===0)return prefix+"0";
+    if(Math.abs(v)<.0001)return prefix+v.toExponential(3);
+    if(Math.abs(v)<.01)return prefix+v.toFixed(6).replace(/0+$/,"").replace(/\.$/,"");
+    if(Math.abs(v)<1)return prefix+v.toFixed(4).replace(/0+$/,"").replace(/\.$/,"");
+    return prefix+v.toFixed(2);
+  }
+  const usd=fmt(n,"$"),cny=fmt(n*state.rate,"¥");
+  return unit==="usd"?usd:unit==="cny"?cny:usd+" / "+cny;
+}
+
+const badge=(text,type="")=>`<span class="badge ${type}">${esc(text)}</span>`;
+
+function notify(text){
+  const e=$("#toast");e.textContent=text;e.classList.add("show");
+  clearTimeout(notify.timer);
+  notify.timer=setTimeout(()=>e.classList.remove("show"),3800);
+}
+
+async function api(path,options={}){
+  const headers={
+    Accept:"application/json",
+    ...(state.token?{"X-Admin-Token":state.token}:{}),
+    ...(options.body?{"Content-Type":"application/json"}:{}),
+    ...(options.headers||{})
+  };
+  const resp=await fetch(BASE+"/"+path.replace(/^\/+/,""),{
+    ...options,headers,cache:"no-store"
+  });
+  let data;
+  try{data=await resp.json();}
+  catch{throw new Error("服务器未返回有效 JSON");}
+  if(!resp.ok)throw new Error(data.error||data.message||"HTTP "+resp.status);
+  return data;
+}
+
+const send=(path,method,body)=>api(path,{
+  method,...(body!==undefined?{body:JSON.stringify(body)}:{})
+});
+
+function route(){
+  const hash=location.hash.slice(1)||"overview";
+  let page=hash.startsWith("detail/")?"detail":hash;
+  if(!["overview","popularity","compare","settings","detail"].includes(page))
+    page="overview";
+  state.page=page;
+  document.querySelectorAll(".section").forEach(el=>
+    el.classList.toggle("active",el.id==="page-"+page));
+  document.querySelectorAll(".nav a").forEach(a=>
+    a.classList.toggle("active",a.dataset.page===page));
+  const titles={
+    overview:["模型价格总览","官方模型价格、缓存和公开热度"],
+    popularity:["模型受欢迎程度","最近 7 日公开流量样本"],
+    compare:["模型对比","价格、热度和调用费用估算"],
+    settings:["模型管理","模型设置与价格异常高亮规则"],
+    detail:["模型详情","价格历史、热度与 Provider"]
+  };
+  $("#page-title").textContent=titles[page][0];
+  $("#page-subtitle").textContent=titles[page][1];
+  if(page==="detail"){
+    let id;
+    try{id=decodeURIComponent(hash.slice(7));}
+    catch{id="";}
+    if(id!==state.detailId){state.detailId=id;loadDetail(id);}
+    else renderDetail();
+  }
+  if(page==="settings")renderManage();
+  if(page==="compare")renderCompare();
+  window.scrollTo(0,0);
+}
+
+const detailHref=m=>"#detail/"+encodeURIComponent(m.id);
+const officialHref=id=>"https://openrouter.ai/models/"+
+  id.split("/").map(encodeURIComponent).join("/");
+
+function popLabel(m){
+  const p=m.popularity||{};
+  if(p.status==="unavailable")return badge("暂无热度");
+  if(p.status!=="listed")return badge("未上榜");
+  return `<div class="heat-wrap">
+    <strong>${compact(p.tokens_7d)} Tokens</strong>
+    <div class="small muted">样本 #${p.rank} · ${p.listed_days} 天入榜</div>
+  </div>`;
+}
+
+function popTokens(m){
+  const p=m.popularity||{};
+  return p.status==="listed"?num(p.tokens_7d):null;
+}
+
+function sortedModels(){
+  const q=$("#search").value.toLowerCase().trim();
+  const status=$("#status-filter").value;
+  const sort=$("#sort").value;
+  const arr=state.models.filter(m=>{
+    if(q&&!((m.name||"").toLowerCase().includes(q)||m.id.toLowerCase().includes(q)))return false;
+    if(status==="enabled"&&!m.enabled)return false;
+    if(status==="found"&&!m.found)return false;
+    if(status==="disabled"&&m.enabled)return false;
+    if(status==="unranked"&&m.popularity?.status!=="unranked")return false;
+    return true;
+  });
+  arr.sort((a,b)=>{
+    if(sort==="name")return a.name.localeCompare(b.name,"zh-CN");
+    const x=sort==="popularity"?popTokens(a):num(a[sort]);
+    const y=sort==="popularity"?popTokens(b):num(b[sort]);
+    if(x===null&&y===null)return 0;
+    if(x===null)return 1;if(y===null)return -1;
+    return sort==="popularity"||sort==="context_length"?y-x:x-y;
+  });
+  return arr;
+}
+
+function renderOverview(){
+  const enabled=state.models.filter(m=>m.enabled);
+  const found=enabled.filter(m=>m.found);
+  const priceValues=found.map(m=>num(m.input_price)).filter(v=>v!==null);
+  $("#s-total").textContent=state.models.length;
+  $("#s-found").textContent=found.length;
+  $("#s-input").textContent=priceValues.length?fmtMoney(Math.min(...priceValues)):"—";
+  $("#s-ranked").textContent=state.popularity.available
+    ?enabled.filter(m=>m.popularity?.status==="listed").length:"—";
+  $("#updated").textContent="价格更新："+timeText(state.updated);
+  $("#status-badge").innerHTML=badge(
+    state.refreshing?"正在刷新":state.status==="updated"?"已更新":
+    state.status==="cached"?"缓存":"暂无数据",
+    state.refreshing?"blue":state.status==="updated"?"green":"amber"
+  );
+  const notice=$("#notice");
+  if(state.error){
+    notice.textContent="刷新失败："+state.error+"；已有价格缓存仍可使用。";
+    notice.classList.remove("hidden");
+  }else notice.classList.add("hidden");
+
+  const arr=sortedModels();
+  $("#count").textContent=arr.length+" / "+state.models.length+" 个";
+  $("#empty-models").classList.toggle("hidden",arr.length>0);
+  const status=m=>m.enabled?(m.found?badge("正常","green"):badge("未找到","red")):badge("已禁用");
+  $("#models-body").innerHTML=arr.map(m=>`
+    <tr>
+      <td><a class="model-name" href="${detailHref(m)}">${esc(m.name)}</a>
+        <div class="model-id mono">${esc(m.id)}</div></td>
+      <td class="price">${fmtMoney(m.input_price)}</td>
+      <td class="price">${fmtMoney(m.output_price)}</td>
+      <td class="price">${fmtMoney(m.cache_read_price)}</td>
+      <td>${compact(m.context_length)}</td>
+      <td>${popLabel(m)}</td>
+      <td>${status(m)}</td>
+      <td><a class="btn small" href="${detailHref(m)}">详情</a></td>
+    </tr>`).join("");
+  $("#models-mobile").innerHTML=arr.map(m=>`
+    <div class="mobile-card">
+      <div style="display:flex;justify-content:space-between;gap:10px">
+        <div><a class="model-name" href="${detailHref(m)}">${esc(m.name)}</a>
+        <div class="model-id">${esc(m.id)}</div></div>${status(m)}
+      </div>
+      <div class="mobile-grid">
+        <div><div class="muted small">输入</div><strong>${fmtMoney(m.input_price)}</strong></div>
+        <div><div class="muted small">输出</div><strong>${fmtMoney(m.output_price)}</strong></div>
+        <div><div class="muted small">7 日热度</div>${popLabel(m)}</div>
+        <div><div class="muted small">上下文</div>${compact(m.context_length)}</div>
+      </div>
+      <div style="text-align:right;margin-top:12px"><a href="${detailHref(m)}">查看详情 →</a></div>
+    </div>`).join("");
+  $("#refresh").disabled=state.refreshing;
+  $("#refresh").textContent=state.refreshing?"刷新中...":"立即刷新";
+}
+
+function renderPopularity(){
+  const info=state.popularity;
+  $("#pop-period").textContent=info.start_date&&info.end_date
+    ?`${info.start_date} 至 ${info.end_date} · 数据截至 ${timeText(info.as_of)}`
+    :"尚未获取热度数据";
+  const warning=$("#pop-warning");
+  if(!info.available||info.error){
+    warning.classList.remove("hidden");
+    warning.textContent=info.error
+      ?"热度数据提示："+info.error
+      :"未取得官方热度数据，请配置 OPENROUTER_API_KEY 并刷新。";
+  }else warning.classList.add("hidden");
+
+  const listed=state.models.filter(m=>m.popularity?.status==="listed")
+    .sort((a,b)=>popTokens(b)-popTokens(a));
+  const max=Math.max(...listed.map(m=>popTokens(m)||0),1);
+  $("#pop-body").innerHTML=listed.length?listed.map(m=>{
+    const p=m.popularity;
+    const percentage=Math.max(1,100*(p.tokens_7d/max));
+    return `<tr>
+      <td>${badge("#"+p.rank,"blue")}</td>
+      <td><a class="model-name" href="${detailHref(m)}">${esc(m.name)}</a>
+          <div class="model-id">${esc(m.id)}</div></td>
+      <td class="price">${compact(p.tokens_7d)}</td>
+      <td>${p.listed_days} / 7</td>
+      <td style="min-width:120px"><div class="heat-bar">
+        <div class="heat-fill" style="width:${percentage}%"></div>
+      </div></td>
+      <td>${fmtMoney(m.input_price)}</td>
+    </tr>`;
+  }).join(""):`<tr><td colspan="6" class="empty">暂无已匹配的热度榜模型</td></tr>`;
+}
+
+function updateCompare(){
+  const models=state.models.filter(m=>m.enabled&&m.found);
+  const a=$("#compare-a"),b=$("#compare-b");
+  const av=a.value,bv=b.value;
+  const options=models.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+  a.innerHTML=options;b.innerHTML=options;
+  if(models.some(m=>m.id===av))a.value=av;
+  if(models.some(m=>m.id===bv))b.value=bv;
+  else if(models.length>1)b.selectedIndex=1;
+}
+
+function renderCompare(){
+  const a=state.models.find(m=>m.id===$("#compare-a").value);
+  const b=state.models.find(m=>m.id===$("#compare-b").value);
+  if(!a||!b){
+    $("#compare-result").innerHTML="<div class='empty'>暂无可比较的模型</div>";
+    $("#calc-result").innerHTML="";return;
+  }
+  const rows=[
+    ["输入价格 / 1M","input_price"],
+    ["输出价格 / 1M","output_price"],
+    ["缓存读 / 1M","cache_read_price"],
+    ["上下文","context_length"],
+    ["7 日已观测 Tokens","popularity"]
+  ];
+  $("#compare-result").innerHTML=`<div class="table-scroll"><table>
+    <thead><tr><th>指标</th><th>${esc(a.name)}</th><th>${esc(b.name)}</th></tr></thead>
+    <tbody>${rows.map(([label,key])=>{
+      const display=m=>key==="popularity"?(popTokens(m)===null?"未上榜/暂无数据":compact(popTokens(m)))
+        :key==="context_length"?compact(m.context_length):fmtMoney(m[key]);
+      return `<tr><td>${label}</td><td>${display(a)}</td><td>${display(b)}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+  const input=Number($("#calc-in").value),output=Number($("#calc-out").value);
+  if(!Number.isFinite(input)||!Number.isFinite(output)||input<0||output<0){
+    $("#calc-result").textContent="Token 数量必须为非负数";return;
+  }
+  const cost=m=>{
+    const x=num(m.input_price),y=num(m.output_price);
+    return x===null||y===null?null:(x*input+y*output)/1e6;
+  };
+  $("#calc-result").innerHTML=`<div class="grid2">
+    ${[a,b].map(m=>`<div class="stat"><div class="stat-label">${esc(m.name)}</div>
+    <div class="stat-value">${fmtMoney(cost(m))}</div></div>`).join("")}
+    </div><p class="small muted">仅估算文本输入及输出 Tokens 费用。</p>`;
+}
+
+async function loadDetail(id){
+  $("#detail-name").textContent="加载中...";
+  state.detail=null;state.history=[];
+  try{
+    const [d,h]=await Promise.all([
+      api("api/models/"+encodeURIComponent(id)),
+      api("api/history/"+encodeURIComponent(id))
+    ]);
+    if(id!==state.detailId)return;
+    state.detail=d.model;state.history=h.history||[];
+    renderDetail();
+  }catch(e){$("#detail-name").textContent="加载失败："+e.message;}
+}
+
+function renderDetail(){
+  const m=state.detail;if(!m)return;
+  $("#detail-name").textContent=m.name;
+  $("#detail-id").textContent=m.id;
+  $("#official-model").href=officialHref(m.id);
+  const p=m.popularity||{};
+  const fields=[
+    ["输入价格 / 1M",fmtMoney(m.input_price)],
+    ["输出价格 / 1M",fmtMoney(m.output_price)],
+    ["缓存读价格 / 1M",fmtMoney(m.cache_read_price)],
+    ["上下文",compact(m.context_length)],
+    ["7 日模型热度",p.status==="listed"?compact(p.tokens_7d)+" Tokens":p.status==="unranked"?"未上榜":"暂无数据"],
+    ["热度样本名次",p.status==="listed"?"#"+p.rank:"—"],
+    ["入榜天数",p.status==="listed"?p.listed_days+" / 7":"—"],
+    ["模型架构",m.architecture||"—"]
+  ];
+  $("#detail-stats").innerHTML=fields.map(([k,v])=>`
+    <div class="kv"><div class="muted small">${esc(k)}</div>
+      <div class="value">${esc(v)}</div></div>`).join("");
+  $("#description").textContent=m.description||"暂无介绍";
+  $("#parameters").innerHTML=(m.supported_parameters||[])
+    .map(x=>badge(x,"blue")).join("")||"暂无参数信息";
+  renderHistory();renderProviders();
+}
+
+function renderHistory(){
+  const key=$("#history-field").value;
+  const data=state.history.filter(p=>num(p[key])!==null);
+  if(!data.length){$("#history-chart").innerHTML="<div class='empty'>暂无历史数据</div>";return;}
+  const values=data.map(p=>Number(p[key]));
+  let lo=Math.min(...values),hi=Math.max(...values);
+  if(lo===hi){const padding=Math.max(Math.abs(lo)*.1,.001);lo-=padding;hi+=padding;}
+  const W=800,H=190,pad=25;
+  const x=i=>pad+i*(W-pad*2)/Math.max(data.length-1,1);
+  const y=v=>pad+(hi-v)/(hi-lo)*(H-pad*2);
+  const points=data.map((p,i)=>`${x(i)},${y(values[i])}`).join(" ");
+  $("#history-chart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">
+    ${[0,1,2,3,4].map(i=>`<line class="chart-grid" x1="${pad}" x2="${W-pad}" y1="${pad+i*(H-pad*2)/4}" y2="${pad+i*(H-pad*2)/4}"/>`).join("")}
+    <polyline class="chart-line" points="${points}"/>
+    ${data.map((p,i)=>`<circle cx="${x(i)}" cy="${y(values[i])}" r="3" fill="var(--blue)">
+      <title>${esc(p.time)}: ${values[i]}</title></circle>`).join("")}
+    </svg><div class="small muted">最低 ${fmtMoney(Math.min(...values))} · 最高 ${fmtMoney(Math.max(...values))}</div>`;
+}
+
+function priceCell(p,key){
+  const flag=p.price_flags?.[key]||"normal";
+  const texts={free:"免费",low:"显著低价",high:"显著高价"};
+  const label=texts[flag];
+  return `<span class="price-cell ${esc(flag)}">
+    <span class="price">${fmtMoney(p[key])}</span>
+    ${label?`<span class="annotation">${label}</span>`:""}
+  </span>`;
+}
+
+function renderProviders(){
+  const raw=Array.isArray(state.detail?.providers)?state.detail.providers:[];
+  const q=$("#provider-search").value.toLowerCase().trim();
+  const sort=$("#provider-sort").value;
+  const list=raw.filter(p=>(p.name||"").toLowerCase().includes(q));
+  list.sort((a,b)=>{
+    const x=num(a[sort]),y=num(b[sort]);
+    if(x===null&&y===null)return 0;
+    if(x===null)return 1;if(y===null)return -1;
+    return sort==="throughput_tps"?y-x:x-y;
+  });
+  $("#provider-count").textContent=list.length+" / "+raw.length;
+  $("#provider-body").innerHTML=list.length?list.map(p=>`
+    <tr>
+      <td><strong>${esc(p.name)}</strong>
+        <div class="model-id">${esc(p.quantization||"")} ${esc(p.tag||"")}</div>
+        <div>${(p.special_tags||[]).map(t=>badge(t,t==="高价异常"?"red":t==="高延迟"||t==="低可用率"?"amber":"green")).join("")}</div>
+      </td>
+      <td>${priceCell(p,"input_price")}</td>
+      <td>${priceCell(p,"output_price")}</td>
+      <td>${priceCell(p,"cache_read_price")}</td>
+      <td>${num(p.latency_ms)===null?"—":p.latency_ms+" ms"}</td>
+      <td>${num(p.throughput_tps)===null?"—":p.throughput_tps+" tok/s"}</td>
+      <td>${num(p.uptime_1d)===null?"—":p.uptime_1d+"%"}</td>
+    </tr>`).join(""):`<tr><td colspan="7" class="empty">暂无供应商数据</td></tr>`;
+}
+
+function renderManage(){
+  $("#manage-list").innerHTML=state.models.map(m=>`
+    <div class="model-row" data-id="${esc(m.id)}">
+      <label><input type="checkbox" class="m-enabled" ${m.enabled?"checked":""}> 启用</label>
+      <div class="field"><input class="input m-name" value="${esc(m.name)}">
+      <span class="small muted mono">${esc(m.id)}</span></div>
+      <button type="button" class="btn small m-save">保存</button>
+      <button type="button" class="btn small danger m-delete">删除</button>
+    </div>`).join("")||"<div class='empty'>暂无模型</div>";
+}
+
+$("#manage-list").addEventListener("click",async e=>{
+  const btn=e.target.closest("button");if(!btn)return;
+  const row=btn.closest("[data-id]");if(!row)return;
+  const id=row.dataset.id,path="api/models/"+encodeURIComponent(id);
+  if(btn.classList.contains("m-delete")){
+    if(!confirm("确定删除 "+id+"？"))return;
+    try{await send(path,"DELETE");await loadModels();notify("已删除");}
+    catch(err){notify(err.message);}
+  }
+  if(btn.classList.contains("m-save")){
+    try{
+      await send(path,"PUT",{
+        name:row.querySelector(".m-name").value.trim(),
+        enabled:row.querySelector(".m-enabled").checked
+      });
+      await loadModels();notify("保存成功");
+    }catch(err){notify(err.message);}
+  }
+});
+
+$("#add-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{
+    await send("api/models","POST",{
+      id:$("#add-id").value.trim(),
+      name:$("#add-name").value.trim(),
+      enabled:$("#add-enabled").checked
+    });
+    e.target.reset();$("#add-enabled").checked=true;
+    await loadModels();notify("添加成功，请刷新价格");
+  }catch(err){notify(err.message);}
+});
+
+const configMap={
+  "usd_cny_rate":"c-rate",
+  "refresh_interval_seconds":"c-interval",
+  "manual_refresh_cooldown_seconds":"c-cooldown",
+  "api_timeout_seconds":"c-timeout",
+  "low_price_ratio":"c-low",
+  "high_price_ratio":"c-high",
+  "latency_warning_ms":"c-latency",
+  "uptime_warning_pct":"c-uptime",
+  "proxy":"c-proxy"
+};
+
+async function loadConfig(){
+  try{
+    const data=await api("api/config");
+    Object.entries(configMap).forEach(([key,id])=>{
+      $("#"+id).value=data.settings[key]??"";
+    });
+  }catch(err){notify("读取配置失败："+err.message);}
+}
+
+$("#config-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const body={};
+  Object.entries(configMap).forEach(([key,id])=>{
+    body[key]=key==="proxy"?$("#"+id).value.trim():Number($("#"+id).value);
+  });
+  try{
+    await send("api/config","POST",body);
+    await loadModels();notify("配置已保存");
+  }catch(err){notify(err.message);}
+});
+$("#load-config").addEventListener("click",loadConfig);
+$("#admin-token").value=state.token;
+$("#admin-token").addEventListener("change",e=>{
+  state.token=e.target.value;
+  sessionStorage.setItem("or-admin-token",state.token);
+  loadConfig();
+});
+
+async function loadModels(){
+  const d=await api("api/models");
+  state.models=Array.isArray(d.models)?d.models:[];
+  state.rate=Number(d.usd_cny_rate)||7.2;
+  state.status=d.status||"empty";
+  state.updated=d.updated_at||null;
+  state.error=d.last_error||null;
+  state.refreshing=!!d.refreshing;
+  state.popularity=d.popularity||{};
+  renderOverview();renderPopularity();updateCompare();renderCompare();
+  if(state.page==="settings")renderManage();
+}
+
+async function poll(){
+  try{
+    const d=await api("api/status");
+    if(d.updated_at!==state.updated||
+       !!d.refresh?.running!==state.refreshing||
+       d.last_error!==state.error){
+      await loadModels();
+      if(state.page==="detail"&&state.detailId){
+        await loadDetail(state.detailId);
+      }
+    }
+  }catch(err){console.warn("同步失败",err);}
+}
+
+$("#refresh").addEventListener("click",async()=>{
+  try{
+    const d=await api("api/refresh",{method:"POST"});
+    state.refreshing=true;renderOverview();
+    notify(d.message||"开始刷新");
+  }catch(err){notify(err.message);}
+});
+["search","status-filter","sort"].forEach(id=>
+  $("#"+id).addEventListener("input",renderOverview));
+["compare-a","compare-b","calc-in","calc-out"].forEach(id=>
+  $("#"+id).addEventListener("input",renderCompare));
+["provider-search","provider-sort"].forEach(id=>
+  $("#"+id).addEventListener("input",renderProviders));
+$("#history-field").addEventListener("change",renderHistory);
+
+$("#currency").value=state.currency;
+$("#currency").addEventListener("change",e=>{
+  state.currency=e.target.value;
+  localStorage.setItem("or-currency",state.currency);
+  renderOverview();renderPopularity();renderCompare();renderDetail();
+});
+document.documentElement.dataset.theme=state.theme;
+$("#theme").addEventListener("click",()=>{
+  state.theme=state.theme==="dark"?"light":"dark";
+  document.documentElement.dataset.theme=state.theme;
+  localStorage.setItem("or-theme",state.theme);
+});
+window.addEventListener("hashchange",route);
+
+(async()=>{
+  route();
+  try{await loadModels();}catch(err){notify("连接后端失败："+err.message);}
+  if(state.page==="settings")loadConfig();
+  setInterval(poll,8000);
+})();
+})();
+</script>
+</body>
+</html>

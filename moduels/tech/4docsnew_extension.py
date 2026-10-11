@@ -16,6 +16,10 @@ DOCS_DIR = 'db/docsnew_data'
 INBOX_DIR = os.path.join(DOCS_DIR, 'inbox')
 ARCHIVE_DIR = os.path.join(DOCS_DIR, 'archive')
 
+# 【新增】回收站：刻意放在 DOCS_DIR 之外，
+# 避免 build_memory_index 的 os.walk 再次扫描到已删除文件
+TRASH_DIR = DOCS_DIR + '_trash'
+
 MAX_FILES_PER_FOLDER = 100
 
 # =========================================================
@@ -24,7 +28,7 @@ MAX_FILES_PER_FOLDER = 100
 
 FILE_INDEX = {}
 
-for d in [DOCS_DIR, INBOX_DIR, ARCHIVE_DIR]:
+for d in [DOCS_DIR, INBOX_DIR, ARCHIVE_DIR, TRASH_DIR]:
     os.makedirs(d, exist_ok=True)
 
 
@@ -40,6 +44,30 @@ def timestamp_to_string(ts):
     if not ts:
         return ''
     return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def sanitize_doc_id(value: str) -> str:
+    """
+    【新增】清洗文档 ID：
+    - 允许中文、字母、数字、下划线、短横、点、空格
+    - 移除路径分隔符与控制字符
+    - 去掉首尾空格和点
+    """
+    if value is None:
+        return ''
+
+    value = str(value).strip()
+
+    # 仅取文件名部分
+    value = os.path.basename(value)
+
+    # 移除危险字符
+    value = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '', value)
+
+    # 去掉首尾的点、空格
+    value = value.strip(' .')
+
+    return value
 
 
 def get_target_folder(base_dir):
@@ -789,7 +817,6 @@ def get_document(doc_id):
 # =========================================================
 # 保存
 # =========================================================
-
 @document_bp.route(
     '/docapi/document/save',
     methods=['POST']
@@ -803,10 +830,10 @@ def save_document():
     data = request.json or {}
 
     doc_id = data.get('id')
-    raw_content = data.get(
-        'content',
-        ''
-    )
+    raw_content = data.get('content', '')
+
+    # ★ 新增：接收客户端传来的创建时间
+    client_created_time = data.get('created_time')
 
     if not doc_id:
         return jsonify({
@@ -875,30 +902,28 @@ def save_document():
 
     now = now_timestamp()
 
+    # ★ 修改：创建时间优先级
+    #   已有文档 → 用索引里的 created_time，再退到请求值，最后 now
+    #   新文档   → 用请求带来的 created_time，没有才用 now
     if existing_doc:
 
-        # 已存在文档：
-        # 必须保持原 created_time
         created_time = int(
-            existing_doc.get(
-                'created_time'
-            )
+            existing_doc.get('created_time')
+            or client_created_time
             or now
         )
 
     else:
 
-        # 新文档第一次保存
-        created_time = now
+        try:
+            created_time = int(client_created_time) if client_created_time else now
+        except (TypeError, ValueError):
+            created_time = now
 
-    meta['id'] = meta.get(
-        'id',
-        doc_id
-    )
+    # ★ 修改：始终以请求参数为准，避免 content 里带的旧 id 覆盖
+    meta['id'] = doc_id
 
-    meta['created_time'] = (
-        created_time
-    )
+    meta['created_time'] = created_time
 
     meta['updated_time'] = now
 
@@ -941,6 +966,250 @@ def save_document():
             '保存成功',
         'meta':
             FILE_INDEX[doc_id]
+    })
+# =========================================================
+# 【新增】重命名（修复前端已调用但后端缺失的接口）
+# =========================================================
+
+@document_bp.route(
+    '/docapi/document/rename',
+    methods=['POST']
+)
+def rename_document():
+
+    data = request.json or {}
+
+    old_id = data.get('old_id')
+    new_id = data.get('new_id')
+
+    if not old_id or not new_id:
+        return jsonify({
+            'error': '缺少 old_id 或 new_id'
+        }), 400
+
+    old_id = str(old_id).strip()
+    new_id = sanitize_doc_id(new_id)
+
+    if not new_id:
+        return jsonify({
+            'error': '非法的文件名'
+        }), 400
+
+    if new_id == old_id:
+        # 没有实际变化，直接返回当前状态
+        doc_info = FILE_INDEX.get(old_id)
+
+        if not doc_info:
+            return jsonify({
+                'error': '文档不存在'
+            }), 404
+
+        return jsonify({
+            'message': 'ID 未变化',
+            'old_id': old_id,
+            'new_id': new_id,
+            'meta': doc_info
+        })
+
+    # 冲突检测
+    if new_id in FILE_INDEX:
+        return jsonify({
+            'error': f'ID「{new_id}」已存在'
+        }), 409
+
+    doc_info = FILE_INDEX.get(old_id)
+
+    if not doc_info:
+        return jsonify({
+            'error': '文档不存在'
+        }), 404
+
+    old_full_path = os.path.join(
+        DOCS_DIR,
+        doc_info['path']
+    )
+
+    if not os.path.exists(old_full_path):
+        return jsonify({
+            'error': '物理文件丢失'
+        }), 404
+
+    # -----------------------------------------------------
+    # 读取并改写 frontmatter
+    # -----------------------------------------------------
+
+    with open(
+        old_full_path,
+        'r',
+        encoding='utf-8'
+    ) as f:
+        raw_content = f.read()
+
+    meta, pure_content = parse_frontmatter(
+        raw_content
+    )
+
+    now = now_timestamp()
+
+    created_time = int(
+        meta.get('created_time')
+        or doc_info.get('created_time')
+        or now
+    )
+
+    meta['id'] = new_id
+    meta['created_time'] = created_time
+    meta['updated_time'] = now
+    meta['updated'] = datetime.fromtimestamp(
+        now
+    ).strftime('%Y-%m-%d %H:%M:%S')
+
+    final_content = build_frontmatter(
+        meta,
+        pure_content
+    )
+
+    # -----------------------------------------------------
+    # 同目录下使用新文件名
+    # -----------------------------------------------------
+
+    old_dir = os.path.dirname(old_full_path)
+    new_full_path = os.path.join(
+        old_dir,
+        f'{new_id}.md'
+    )
+
+    if (
+        os.path.abspath(new_full_path)
+        != os.path.abspath(old_full_path)
+        and os.path.exists(new_full_path)
+    ):
+        return jsonify({
+            'error': f'目标文件 {new_id}.md 已存在'
+        }), 409
+
+    try:
+
+        with open(
+            new_full_path,
+            'w',
+            encoding='utf-8'
+        ) as f:
+            f.write(final_content)
+
+        # 若路径不同则删除旧文件
+        if os.path.abspath(new_full_path) != os.path.abspath(old_full_path):
+            try:
+                os.remove(old_full_path)
+            except Exception as e:
+                print(f'删除旧文件失败 {old_full_path}: {e}')
+
+    except Exception as e:
+
+        print(f'重命名失败 {old_full_path} -> {new_full_path}: {e}')
+
+        return jsonify({
+            'error': f'重命名失败: {e}'
+        }), 500
+
+    # -----------------------------------------------------
+    # 更新索引
+    # -----------------------------------------------------
+
+    new_rel_path = os.path.relpath(
+        new_full_path,
+        DOCS_DIR
+    )
+
+    FILE_INDEX.pop(old_id, None)
+
+    FILE_INDEX[new_id] = build_doc_index(
+        new_full_path,
+        new_rel_path,
+        final_content,
+        meta
+    )
+
+    return jsonify({
+        'message': '重命名成功',
+        'old_id': old_id,
+        'new_id': new_id,
+        'meta': FILE_INDEX[new_id]
+    })
+
+
+# =========================================================
+# 【新增】删除（软删除 → 回收站）
+# =========================================================
+
+@document_bp.route(
+    '/docapi/document/delete',
+    methods=['POST']
+)
+def delete_document():
+
+    data = request.json or {}
+
+    doc_id = data.get('id')
+
+    if not doc_id:
+        return jsonify({
+            'error': '缺少文档ID'
+        }), 400
+
+    doc_info = FILE_INDEX.get(doc_id)
+
+    if not doc_info:
+        return jsonify({
+            'error': '文档不存在'
+        }), 404
+
+    full_path = os.path.join(
+        DOCS_DIR,
+        doc_info['path']
+    )
+
+    # 物理文件已丢失：只清理索引
+    if not os.path.exists(full_path):
+
+        FILE_INDEX.pop(doc_id, None)
+
+        return jsonify({
+            'message': '文件已不存在，索引已清理',
+            'id': doc_id
+        })
+
+    os.makedirs(TRASH_DIR, exist_ok=True)
+
+    # 用 时间戳 + 原文件名 命名，避免重名覆盖
+    trash_name = (
+        f'{now_timestamp()}_'
+        f'{secure_filename(os.path.basename(full_path))}'
+    )
+
+    trash_path = os.path.join(
+        TRASH_DIR,
+        trash_name
+    )
+
+    try:
+
+        shutil.move(full_path, trash_path)
+
+    except Exception as e:
+
+        print(f'删除文档失败 {full_path}: {e}')
+
+        return jsonify({
+            'error': f'删除失败: {e}'
+        }), 500
+
+    FILE_INDEX.pop(doc_id, None)
+
+    return jsonify({
+        'message': '已移入回收站',
+        'id': doc_id,
+        'trash': trash_name
     })
 
 
@@ -1452,7 +1721,7 @@ def search_documents():
 
         if q.startswith('tag:'):
 
-            tag_target =q_lower.replace(
+            tag_target = q_lower.replace(
                     'tag:',
                     ''
                 ).strip()
@@ -1506,4 +1775,123 @@ def search_documents():
     return jsonify({
         'results':
             results
+    })
+# =========================================================
+# 统计接口
+# =========================================================
+
+import re as _re
+
+_L1_CODES = {
+    'pol','his','mil','eco','soc','psy','know','exe','med','out',
+    'tec','fan','cul','dai','adu','unk',
+}
+_CAT_P1 = _re.compile(r'^\[([a-z]{2,8})\s+([a-z]{2,8})\]\s*(.*)$', _re.I)
+_CAT_P2 = _re.compile(r'^([a-z]{2,8})\s+([a-z]{2,8})\s+(.+)$', _re.I)
+
+
+def _parse_category(title):
+    t = str(title or '').strip()
+    m = _CAT_P1.match(t)
+    if m:
+        return (m.group(1).lower(), m.group(2).lower(),
+                m.group(3).strip() or '未命名笔记')
+    m = _CAT_P2.match(t)
+    if m and m.group(1).lower() in _L1_CODES:
+        return m.group(1).lower(), m.group(2).lower(), m.group(3).strip()
+    return 'unk', '', (t or '未命名笔记')
+
+
+@document_bp.route('/docapi/stats', methods=['GET'])
+def get_stats():
+    """汇总统计：总览、分类、时间、最长/最短。"""
+    now = now_timestamp()
+    day_ago   = now - 86400
+    week_ago  = now - 7 * 86400
+    month_ago = now - 30 * 86400
+
+    total_docs = len(FILE_INDEX)
+    total_words = 0
+    pinned = 0
+    archived = 0
+    today_new = week_new = month_new = 0
+
+    cat_map = {}          # code -> {count, words, max, min, children{}}
+    all_items = []
+
+    for doc in FILE_INDEX.values():
+        title = doc.get('title', '')
+        l1, l2, clean = _parse_category(title)
+        wc = int(doc.get('word_count', 0) or 0)
+
+        total_words += wc
+        if doc.get('is_pinned') == 1:
+            pinned += 1
+        if doc.get('status') == 'archive':
+            archived += 1
+
+        ct = int(doc.get('created_time', 0) or 0)
+        if ct >= day_ago:   today_new += 1
+        if ct >= week_ago:  week_new += 1
+        if ct >= month_ago: month_new += 1
+
+        s = cat_map.setdefault(l1, {
+            'code': l1, 'count': 0, 'words': 0,
+            'max': 0, 'min': 0, 'children': {},
+        })
+        s['count'] += 1
+        s['words'] += wc
+        if wc > s['max']: s['max'] = wc
+        if s['min'] == 0 or wc < s['min']: s['min'] = wc
+
+        if l2:
+            c = s['children'].setdefault(l2, {
+                'code': l2, 'count': 0, 'words': 0,
+            })
+            c['count'] += 1
+            c['words'] += wc
+
+        all_items.append({
+            'id': doc['id'],
+            'title': clean,
+            'words': wc,
+            'created_time': ct,
+            'update_time': int(doc.get('update_time', 0) or 0),
+        })
+
+    # 平均
+    categories = []
+    for code, s in cat_map.items():
+        s['avg'] = round(s['words'] / s['count'], 1) if s['count'] else 0
+        s['children'] = [
+            {**c, 'avg': round(c['words'] / c['count'], 1) if c['count'] else 0}
+            for c in sorted(s['children'].values(), key=lambda x: -x['count'])
+        ]
+        categories.append(s)
+    categories.sort(key=lambda x: -x['count'])
+
+    top_longest = sorted(all_items, key=lambda x: -x['words'])[:5]
+    top_shortest = sorted(
+        [x for x in all_items if x['words'] > 0],
+        key=lambda x: x['words']
+    )[:5]
+
+    return jsonify({
+        'total': {
+            'docs': total_docs,
+            'words': total_words,
+            'avg_words': round(total_words / total_docs, 1) if total_docs else 0,
+            'pinned': pinned,
+            'archived': archived,
+            'active': total_docs - archived,
+        },
+        'time': {
+            'today': today_new,
+            'week': week_new,
+            'month': month_new,
+        },
+        'categories': categories,
+        'top_longest': top_longest,
+        'top_shortest': top_shortest,
+        'generated_at': now,
     })

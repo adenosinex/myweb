@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>阅读模式 · 个人知识笔记</title>
+
+    <script>window.API_BASE = "";</script>
+
+    <script src="/static/cdn/vue3.5.global.prod.js"></script>
+    <link rel="stylesheet" href="/static/cdn/element-plus2.14.3.css">
+    <script src="/static/cdn/element-plus2.14.3.js"></script>
+    <script src="/static/cdn/element.vue.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        html, body, #app { width: 100%; height: 100%; margin: 0; }
+        body {
+            overflow: hidden; background: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            -webkit-font-smoothing: antialiased; color: #1e293b;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        .layout { display: flex; height: 100%; width: 100%; }
+        .sidebar {
+            width: 300px; min-width: 300px; background: #fff;
+            border-right: 1px solid #e5e7eb;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .main {
+            flex: 1; min-width: 0; display: flex; flex-direction: column;
+            overflow: hidden; background: #f8fafc;
+        }
+
+        .topbar {
+            height: 56px; flex-shrink: 0; background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex; align-items: center; gap: 10px;
+            padding: 0 14px; z-index: 20;
+        }
+        .brand {
+            font-weight: 700; font-size: 15px; color: #334155;
+            display: flex; align-items: center; gap: 6px; white-space: nowrap;
+        }
+        .search-wrap { flex: 1; max-width: 420px; min-width: 120px; }
+        .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .stat-mini { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+
+        .view-switch {
+            display: flex; align-items: center; gap: 0;
+            border: 1px solid #e2e8f0; border-radius: 6px;
+            overflow: hidden; flex-shrink: 0;
+        }
+        .view-switch-btn {
+            padding: 4px 10px; font-size: 12px; color: #64748b;
+            background: #fff; cursor: pointer; user-select: none;
+            transition: all 0.12s; border: none;
+        }
+        .view-switch-btn:hover { background: #f8fafc; color: #334155; }
+        .view-switch-btn.active {
+            background: #eff6ff; color: #1d4ed8; font-weight: 600;
+        }
+        .view-switch-btn + .view-switch-btn { border-left: 1px solid #e2e8f0; }
+
+        .sidebar-head {
+            padding: 12px 14px 10px; flex-shrink: 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .sidebar-head-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 8px;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; color: #64748b;
+            letter-spacing: 0.4px;
+        }
+        .stat-btn {
+            font-size: 11px; color: #2563eb; cursor: pointer;
+            padding: 2px 8px; border-radius: 4px; background: #eff6ff;
+            border: 1px solid #dbeafe; user-select: none;
+            white-space: nowrap;
+        }
+        .stat-btn:hover { background: #dbeafe; }
+
+        .sidebar-summary {
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+        }
+        .sum-item {
+            background: #f8fafc; border-radius: 6px;
+            padding: 6px 8px; text-align: center;
+        }
+        .sum-value {
+            font-size: 14px; font-weight: 700; color: #1e293b;
+            line-height: 1.2;
+        }
+        .sum-label { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+
+        .sidebar-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; }
+
+        .cat-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 10px; border-radius: 6px;
+            cursor: pointer; user-select: none;
+            font-size: 13px; color: #334155;
+            transition: background 0.12s;
+        }
+        .cat-item:hover { background: #f1f5f9; }
+        .cat-item.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+        .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .cat-name {
+            flex: 1; min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .cat-name small {
+            color: #94a3b8; font-weight: 400; margin-left: 4px; font-size: 10px;
+        }
+        .cat-count {
+            font-size: 10px; color: #94a3b8; background: #f1f5f9;
+            padding: 2px 7px; border-radius: 8px; font-weight: 600;
+            display: flex; align-items: center; gap: 4px;
+            flex-shrink: 0;
+        }
+        .cat-count .avg {
+            font-weight: 400; color: #94a3b8;
+            border-left: 1px solid #cbd5e1; padding-left: 4px;
+        }
+        .cat-item.active .cat-count { background: #dbeafe; color: #1d4ed8; }
+        .cat-item.active .cat-count .avg { color: #60a5fa; border-color: #93c5fd; }
+
+        .subcat-list {
+            margin-left: 22px; border-left: 1px dashed #e2e8f0;
+            padding-left: 4px; margin-bottom: 4px;
+        }
+        .subcat-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 8px; border-radius: 5px;
+            cursor: pointer; font-size: 12px; color: #64748b;
+        }
+        .subcat-item:hover { background: #f8fafc; color: #334155; }
+        .subcat-item.active {
+            background: #f0f9ff; color: #0369a1; font-weight: 600;
+        }
+        .subcat-stats {
+            margin-left: auto; font-size: 10px; color: #94a3b8;
+            display: flex; gap: 6px;
+        }
+
+        .cat-arrow {
+            width: 14px; height: 14px; flex-shrink: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 9px; color: #94a3b8; transition: transform 0.15s;
+        }
+        .cat-arrow.open { transform: rotate(90deg); }
+
+        .doc-list-wrap { flex: 1; overflow-y: auto; padding: 14px 16px 40px; }
+
+        .doc-group { margin-bottom: 22px; }
+        .doc-group-head {
+            display: flex; align-items: center; gap: 8px;
+            margin: 0 4px 10px; cursor: pointer; user-select: none;
+        }
+        .doc-group-head:hover .doc-group-name { color: #1d4ed8; }
+        .doc-group-name {
+            font-size: 14px; font-weight: 700; color: #334155;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .doc-group-count { font-size: 11px; color: #94a3b8; font-weight: 500; }
+        .doc-group-count .avg {
+            margin-left: 4px; padding-left: 6px;
+            border-left: 1px solid #e2e8f0; color: #64748b;
+        }
+        .doc-group-line { flex: 1; height: 1px; background: #e2e8f0; }
+
+        .doc-card {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
+            transition: all 0.14s;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .doc-card:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+            transform: translateY(-1px);
+        }
+        .doc-card-title {
+            font-size: 14px; font-weight: 600; line-height: 1.5;
+            color: #1e293b; word-break: break-word;
+        }
+        .doc-card-preview {
+            font-size: 12px; color: #64748b; line-height: 1.55;
+            display: -webkit-box; -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2; overflow: hidden;
+        }
+        .doc-card-meta {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 10px; color: #94a3b8;
+            margin-top: 2px; flex-wrap: wrap;
+        }
+        .doc-card-meta .meta-tag {
+            background: #f1f5f9; padding: 1px 6px;
+            border-radius: 4px; font-weight: 500;
+        }
+
+        .timeline-wrap {
+            flex: 1; overflow-y: auto;
+            padding: 14px 16px 60px;
+        }
+        .timeline-inner { max-width: 900px; margin: 0 auto; }
+
+        .timeline-bar {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 16px; padding: 8px 12px;
+            background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            position: sticky; top: 0; z-index: 5;
+        }
+        .timeline-bar-label {
+            font-size: 12px; color: #64748b; white-space: nowrap;
+        }
+        .timeline-bar-count {
+            margin-left: auto; font-size: 11px; color: #94a3b8;
+            white-space: nowrap;
+        }
+
+        .timeline-group { margin-bottom: 26px; }
+
+        .timeline-date {
+            display: flex; align-items: center; gap: 8px;
+            margin: 0 0 10px 2px;
+            position: sticky; top: 52px; z-index: 3;
+            background: linear-gradient(to bottom, #f8fafc 60%, transparent);
+            padding: 6px 0;
+        }
+        .timeline-date-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #3b82f6;
+            box-shadow: 0 0 0 3px #dbeafe;
+        }
+        .timeline-date-text {
+            font-size: 14px; font-weight: 700; color: #334155;
+        }
+        .timeline-date-count {
+            font-size: 11px; color: #94a3b8;
+            background: #f1f5f9; padding: 1px 8px; border-radius: 8px;
+        }
+        .timeline-date-line {
+            flex: 1; height: 1px; background: #e2e8f0;
+        }
+
+        .timeline-items {
+            margin-left: 4px;
+            padding-left: 20px;
+            border-left: 2px solid #e2e8f0;
+        }
+
+        .timeline-item {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 12px; margin-bottom: 6px;
+            background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 8px; cursor: pointer;
+            transition: all 0.14s;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute; left: -27px; top: 18px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #cbd5e1; border: 2px solid #fff;
+        }
+        .timeline-item:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+            transform: translateX(2px);
+        }
+        .timeline-item:hover::before {
+            background: #3b82f6;
+        }
+
+        .timeline-item-time {
+            flex-shrink: 0; font-size: 11px; color: #94a3b8;
+            font-variant-numeric: tabular-nums;
+            width: 40px; padding-top: 3px;
+        }
+        .timeline-item-body {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column; gap: 3px;
+        }
+        .timeline-item-title {
+            font-size: 13.5px; font-weight: 600; color: #1e293b;
+            line-height: 1.45; word-break: break-word;
+        }
+        .timeline-item-preview {
+            font-size: 12px; color: #64748b; line-height: 1.5;
+            display: -webkit-box; -webkit-box-orient: vertical;
+            -webkit-line-clamp: 1; overflow: hidden;
+        }
+        .timeline-item-meta {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 10px; color: #94a3b8; margin-top: 2px;
+            flex-wrap: wrap;
+        }
+        .timeline-item-words {
+            flex-shrink: 0; font-size: 10px; color: #94a3b8;
+            padding-top: 3px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* =========================================================
+           分类徽章 —— 放大 + 可点击
+           ========================================================= */
+        .cat-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 12px;
+            padding: 3px 9px;
+            border-radius: 5px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            flex-shrink: 0;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.12s ease, box-shadow 0.12s ease,
+                        filter 0.12s ease;
+            transform-origin: center;
+        }
+        .cat-badge:hover {
+            transform: scale(1.08);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+            filter: brightness(0.96);
+        }
+        .cat-badge:active {
+            transform: scale(0.98);
+        }
+
+        .empty-hint {
+            text-align: center; padding: 60px 20px;
+            color: #94a3b8; font-size: 13px;
+        }
+
+        .reader {
+            flex: 1; overflow-y: auto;
+            display: flex; justify-content: center;
+            padding: 26px 16px 60px;
+        }
+        .reader-inner { width: 100%; max-width: 780px; }
+        .reader-head {
+            margin-bottom: 22px; padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .reader-title {
+            font-size: 24px; font-weight: 700; line-height: 1.4;
+            color: #0f172a; margin: 10px 0 12px; word-break: break-word;
+        }
+        .reader-meta {
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 12px; font-size: 12px; color: #64748b;
+        }
+        .reader-meta-item { display: inline-flex; align-items: center; gap: 4px; }
+
+        .reader-body {
+            font-size: 15.5px; line-height: 1.85; color: #1e293b;
+            word-break: break-word;
+        }
+        .reader-body h1 {
+            font-size: 22px; margin: 26px 0 14px;
+            padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
+        }
+        .reader-body h2 { font-size: 19px; margin: 22px 0 12px; }
+        .reader-body h3 { font-size: 17px; margin: 18px 0 10px; }
+        .reader-body h4 { font-size: 16px; margin: 16px 0 8px; }
+        .reader-body h5,
+        .reader-body h6 { font-size: 15px; margin: 14px 0 8px; }
+        .reader-body p { margin: 10px 0; }
+        .reader-body ul,
+        .reader-body ol { margin: 10px 0; padding-left: 26px; }
+        .reader-body li { margin: 4px 0; }
+        .reader-body blockquote {
+            border-left: 3px solid #93c5fd;
+            padding: 6px 14px; margin: 12px 0;
+            background: #f8fafc; color: #475569;
+        }
+        .reader-body code {
+            background: #f1f5f9; padding: 1px 5px;
+            border-radius: 3px; font-size: 0.92em; color: #be185d;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .reader-body pre {
+            background: #1e293b; border-radius: 8px;
+            padding: 14px; margin: 14px 0; overflow-x: auto;
+        }
+        .reader-body pre code {
+            background: transparent; color: #e2e8f0;
+            padding: 0; font-size: 13px; line-height: 1.6;
+        }
+        .reader-body table {
+            border-collapse: collapse; margin: 14px 0;
+            font-size: 13px; width: 100%;
+        }
+        .reader-body th,
+        .reader-body td { border: 1px solid #e2e8f0; padding: 7px 10px; }
+        .reader-body th { background: #f8fafc; font-weight: 600; }
+        .reader-body img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
+        .reader-body a { color: #2563eb; text-decoration: none; }
+        .reader-body a:hover { text-decoration: underline; }
+        .reader-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }
+
+        .mobile-only { display: none; }
+
+        @media (max-width: 768px) {
+            .mobile-only { display: inline-flex; }
+            .sidebar {
+                position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+                transform: translateX(-100%);
+                box-shadow: 2px 0 16px rgba(15, 23, 42, 0.12);
+                width: 84vw; min-width: 84vw; max-width: 340px;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-mask {
+                position: fixed; inset: 0;
+                background: rgba(15, 23, 42, 0.42);
+                z-index: 99;
+            }
+            .topbar { height: 52px; padding: 0 10px; }
+            .brand span.brand-text { display: none; }
+            .stat-mini { display: none; }
+            .search-wrap { max-width: none; }
+            .doc-list-wrap { padding: 10px 10px 30px; }
+            .doc-card { padding: 11px 12px; }
+            .doc-card-title { font-size: 13.5px; }
+            .reader { padding: 16px 14px 40px; }
+            .reader-title { font-size: 20px; margin: 8px 0 10px; }
+            .reader-body { font-size: 15px; }
+
+            .view-switch-btn { padding: 3px 8px; font-size: 11px; }
+
+            .timeline-wrap { padding: 10px 10px 40px; }
+            .timeline-bar { padding: 6px 10px; gap: 6px; }
+            .timeline-bar-label { font-size: 11px; }
+            .timeline-date { top: 48px; }
+            .timeline-date-text { font-size: 13px; }
+            .timeline-items { padding-left: 14px; }
+            .timeline-item {
+                padding: 9px 10px; gap: 8px;
+            }
+            .timeline-item::before { left: -21px; }
+            .timeline-item-time { width: 34px; font-size: 10px; }
+            .timeline-item-title { font-size: 13px; }
+
+            /* 移动端稍减，但仍比旧版大 */
+            .cat-badge { font-size: 11.5px; padding: 3px 8px; }
+        }
+
+        .reader-bar {
+            height: 52px; flex-shrink: 0; background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex; align-items: center; gap: 10px; padding: 0 14px;
+        }
+        .reader-bar-title {
+            flex: 1; font-size: 13px; font-weight: 600; color: #475569;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .hl { background: #fef08a; color: #92400e; border-radius: 2px; padding: 0 1px; }
+
+        .stats-panel { padding: 4px 2px; }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 8px; margin-bottom: 14px;
+        }
+        .stats-cell {
+            background: #f8fafc; border: 1px solid #f1f5f9;
+            border-radius: 8px; padding: 10px 8px; text-align: center;
+        }
+        .stats-cell .v {
+            font-size: 18px; font-weight: 700; color: #1e293b;
+            line-height: 1.2;
+        }
+        .stats-cell .l { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+        .stats-section-title {
+            font-size: 12px; font-weight: 700; color: #64748b;
+            margin: 14px 0 8px;
+        }
+        .stats-table {
+            width: 100%; border-collapse: collapse; font-size: 12px;
+        }
+        .stats-table th {
+            text-align: left; color: #94a3b8; font-weight: 600;
+            padding: 6px 8px; border-bottom: 1px solid #e5e7eb;
+            font-size: 11px;
+        }
+        .stats-table td {
+            padding: 6px 8px; border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+        }
+        .stats-table tr:hover td { background: #f8fafc; }
+        .stats-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .stats-top-list { font-size: 12px; color: #475569; }
+        .stats-top-item {
+            display: flex; justify-content: space-between; gap: 10px;
+            padding: 5px 8px; border-radius: 5px; cursor: pointer;
+            align-items: center;
+        }
+        .stats-top-item:hover { background: #f1f5f9; }
+        .stats-top-item .t {
+            flex: 1; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .stats-top-item .w {
+            color: #94a3b8; flex-shrink: 0; font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+
+<body>
+<div id="app" class="layout">
+
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
+
+        <div class="sidebar-head">
+            <div class="sidebar-head-row">
+                <span class="sidebar-title">📂 分类目录</span>
+                <span class="stat-btn" @click="openStats">📊 统计</span>
+            </div>
+
+            <div class="sidebar-summary" v-if="stats && stats.total">
+                <div class="sum-item">
+                    <div class="sum-value">{{ formatNum(stats.total.docs) }}</div>
+                    <div class="sum-label">篇</div>
+                </div>
+                <div class="sum-item">
+                    <div class="sum-value">{{ formatNum(stats.total.words) }}</div>
+                    <div class="sum-label">总字</div>
+                </div>
+                <div class="sum-item">
+                    <div class="sum-value">{{ formatNum(stats.total.avg_words) }}</div>
+                    <div class="sum-label">均字</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-body">
+
+            <div class="cat-item"
+                 :class="{ active: !activeCat }"
+                 @click="selectCategory(null, null)">
+                <span class="cat-dot" style="background:#64748b"></span>
+                <span class="cat-name">全部笔记</span>
+                <span class="cat-count">
+                    {{ totalDocs }}
+                    <span class="avg" v-if="overallAvg > 0">
+                        均{{ formatNum(overallAvg) }}
+                    </span>
+                </span>
+            </div>
+
+            <template v-for="cat in categoryTree" :key="cat.code">
+                <div class="cat-item"
+                     :class="{ active: activeCat === cat.code && !activeSub }"
+                     @click="selectCategory(cat.code, null)">
+
+                    <span class="cat-arrow"
+                          :class="{ open: expandedCats[cat.code] }"
+                          @click.stop="toggleCat(cat.code)">▶</span>
+
+                    <span class="cat-dot"
+                          :style="{ background: cat.color }"></span>
+
+                    <span class="cat-name">
+                        {{ cat.label }}
+                        <small>{{ cat.code }}</small>
+                    </span>
+
+                    <span class="cat-count">
+                        {{ cat.count }}
+                        <span class="avg" v-if="cat.avg > 0">
+                            均{{ formatNum(cat.avg) }}
+                        </span>
+                    </span>
+                </div>
+
+                <div class="subcat-list" v-show="expandedCats[cat.code]">
+                    <div class="subcat-item"
+                         v-for="sub in cat.children"
+                         :key="sub.code"
+                         :class="{ active: activeCat === cat.code && activeSub === sub.code }"
+                         @click="selectCategory(cat.code, sub.code)">
+
+                        <span>{{ sub.code }}</span>
+                        <span v-if="sub.label" style="color:#94a3b8">· {{ sub.label }}</span>
+
+                        <span class="subcat-stats">
+                            <span>{{ sub.count }} 篇</span>
+                            <span v-if="sub.avg > 0">均{{ formatNum(sub.avg) }}</span>
+                        </span>
+                    </div>
+                </div>
+            </template>
+
+        </div>
+    </aside>
+
+    <div class="sidebar-mask"
+         v-if="isMobile && sidebarOpen"
+         @click="sidebarOpen = false"></div>
+
+    <main class="main">
+
+        <template v-if="view === 'list'">
+
+            <div class="topbar">
+                <el-button class="mobile-only" size="small" circle plain
+                           @click="sidebarOpen = true">☰</el-button>
+
+                <div class="brand">
+                    <span>📖</span>
+                    <span class="brand-text">阅读模式</span>
+                </div>
+
+                <div class="search-wrap">
+                    <el-input v-model="keyword" size="small"
+                              placeholder="搜索标题或内容..."
+                              clearable @keyup.enter="doSearch">
+                        <template #prefix>
+                            <span style="color:#94a3b8">🔍</span>
+                        </template>
+                    </el-input>
+                </div>
+
+                <div class="view-switch">
+                    <button class="view-switch-btn"
+                            :class="{ active: viewMode === 'card' }"
+                            @click="viewMode = 'card'">
+                        卡片
+                    </button>
+                    <button class="view-switch-btn"
+                            :class="{ active: viewMode === 'timeline' }"
+                            @click="viewMode = 'timeline'">
+                        时间线
+                    </button>
+                </div>
+
+                <div class="topbar-right">
+                    <span class="stat-mini">
+                        {{ filteredDocs.length }} / {{ totalDocs }} 篇
+                    </span>
+                    <el-button size="small" plain
+                               @click="loadAll" :loading="loadingDocs">
+                        刷新
+                    </el-button>
+                </div>
+            </div>
+
+            <!-- 卡片视图 -->
+            <div v-if="viewMode === 'card'"
+                 class="doc-list-wrap" ref="listWrap">
+
+                <div v-if="loadingDocs" class="empty-hint">正在加载笔记...</div>
+
+                <div v-else-if="groupedDocs.length === 0" class="empty-hint">
+                    <div style="font-size:36px;margin-bottom:8px">🔍</div>
+                    <div v-if="keyword">没有匹配「{{ keyword }}」的笔记</div>
+                    <div v-else>还没有笔记</div>
+                </div>
+
+                <template v-else>
+                    <div class="doc-group"
+                         v-for="group in groupedDocs"
+                         :key="group.code">
+
+                        <div class="doc-group-head"
+                             @click="toggleGroup(group.code)">
+
+                            <span class="cat-arrow"
+                                  :class="{ open: expandedGroups[group.code] }">▶</span>
+
+                            <span class="doc-group-name">
+                                <span :style="{ color: group.color }">●</span>
+                                {{ group.label }}
+                                <small style="color:#94a3b8;font-size:11px;font-weight:400">
+                                    {{ group.code }}
+                                </small>
+                            </span>
+
+                            <span class="doc-group-count">
+                                {{ group.docs.length }} 篇
+                                <span class="avg" v-if="group.avg > 0">
+                                    均 {{ formatNum(group.avg) }} 字
+                                </span>
+                                <span class="avg">
+                                    总 {{ formatNum(group.totalWords) }} 字
+                                </span>
+                            </span>
+
+                            <span class="doc-group-line"></span>
+                        </div>
+
+                        <div v-show="expandedGroups[group.code]">
+                            <div class="doc-card"
+                                 v-for="doc in group.docs"
+                                 :key="doc.id"
+                                 @click="openDoc(doc)">
+
+                                <div style="display:flex;align-items:flex-start;gap:8px">
+                                    <!-- 卡片视图徽章：点击跳一级分类 -->
+                                    <span class="cat-badge"
+                                          :style="{ background: group.color + '20', color: group.color }"
+                                          :title="`查看「${group.label}」全部文章`"
+                                          @click.stop="jumpToCategory(group.code)">
+                                        {{ group.code }}
+                                    </span>
+
+                                    <div class="doc-card-title" style="flex:1"
+                                         v-html="highlight(getCleanTitle(doc))"></div>
+                                </div>
+
+                                <div class="doc-card-preview" v-if="getPreview(doc)"
+                                     v-html="highlight(getPreview(doc))"></div>
+
+                                <div class="doc-card-meta">
+                                    <span v-if="doc.created_time">
+                                        📅 {{ formatDate(doc.created_time) }}
+                                    </span>
+                                    <span class="meta-tag"
+                                          v-if="getWordCount(doc) > 0">
+                                        📝 {{ formatNum(getWordCount(doc)) }} 字
+                                    </span>
+                                    <span v-if="doc.is_pinned === 1" class="meta-tag"
+                                          style="background:#fef3c7;color:#b45309">📌 置顶</span>
+                                    <span v-if="doc.status === 'archive'" class="meta-tag"
+                                          style="background:#f1f5f9">📦 归档</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 时间线视图 -->
+            <div v-else class="timeline-wrap">
+
+                <div class="timeline-inner">
+
+                    <div class="timeline-bar">
+                        <span class="timeline-bar-label">时间字段</span>
+                        <el-radio-group v-model="timelineField" size="small">
+                            <el-radio-button label="created">创建</el-radio-button>
+                            <el-radio-button label="update">更新</el-radio-button>
+                        </el-radio-group>
+                        <span class="timeline-bar-label"
+                              style="margin-left:10px">
+                            方向
+                        </span>
+                        <el-radio-group v-model="timelineOrder" size="small">
+                            <el-radio-button label="desc">最新</el-radio-button>
+                            <el-radio-button label="asc">最早</el-radio-button>
+                        </el-radio-group>
+                        <span class="timeline-bar-count">
+                            共 {{ timelineTotal }} 篇 · {{ timelineGroups.length }} 天
+                        </span>
+                    </div>
+
+                    <div v-if="loadingDocs" class="empty-hint">正在加载笔记...</div>
+
+                    <div v-else-if="timelineGroups.length === 0" class="empty-hint">
+                        <div style="font-size:36px;margin-bottom:8px">🕒</div>
+                        <div v-if="keyword">没有匹配「{{ keyword }}」的笔记</div>
+                        <div v-else>还没有笔记</div>
+                    </div>
+
+                    <template v-else>
+                        <div class="timeline-group"
+                             v-for="group in timelineGroups"
+                             :key="group.key">
+
+                            <div class="timeline-date">
+                                <span class="timeline-date-dot"></span>
+                                <span class="timeline-date-text">{{ group.label }}</span>
+                                <span class="timeline-date-count">
+                                    {{ group.docs.length }} 篇
+                                </span>
+                                <span class="timeline-date-line"></span>
+                            </div>
+
+                            <div class="timeline-items">
+                                <div class="timeline-item"
+                                     v-for="d in group.docs"
+                                     :key="d.raw.id"
+                                     @click="openDoc(d.raw)">
+
+                                    <span class="timeline-item-time">
+                                        {{ formatTimeOfDay(d.timestamp) }}
+                                    </span>
+
+                                    <!-- 时间线徽章：点击跳该分类（含二级） -->
+                                    <span class="cat-badge"
+                                          :style="badgeStyle(d.cat)"
+                                          :title="`查看「${d.cat.l1}${d.cat.l2 ? ' ' + d.cat.l2 : ''}」全部文章`"
+                                          @click.stop="jumpToCategory(
+                                              (d.cat.l1 || '') + ' ' + (d.cat.l2 || ''))">
+                                        {{ d.cat.l1 }}{{ d.cat.l2 ? ' ' + d.cat.l2 : '' }}
+                                    </span>
+
+                                    <div class="timeline-item-body">
+                                        <div class="timeline-item-title"
+                                             v-html="highlight(d.cat.clean)"></div>
+
+                                        <div class="timeline-item-preview"
+                                             v-if="d.previewText"
+                                             v-html="highlight(d.previewText)"></div>
+
+                                        <div class="timeline-item-meta">
+                                            <span v-if="d.raw.is_pinned === 1"
+                                                  style="color:#b45309">📌 置顶</span>
+                                            <span v-if="d.raw.status === 'archive'"
+                                                  style="color:#64748b">📦 归档</span>
+                                        </div>
+                                    </div>
+
+                                    <span class="timeline-item-words"
+                                          v-if="d.words > 0">
+                                        {{ formatNum(d.words) }} 字
+                                    </span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </template>
+
+                </div>
+            </div>
+
+        </template>
+
+        <template v-else>
+
+            <div class="reader-bar">
+                <el-button class="mobile-only" size="small" circle plain
+                           @click="sidebarOpen = true">☰</el-button>
+                <el-button size="small" circle plain @click="closeReader">←</el-button>
+                <span class="reader-bar-title">
+                    {{ currentDoc ? getCleanTitle(currentDoc) : '加载中...' }}
+                </span>
+                <el-button size="small" plain @click="copyLink" title="复制链接">🔗</el-button>
+                <el-button size="small" plain
+                           @click="openDoc(currentDoc, true)" title="重新加载">🔄</el-button>
+            </div>
+
+            <div class="reader" ref="readerWrap">
+                <div class="reader-inner">
+
+                    <div v-if="loadingContent" class="empty-hint">正在加载内容...</div>
+
+                    <template v-else-if="currentDoc">
+                        <div class="reader-head">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                <!-- 阅读视图徽章：点击返回列表并筛选该分类 -->
+                                <span class="cat-badge"
+                                      :style="{ background: currentCat.color + '20', color: currentCat.color }"
+                                      :title="`查看「${currentCat.code}」全部文章`"
+                                      @click="jumpToCategory(currentCat.code)">
+                                    {{ currentCat.code }}
+                                </span>
+
+                                <span v-if="currentDoc.is_pinned === 1"
+                                      style="font-size:11px;color:#b45309">📌 置顶</span>
+                                <span v-if="currentDoc.status === 'archive'"
+                                      style="font-size:11px;color:#64748b">📦 归档</span>
+                            </div>
+
+                            <h1 class="reader-title">{{ getCleanTitle(currentDoc) }}</h1>
+
+                            <div class="reader-meta">
+                                <span class="reader-meta-item" v-if="currentDoc.created_time">
+                                    🕐 创建于 {{ formatDateTime(currentDoc.created_time) }}
+                                </span>
+                                <span class="reader-meta-item" v-if="currentDoc.update_time">
+                                    ✏️ 更新于 {{ formatDateTime(currentDoc.update_time) }}
+                                </span>
+                                <span class="reader-meta-item">
+                                    📝 {{ formatNum(currentContent.length) }} 字符
+                                </span>
+                                <span class="reader-meta-item">
+                                    ☕ 约 {{ readingTime }} 分钟
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="reader-body" v-html="renderedHtml"></div>
+
+                        <div v-if="!renderedHtml && currentContent"
+                             style="margin-top:14px;padding:12px;
+                                    background:#fef3c7;border-radius:6px;
+                                    font-size:12px;color:#92400e">
+                            ⚠️ 渲染为空，原文预览：
+                            <pre style="white-space:pre-wrap;margin-top:8px;
+                                        font-size:12px;color:#1e293b">{{ currentContent.slice(0, 500) }}</pre>
+                        </div>
+                    </template>
+
+                    <div v-else class="empty-hint">
+                        未找到笔记「{{ missingId }}」
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </main>
+
+    <el-dialog v-model="statsDialog" title="📊 知识库统计"
+               width="640px" top="6vh" class="stats-dialog">
+
+        <div v-if="statsLoading" class="empty-hint">正在加载统计...</div>
+        <div v-else-if="!stats" class="empty-hint">暂无统计数据</div>
+
+        <div v-else class="stats-panel">
+
+            <div class="stats-grid">
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.total.docs) }}</div>
+                    <div class="l">总篇数</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.total.words) }}</div>
+                    <div class="l">总字数</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.total.avg_words) }}</div>
+                    <div class="l">平均字数</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.total.pinned) }}</div>
+                    <div class="l">置顶</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.total.active) }}</div>
+                    <div class="l">活跃</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.total.archived) }}</div>
+                    <div class="l">归档</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.time.today) }}</div>
+                    <div class="l">今日新增</div>
+                </div>
+                <div class="stats-cell">
+                    <div class="v">{{ formatNum(stats.time.week) }}</div>
+                    <div class="l">本周新增</div>
+                </div>
+            </div>
+
+            <div class="stats-section-title">按分类统计</div>
+            <table class="stats-table">
+                <thead>
+                <tr>
+                    <th>分类</th>
+                    <th class="num">篇数</th>
+                    <th class="num">总字数</th>
+                    <th class="num">平均字数</th>
+                    <th class="num">最长</th>
+                    <th class="num">最短</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr v-for="c in stats.categories" :key="c.code">
+                    <td>
+                        <span :style="{ color: (L1_META[c.code]||{}).color || '#64748b' }">●</span>
+                        {{ (L1_META[c.code]||{}).label || c.code }}
+                        <small style="color:#94a3b8">{{ c.code }}</small>
+                    </td>
+                    <td class="num">{{ c.count }}</td>
+                    <td class="num">{{ formatNum(c.words) }}</td>
+                    <td class="num" style="font-weight:600;color:#1d4ed8">
+                        {{ formatNum(c.avg) }}
+                    </td>
+                    <td class="num">{{ formatNum(c.max) }}</td>
+                    <td class="num">{{ formatNum(c.min) }}</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="stats-section-title">最长的 5 篇</div>
+            <div class="stats-top-list">
+                <div class="stats-top-item"
+                     v-for="d in stats.top_longest"
+                     :key="'L'+d.id"
+                     @click="openFromStats(d.id)">
+                    <span class="t">{{ d.title }}</span>
+                    <span class="w">{{ formatNum(d.words) }} 字</span>
+                </div>
+            </div>
+
+        </div>
+    </el-dialog>
+
+</div>
+
+<script>
+const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+
+const API_BASE = (window.API_BASE || '').replace(/\/$/, '');
+const api = path => /^https?:\/\//i.test(path) ? path : API_BASE + path;
+
+/* =========================================================
+   Markdown → HTML
+   ========================================================= */
+const escapeHtml = s =>
+    String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+function markdownToHtml(src) {
+    let text = String(src || '');
+    const codeBlocks = [];
+    text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g,
+        (m, lang, code) => {
+            codeBlocks.push({ lang: lang || '', code });
+            return `\u0000CB${codeBlocks.length - 1}\u0000`;
+        });
+
+    text = escapeHtml(text);
+    text = text.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+    text = text.replace(/^######[ \t]+(.+)$/gm, '<h6>$1</h6>');
+    text = text.replace(/^#####[ \t]+(.+)$/gm,  '<h5>$1</h5>');
+    text = text.replace(/^####[ \t]+(.+)$/gm,   '<h4>$1</h4>');
+    text = text.replace(/^###[ \t]+(.+)$/gm,    '<h3>$1</h3>');
+    text = text.replace(/^##[ \t]+(.+)$/gm,     '<h2>$1</h2>');
+    text = text.replace(/^#[ \t]+(.+)$/gm,      '<h1>$1</h1>');
+
+    text = text.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__([^_\n]+)__/g,     '<strong>$1</strong>');
+    text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    text = text.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+
+    text = text.replace(/^&gt;[ \t]?(.*)$/gm, '<blockquote>$1</blockquote>');
+    text = text.replace(/(<blockquote>[\s\S]*?<\/blockquote>\n?)+/g, m =>
+        '<blockquote>' +
+        m.replace(/<\/?blockquote>/g, '').replace(/\n/g, '<br>') +
+        '</blockquote>\n'
+    );
+
+    text = text.replace(
+        /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
+        (m, alt, url, t) =>
+            `<img src="${url}" alt="${alt}"${t ? ` title="${t}"` : ''} loading="lazy">`
+    );
+
+    text = text.replace(
+        /\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
+        (m, label, url, t) =>
+            `<a href="${url}" target="_blank" rel="noopener"${t ? ` title="${t}"` : ''}>${label}</a>`
+    );
+
+    text = text.replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, '<hr>');
+
+    text = text.replace(/^[ \t]*[-*+][ \t]+(.+)$/gm, '<li>$1</li>');
+    text = text.replace(/(?:^|\n)((?:[ \t]*<li>.*<\/li>[ \t]*\n?)+)/g,
+        (m, g) => '\n<ul>' + g.replace(/^\s+/gm, '') + '</ul>\n');
+
+    text = text.replace(/^[ \t]*\d+\.[ \t]+(.+)$/gm, '<oli>$1</oli>');
+    text = text.replace(/(?:^|\n)((?:[ \t]*<oli>.*<\/oli>[ \t]*\n?)+)/g,
+        (m, g) => '\n<ol>' +
+            g.replace(/^\s+/gm, '')
+             .replace(/<oli>/g, '<li>')
+             .replace(/<\/oli>/g, '</li>') +
+            '</ol>\n'
+    );
+
+    text = text.split(/\n{2,}/).map(b => {
+        const p = b.trim();
+        if (!p) return '';
+        if (/^<(h\d|ul|ol|blockquote|pre|hr|li|table|img|p)/i.test(p)) return p;
+        return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
+    }).join('\n');
+
+    text = text.replace(/\u0000CB(\d+)\u0000/g, (m, idx) => {
+        const cb = codeBlocks[parseInt(idx, 10)];
+        if (!cb) return '';
+        const la = cb.lang ? ` class="language-${cb.lang}"` : '';
+        return `<pre><code${la}>${escapeHtml(cb.code)}</code></pre>`;
+    });
+
+    return text;
+}
+
+/* =========================================================
+   分类元数据
+   ========================================================= */
+const L1_META = {
+    pol:  { label: '政治',  color: '#dc2626' },
+    his:  { label: '历史',  color: '#b45309' },
+    mil:  { label: '军事',  color: '#7c2d12' },
+    eco:  { label: '经济',  color: '#0891b2' },
+    soc:  { label: '社会',  color: '#7c3aed' },
+    psy:  { label: '心理',  color: '#db2777' },
+    know: { label: '方法',  color: '#059669' },
+    exe:  { label: '运动',  color: '#ea580c' },
+    med:  { label: '医疗',  color: '#16a34a' },
+    out:  { label: '户外',  color: '#65a30d' },
+    tec:  { label: '技术',  color: '#2563eb' },
+    fan:  { label: '网文',  color: '#a21caf' },
+    cul:  { label: '文艺',  color: '#9333ea' },
+    dai:  { label: '记录',  color: '#64748b' },
+    adu:  { label: '成人',  color: '#be185d' },
+    unk:  { label: '未分类', color: '#94a3b8' },
+};
+const L1_CODES = new Set(Object.keys(L1_META));
+
+const L2_LABEL = {
+    pow:'权力', prop:'宣传', ctrl:'管控', gov:'治理',
+    law:'法律', econ:'政治经济', welf:'福利', ethn:'民族',
+    intl:'外交', hist:'党史', thy:'理论', misc:'其他',
+    anc:'古代', qing:'晚清', rep:'民国', prc:'建国后', meth:'史学',
+    strat:'战略', war:'作战', tech:'武器',
+    fin:'金融', inv:'投资', biz:'商业', macro:'宏观',
+    class:'阶层', media:'传播', demo:'人口', relig:'宗教', labor:'劳动',
+    mind:'心理', rel:'关系', group:'群体',
+    model:'模型', decide:'决策', pkm:'知识库', fake:'纠错',
+    str:'力量', endu:'耐力', plan:'计划', sci:'科学', recov:'恢复',
+    oral:'口腔', rehab:'康复', sleep:'睡眠', nutri:'营养', drug:'药物',
+    hike:'徒步', moto:'摩托', camp:'露营', bike:'骑行', auto:'汽车',
+    ai:'AI', agent:'智能体', cost:'成本', dev:'开发', net:'网络',
+    set:'设定', char:'角色', plot:'剧情', pick:'选书',
+    gen:'生成', mkt:'市场',
+    book:'书评', film:'影视', phil:'哲学',
+    log:'日记', train:'训练', buy:'购买',
+    lib:'整理', ana:'分析',
+};
+
+const parseDocIdFromUrl = () => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('doc') || '';
+};
+const buildDocUrl = id => {
+    const u = new URL(window.location.href);
+    u.searchParams.set('doc', id);
+    return u.pathname + u.search + u.hash;
+};
+const buildListUrl = () => {
+    const u = new URL(window.location.href);
+    u.searchParams.delete('doc');
+    return u.pathname + u.search + u.hash;
+};
+
+const pad2 = n => String(n).padStart(2, '0');
+const dateKey = date =>
+    `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+const startOfDay = date => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+};
+
+/* =========================================================
+   App
+   ========================================================= */
+const app = createApp({
+    setup() {
+
+        const documents   = ref([]);
+        const loadingDocs = ref(false);
+        const keyword     = ref('');
+        const activeCat   = ref(null);
+        const activeSub   = ref(null);
+
+        const expandedCats   = ref({});
+        const expandedGroups = ref({});
+
+        const view        = ref('list');
+        const viewMode    = ref('card');
+        const sidebarOpen = ref(false);
+
+        const timelineField = ref('created');
+        const timelineOrder = ref('desc');
+
+        const currentDoc     = ref(null);
+        const currentContent = ref('');
+        const renderedHtml   = ref('');
+        const loadingContent = ref(false);
+        const missingId      = ref('');
+
+        const stats         = ref(null);
+        const statsLoading  = ref(false);
+        const statsDialog   = ref(false);
+
+        const isMobile = ref(window.innerWidth <= 768);
+        const listWrap   = ref(null);
+        const readerWrap = ref(null);
+
+        /* ---------- 分类解析 ---------- */
+        const parseCategory = title => {
+            const t = String(title || '').trim();
+            let m = t.match(/^\[([a-z]{2,8})\s+([a-z]{2,8})\]\s*(.*)$/i);
+            if (m) return { l1: m[1].toLowerCase(), l2: m[2].toLowerCase(),
+                            clean: m[3].trim() || '未命名笔记' };
+            m = t.match(/^([a-z]{2,8})\s+([a-z]{2,8})\s+(.+)$/i);
+            if (m && L1_CODES.has(m[1].toLowerCase())) {
+                return { l1: m[1].toLowerCase(), l2: m[2].toLowerCase(),
+                         clean: m[3].trim() };
+            }
+            return { l1: 'unk', l2: '', clean: t || '未命名笔记' };
+        };
+
+        const getCleanTitle = doc => {
+            if (!doc) return '';
+            const cat = parseCategory(doc.title);
+            return cat.clean || doc.title || doc.id || '未命名笔记';
+        };
+
+        const getPreview = doc => {
+            const raw = doc.preview || doc.summary || doc.snippet ||
+                        doc.content_preview || '';
+            if (!raw) return '';
+            return String(raw)
+                .replace(/```[\s\S]*?```/g, ' ')
+                .replace(/[#>*_`~]/g, '')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
+        const getWordCount = doc => {
+            const wc = Number(doc && doc.word_count);
+            return wc > 0 ? wc : 0;
+        };
+
+        const badgeStyle = cat => {
+            const meta = L1_META[cat.l1] || L1_META.unk;
+            return { background: meta.color + '20', color: meta.color };
+        };
+
+        const statsMap = computed(() => {
+            const m = {};
+            if (!stats.value || !stats.value.categories) return m;
+            for (const c of stats.value.categories) {
+                m[c.code] = {
+                    avg: c.avg, count: c.count, words: c.words,
+                    max: c.max, min: c.min, children: {},
+                };
+                for (const sub of (c.children || [])) {
+                    m[c.code].children[sub.code] = {
+                        avg: sub.avg, count: sub.count, words: sub.words,
+                    };
+                }
+            }
+            return m;
+        });
+
+        const decoratedDocs = computed(() =>
+            documents.value.map(doc => {
+                const cat = parseCategory(doc.title);
+                return {
+                    raw: doc, cat,
+                    previewText: getPreview(doc),
+                    words: getWordCount(doc),
+                };
+            })
+        );
+
+        const filteredDocs = computed(() => {
+            let list = decoratedDocs.value;
+            if (activeCat.value) {
+                list = list.filter(d => d.cat.l1 === activeCat.value);
+                if (activeSub.value) {
+                    list = list.filter(d => d.cat.l2 === activeSub.value);
+                }
+            }
+            const q = keyword.value.trim().toLowerCase();
+            if (q) {
+                list = list.filter(d => {
+                    const t = (d.cat.clean || '').toLowerCase();
+                    const p = (d.previewText || '').toLowerCase();
+                    return t.includes(q) || p.includes(q);
+                });
+            }
+            return list;
+        });
+
+        const groupedDocs = computed(() => {
+            const groups = {};
+            for (const d of filteredDocs.value) {
+                const code = d.cat.l1 || 'unk';
+                if (!groups[code]) {
+                    const meta = L1_META[code] || L1_META.unk;
+                    groups[code] = {
+                        code, label: meta.label, color: meta.color,
+                        docs: [], totalWords: 0,
+                    };
+                }
+                groups[code].docs.push(d.raw);
+                groups[code].totalWords += d.words || 0;
+            }
+            return Object.values(groups).map(g => ({
+                ...g,
+                avg: g.docs.length
+                    ? Math.round(g.totalWords / g.docs.length)
+                    : 0,
+            })).sort((a, b) => b.docs.length - a.docs.length);
+        });
+
+        const categoryTree = computed(() => {
+            const map = {};
+            for (const d of decoratedDocs.value) {
+                const code = d.cat.l1 || 'unk';
+                if (!map[code]) {
+                    const meta = L1_META[code] || L1_META.unk;
+                    map[code] = {
+                        code, label: meta.label, color: meta.color,
+                        count: 0, totalWords: 0, children: {},
+                    };
+                }
+                map[code].count += 1;
+                map[code].totalWords += d.words || 0;
+
+                const sub = d.cat.l2;
+                if (sub) {
+                    if (!map[code].children[sub]) {
+                        map[code].children[sub] = {
+                            code: sub,
+                            label: L2_LABEL[sub] || sub,
+                            count: 0, totalWords: 0,
+                        };
+                    }
+                    map[code].children[sub].count += 1;
+                    map[code].children[sub].totalWords += d.words || 0;
+                }
+            }
+
+            return Object.values(map).map(cat => {
+                const s = statsMap.value[cat.code];
+                const avg = s && s.avg
+                    ? Math.round(s.avg)
+                    : (cat.count ? Math.round(cat.totalWords / cat.count) : 0);
+
+                const children = Object.values(cat.children).map(sub => {
+                    const ss = s && s.children && s.children[sub.code];
+                    const subAvg = ss && ss.avg
+                        ? Math.round(ss.avg)
+                        : (sub.count
+                            ? Math.round(sub.totalWords / sub.count)
+                            : 0);
+                    return { ...sub, avg: subAvg };
+                }).sort((a, b) => b.count - a.count);
+
+                return {
+                    code: cat.code, label: cat.label, color: cat.color,
+                    count: cat.count, totalWords: cat.totalWords,
+                    avg, children,
+                };
+            }).sort((a, b) => b.count - a.count);
+        });
+
+        /* ---------- 时间线 ---------- */
+        const timelineTotal = computed(() => filteredDocs.value.length);
+
+        const timelineGroups = computed(() => {
+            const field = timelineField.value === 'created'
+                ? 'created_time'
+                : 'update_time';
+
+            const list = filteredDocs.value.slice().map(d => {
+                const ts = Number(d.raw[field]) || 0;
+                return { ...d, timestamp: ts };
+            }).filter(d => d.timestamp > 0);
+
+            list.sort((a, b) => timelineOrder.value === 'asc'
+                ? a.timestamp - b.timestamp
+                : b.timestamp - a.timestamp);
+
+            const groups = {};
+            const now = new Date();
+            const today = startOfDay(now);
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            for (const d of list) {
+                const date = new Date(d.timestamp * 1000);
+                const key = dateKey(date);
+                if (!groups[key]) {
+                    groups[key] = {
+                        key, date,
+                        label: humanDate(date, today, yesterday),
+                        docs: [],
+                    };
+                }
+                groups[key].docs.push(d);
+            }
+
+            const result = Object.values(groups);
+            result.sort((a, b) => timelineOrder.value === 'asc'
+                ? a.key.localeCompare(b.key)
+                : b.key.localeCompare(a.key));
+
+            return result;
+        });
+
+        const humanDate = (date, today, yesterday) => {
+            const key = dateKey(date);
+            const todayKey = dateKey(today);
+            const yesterdayKey = dateKey(yesterday);
+
+            if (key === todayKey) return '今天';
+            if (key === yesterdayKey) return '昨天';
+
+            const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const y = date.getFullYear();
+            const m = date.getMonth() + 1;
+            const d = date.getDate();
+
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 6);
+            if (date >= weekAgo) {
+                return `${m}月${d}日 ${names[date.getDay()]}`;
+            }
+            if (y === today.getFullYear()) {
+                return `${m}月${d}日`;
+            }
+            return `${y}年${m}月${d}日`;
+        };
+
+        /* ---------- 其他计算 ---------- */
+        const totalDocs  = computed(() => documents.value.length);
+
+        const overallAvg = computed(() => {
+            if (stats.value && stats.value.total) {
+                return Math.round(stats.value.total.avg_words || 0);
+            }
+            if (!totalDocs.value) return 0;
+            const sum = decoratedDocs.value.reduce((s, d) => s + (d.words || 0), 0);
+            return Math.round(sum / totalDocs.value);
+        });
+
+        const readingTime = computed(() =>
+            Math.max(1, Math.ceil(currentContent.value.length / 500))
+        );
+
+        const currentCat = computed(() => {
+            if (!currentDoc.value) {
+                return { code: 'unk', label: '未分类', color: '#94a3b8' };
+            }
+            const cat = parseCategory(currentDoc.value.title);
+            const meta = L1_META[cat.l1] || L1_META.unk;
+            return {
+                code: cat.l2 ? `${cat.l1} ${cat.l2}` : cat.l1,
+                label: meta.label,
+                color: meta.color,
+            };
+        });
+
+        /* ---------- 工具 ---------- */
+        const formatNum = n => {
+            n = Number(n) || 0;
+            if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+            if (n >= 1000)  return (n / 1000).toFixed(1) + 'k';
+            return String(n);
+        };
+        const formatDate = ts => {
+            if (!ts) return '';
+            const d = new Date(Number(ts) * 1000);
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        };
+        const formatDateTime = ts => {
+            if (!ts) return '';
+            const d = new Date(Number(ts) * 1000);
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} `
+                + `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        };
+        const formatTimeOfDay = ts => {
+            if (!ts) return '';
+            const d = new Date(Number(ts) * 1000);
+            return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        };
+        const escapeReg = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const highlight = text => {
+            const q = keyword.value.trim();
+            if (!q) return escapeHtml(text);
+            const safe = escapeHtml(text);
+            const re = new RegExp(`(${escapeReg(escapeHtml(q))})`, 'gi');
+            return safe.replace(re, '<span class="hl">$1</span>');
+        };
+
+        /* ---------- 交互 ---------- */
+        const toggleCat = code => {
+            expandedCats.value = {
+                ...expandedCats.value,
+                [code]: !expandedCats.value[code],
+            };
+        };
+        const toggleGroup = code => {
+            expandedGroups.value = {
+                ...expandedGroups.value,
+                [code]: !expandedGroups.value[code],
+            };
+        };
+
+        /* ★ 核心修改：点击侧栏分类 → 强制回到列表目录，不再被文章盖住 ★ */
+        const selectCategory = (l1, l2) => {
+            activeCat.value = l1;
+            activeSub.value = l2;
+
+            // 展开当前一级分类（如果点的是二级分类，这里也会保证一级展开）
+            if (l1 && !expandedCats.value[l1]) {
+                expandedCats.value = { ...expandedCats.value, [l1]: true };
+            }
+            // 如果点的是“全部笔记”，把当前分类的展开也保留，不做额外处理
+
+            // 若正在阅读文章，先退出阅读视图，直接显示目录列表
+            if (view.value !== 'list') {
+                closeReader();          // 内部会同步 URL（去掉 ?doc=）
+            }
+
+            // 移动端点击后收起抽屉
+            if (isMobile.value) sidebarOpen.value = false;
+
+            // 列表滚回顶部，让用户看到新选中的分类
+            nextTick(() => {
+                const listEl = document.querySelector('.doc-list-wrap');
+                const tlEl   = document.querySelector('.timeline-wrap');
+                if (listEl) listEl.scrollTop = 0;
+                if (tlEl)   tlEl.scrollTop = 0;
+            });
+        };
+
+        /* 点击徽章跳转分类（卡片 / 时间线 / 阅读视图） */
+        const jumpToCategory = codeStr => {
+            const parts = String(codeStr || '')
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean);
+
+            const l1 = parts[0] || null;
+            const l2 = parts[1] || null;
+
+            if (!l1 || !L1_CODES.has(l1)) return;
+
+            // 复用统一逻辑：设筛选 + 若在阅读视图则退回列表
+            selectCategory(l1, l2);
+        };
+
+        const doSearch = () => {
+            if (keyword.value.trim()) {
+                const map = {};
+                for (const g of groupedDocs.value) map[g.code] = true;
+                expandedGroups.value = map;
+            }
+        };
+        watch(keyword, () => { if (keyword.value.trim()) doSearch(); });
+
+        /* ---------- URL ---------- */
+        const pushUrlForDoc = (id, replace = false) => {
+            const url = buildDocUrl(id);
+            const cur = window.location.pathname + window.location.search;
+            if (cur === url) return;
+            replace ? history.replaceState({ id }, '', url)
+                    : history.pushState({ id }, '', url);
+        };
+        const pushUrlForList = (replace = false) => {
+            const url = buildListUrl();
+            const cur = window.location.pathname + window.location.search;
+            if (cur === url) return;
+            replace ? history.replaceState({}, '', url)
+                    : history.pushState({}, '', url);
+        };
+
+        /* ---------- 加载 ---------- */
+        const loadAll = async () => {
+            loadingDocs.value = true;
+            try {
+                const res = await fetch(api('/docapi/documents'));
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                documents.value = data.docs || data.documents || [];
+            } catch (e) {
+                console.error('加载失败:', e);
+                ElementPlus.ElMessage.error('文档列表加载失败');
+            } finally {
+                loadingDocs.value = false;
+            }
+        };
+
+        const loadStats = async () => {
+            statsLoading.value = true;
+            try {
+                const res = await fetch(api('/docapi/stats'));
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                stats.value = await res.json();
+            } catch (e) {
+                console.error('统计加载失败:', e);
+                stats.value = null;
+            } finally {
+                statsLoading.value = false;
+            }
+        };
+
+        const openStats = async () => {
+            statsDialog.value = true;
+            if (!stats.value) await loadStats();
+        };
+
+        const openFromStats = async id => {
+            statsDialog.value = false;
+            await openDoc({ id });
+        };
+
+        /* ---------- 打开文档 ---------- */
+        const stripFrontmatter = c =>
+            String(c || '').replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '');
+
+        const openDoc = async (docOrId, forceReload = false) => {
+            let doc = docOrId;
+            if (typeof doc === 'string' || typeof doc === 'number') {
+                doc = { id: String(doc) };
+            }
+            if (!doc || !doc.id) return;
+
+            if (!forceReload && currentDoc.value && currentDoc.value.id === doc.id) {
+                view.value = 'read';
+                pushUrlForDoc(doc.id);
+                return;
+            }
+
+            view.value = 'read';
+            currentDoc.value = doc;
+            currentContent.value = '';
+            renderedHtml.value = '';
+            loadingContent.value = true;
+            missingId.value = '';
+            pushUrlForDoc(doc.id);
+
+            try {
+                const res = await fetch(
+                    api(`/docapi/document/${encodeURIComponent(doc.id)}`)
+                );
+
+                if (res.status === 404) {
+                    missingId.value = doc.id;
+                    currentDoc.value = null;
+                    return;
+                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const data = await res.json();
+                if (typeof data.content !== 'string') {
+                    throw new Error('缺少 content 字段');
+                }
+                if (data.meta) {
+                    currentDoc.value = { ...doc, ...data.meta };
+                }
+
+                const raw = stripFrontmatter(data.content);
+                currentContent.value = raw;
+                renderedHtml.value = markdownToHtml(raw);
+
+                if (readerWrap.value) readerWrap.value.scrollTop = 0;
+            } catch (e) {
+                console.error('[reader] 失败:', e);
+                ElementPlus.ElMessage.error(e.message || '内容加载失败');
+                currentContent.value = '';
+                renderedHtml.value = '';
+            } finally {
+                loadingContent.value = false;
+            }
+        };
+
+        const closeReader = (updateUrl = true) => {
+            view.value = 'list';
+            currentDoc.value = null;
+            currentContent.value = '';
+            renderedHtml.value = '';
+            missingId.value = '';
+            if (updateUrl) pushUrlForList();
+        };
+
+        const copyLink = async () => {
+            if (!currentDoc.value) return;
+            const base = window.location.origin + window.location.pathname;
+            const url = `${base}?doc=${encodeURIComponent(currentDoc.value.id)}`;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(url);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = url;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                }
+                ElementPlus.ElMessage.success('链接已复制');
+            } catch (e) {
+                ElementPlus.ElMessage.warning('复制失败：' + url);
+            }
+        };
+
+        const updateIsMobile = () => {
+            isMobile.value = window.innerWidth <= 768;
+            if (!isMobile.value) sidebarOpen.value = false;
+        };
+        window.addEventListener('resize', updateIsMobile);
+
+        const handlePopState = async () => {
+            const id = parseDocIdFromUrl();
+            if (!id) { closeReader(false); return; }
+            if (currentDoc.value && currentDoc.value.id === id &&
+                view.value === 'read') return;
+            const hit = documents.value.find(d => d.id === id);
+            await openDoc(hit || { id }, true);
+        };
+        window.addEventListener('popstate', handlePopState);
+
+        onMounted(async () => {
+            updateIsMobile();
+            await loadAll();
+            loadStats();
+
+            try {
+                const savedMode = localStorage.getItem('reader.viewMode');
+                if (savedMode === 'timeline' || savedMode === 'card') {
+                    viewMode.value = savedMode;
+                } else {
+                    viewMode.value = 'timeline';
+                }
+            } catch (e) {
+                viewMode.value = 'timeline';
+            }
+
+            const initialId = parseDocIdFromUrl();
+            if (initialId) {
+                history.replaceState({ id: initialId }, '',
+                    buildDocUrl(initialId));
+                const hit = documents.value.find(d => d.id === initialId);
+                await openDoc(hit || { id: initialId }, true);
+            } else if (window.location.search.includes('doc=')) {
+                history.replaceState({}, '', buildListUrl());
+            }
+        });
+
+        watch(viewMode, v => {
+            try { localStorage.setItem('reader.viewMode', v); } catch (e) {}
+        });
+
+        return {
+            documents, loadingDocs, keyword,
+            activeCat, activeSub,
+            expandedCats, expandedGroups,
+            view, viewMode, sidebarOpen,
+            timelineField, timelineOrder,
+            currentDoc, currentContent, renderedHtml,
+            loadingContent, missingId,
+            stats, statsLoading, statsDialog,
+            isMobile,
+            listWrap, readerWrap,
+            L1_META,
+
+            filteredDocs, groupedDocs, categoryTree,
+            timelineGroups, timelineTotal,
+            totalDocs, overallAvg, readingTime, currentCat,
+            statsMap,
+
+            parseCategory, getCleanTitle, getPreview, getWordCount,
+            badgeStyle,
+            formatNum, formatDate, formatDateTime, formatTimeOfDay,
+            highlight,
+
+            toggleCat, toggleGroup, selectCategory, jumpToCategory,
+            doSearch,
+            loadAll, loadStats, openStats, openFromStats,
+            openDoc, closeReader, copyLink,
+        };
+    }
+});
+
+for (const [key, comp] of Object.entries(ElementPlusIconsVue || {})) {
+    app.component(key, comp);
+}
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+
+</body>
+</html>
