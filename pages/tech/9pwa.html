@@ -1,253 +1,249 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PWA 工具管理器</title>
-    <style>
-        :root {
-            --bg: #f4f6fb;
-            --card-bg: #ffffff;
-            --accent: #6c5ce7;
-            --text: #1e1f2a;
-            --border: #d5d9e2;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: system-ui, sans-serif;
-            background: var(--bg);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 800px; margin: 0 auto; }
-        .card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.05);
-            border: 1px solid var(--border);
-            margin-bottom: 20px;
-        }
-        h2 { font-size: 1.3rem; color: var(--text); margin-bottom: 12px; }
-        label { display: block; font-weight: 600; margin: 0.8em 0 0.3em; color: var(--text); }
-        input, textarea {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1.5px solid var(--border);
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 0.95rem;
-            background: #fafbfc;
-            color: var(--text);
-        }
-        textarea {
-            height: 200px;
-            resize: vertical;
-            font-family: 'SF Mono', 'Consolas', monospace;
-            font-size: 0.85rem;
-        }
-        button {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        button:hover { background: #7f6ff0; }
-        .btn-danger { background: #e74c5e; }
-        .btn-danger:hover { background: #f05a6c; }
-        .btn-sm { padding: 5px 12px; font-size: 0.8rem; }
-        .tools-list ul { list-style: none; padding: 0; }
-        .tools-list li {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 14px;
-            border-bottom: 1px solid var(--border);
-        }
-        .tools-list li:last-child { border-bottom: none; }
-        .tools-list a {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .tools-list a:hover { text-decoration: underline; }
-        .action-btns { display: flex; gap: 6px; }
-        .message {
-            padding: 8px 14px;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-size: 0.9rem;
-        }
-        .message.success { background: #e8f8ef; color: #2e7d5e; border: 1px solid #a8e0c0; }
-        .message.error { background: #fde8ec; color: #b33; border: 1px solid #f5b7c5; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>动态 PWA 工具管理器</title>
+  <style>
+    :root { color-scheme: light; --accent: #6c5ce7; --text: #242538; --line: #d9ddeb; --bg: #f4f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px 50px; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, sans-serif; }
+    main { max-width: 860px; margin: auto; }
+    h1 { font-size: 26px; margin: 0 0 18px; }
+    h2 { font-size: 19px; margin: 0 0 14px; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 18px; box-shadow: 0 8px 22px #10203b08; }
+    .muted { color: #596174; margin: 5px 0 14px; }
+    label { display: block; font-weight: 600; margin: 12px 0 5px; }
+    input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #bdc6d7; border-radius: 9px; background: #fff; font: inherit; }
+    textarea { min-height: 290px; resize: vertical; font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    button, .link-button { border: none; color: #fff; background: var(--accent); border-radius: 8px; padding: 10px 16px; font: 600 14px system-ui, sans-serif; cursor: pointer; }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .secondary { background: #6a7487; }
+    .danger { background: #d53c56; }
+    .small { padding: 7px 10px; font-size: 13px; }
+    .row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .actions { display: flex; gap: 7px; flex-wrap: wrap; }
+    .tools { list-style: none; margin: 0; padding: 0; }
+    .tools li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid #e4e6ef; }
+    .tools li:last-child { border: 0; }
+    .tools a { color: #493acb; font-weight: 600; overflow-wrap: anywhere; }
+    .tools small { display: block; color: #687184; }
+    .message { padding: 10px 12px; border-radius: 7px; margin: 12px 0 0; white-space: pre-wrap; }
+    .message.ok { background: #e8f8ee; color: #166341; }
+    .message.error { background: #ffebee; color: #a02436; }
+    [hidden] { display: none !important; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <!-- 书签列表 -->
-        <div class="card">
-            <h2>📚 我的 PWA 工具</h2>
-            <div class="tools-list" id="toolList">
-                <p>加载中...</p>
-            </div>
+<main>
+  <h1>PWA 工具管理器</h1>
+  <section class="card" id="loginPanel">
+    <h2>管理身份验证</h2>
+    <p class="muted">输入服务器管理密钥。首次启动时系统会自动生成并保存到本地 db/.pwa_admin_token（可配置路径），重启后仍有效。为安全起见，密钥不会保存在浏览器，刷新后需重新输入。</p>
+    <form id="loginForm">
+      <label for="adminToken">管理密钥</label>
+      <input id="adminToken" type="password" autocomplete="off" required>
+      <div style="margin-top:12px"><button type="submit">进入管理器</button></div>
+    </form>
+    <div id="loginMessage" aria-live="polite"></div>
+  </section>
+
+  <div id="workspace" hidden>
+    <section class="card">
+      <div class="row">
+        <h2>已创建的工具</h2>
+        <div class="actions">
+          <button class="secondary small" id="reloadBtn" type="button">刷新列表</button>
+          <button class="secondary small" id="lockBtn" type="button">退出管理</button>
         </div>
+      </div>
+      <div id="toolsList" aria-live="polite"></div>
+    </section>
 
-        <!-- 创建 / 编辑表单 -->
-        <div class="card">
-            <h2 id="formTitle">⚡ 创建新工具</h2>
-            <form id="toolForm">
-                <input type="hidden" id="editSlug" value="">
-                <label for="slug">Slug（URL 标识）</label>
-                <input type="text" id="slug" placeholder="英文、数字或连字符" required pattern="[a-zA-Z0-9\\-]+">
-                <label for="html">完整 HTML 代码</label>
-                <textarea id="html" required placeholder="粘贴包含 <html>...</html> 的完整页面代码"></textarea>
-                <div style="margin-top: 12px;">
-                    <button type="submit" id="submitBtn">创建工具</button>
-                    <button type="button" id="cancelEditBtn" style="display:none; margin-left:8px;" class="btn-danger btn-sm">取消编辑</button>
-                </div>
-            </form>
-            <div id="formMessage"></div>
+    <section class="card">
+      <h2 id="formHeading">创建新工具</h2>
+      <p class="muted">粘贴完整的 HTML，创建后访问 /pwa/工具标识/ 测试安装。工具页右下角会显示“安装应用”和“PWA检测”。建议把 CSS 和 JavaScript 内联到 HTML 中；外部网络资源不保证离线可用。</p>
+      <form id="toolForm">
+        <label for="slug">URL 标识（slug）</label>
+        <input id="slug" type="text" placeholder="例如 calculator" pattern="[a-z0-9][a-z0-9-]{0,62}" maxlength="63" required>
+        <label for="html">HTML 源代码</label>
+        <textarea id="html" required spellcheck="false" placeholder="<!DOCTYPE html> ..."></textarea>
+        <div class="actions" style="margin-top:14px">
+          <button id="saveBtn" type="submit">创建工具</button>
+          <button id="cancelBtn" class="secondary" type="button" hidden>取消编辑</button>
         </div>
-    </div>
+      </form>
+      <div id="formMessage" aria-live="polite"></div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  'use strict';
+  const BASE = "/pwa";
+  const API = BASE + "/api/tools";
+  const el = (id) => document.getElementById(id);
+  let adminToken = '';
+  let editingSlug = null;
+  let saving = false;
 
-    <script>
-        // ==================== 固定 API 基础路径（与你蓝图前缀一致） ====================
-        const API_BASE = '/pwa/';   // 请确保此后端蓝图挂载前缀一致
+  function message(where, text, isError = false) {
+    const target = el(where);
+    target.replaceChildren();
+    if (!text) return;
+    const panel = document.createElement('div');
+    panel.className = 'message ' + (isError ? 'error' : 'ok');
+    panel.textContent = text;
+    target.append(panel);
+  }
 
-        // ==================== 工具函数 ====================
-        function showFormMessage(msg, type = 'success') {
-            const el = document.getElementById('formMessage');
-            el.innerHTML = `<div class="message ${type}">${msg}</div>`;
-            setTimeout(() => { el.innerHTML = ''; }, 4000);
-        }
+  async function callAPI(path = '', options = {}) {
+    const headers = { 'X-PWA-Admin-Token': adminToken };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    const res = await fetch(API + path, { ...options, headers, cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('服务器返回 ' + res.status));
+    return data;
+  }
 
-        // 加载工具列表
-        async function loadTools() {
-            const listDiv = document.getElementById('toolList');
-            try {
-                const resp = await fetch(`${API_BASE}api/tools`);
-                if (!resp.ok) throw new Error('请求失败');
-                const tools = await resp.json();
-                if (!tools.length) {
-                    listDiv.innerHTML = '<p>暂无已创建的工具。</p>';
-                    return;
-                }
-                let html = '<ul>';
-                tools.forEach(t => {
-                    html += `
-                    <li>
-                        <a href="/pwa${t.url}" target="_blank">${t.name}</a>
-                        <div class="action-btns">
-                            <button class="btn-sm" onclick="editTool('${t.slug}')">编辑</button>
-                            <button class="btn-sm btn-danger" onclick="deleteTool('${t.slug}')">删除</button>
-                        </div>
-                    </li>`;
-                });
-                html += '</ul>';
-                listDiv.innerHTML = html;
-            } catch (err) {
-                listDiv.innerHTML = '<p>加载失败，请刷新重试。</p>';
-            }
-        }
+  async function login(event) {
+    event.preventDefault();
+    adminToken = el('adminToken').value;
+    try {
+      await loadTools();
+      el('adminToken').value = '';
+      el('loginPanel').hidden = true;
+      el('workspace').hidden = false;
+    } catch (error) {
+      adminToken = '';
+      message('loginMessage', error.message, true);
+    }
+  }
 
-        // 保存工具（创建 / 编辑）
-        async function saveTool(slug, html, isEdit = false) {
-            if (isEdit) {
-                // 编辑：先删除旧工具，再重新创建（需要后端 DELETE 端点）
-                try {
-                    const delResp = await fetch(`${API_BASE}api/tools/${slug}`, { method: 'DELETE' });
-                    if (!delResp.ok) {
-                        const err = await delResp.json();
-                        throw new Error(err.error || '删除旧版本失败');
-                    }
-                } catch (err) {
-                    showFormMessage(`编辑失败：${err.message}`, 'error');
-                    return false;
-                }
-            }
+  function lock() {
+    adminToken = '';
+    resetForm();
+    el('toolsList').replaceChildren();
+    el('workspace').hidden = true;
+    el('loginPanel').hidden = false;
+    message('loginMessage', '已退出当前管理会话');
+  }
 
-            try {
-                const resp = await fetch(`${API_BASE}api/tools`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ slug, html })
-                });
-                const data = await resp.json();
-                if (!resp.ok) {
-                    showFormMessage(`操作失败：${data.error || '未知错误'}`, 'error');
-                    return false;
-                }
-                showFormMessage(isEdit ? '修改已保存' : '工具创建成功！');
-                resetForm();
-                loadTools();
-                return true;
-            } catch (err) {
-                showFormMessage(`网络错误：${err.message}`, 'error');
-                return false;
-            }
-        }
+  async function loadTools() {
+    const tools = await callAPI();
+    const target = el('toolsList');
+    target.replaceChildren();
+    if (!tools.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = '暂无工具。';
+      target.append(p);
+      return;
+    }
+    const ul = document.createElement('ul');
+    ul.className = 'tools';
+    for (const tool of tools) {
+      const li = document.createElement('li');
+      const info = document.createElement('div');
+      const a = document.createElement('a');
+      a.href = tool.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = tool.name;
+      const slug = document.createElement('small');
+      slug.textContent = tool.slug + ' · ' + tool.url;
+      info.append(a, slug);
 
-        // 删除工具
-        async function deleteTool(slug) {
-            if (!confirm(`确定要删除工具 "${slug}" 吗？此操作不可恢复。`)) return;
-            try {
-                const resp = await fetch(`${API_BASE}api/tools/${slug}`, { method: 'DELETE' });
-                if (!resp.ok) throw new Error('删除失败');
-                loadTools();
-                if (document.getElementById('editSlug').value === slug) resetForm();
-            } catch (err) {
-                alert(`删除失败：${err.message}`);
-            }
-        }
+      const buttons = document.createElement('div');
+      buttons.className = 'actions';
+      const edit = document.createElement('button');
+      edit.className = 'small secondary';
+      edit.type = 'button';
+      edit.textContent = '编辑';
+      edit.addEventListener('click', () => editTool(tool.slug));
+      const del = document.createElement('button');
+      del.className = 'small danger';
+      del.type = 'button';
+      del.textContent = '删除';
+      del.addEventListener('click', () => deleteTool(tool.slug));
+      buttons.append(edit, del);
+      li.append(info, buttons);
+      ul.append(li);
+    }
+    target.append(ul);
+  }
 
-        // 编辑工具：加载原始 HTML
-        async function editTool(slug) {
-            try {
-                // 通过静态文件接口获取 index.html 原始内容
-                const resp = await fetch(`${API_BASE}${slug}/static/index.html`);
-                if (!resp.ok) throw new Error('无法加载工具源代码');
-                const htmlText = await resp.text();
-                document.getElementById('editSlug').value = slug;
-                document.getElementById('slug').value = slug;
-                document.getElementById('slug').disabled = true;
-                document.getElementById('html').value = htmlText;
-                document.getElementById('submitBtn').textContent = '保存修改';
-                document.getElementById('cancelEditBtn').style.display = 'inline-block';
-                document.getElementById('formTitle').textContent = `✏️ 编辑工具：${slug}`;
-            } catch (err) {
-                alert(`无法编辑：${err.message}`);
-            }
-        }
+  async function editTool(slug) {
+    try {
+      const data = await callAPI('/' + encodeURIComponent(slug));
+      editingSlug = slug;
+      el('slug').value = slug;
+      el('slug').disabled = true;
+      el('html').value = data.html;
+      el('saveBtn').textContent = '保存修改';
+      el('formHeading').textContent = '编辑：' + slug;
+      el('cancelBtn').hidden = false;
+      message('formMessage', '');
+      el('toolForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+      message('formMessage', error.message, true);
+    }
+  }
 
-        // 重置表单
-        function resetForm() {
-            document.getElementById('toolForm').reset();
-            document.getElementById('editSlug').value = '';
-            document.getElementById('slug').disabled = false;
-            document.getElementById('submitBtn').textContent = '创建工具';
-            document.getElementById('cancelEditBtn').style.display = 'none';
-            document.getElementById('formTitle').textContent = '⚡ 创建新工具';
-            document.getElementById('formMessage').innerHTML = '';
-        }
+  function resetForm() {
+    editingSlug = null;
+    el('toolForm').reset();
+    el('slug').disabled = false;
+    el('saveBtn').textContent = '创建工具';
+    el('formHeading').textContent = '创建新工具';
+    el('cancelBtn').hidden = true;
+  }
 
-        // ==================== 事件监听 ====================
-        document.getElementById('toolForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const slug = document.getElementById('slug').value.trim();
-            const html = document.getElementById('html').value.trim();
-            const isEdit = document.getElementById('editSlug').value !== '';
-            if (!slug || !html) return;
-            await saveTool(slug, html, isEdit);
-        });
+  async function saveTool(event) {
+    event.preventDefault();
+    if (saving) return;
+    const slug = el('slug').value.trim();
+    const html = el('html').value;
+    if (!slug || !html.trim()) return;
+    saving = true;
+    el('saveBtn').disabled = true;
+    const old = editingSlug;
+    try {
+      const data = await callAPI(old ? '/' + encodeURIComponent(old) : '', {
+        method: old ? 'PUT' : 'POST', body: JSON.stringify({ slug, html })
+      });
+      resetForm();
+      message('formMessage', data.message + '，页面地址：' + data.url);
+      await loadTools();
+    } catch (error) {
+      message('formMessage', error.message, true);
+    } finally {
+      saving = false;
+      el('saveBtn').disabled = false;
+    }
+  }
 
-        document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+  async function deleteTool(slug) {
+    if (!confirm('确定删除工具“' + slug + '”？此操作不可恢复。')) return;
+    try {
+      await callAPI('/' + encodeURIComponent(slug), { method: 'DELETE' });
+      if (editingSlug === slug) resetForm();
+      await loadTools();
+      message('formMessage', '已删除工具：' + slug);
+    } catch (error) {
+      message('formMessage', error.message, true);
+    }
+  }
 
-        // ==================== 初始化 ====================
-        loadTools();
-    </script>
+  el('loginForm').addEventListener('submit', login);
+  el('lockBtn').addEventListener('click', lock);
+  el('reloadBtn').addEventListener('click', async () => {
+    try { await loadTools(); } catch (error) { message('formMessage', error.message, true); }
+  });
+  el('toolForm').addEventListener('submit', saveTool);
+  el('cancelBtn').addEventListener('click', () => { resetForm(); message('formMessage', ''); });
+})();
+</script>
 </body>
 </html>

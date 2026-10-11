@@ -3,7 +3,17 @@ source .venv/bin/activate.fish
 ./pocketbase serve --http="0.0.0.0:8790"
 
 tar -czvf db.tar.gz db
-
+tar -czf dball.tar.gz \
+  --exclude='venv' \
+  --exclude='.venv' \
+  --exclude='env' \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  --exclude='*.pyo' \
+  --exclude='*.pyd' \
+  --exclude='dball.tar.gz' \
+  ./
+  
 tar -czvf dball.tar.gz \
   --exclude='./.git' \
   --exclude='*.pyc' \

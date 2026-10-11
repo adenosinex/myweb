@@ -2,292 +2,3116 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>动态知识库</title>
-    <script src="/static/cdn/vue3.5.31.js"></script>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
+
+    <title>知识笔记 · 个人知识工作台</title>
+
+    <script src="/static/cdn/vue3.5.global.prod.js"></script>
+    <link rel="stylesheet" href="/static/cdn/element-plus2.14.3.css">
+    <script src="/static/cdn/element-plus2.14.3.js"></script>
+    <script src="/static/cdn/element.vue.js"></script>
     <script src="/static/cdn/tailwindcss3.4.17.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <link rel="stylesheet" href="/static/cdn/github-markdown.min.css">
-    <link rel="stylesheet" href="/static/cdn/nprogress.min.css">
-    <script src="/static/cdn/nprogress.min.js"></script>
+
+    <link rel="stylesheet" href="/static/cdn/vditor.css">
+    <script src="/static/cdn/vditor.js"></script>
 
     <style>
-        body { height: 100dvh; width: 100vw; margin: 0; overscroll-behavior-y: none; }
-        #nprogress .bar { background: #2563eb !important; height: 3px !important; }
-        #nprogress .peg { box-shadow: 0 0 10px #2563eb, 0 0 5px #2563eb !important; }
-        #nprogress .spinner { display: none !important; }
-        .markdown-body { background-color: transparent; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .drop-zone-active { background-color: #eff6ff !important; border-color: #93c5fd !important; }
-        .editor-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-        .folder-action { opacity: 0; transition: opacity 0.2s; }
-        .folder-row:hover .folder-action { opacity: 1; }
-        @media (max-width: 768px) { .folder-action { opacity: 1; } }
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body,
+        #app {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .highlight-mark {
+            background: #fef08a;
+            color: #b91c1c;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+
+        ::highlight(search-results) {
+            background: #fef08a;
+            color: #b91c1c;
+            font-weight: bold;
+        }
+
+        /* =====================================================
+           Vditor
+           ===================================================== */
+
+        .vditor {
+            border: none !important;
+        }
+
+        .vditor-toolbar {
+            border-bottom: 1px solid #f1f5f9 !important;
+            background: #f8fafc !important;
+            padding-left: 20px !important;
+        }
+
+        .vditor-ir,
+        .vditor-wysiwyg {
+            padding: 20px 40px !important;
+        }
+
+        /* =====================================================
+           侧栏
+           ===================================================== */
+
+        .document-aside {
+            width: 320px;
+            min-width: 320px;
+            max-width: 320px;
+        }
+
+        .timeline-aside {
+            width: 430px;
+            min-width: 430px;
+            max-width: 430px;
+        }
+
+        /* =====================================================
+           时间线
+           ===================================================== */
+
+        .timeline-panel {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        .timeline-header {
+            flex-shrink: 0;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .timeline-header-main {
+            min-height: 47px;
+            padding: 7px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .timeline-main-title {
+            min-width: 0;
+            font-size: 14px;
+            line-height: 1.3;
+            color: #334155;
+            font-weight: 700;
+        }
+
+        .timeline-main-count {
+            margin-top: 2px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .timeline-options {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px 7px;
+        }
+
+        /* =====================================================
+           月历
+           ===================================================== */
+
+        .calendar-container {
+            flex-shrink: 0;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 7px 9px 8px;
+        }
+
+        .calendar-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .calendar-month {
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .calendar-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 2px;
+        }
+
+        .calendar-weekday {
+            height: 17px;
+            line-height: 17px;
+            text-align: center;
+            font-size: 9px;
+            color: #94a3b8;
+        }
+
+        .calendar-cell {
+            height: 30px;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            padding: 1px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .calendar-cell:hover {
+            background: #f8fafc;
+        }
+
+        .calendar-cell.other-month {
+            opacity: 0.35;
+        }
+
+        .calendar-cell.today {
+            border-color: #93c5fd;
+        }
+
+        .calendar-cell.selected {
+            background: #eff6ff;
+            border-color: #3b82f6;
+        }
+
+        .calendar-number {
+            height: 15px;
+            line-height: 15px;
+            text-align: center;
+            font-size: 10px;
+            color: #475569;
+        }
+
+        .calendar-cell.selected .calendar-number {
+            color: #2563eb;
+            font-weight: 700;
+        }
+
+        .calendar-count {
+            height: 10px;
+            line-height: 10px;
+            text-align: center;
+            font-size: 8px;
+            color: transparent;
+        }
+
+        .calendar-cell.has-docs .calendar-count {
+            color: #2563eb;
+            font-weight: 700;
+        }
+
+        .calendar-cell.heavy .calendar-count {
+            color: #7c3aed;
+        }
+
+        .timeline-calendar-collapsed {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 37px;
+            padding: 5px 10px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            flex-shrink: 0;
+        }
+
+        .collapsed-month {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+        }
+
+        .collapsed-info {
+            margin-left: 8px;
+            color: #94a3b8;
+            font-size: 10px;
+        }
+
+        /* =====================================================
+           时间线文章
+           ===================================================== */
+
+        .timeline-document-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 9px;
+        }
+
+        .timeline-group {
+            margin-bottom: 14px;
+        }
+
+        .timeline-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 1px 2px 6px;
+        }
+
+        .timeline-group-title {
+            min-width: 0;
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+        }
+
+        .timeline-group-count {
+            flex-shrink: 0;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .timeline-document {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 9px 10px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: background 0.12s, border-color 0.12s;
+        }
+
+        .timeline-document:hover {
+            background: #f8fbff;
+            border-color: #93c5fd;
+        }
+
+        .timeline-document:active {
+            background: #eff6ff;
+        }
+
+        .timeline-document.active {
+            background: #eff6ff;
+            border-color: #60a5fa;
+        }
+
+        .timeline-document-title {
+            font-size: 13px;
+            line-height: 1.45;
+            color: #334155;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .timeline-document-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 4px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .timeline-document-preview {
+            margin-top: 4px;
+            color: #94a3b8;
+            font-size: 10px;
+            line-height: 1.45;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+        }
+
+        .timeline-empty {
+            padding: 36px 10px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        /* =====================================================
+           文档 ID
+           ===================================================== */
+
+        .doc-id-input {
+            width: 210px;
+        }
+
+        .rename-hint {
+            font-size: 10px;
+            color: #94a3b8;
+            white-space: nowrap;
+        }
+
+        /* =====================================================
+           手机底部
+           ===================================================== */
+
+        .mobile-bottom-nav {
+            display: none;
+        }
+
+        .mobile-nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 2px;
+            color: #94a3b8;
+            font-size: 11px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .mobile-nav-item.active {
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        /* =====================================================
+           移动端
+           ===================================================== */
+
+        @media (max-width: 768px) {
+            header {
+                height: auto !important;
+                min-height: 56px;
+                padding: 7px 9px !important;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            header > div:nth-child(1) {
+                flex: 1;
+                min-width: 0;
+            }
+
+            header > div:nth-child(2) {
+                width: 100% !important;
+                max-width: none !important;
+                order: 3;
+            }
+
+            header > div:nth-child(3) {
+                flex-shrink: 0;
+            }
+
+            .timeline-aside,
+            .document-aside {
+                width: 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .vditor-ir,
+            .vditor-wysiwyg {
+                padding: 12px 16px !important;
+            }
+
+            .vditor-toolbar {
+                padding-left: 7px !important;
+            }
+
+            .mobile-editor-header {
+                min-height: 48px !important;
+                height: auto !important;
+                padding: 4px 7px !important;
+            }
+
+            .mobile-save-status {
+                display: none;
+            }
+
+            .doc-id-input {
+                width: 115px !important;
+            }
+
+            .rename-hint {
+                display: none;
+            }
+
+            .timeline-document-list {
+                padding: 7px;
+            }
+
+            .calendar-container {
+                padding: 6px 7px 7px;
+            }
+
+            .calendar-cell {
+                height: 28px;
+            }
+
+            .mobile-bottom-nav {
+                display: flex;
+                height: 54px;
+                flex-shrink: 0;
+                background: #ffffff;
+                border-top: 1px solid #e5e7eb;
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
+
+/* ===== 2026 UI refresh: visuals only; existing interaction/API preserved ===== */
+:root {
+  --el-color-primary: #4f46e5;
+  --el-color-primary-light-3: #7771ef;
+  --el-color-primary-light-5: #a19dfa;
+  --el-color-primary-light-9: #f0efff;
+  --el-border-radius-base: 9px;
+  --ui-ink: #18233b;
+  --ui-muted: #74809a;
+  --ui-line: #e9edf5;
+  --ui-surface: #ffffff;
+  --ui-soft: #f6f8fc;
+  --ui-brand: #4f46e5;
+}
+html, body, #app { min-height: 0; }
+body { color: var(--ui-ink); background: var(--ui-soft); font-family: Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
+button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, [role="button"]:focus-visible { outline: 2px solid #817cf5; outline-offset: 2px; }
+.el-button { font-weight: 550; transition: background .18s, box-shadow .18s, transform .18s; }
+.el-button:not(.is-disabled):active { transform: translateY(1px); }
+.el-button--primary { box-shadow: 0 3px 9px rgba(79,70,229,.16); }
+.el-input__wrapper { box-shadow: 0 0 0 1px #e3e8f2 inset !important; border-radius: 9px; }
+.el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--ui-brand) inset,0 0 0 3px #4f46e51b !important; }
+.el-tag { border-radius: 6px; }
+.app-header { height: 72px; min-height: 72px; gap: 18px; padding: 0 22px !important; background: rgba(255,255,255,.98); border-bottom: 1px solid var(--ui-line); box-shadow: 0 1px 0 rgba(18,29,54,.025); }
+.brand-section { min-width: 296px; gap: 11px; }
+.brand-icon { width: 39px; height: 39px; flex-shrink: 0; display: grid; place-items: center; border-radius: 12px; color: white; font-size: 21px; background: linear-gradient(145deg,#6b63f7,#4338ca); box-shadow: 0 6px 16px #4f46e529; }
+.brand-copy { display: flex; flex-direction: column; white-space: nowrap; line-height: 1.35; }
+.brand-copy strong { font-size: 15px; letter-spacing: .3px; color: #1e2740; }
+.brand-copy span { font-size: 10px; color: #9da6b8; letter-spacing: .6px; }
+.header-sync { margin-left: 12px; border-color: #e7eaf3; color: #69758d; }
+.header-search { width: min(100%,500px); flex: 1; min-width: 140px; }
+.header-search .el-input__wrapper { min-height: 39px; background: #f7f8fc; box-shadow: 0 0 0 1px transparent inset !important; }
+.header-search .el-input__wrapper:hover { background: #f2f4fa; }
+.search-shortcut { padding: 3px 5px; font-size: 10px; border: 1px solid #e3e7f0; background: white; color: #a0a9bd; border-radius: 5px; }
+.header-actions { flex-shrink: 0; gap: 16px; }
+.header-actions .el-switch__label { font-size: 12px; color: #707a91; }
+.header-create { border-radius: 9px; padding-inline: 14px; }
+.workspace-body { min-height: 0; }
+.document-sidebar { background: #fbfcff; border-right: 1px solid var(--ui-line); box-shadow: 1px 0 0 #f7f8fc; }
+.document-aside { width: 294px; min-width: 294px; max-width: 294px; }
+.timeline-aside { width: 382px; min-width: 382px; max-width: 382px; }
+.sidebar-top { padding: 19px 13px 14px; background: #fff; border-bottom: 1px solid var(--ui-line); }
+.side-heading { display:flex; align-items:center; justify-content:space-between; padding:0 8px 15px; font-size:12px; font-weight:700; letter-spacing:.5px; color:#58647c; }
+.total-pill { font-weight:600; background:#f3f5fa; color:#8893a9; padding:4px 8px; border-radius:20px; font-size:10px; }
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; gap: 4px; border-radius: 11px; background: #f1f3f9; }
+.mode-button { min-height:34px; display:flex; justify-content:center; align-items:center; gap:7px; border:0; border-radius:8px; cursor:pointer; background:transparent; color:#8a94a8; font-size:12px; font-weight:650; transition:all .16s; }
+.mode-button:hover { color:#4f46e5; }
+.mode-button.active { color:#4f46e5; background:white; box-shadow:0 2px 6px #2e346214; }
+.mode-arrow { font-size:10px; }
+.quick-create { width: 100%; margin-top: 13px; height: 37px; border-radius:9px; }
+.create-key { margin-left:auto; color:#ffffffbd; font-size:9px; font-weight:400; }
+.document-sidebar > div:nth-child(2) { padding: 10px 9px 26px; }
+.section-label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin: 16px 8px 8px; font-size:11px; font-weight:700; color:#78849b; }
+.section-label:first-child { margin-top: 8px; }
+.section-label > span:first-child { display:flex; align-items:center; gap:6px; }
+.section-label .el-icon { font-size:12px; }
+.pinned-label { color:#c58433; }
+.counter { color:#9ba5b7; border-radius:10px; min-width:19px; text-align:center; background:#eff1f7; padding:2px 5px; font-weight:500; font-size:10px; }
+.doc-row { display:flex; align-items:center; min-height:35px; padding: 9px 11px; margin:2px 3px; border: 1px solid transparent; border-radius:9px; font-size:12px; line-height:1.4; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; color:#455069; transition:all .15s; }
+.doc-row:hover { background:#f2f3fa; color:#4b42c8; }
+.doc-row.bg-blue-100, .doc-row.bg-orange-100, .doc-row.bg-slate-200 { background:#efeeff !important; color:#453bc3 !important; border-color:#e1dfff; font-weight:700; }
+.doc-row.text-slate-500 { color:#94a0b1; }
+.highlight-mark { background:#fff2aa; color:#915300; border-radius:3px; padding:1px 2px; }
+.empty-small { padding:28px 12px; color:#99a4b5; display:flex; flex-direction:column; align-items:center; gap:7px; text-align:center; font-size:12px; }
+.empty-small .el-icon { font-size:27px; color:#bfc6d7; }
+.empty-small small { color:#adb5c4; font-size:10px; }
+.editor-main { background:#fff; }
+.editor-empty { background: radial-gradient(ellipse at 50% 30%, #f3f2ff 0%, #ffffff 58%); padding:30px; }
+.empty-hero { display:flex; flex-direction:column; align-items:center; max-width:550px; text-align:center; }
+.empty-hero-icon { width:76px; height:76px; border-radius:23px; display:grid; place-items:center; font-size:32px; background:#edebff; color:var(--ui-brand); box-shadow:0 12px 42px #7771ef18; margin-bottom:24px; }
+.empty-hero h1 { font-size:24px; letter-spacing:.6px; font-weight:750; color:#27324b; margin:0 0 12px; }
+.empty-hero p { font-size:13px; line-height:1.8; color:#919caf; margin:0 0 26px; }
+.empty-hero .el-button { padding:18px 25px; font-size:13px; }
+.empty-shortcut { font-size:11px; color:#acb5c5; margin-top:30px; }
+.editor-toolbar { background:#fff !important; border-color:var(--ui-line) !important; min-height:58px; height:58px; gap:12px; }
+.editor-toolbar .doc-id-input { width:225px; }
+.editor-toolbar .el-input-group__prepend { font-size:10px; color:#7c87a0; background:#f5f6fa; border:0; }
+.editor-toolbar .rename-hint { color:#aab2c3; font-size:10px; }
+.editor-toolbar .el-button--success { --el-button-bg-color: #4f46e5; --el-button-border-color: #4f46e5; --el-button-hover-bg-color: #6259e6; --el-button-hover-border-color: #6259e6; --el-button-active-bg-color: #4338ca; --el-button-active-border-color: #4338ca; }
+.editor-canvas { background:#ffffff; }
+.vditor { border:none !important; }
+.vditor-toolbar { padding:7px 14px !important; min-height:44px; background:#fff !important; border-bottom:1px solid var(--ui-line) !important; }
+.vditor-toolbar__item { border-radius:6px; }
+.vditor-ir,.vditor-wysiwyg { padding:25px clamp(20px,5vw,62px) !important; }
+.vditor-ir .vditor-reset, .vditor-wysiwyg .vditor-reset { max-width:920px; margin:0 auto; color:#2f3b50; font-size:15px; line-height:1.85; }
+.editor-statusbar { height:34px; flex-shrink:0; display:flex; align-items:center; gap:14px; padding:0 22px; background:#fbfcff; border-top:1px solid var(--ui-line); color:#a2abbb; font-size:10px; }
+.status-indicator { width:6px; height:6px; border-radius:50%; background:#65b895; box-shadow:0 0 0 3px #65b89517; }
+.status-indicator.status-dirty { background:#eca946; box-shadow:0 0 0 3px #eca94617; }
+.status-indicator.status-error { background:#e86666; box-shadow:0 0 0 3px #e8666617; }
+.status-text { color:#718099; }
+.statusbar-spacer { flex:1; }
+.inspector-aside { width:284px; min-width:284px; max-width:284px; background:#fafbfe; border-color:var(--ui-line); padding:18px 15px; gap:13px; }
+.inspector-aside > div { border-radius:12px !important; border:1px solid #eaedf5 !important; box-shadow:0 4px 15px #1b274006 !important; padding:16px !important; }
+.inspector-aside h3 { font-size:12px; }
+.inspector-aside .el-tag { max-width:100%; }
+.inspector-aside .related-links > div { padding:7px 8px; border-radius:6px; }
+.inspector-aside .related-links > div:hover { background:#f1f0ff; }
+.generated-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.timeline-panel { background:#fafbfe; }
+.timeline-header { border-color:var(--ui-line); padding:7px 5px; }
+.timeline-main-title { color:#28334d; font-size:14px; }
+.timeline-options { padding-top:6px; }
+.calendar-container { padding:10px 12px 13px; border-color:var(--ui-line); }
+.calendar-month { color:#4d5673; }
+.calendar-grid { gap:3px; }
+.calendar-weekday { height:22px; line-height:22px; font-size:10px; }
+.calendar-cell { height:38px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:7px; }
+.calendar-number { font-size:11px; height:17px; line-height:17px; }
+.calendar-cell.today { border-color:#c8c5fc; }
+.calendar-cell.selected { background:#efeeff; border-color:#8882ed; }
+.calendar-cell.selected .calendar-number { color:#4f46e5; }
+.calendar-count { height:13px; line-height:13px; font-size:9px; }
+.calendar-cell.has-docs .calendar-count { color:#645de0; }
+.timeline-document-list { padding:12px; }
+.timeline-document { border:1px solid #eaedf5; box-shadow:0 2px 10px #1e2b4705; border-radius:10px; padding:12px 13px; margin-bottom:8px; }
+.timeline-document:hover { border-color:#b4b0f4; background:#faf9ff; }
+.timeline-document.active { background:#f0efff; border-color:#a9a4f2; }
+.timeline-document-title { color:#2f3b53; }
+.timeline-calendar-collapsed { border-color:var(--ui-line); }
+.mobile-bottom-nav { z-index:15; }
+.mobile-nav-item.active { color:var(--ui-brand); }
+@media (min-width:769px) and (max-width:1160px) {
+  .brand-section { min-width:210px; }
+  .brand-copy span,.header-sync,.auto-ai-switch,.rename-hint { display:none !important; }
+  .inspector-aside { width:250px; min-width:250px; max-width:250px; }
+  .document-aside { width:260px; min-width:260px; max-width:260px; }
+  .timeline-aside { width:345px; min-width:345px; max-width:345px; }
+}
+@media (max-width:768px) {
+  .app-header { height:auto !important; min-height:64px; padding:10px 12px !important; gap:9px; }
+  .brand-section { min-width:0; flex:1; gap:9px; }
+  .brand-icon { width:33px; height:33px; font-size:18px; border-radius:10px; }
+  .brand-copy strong { font-size:13px; }
+  .brand-copy span,.header-sync,.auto-ai-switch { display:none !important; }
+  .header-actions { gap:6px; }
+  .header-search { width:100% !important; max-width:none; flex:none; order:3; }
+  .header-search .el-input__wrapper { min-height:36px; }
+  .document-sidebar { border:0; }
+  .document-aside,.timeline-aside { width:100% !important; min-width:100% !important; max-width:100% !important; }
+  .sidebar-top { padding:11px 12px 12px; }
+  .side-heading { padding-bottom:9px; }
+  .quick-create { height:35px; }
+  .editor-toolbar { height:auto !important; min-height:57px !important; padding:8px !important; align-items:flex-start; flex-wrap:wrap; gap:7px; }
+  .editor-toolbar > div:first-child { min-width:0; flex:1; flex-wrap:wrap; gap:5px; }
+  .editor-toolbar > div:last-child { gap:5px; margin-left:auto; }
+  .editor-toolbar .doc-id-input { width: min(40vw,175px) !important; }
+  .editor-toolbar .el-button { padding:7px 9px; }
+  .vditor-ir,.vditor-wysiwyg { padding:12px 16px !important; }
+  .vditor-toolbar { padding:5px 7px !important; }
+  .editor-statusbar { padding:0 13px; height:32px; gap:9px; font-size:9px; }
+  .mobile-bottom-nav { height: calc(56px + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom); border-color:var(--ui-line); box-shadow:0 -4px 22px #1c2a4310; }
+  .mobile-nav-item { font-size:10px; gap:3px; }
+  .mobile-nav-item .el-icon { font-size:19px; }
+  .calendar-cell { height: min(9vw,40px); }
+  .timeline-document-list { padding:10px; }
+  .empty-hero h1 { font-size:20px; }
+  .empty-hero p { font-size:12px; }
+}
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition-duration:.01ms !important; animation-duration:.01ms !important; } }
+
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 flex overflow-hidden font-sans" id="app">
 
-    <div v-show="isSidebarOpen" class="fixed inset-0 bg-slate-900/40 z-[40] md:hidden backdrop-blur-sm transition-opacity" @click="isSidebarOpen = false"></div>
+<body>
 
-    <div v-show="showMoveModal" class="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center backdrop-blur-sm" style="display: none;" @click.self="showMoveModal = false">
-        <div class="bg-white rounded-xl shadow-2xl w-[420px] max-w-[90vw] flex flex-col max-h-[80vh] overflow-hidden transform transition-all">
-            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
-                <h3 class="font-semibold text-slate-800 flex items-center gap-2">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                    移动 {{ selectedDocs.length }} 个文档至...
-                </h3>
-                <button @click="showMoveModal = false" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+<div id="app" class="h-full flex flex-col">
+
+    <!-- =========================================================
+         HEADER
+         ========================================================= -->
+    <header v-show="!isFocusMode" class="app-header bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10">
+        <div class="brand-section flex items-center gap-3 min-w-0">
+            <div class="brand-icon" aria-hidden="true"><el-icon><collection></collection></el-icon></div>
+            <div class="brand-copy">
+                <strong>知识笔记</strong>
+                <span>把想法沉淀为知识</span>
             </div>
-            <div class="p-3 overflow-y-auto flex-1 space-y-1">
-                <div @click="executeBulkMove('')" class="px-3 py-2.5 hover:bg-blue-50 cursor-pointer rounded-lg flex items-center gap-2 text-sm font-medium text-slate-700 transition-colors border border-transparent hover:border-blue-100">
-                    <span>📂</span> 知识库 (根目录)
-                </div>
-                <div v-for="path in allFolderPaths" :key="path" @click="executeBulkMove(path)" class="px-3 py-2.5 hover:bg-blue-50 cursor-pointer rounded-lg flex items-center gap-2 text-sm text-slate-700 transition-colors border border-transparent hover:border-blue-100">
-                    <span>📁</span> {{ path.replace(/_/g, ' / ') }}
-                </div>
-            </div>
+            <el-button class="header-sync" size="small" plain :loading="syncing" @click="rebuildIndex">
+                <el-icon class="mr-1"><refresh></refresh></el-icon>同步索引
+            </el-button>
         </div>
-    </div>
+        <div class="header-search">
+            <el-input v-model="searchQuery" placeholder="搜索标题、标签或正文（支持 tag:）" clearable
+                      @keyup.enter="forceSearch" aria-label="搜索笔记">
+                <template #prefix><el-icon><search></search></el-icon></template>
+                <template #suffix><span v-if="!isMobile" class="search-shortcut">⌘ K</span></template>
+            </el-input>
+        </div>
+        <div class="header-actions flex items-center gap-2">
+            <el-switch v-model="autoAiTags" active-text="静默 AI 补全" size="small" class="auto-ai-switch"></el-switch>
+            <el-button v-if="isMobile" type="primary" circle @click="createNew" aria-label="新建笔记">
+                <el-icon><plus></plus></el-icon>
+            </el-button>
+            <el-button v-else type="primary" class="header-create" @click="createNew">
+                <el-icon class="mr-1"><plus></plus></el-icon>新建笔记
+            </el-button>
+        </div>
+    </header>
 
-    <div class="w-[280px] bg-white border-r border-slate-200 flex flex-col z-[50] shadow-xl md:shadow-sm shrink-0 h-full fixed md:relative transition-transform duration-300 md:translate-x-0"
-         :class="isSidebarOpen ? 'translate-x-0' : '-translate-x-full'">
-        
-        <div class="p-4 border-b border-slate-200 flex flex-col gap-3">
-            <div class="flex items-center justify-between">
-                <div class="flex bg-slate-100 p-1 rounded-lg w-full">
-                    <button @click="switchMode('view')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">📖 阅读</button>
-                    <button @click="switchMode('edit')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">✍️ 编辑</button>
-                    <button @click="switchMode('graph')" class="flex-1 py-1.5 text-sm font-medium rounded-md transition" :class="currentMode === 'graph' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'">🕸️ 网状图</button>
+
+    <!-- =========================================================
+         主体
+         ========================================================= -->
+    <div class="workspace-body flex-1 flex overflow-hidden">
+
+        <!-- =====================================================
+             左侧
+             ===================================================== -->
+        <aside
+            v-show="!isFocusMode && (!isMobile || mobileView === 'list')"
+            class="document-sidebar bg-slate-50 border-r border-slate-200 flex flex-col shrink-0"
+            :class="sidebarMode === 'timeline'
+                ? 'timeline-aside'
+                : 'document-aside'">
+
+            <!-- =================================================
+                 顶部模式
+                 ================================================= -->
+            <div class="sidebar-top">
+                <div class="side-heading"><span>我的工作区</span><span class="total-pill">{{ documents.length }} 篇</span></div>
+                <div class="mode-switch">
+                    <button type="button" class="mode-button" :class="{ active: sidebarMode === 'docs' }"
+                            @click="sidebarMode = 'docs'">
+                        <el-icon><document></document></el-icon>文档
+                    </button>
+                    <button type="button" class="mode-button" :class="{ active: sidebarMode === 'timeline' }"
+                            @click="toggleTimelinePanel">
+                        <el-icon><calendar></calendar></el-icon>时间线
+                        <span v-if="sidebarMode === 'timeline'" class="mode-arrow">{{ calendarCollapsed ? '▾' : '▴' }}</span>
+                    </button>
                 </div>
-                <button @click="isSidebarOpen = false" class="ml-2 p-1.5 text-slate-400 md:hidden hover:bg-slate-100 rounded-md">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
+                <el-button v-if="sidebarMode === 'docs'" type="primary" class="quick-create" @click="createNew">
+                    <el-icon class="mr-1"><edit-pen></edit-pen></el-icon>快速记录
+                    <span class="create-key">Ctrl N</span>
+                </el-button>
             </div>
-            
-            <button v-show="currentMode === 'edit'" @click="createNew" class="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-md text-sm font-medium transition flex items-center justify-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                新建文档
-            </button>
 
-            <div class="relative">
-                <input type="text" v-model="searchQuery" @input="debouncedSearch" placeholder="全文搜索..." 
-                       class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all">
-                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-            </div>
-        </div>
-        
-        <div class="px-4 py-2 border-b border-slate-100 flex justify-between items-center shrink-0 transition-colors sticky top-0 bg-white/95 backdrop-blur z-20 border-2 border-transparent"
-             @dragover.prevent.stop="dragOverTarget = 'root'" @dragleave.prevent.stop="dragOverTarget = null" @drop.prevent.stop="handleDrop($event, '')"
-             :class="dragOverTarget === 'root' ? 'drop-zone-active text-blue-800' : ''">
-            <h3 class="m-0 text-sm font-semibold flex items-center gap-1.5 pointer-events-none text-slate-600">📂 知识库</h3>
-            <div class="flex items-center gap-1">
-                <button @click="expandAll" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition" title="展开全部">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>
-                </button>
-                <button @click="collapseAll" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition" title="折叠全部">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 11 12 6 17 11"></polyline><polyline points="7 18 12 13 17 18"></polyline></svg>
-                </button>
-            </div>
-        </div>
+            <!-- =================================================
+                 文档列表
+                 ================================================= -->
+            <div
+                v-if="sidebarMode === 'docs'"
+                class="flex-1 overflow-y-auto p-2">
 
-        <div class="flex-1 p-2 overflow-y-auto no-scrollbar relative pb-20" ref="sidebarScroll" @dragover="autoScroll">
-            <div v-show="searchQuery !== ''">
-                <div v-if="isSearching" class="text-center text-sm text-slate-400 py-4">搜索中...</div>
-                <div v-else-if="searchResults && searchResults.length === 0" class="text-center text-sm text-slate-400 py-4">未找到相关文档</div>
-                <div v-else class="space-y-1">
-                    <div v-for="doc in searchResults" :key="doc.id" @click.stop="handleDocClick($event, doc.id)"
-                         class="px-3 py-2 cursor-pointer rounded-md text-sm transition flex items-center gap-2 border-l-2 bg-white"
-                         :class="activeDoc === doc.id ? 'bg-blue-50 text-blue-600 font-medium border-blue-600 translate-x-1 shadow-sm' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:translate-x-1'">
-                        <span class="text-base transition-opacity duration-200" :class="activeDoc === doc.id ? 'opacity-100' : 'opacity-40'">📄</span>
-                        <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 pointer-events-none">{{ doc.title }}</span>
+                <template v-if="searchQuery.trim()">
+
+                    <div class="section-label search-result-label">
+                        <span>搜索结果</span><span class="counter">{{ searchResults.length }}</span>
                     </div>
-                </div>
+                    <div v-if="!isSearching && searchResults.length === 0" class="empty-small">
+                        <el-icon><search></search></el-icon>
+                        <span>没有找到匹配的笔记</span>
+                        <small>尝试换个关键词或使用 tag:标签</small>
+                    </div>
+
+                    <div
+                        v-for="doc in searchResults"
+                        :key="doc.id"
+                        @click="loadDocument(doc.id)" :title="getDocTitle(doc)" tabindex="0" role="button" @keyup.enter="loadDocument(doc.id)"
+                        :class="[
+                            'doc-row search-doc-row',
+                            activeDocId === doc.id
+                                ? 'bg-blue-100 text-blue-700 font-medium'
+                                : 'hover:bg-slate-200 text-slate-700'
+                        ]"
+                        v-html="highlightText(getDocTitle(doc))">
+                    </div>
+
+                </template>
+
+
+                <template v-else>
+
+                    <div v-if="pinnedDocs.length > 0">
+
+                        <div class="section-label pinned-label"><span><el-icon><star-filled></star-filled></el-icon> 置顶</span><span class="counter">{{ pinnedDocs.length }}</span></div>
+
+                        <div
+                            v-for="doc in pinnedDocs"
+                            :key="doc.id"
+                            @click="loadDocument(doc.id)" :title="getDocTitle(doc)" tabindex="0" role="button" @keyup.enter="loadDocument(doc.id)"
+                            :class="[
+                                'doc-row',
+                                activeDocId === doc.id
+                                    ? 'bg-orange-100 text-orange-700 font-medium'
+                                    : 'text-slate-700 hover:bg-slate-200'
+                            ]">
+
+                            {{ getDocTitle(doc) }}
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="section-label"><span><el-icon><document></document></el-icon> 收件箱</span><span class="counter">{{ inboxDocs.length }}</span></div>
+
+                    <div
+                        v-for="doc in inboxDocs"
+                        :key="doc.id"
+                        @click="loadDocument(doc.id)" :title="getDocTitle(doc)" tabindex="0" role="button" @keyup.enter="loadDocument(doc.id)"
+                        :class="[
+                            'doc-row',
+                            activeDocId === doc.id
+                                ? 'bg-blue-100 text-blue-700 font-medium'
+                                : 'text-slate-700 hover:bg-slate-200'
+                        ]">
+
+                        {{ getDocTitle(doc) }}
+
+                    </div>
+
+
+                    <div class="section-label"><span><el-icon><folder></folder></el-icon> 归档</span><span class="counter">{{ archiveDocs.length }}</span></div>
+
+                    <div
+                        v-for="doc in archiveDocs"
+                        :key="doc.id"
+                        @click="loadDocument(doc.id)" :title="getDocTitle(doc)" tabindex="0" role="button" @keyup.enter="loadDocument(doc.id)"
+                        :class="[
+                            'doc-row',
+                            activeDocId === doc.id
+                                ? 'bg-slate-200 text-slate-800 font-medium'
+                                : 'text-slate-500 hover:bg-slate-200'
+                        ]">
+
+                        {{ getDocTitle(doc) }}
+
+                    </div>
+                    <div v-if="documents.length === 0" class="empty-small"><el-icon><document></document></el-icon><span>还没有笔记</span><small>点击“快速记录”开始</small></div>
+                </template>
+
             </div>
 
-            <div v-show="searchQuery === ''">
-                <div v-for="(folder1, path1) in tree.folders" :key="path1" class="mb-1 rounded-lg border-2 border-transparent transition-colors"
-                     :class="dragOverTarget === path1 ? 'drop-zone-active' : ''"
-                     @dragover.prevent.stop="dragOverTarget = path1; autoScroll($event)" @dragleave.prevent.stop="dragOverTarget = null" @drop.prevent.stop="handleDrop($event, path1)">
-                    <div class="folder-row px-2 py-2 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-700 hover:bg-slate-100" @click="toggleFolder(path1)">
-                        <div class="flex items-center gap-2 font-medium pointer-events-none">
-                            <span>{{ folderState[path1] ? '📂' : '📁' }}</span>
-                            <span>{{ folder1.name }}</span>
+
+            <!-- =================================================
+                 时间线
+                 ================================================= -->
+            <div
+                v-else
+                class="timeline-panel">
+
+                <!-- 时间线头部 -->
+
+                <div class="timeline-header">
+
+                    <div class="timeline-header-main">
+
+                        <div class="min-w-0">
+
+                            <div class="timeline-main-title">
+                                {{ timelineTitle }}
+                            </div>
+
+                            <div class="timeline-main-count">
+                                {{ timelineDocs.length }} 篇
+                            </div>
+
                         </div>
+
+
                         <div class="flex items-center gap-1">
-                            <button v-show="currentMode === 'edit'" @click.stop="renameFolder(path1)" class="folder-action text-blue-500 hover:bg-blue-100 p-1 rounded" title="重命名文件夹">
-                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                            </button>
-                            <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folderState[path1] ? '' : '-rotate-90'">▼</span>
+
+                            <el-button
+                                size="small"
+                                circle
+                                @click="moveTimelineMonth(-1)">
+
+                                <el-icon>
+                                    <arrow-left></arrow-left>
+                                </el-icon>
+
+                            </el-button>
+
+
+                            <el-button
+                                size="small"
+                                @click="timelineToday">
+
+                                今天
+
+                            </el-button>
+
+
+                            <el-button
+                                size="small"
+                                circle
+                                @click="moveTimelineMonth(1)">
+
+                                <el-icon>
+                                    <arrow-right></arrow-right>
+                                </el-icon>
+
+                            </el-button>
+
                         </div>
+
                     </div>
-                    
-                    <div v-show="folderState[path1]">
-                        <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                            <div v-for="(folder2, path2) in folder1.folders" :key="path2" class="mb-1 rounded-md border-2 border-transparent transition-colors"
-                                 :class="dragOverTarget === path2 ? 'drop-zone-active' : ''"
-                                 @dragover.prevent.stop="dragOverTarget = path2; autoScroll($event)" @dragleave.prevent.stop="dragOverTarget = null" @drop.prevent.stop="handleDrop($event, path2)">
-                                <div class="folder-row px-2 py-1.5 cursor-pointer rounded-md flex items-center justify-between text-sm transition select-none text-slate-600 hover:bg-slate-100" @click="toggleFolder(path2)">
-                                    <div class="flex items-center gap-2 pointer-events-none">
-                                        <span>{{ folderState[path2] ? '📂' : '📁' }}</span>
-                                        <span>{{ folder2.name }}</span>
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                        <button v-show="currentMode === 'edit'" @click.stop="renameFolder(path2)" class="folder-action text-blue-500 hover:bg-blue-100 p-1 rounded" title="重命名文件夹">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                        </button>
-                                        <span class="text-xs text-slate-400 transition-transform duration-300 pointer-events-none" :class="folderState[path2] ? '' : '-rotate-90'">▼</span>
-                                    </div>
-                                </div>
-                                
-                                <div v-show="folderState[path2]">
-                                    <div class="pl-2 mt-1 space-y-1 border-l-2 border-slate-100 ml-3 pb-1">
-                                        <div v-for="doc in folder2.items" :key="doc.id" @click.stop="handleDocClick($event, doc.id)" :draggable="currentMode === 'edit'" @dragstart.stop="dragStart($event, doc.id, path2)"
-                                             class="group px-3 py-2 md:py-1.5 cursor-pointer rounded-md text-sm transition-all duration-200 flex items-center justify-between border-l-2 relative"
-                                             :class="[
-                                                selectedDocs.includes(doc.id) && currentMode === 'edit' ? 'bg-blue-50/90 border-blue-400 shadow-[0_0_0_1px_rgba(96,165,250,0.5)] z-10' : 'border-transparent bg-white hover:bg-slate-50 hover:border-slate-300',
-                                                activeDoc === doc.id && !selectedDocs.includes(doc.id) ? 'bg-blue-50 text-blue-600 font-medium border-blue-600' : ''
-                                             ]">
-                                            <div class="flex items-center gap-2 overflow-hidden flex-1">
-                                                <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
-                                                <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+
+
+                    <div class="timeline-options">
+
+                        <el-radio-group
+                            v-model="timelineTimeField"
+                            size="small">
+
+                            <el-radio-button label="created">
+                                创建
+                            </el-radio-button>
+
+                            <el-radio-button label="updated">
+                                修改
+                            </el-radio-button>
+
+                        </el-radio-group>
+
+
+                        <el-radio-group
+                            v-model="timelineRangeMode"
+                            size="small">
+
+                            <el-radio-button label="day">
+                                日
+                            </el-radio-button>
+
+                            <el-radio-button label="week">
+                                周
+                            </el-radio-button>
+
+                        </el-radio-group>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     展开日历
+                     ================================================= -->
+                <div
+                    v-show="!calendarCollapsed"
+                    class="calendar-container">
+
+                    <div class="calendar-toolbar">
+
+                        <span class="calendar-month">
+                            {{ calendarTitle }}
+                        </span>
+
+                        <div class="flex items-center gap-1">
+
+                            <el-button
+                                link
+                                size="small"
+                                @click="moveTimelineMonth(-1)">
+                                ‹
+                            </el-button>
+
+                            <el-button
+                                link
+                                size="small"
+                                @click="timelineToday">
+                                今天
+                            </el-button>
+
+                            <el-button
+                                link
+                                size="small"
+                                @click="moveTimelineMonth(1)">
+                                ›
+                            </el-button>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="calendar-grid">
+
+                        <div
+                            v-for="day in weekNames"
+                            :key="day"
+                            class="calendar-weekday">
+
+                            {{ day }}
+
+                        </div>
+
+
+                        <div
+                            v-for="cell in calendarCells"
+                            :key="cell.key"
+                            class="calendar-cell"
+                            :class="{
+                                'other-month': !cell.currentMonth,
+                                'today': cell.today,
+                                'selected': cell.selected,
+                                'has-docs': cell.count > 0,
+                                'heavy': cell.count >= 5
+                            }"
+                            @click="selectCalendarDay(cell.date)">
+
+                            <div class="calendar-number">
+                                {{ cell.day }}
                             </div>
 
-                            <div v-for="doc in folder1.items" :key="doc.id" @click.stop="handleDocClick($event, doc.id)" :draggable="currentMode === 'edit'" @dragstart.stop="dragStart($event, doc.id, path1)"
-                                 class="group px-3 py-2 md:py-1.5 cursor-pointer rounded-md text-sm transition-all duration-200 flex items-center justify-between border-l-2 relative mx-1"
-                                 :class="[
-                                    selectedDocs.includes(doc.id) && currentMode === 'edit' ? 'bg-blue-50/90 border-blue-400 shadow-[0_0_0_1px_rgba(96,165,250,0.5)] z-10' : 'border-transparent bg-white hover:bg-slate-50 hover:border-slate-300',
-                                    activeDoc === doc.id && !selectedDocs.includes(doc.id) ? 'bg-blue-50 text-blue-600 font-medium border-blue-600' : ''
-                                 ]">
-                                <div class="flex items-center gap-2 overflow-hidden flex-1">
-                                    <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
-                                    <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
-                                </div>
+                            <div class="calendar-count">
+                                <span v-if="cell.count > 0">
+                                    {{ cell.count }}
+                                </span>
                             </div>
+
                         </div>
+
                     </div>
+
                 </div>
 
-                <div class="space-y-1 mt-2 pt-2 border-t border-slate-100">
-                    <div v-for="doc in tree.items" :key="doc.id" @click.stop="handleDocClick($event, doc.id)" :draggable="currentMode === 'edit'" @dragstart.stop="dragStart($event, doc.id, '')"
-                         class="group px-3 py-2.5 md:py-2 cursor-pointer rounded-md text-sm transition-all duration-200 flex items-center justify-between border-l-2 relative"
-                         :class="[
-                            selectedDocs.includes(doc.id) && currentMode === 'edit' ? 'bg-blue-50/90 border-blue-400 shadow-[0_0_0_1px_rgba(96,165,250,0.5)] z-10' : 'border-transparent bg-white hover:bg-slate-50 hover:border-slate-300',
-                            activeDoc === doc.id && !selectedDocs.includes(doc.id) ? 'bg-blue-50 text-blue-600 font-medium border-blue-600' : ''
-                         ]">
-                        <div class="flex items-center gap-2 overflow-hidden flex-1">
-                            <span @click.stop="currentMode === 'edit' ? toggleSelect(doc.id) : null" class="text-base transition-all duration-200" :class="[selectedDocs.includes(doc.id) ? 'opacity-100' : 'opacity-40', currentMode === 'edit' ? 'hover:scale-125 hover:drop-shadow-md' : '']">📄</span>
-                            <span class="whitespace-nowrap overflow-hidden text-ellipsis select-none">{{ doc.title }}</span>
-                        </div>
+
+                <!-- =================================================
+                     折叠日历
+                     ================================================= -->
+                <div
+                    v-show="calendarCollapsed"
+                    class="timeline-calendar-collapsed">
+
+                    <div class="flex items-center min-w-0">
+
+                        <span class="collapsed-month">
+                            {{ calendarTitle }}
+                        </span>
+
+                        <span class="collapsed-info">
+                            本月 {{ currentMonthDocCount }} 篇
+                        </span>
+
                     </div>
+
+                    <span class="text-[10px] text-slate-400">
+                        再点“时间线”展开
+                    </span>
+
+                </div>
+
+
+                <!-- =================================================
+                     文档时间线
+                     ================================================= -->
+                <div class="timeline-document-list">
+
+                    <!-- 日 -->
+
+                    <template v-if="timelineRangeMode === 'day'">
+
+                        <div class="timeline-group">
+
+                            <div class="timeline-group-header">
+
+                                <span class="timeline-group-title">
+                                    {{ selectedDateLabel }}
+                                </span>
+
+                                <span class="timeline-group-count">
+                                    {{ timelineDocs.length }} 篇
+                                </span>
+
+                            </div>
+
+
+                            <div
+                                v-for="doc in timelineDocs"
+                                :key="doc.id"
+                                class="timeline-document"
+                                :class="{
+                                    active: activeDocId === doc.id
+                                }"
+                                @click="loadDocumentFromTimeline(doc.id)">
+
+                                <div class="timeline-document-title">
+                                    {{ getDocTitle(doc) }}
+                                </div>
+
+                                <div class="timeline-document-meta">
+
+                                    <span>
+                                        {{ formatTimelineTime(doc) }}
+                                    </span>
+
+                                    <span>
+
+                                        <span v-if="doc.is_pinned === 1">
+                                            📌
+                                        </span>
+
+                                        <span v-if="doc.status === 'archive'">
+                                            📦
+                                        </span>
+
+                                    </span>
+
+                                </div>
+
+                                <div
+                                    v-if="getDocPreview(doc)"
+                                    class="timeline-document-preview">
+
+                                    {{ getDocPreview(doc) }}
+
+                                </div>
+
+                            </div>
+
+
+                            <div
+                                v-if="timelineDocs.length === 0"
+                                class="timeline-empty">
+
+                                这一天没有文章
+
+                            </div>
+
+                        </div>
+
+                    </template>
+
+
+                    <!-- 周 -->
+
+                    <template v-else>
+
+                        <div class="timeline-group">
+
+                            <div class="timeline-group-header">
+
+                                <span class="timeline-group-title">
+                                    {{ selectedWeekLabel }}
+                                </span>
+
+                                <span class="timeline-group-count">
+                                    {{ timelineDocs.length }} 篇
+                                </span>
+
+                            </div>
+
+
+                            <div
+                                v-for="group in timelineDayGroups"
+                                :key="group.key">
+
+                                <div class="timeline-group-header mt-3">
+
+                                    <span class="timeline-group-title">
+                                        {{ group.label }}
+                                    </span>
+
+                                    <span class="timeline-group-count">
+                                        {{ group.docs.length }} 篇
+                                    </span>
+
+                                </div>
+
+
+                                <div
+                                    v-for="doc in group.docs"
+                                    :key="doc.id"
+                                    class="timeline-document"
+                                    :class="{
+                                        active: activeDocId === doc.id
+                                    }"
+                                    @click="loadDocumentFromTimeline(doc.id)">
+
+                                    <div class="timeline-document-title">
+                                        {{ getDocTitle(doc) }}
+                                    </div>
+
+                                    <div class="timeline-document-meta">
+
+                                        <span>
+                                            {{ formatTimelineTime(doc) }}
+                                        </span>
+
+                                        <span>
+
+                                            <span v-if="doc.is_pinned === 1">
+                                                📌
+                                            </span>
+
+                                            <span v-if="doc.status === 'archive'">
+                                                📦
+                                            </span>
+
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div
+                                v-if="timelineDocs.length === 0"
+                                class="timeline-empty">
+
+                                这一周没有文章
+
+                            </div>
+
+                        </div>
+
+                    </template>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+
+        <!-- =====================================================
+             主编辑区
+             ===================================================== -->
+
+        <main
+            v-show="!isMobile || mobileView === 'editor'"
+            class="editor-main flex-1 flex flex-col bg-white relative min-w-0">
+
+            <!-- 空状态 -->
+
+            <div v-show="!activeDocId && !isCreating" class="editor-empty absolute inset-0 flex items-center justify-center">
+                <div class="empty-hero">
+                    <div class="empty-hero-icon"><el-icon><edit-pen></edit-pen></el-icon></div>
+                    <h1>让每一个想法，都有归处</h1>
+                    <p>随手记录、分类整理、通过时间线回顾你的知识积累。</p>
+                    <el-button type="primary" size="large" @click="createNew"><el-icon class="mr-1"><plus></plus></el-icon>写下第一条笔记</el-button>
+                    <div class="empty-shortcut">支持 Markdown 编辑 · 自动保存 · 全文搜索</div>
                 </div>
             </div>
-        </div>
 
-        <div v-show="selectedDocs.length > 0 && currentMode === 'edit'" class="absolute bottom-0 left-0 right-0 p-3 bg-blue-50/95 backdrop-blur border-t border-blue-200 flex justify-between items-center z-30 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)]">
-            <div class="text-sm font-medium text-blue-800">已选 {{ selectedDocs.length }} 项</div>
-            <div class="flex gap-2">
-                <button @click="selectedDocs = []" class="px-2 py-1.5 text-slate-500 hover:text-slate-700 text-xs rounded transition">取消</button>
-                <button @click="showMoveModal = true" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded shadow hover:bg-blue-700 transition">移动至...</button>
-            </div>
-        </div>
-    </div>
+            <!-- 编辑器 -->
 
-    <div class="flex-1 flex flex-col bg-slate-50 relative w-full overflow-hidden">
-        
-        <div v-show="currentMode === 'graph'" class="absolute inset-0 flex flex-col w-full h-full z-20 bg-slate-50">
-            <div class="flex items-center p-3 bg-white border-b border-slate-200 shadow-sm shrink-0 justify-between">
-                <div class="flex items-center">
-                    <button @click="isSidebarOpen = !isSidebarOpen" class="w-10 h-10 rounded-lg flex items-center justify-center mr-3 bg-white text-slate-900 text-xl hover:bg-blue-50 hover:text-blue-600 transition md:hidden shrink-0">☰</button>
-                    <div class="font-semibold text-lg text-slate-700">🕸️ 知识标签网络视图</div>
+            <div
+                v-show="activeDocId || isCreating"
+                class="flex flex-col h-full w-full">
+
+                <div
+                    class="editor-toolbar h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 mobile-editor-header">
+
+                    <div class="flex items-center gap-2 min-w-0">
+
+                        <el-button
+                            v-if="isMobile"
+                            size="small"
+                            circle
+                            plain
+                            @click="flushAndBack">
+
+                            <el-icon>
+                                <arrow-left></arrow-left>
+                            </el-icon>
+
+                        </el-button>
+
+
+                        <el-button
+                            size="small"
+                            circle
+                            plain
+                            @click="isFocusMode = !isFocusMode">
+
+                            <el-icon>
+                                <full-screen></full-screen>
+                            </el-icon>
+
+                        </el-button>
+
+
+                        <!-- 文件名 -->
+
+                        <el-input
+                            v-model="docIdInput"
+                            class="doc-id-input"
+                            size="small"
+                            :disabled="isCreating || renaming"
+                            @keyup.enter="commitRename"
+                            @blur="commitRename">
+
+                            <template #prepend>
+                                ID
+                            </template>
+
+                        </el-input>
+
+
+                        <el-button
+                            size="small"
+                            plain
+                            :loading="clipboardTitleLoading"
+                            :disabled="!activeDocId && !isCreating"
+                            @click="setTitleFromClipboard">
+
+                            <el-icon class="mr-1"><magic-stick></magic-stick></el-icon>提取标题
+
+                        </el-button>
+
+
+                        <span class="rename-hint">回车或失焦重命名</span>
+
+                    </div>
+
+
+                    <div class="flex items-center gap-3 shrink-0">
+
+                        <!-- 【新增】移动端删除按钮 -->
+                        <el-button
+                            v-if="isMobile && activeDocId"
+                            size="small"
+                            type="danger"
+                            plain
+                            circle
+                            :loading="deleting"
+                            @click="deleteDocument">
+
+                            <el-icon>
+                                <delete></delete>
+                            </el-icon>
+
+                        </el-button>
+
+
+                        <span
+                            class="text-xs mobile-save-status"
+                            :class="{
+                                'text-red-500':
+                                    saveStatus === '保存失败',
+
+                                'text-blue-500':
+                                    saveStatus === '保存中...',
+
+                                'text-orange-500':
+                                    saveStatus === '有未保存修改',
+
+                                'text-slate-400':
+                                    ![
+                                        '保存失败',
+                                        '保存中...',
+                                        '有未保存修改'
+                                    ].includes(saveStatus)
+                            }">
+
+                            {{ saveStatus }}
+
+                        </span>
+
+
+                        <el-button
+                            size="small"
+                            type="success"
+                            @click="manualSave"
+                            :loading="saving">
+
+                            <el-icon class="mr-1"><check></check></el-icon>保存
+
+                        </el-button>
+
+                    </div>
+
                 </div>
+
+
+                <div class="flex-1 overflow-hidden relative editor-canvas">
+                    <div id="vditor-container" class="absolute inset-0"></div>
+                </div>
+                <div class="editor-statusbar" aria-live="polite">
+                    <span class="status-indicator" :class="{ 'status-error': saveStatus === '保存失败', 'status-dirty': dirty }"></span>
+                    <span class="status-text">{{ saveStatus || '就绪' }}</span>
+                    <span class="statusbar-spacer"></span>
+                    <span>{{ charCount }} 字</span><span>{{ lineCount }} 行</span><span>约 {{ readTime }} 分钟阅读</span>
+                </div>
+            </div>
+
+        </main>
+
+
+        <!-- =====================================================
+             右侧信息
+             ===================================================== -->
+
+        <aside
+            v-show="(activeDocId || isCreating) && !isFocusMode && !isMobile"
+            class="inspector-aside w-72 bg-slate-50 border-l border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0">
+
+            <!-- 【修复】操作区：置顶 / 归档 / 删除 -->
+
+            <div
+                v-if="activeDocId"
+                class="bg-white p-3 rounded-lg shadow-sm border border-slate-200">
+
                 <div class="flex gap-2">
-                    <button @click="exportCSV" class="px-3 py-1.5 text-xs font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition">
-                        ⬇️ 导出
-                    </button>
-                    <input type="file" ref="csvFileRef" style="display:none" accept=".csv" @change="importCSV">
-                    <button @click="triggerFileInput" class="px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-600 text-emerald-600 hover:bg-emerald-50 transition">
-                        ⬆️ 导入
-                    </button>
+
+                    <el-button
+                        size="small"
+                        class="flex-1"
+                        :type="activeDocMeta.is_pinned ? 'warning' : 'default'"
+                        @click="toggleAction('toggle_pin')">
+
+                        {{ activeDocMeta.is_pinned
+                            ? '取消置顶'
+                            : '📌 置顶' }}
+
+                    </el-button>
+
+
+                    <el-button
+                        size="small"
+                        class="flex-1"
+                        plain
+                        :type="activeDocStatus === 'archive'
+                            ? 'primary'
+                            : 'info'"
+                        @click="toggleAction('toggle_archive')">
+
+                        {{ activeDocStatus === 'archive'
+                            ? '还原活跃'
+                            : '📦 归档' }}
+
+                    </el-button>
+
                 </div>
-            </div>
-            <div class="flex-1 relative bg-white p-2">
-                <div id="md-graph-container" class="w-full h-full min-h-[600px]"></div>
-            </div>
-        </div>
-        
-        <div v-show="currentMode !== 'graph'" class="absolute inset-0 flex flex-col w-full h-full z-10 bg-slate-50">
-            
-            <div v-if="!activeDoc && currentMode === 'view'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
-                <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
-                <div class="text-5xl mb-4 opacity-20">📄</div>
-                <div class="text-sm md:text-base">选择左侧文档开始阅读</div>
+
+
+                <!-- 【新增】删除按钮 -->
+
+                <el-button
+                    size="small"
+                    type="danger"
+                    plain
+                    class="w-full mt-2"
+                    :loading="deleting"
+                    @click="deleteDocument">
+
+                    <el-icon class="mr-1"><delete></delete></el-icon>删除笔记
+
+                </el-button>
+
             </div>
 
-            <div v-else-if="!activeDoc && !isCreating && currentMode === 'edit'" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-50 z-10">
-                <button @click="isSidebarOpen = true" class="absolute top-4 left-4 p-2.5 bg-white rounded-md shadow-sm border border-slate-200 md:hidden text-slate-600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
-                <div class="text-5xl mb-4 opacity-20">✍️</div>
-                <div class="text-sm md:text-base">选择左侧文档或新建开始编辑</div>
+
+            <!-- 状态 -->
+
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+
+                <h3 class="text-sm font-bold text-slate-700 mb-3">
+                    文档状态
+                </h3>
+
+                <div class="text-[13px] text-slate-600 space-y-3">
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            生命周期
+                        </span>
+
+                        <el-tag
+                            :type="activeDocStatus === 'archive'
+                                ? 'info'
+                                : 'success'"
+                            size="small"
+                            effect="dark">
+
+                            {{ activeDocStatus.toUpperCase() }}
+
+                        </el-tag>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            创建时间
+                        </span>
+
+                        <span :title="fullCreatedTime">
+                            {{ createdTimeAgo }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            最后更新
+                        </span>
+
+                        <span :title="fullUpdateTime">
+                            {{ updatedTimeAgo }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            字数
+                        </span>
+
+                        <span>
+                            {{ charCount }} 字
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            总字符
+                        </span>
+
+                        <span>
+                            {{ totalChars }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between border-b border-slate-50 pb-2">
+
+                        <span class="text-slate-400">
+                            行数
+                        </span>
+
+                        <span>
+                            {{ lineCount }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="flex justify-between">
+
+                        <span class="text-slate-400">
+                            预计阅读
+                        </span>
+
+                        <span>
+                            {{ readTime }} 分钟
+                        </span>
+
+                    </div>
+
+                </div>
+
             </div>
 
-            <template v-if="currentMode === 'view' && activeDoc">
-                <div class="flex items-center p-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
-                    <div class="flex items-center md:hidden mr-2 gap-2 shrink-0">
-                        <button @click="isSidebarOpen = true" class="w-9 h-9 rounded-lg flex items-center justify-center bg-white text-slate-700 text-xl border border-slate-200 hover:bg-slate-50 transition" title="打开侧边栏">☰</button>
-                        <button v-show="previousMode === 'graph'" @click="switchMode('graph')" class="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 text-xl border border-blue-100 hover:bg-blue-100 transition" title="返回网状图">🕸️</button>
-                    </div>
-                    <div class="font-semibold text-lg overflow-hidden text-ellipsis whitespace-nowrap text-slate-700 flex-1">{{ getTitle(activeDoc) }}</div>
-                </div>
-                <div class="flex-1 overflow-y-auto scroll-smooth relative p-4 md:p-8" ref="viewScrollContainer">
-                    <div v-if="viewHtml" class="max-w-[880px] mx-auto bg-white px-6 md:px-10 py-8 md:py-12 rounded-2xl shadow-sm min-h-[calc(100vh-120px)] markdown-body" v-html="viewHtml"></div>
-                    <div v-else class="text-center pt-24 text-slate-500 animate-pulse">加载中...</div>
-                </div>
-            </template>
 
-            <template v-if="currentMode === 'edit' && (activeDoc || isCreating)">
-                <div class="p-3 md:p-4 border-b border-slate-200 flex flex-wrap gap-2 md:gap-3 items-center bg-white/90 backdrop-blur z-0 shadow-sm shrink-0 justify-between">
-                    <div class="flex items-center gap-2 flex-1 min-w-[150px]">
-                        <div class="flex items-center md:hidden shrink-0 gap-1">
-                            <button @click="isSidebarOpen = true" class="p-1.5 text-slate-600 border border-slate-200 bg-white hover:bg-slate-100 rounded-md transition" title="打开目录">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                            </button>
-                            <button v-show="previousMode === 'graph'" @click="switchMode('graph')" class="p-1.5 text-blue-600 border border-blue-100 bg-blue-50 hover:bg-blue-100 rounded-md transition" title="返回网状图">🕸️</button>
-                        </div>
-                        <div class="flex-1 flex items-center border border-slate-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
-                            <span class="px-2 md:px-3 py-2 bg-slate-50 text-slate-500 border-r border-slate-200 text-xs md:text-sm select-none whitespace-nowrap">文件名</span>
-                            <input type="text" v-model="docTitle" class="flex-1 px-2 md:px-3 py-2 border-none outline-none text-xs md:text-sm text-slate-900" placeholder="英文/拼音">
-                        </div>
-                    </div>
-                    <div class="w-full md:w-auto flex justify-between md:justify-end gap-2 items-center mt-1 md:mt-0">
-                        <button v-show="activeDoc" @click="deleteDoc(activeDoc)" class="flex items-center gap-1 px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition border border-red-100 text-red-500 hover:bg-red-50 md:mr-4">删除</button>
-                        <div class="flex gap-2">
-                            <button @click="saveDoc" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition text-white border"
-                                    :class="saveSuccess ? 'bg-emerald-500 border-emerald-500' : 'bg-blue-600 border-blue-600 hover:bg-blue-700'">
-                                {{ saveSuccess ? '✅ 已保存' : '保存' }}
-                            </button>
-                            <button @click="togglePreview" class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-md transition border"
-                                    :class="isPreview ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
-                                {{ isPreview ? '关闭预览' : '预览' }}
-                            </button>
-                        </div>
-                    </div>
+            <!-- AI -->
+
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+
+                <h3 class="text-sm font-bold text-slate-700 mb-3 flex justify-between items-center">
+
+                    <span>
+                        <el-icon class="mr-1"><magic-stick></magic-stick></el-icon>AI 标签提取
+                    </span>
+
+                    <el-button
+                        size="small"
+                        type="primary"
+                        :loading="aiLoading"
+                        @click="generateTags">
+
+                        提取
+
+                    </el-button>
+
+                </h3>
+
+                <div class="text-[11px] text-slate-400">使用 AI 阅读正文并提炼 3–5 个关键词</div>
+                <div v-if="generatedTags.length" class="generated-tags">
+                    <el-tag v-for="tag in generatedTags" :key="tag" size="small" effect="plain">{{ tag }}</el-tag>
+                    <el-button size="small" text type="primary" @click="applyGeneratedTags">应用到笔记</el-button>
                 </div>
-                <div class="flex-1 flex overflow-hidden bg-white">
-                    <textarea v-show="!isPreview" v-model="editContent" ref="editorRef"
-                              class="flex-1 p-4 md:p-8 border-none outline-none resize-none editor-font text-[15px] leading-relaxed bg-slate-50 text-slate-700 focus:ring-0" 
-                              placeholder="---&#10;tags: 默认标签&#10;---&#10;# 在这里输入 Markdown 标题..."></textarea>
-                    <div v-show="isPreview" class="flex-1 p-4 md:p-8 overflow-y-auto bg-white transition-opacity">
-                        <div class="max-w-[880px] mx-auto markdown-body" v-html="editPreviewHtml"></div>
+
+
+                <div
+                    v-if="relatedDocs.length > 0"
+                    class="mt-4 border-t border-slate-100 pt-3">
+
+                    <h4 class="text-xs font-bold text-slate-600 mb-2">
+                        🔗 相关关联推荐
+                    </h4>
+
+                    <div class="space-y-1.5 related-links">
+
+                        <div
+                            v-for="rd in relatedDocs"
+                            :key="rd.id"
+                            @click="loadDocument(rd.id)"
+                            class="text-[12px] text-blue-600 cursor-pointer truncate">
+
+                            {{ rd.title }}
+
+                            <span class="text-slate-400 text-[10px]">
+                                ({{ rd.overlap }} 标签重合)
+                            </span>
+
+                        </div>
+
                     </div>
+
                 </div>
-            </template>
-        </div>
+
+            </div>
+
+        </aside>
+
     </div>
 
-    <script src="/static/doc.js"></script>
+
+    <!-- =========================================================
+         移动端底部
+         ========================================================= -->
+
+    <div
+        v-if="isMobile && !isFocusMode"
+        class="mobile-bottom-nav" role="navigation" aria-label="移动端导航">
+
+        <div
+            class="mobile-nav-item"
+            :class="{
+                active:
+                    mobileView === 'list' &&
+                    sidebarMode === 'docs'
+            }"
+            @click="
+                mobileView = 'list';
+                sidebarMode = 'docs'
+            ">
+
+            <el-icon>
+                <document></document>
+            </el-icon>
+
+            <span>
+                文档
+            </span>
+
+        </div>
+
+
+        <div
+            class="mobile-nav-item"
+            :class="{
+                active:
+                    mobileView === 'list' &&
+                    sidebarMode === 'timeline'
+            }"
+            @click="
+                mobileView = 'list';
+                sidebarMode = 'timeline'
+            ">
+
+            <el-icon>
+                <calendar></calendar>
+            </el-icon>
+
+            <span>
+                时间线
+            </span>
+
+        </div>
+
+
+        <div
+            class="mobile-nav-item"
+            @click="createNew">
+
+            <el-icon>
+                <edit-pen></edit-pen>
+            </el-icon>
+
+            <span>
+                记录
+            </span>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
+const app = createApp({
+    setup() {
+        const documents = ref([]);
+        const searchResults = ref([]);
+        const searchQuery = ref('');
+        const activeDocId = ref('');
+        const docIdInput = ref('');
+        const editorContent = ref('');
+        const isCreating = ref(false);
+        const activeDocMeta = ref({
+            id: '',
+            title: '',
+            created_time: null,
+            update_time: null,
+            is_pinned: 0,
+            status: 'active'
+        });
+        const relatedDocs = ref([]);
+        const saving = ref(false);
+        const syncing = ref(false);
+        const isSearching = ref(false);
+        const renaming = ref(false);
+        const clipboardTitleLoading = ref(false);
+        const deleting = ref(false);
+        const saveStatus = ref('');
+        const aiLoading = ref(false);
+        const generatedTags = ref([]);
+        const isFocusMode = ref(false);
+        const autoAiTags = ref(localStorage.getItem('autoAiTags') === 'true');
+        watch(autoAiTags, value => {
+            localStorage.setItem('autoAiTags', value);
+            if (value)
+                scheduleAutoAiTags();
+            else
+                clearTimeout(autoAiTimer);
+        });
+        const dirty = ref(false);
+        let saveTimer = null;
+        let saveSequence = 0;
+        const pendingSnapshot = ref(null);
+        let saveQueue = Promise.resolve();
+        const isMobile = ref(window.innerWidth <= 768);
+        const mobileView = ref('list');
+        const updateIsMobile = () => {
+            isMobile.value =
+                window.innerWidth <= 768;
+        };
+        window.addEventListener('resize', updateIsMobile);
+        const sidebarMode = ref('docs');
+        const timelineCursor = ref(new Date());
+        const timelineTimeField = ref('created');
+        const timelineRangeMode = ref('day');
+        const calendarCollapsed = ref(false);
+        const weekNames = [
+            '一',
+            '二',
+            '三',
+            '四',
+            '五',
+            '六',
+            '日'
+        ];
+        let vditorInstance = null;
+        let isVditorReady = false;
+        let searchTimer = null;
+        let autoAiTimer = null;
+        let autoAiRunning = false;
+        const scheduleAutoAiTags = (delay = 5000) => {
+            clearTimeout(autoAiTimer);
+            if (!autoAiTags.value || autoAiRunning)
+                return;
+            autoAiTimer = setTimeout(async () => {
+                if (!autoAiTags.value || autoAiRunning)
+                    return;
+                autoAiRunning = true;
+                try {
+                    const response = await fetch('/docapi/ai/batch_tags', { method: 'POST' });
+                    if (!response.ok)
+                        throw new Error(`HTTP ${response.status}`);
+                    const result = await response.json();
+                    if (result.processed > 0) {
+                        await fetchDocuments();
+                        if (activeDocId.value) {
+                            const item = documents.value.find(d => d.id === activeDocId.value);
+                            if (item)
+                                activeDocMeta.value = { ...activeDocMeta.value, tags: item.tags, tags_cache: item.tags_cache };
+                            fetchRelated(activeDocId.value);
+                        }
+                    }
+                }
+                catch (error) {
+                    console.warn('后台 AI 补全未完成：', error);
+                }
+                finally {
+                    autoAiRunning = false;
+                }
+            }, delay);
+        };
+        const getTimelineTimestamp = doc => {
+            if (timelineTimeField.value ===
+                'updated') {
+                return Number(doc.update_time || 0);
+            }
+            return Number(doc.created_time || 0);
+        };
+        const dateKey = date => {
+            const d = new Date(date);
+            return [
+                d.getFullYear(),
+                String(d.getMonth() + 1).padStart(2, '0'),
+                String(d.getDate()).padStart(2, '0')
+            ].join('-');
+        };
+        const startOfDay = date => {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        };
+        const startOfWeek = date => {
+            const d = startOfDay(date);
+            const day = d.getDay();
+            const diff = day === 0
+                ? -6
+                : 1 - day;
+            d.setDate(d.getDate() + diff);
+            return d;
+        };
+        const formatTimeAgo = timestamp => {
+            if (!timestamp) {
+                return '-';
+            }
+            const seconds = Math.floor((Date.now() -
+                Number(timestamp) * 1000) / 1000);
+            if (seconds < 60) {
+                return '刚刚';
+            }
+            const ranges = [
+                [31536000, '年'],
+                [2592000, '个月'],
+                [86400, '天'],
+                [3600, '小时'],
+                [60, '分钟']
+            ];
+            for (const [limit, label] of ranges) {
+                const count = Math.floor(seconds / limit);
+                if (count >= 1) {
+                    return `${count} ${label}前`;
+                }
+            }
+            return '-';
+        };
+        const formatDateTime = timestamp => {
+            if (!timestamp) {
+                return '-';
+            }
+            return new Date(Number(timestamp) * 1000).toLocaleString('zh-CN');
+        };
+        const formatTimelineTime = doc => {
+            const ts = getTimelineTimestamp(doc);
+            if (!ts) {
+                return '';
+            }
+            return new Date(ts * 1000).toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
+        const getDocTitle = doc => {
+            let title = doc.title || '';
+            const isDefault = !title ||
+                title.trim() === '' ||
+                title === '新文档标题' ||
+                title.startsWith('随记_') ||
+                title.startsWith('note_');
+            if (isDefault &&
+                doc.tags_cache &&
+                doc.tags_cache !== '未分类' &&
+                doc.tags_cache !== '笔记') {
+                return ('[提取] ' +
+                    doc.tags_cache.replace(/,/g, ' | '));
+            }
+            return (title ||
+                doc.id ||
+                '未命名笔记');
+        };
+        const getDocPreview = doc => {
+            const text = doc.preview ||
+                doc.summary ||
+                doc.snippet ||
+                doc.content_preview ||
+                '';
+            if (!text) {
+                return '';
+            }
+            return text
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/[#>*_`~\[\]]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+        const parseTitleFromContent = content => {
+            const match = content.match(/^---\n([\s\S]*?)\n---/);
+            if (!match) {
+                return '';
+            }
+            const titleMatch = match[1].match(/^title:\s*(.+)$/m);
+            if (!titleMatch) {
+                return '';
+            }
+            return titleMatch[1]
+                .trim()
+                .replace(/^['"]|['"]$/g, '');
+        };
+        const setTitleFromClipboard = async () => {
+            if (!activeDocId.value &&
+                !isCreating.value) {
+                ElementPlus.ElMessage.warning('请先打开一个文档');
+                return;
+            }
+            if (clipboardTitleLoading.value) {
+                return;
+            }
+            clipboardTitleLoading.value = true;
+            try {
+                const source = (editorContent.value || '').slice(0, 300);
+                const match = source.match(/【主题】\s*\*\*\s*([\s\S]*?)\s*\*\*/);
+                const title = match
+                    ? match[1]
+                        .replace(/[\r\n]+/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                    : '';
+                if (!title) {
+                    ElementPlus.ElMessage.warning('文章开头 300 字内未找到“【主题】** 标题 **”格式');
+                    return;
+                }
+                const lines = editorContent.value.split('\n');
+                const frontMatterEnd = lines.findIndex((line, index) => index > 0 &&
+                    line.trim() === '---');
+                if (lines.length > 0 &&
+                    lines[0].trim() === '---' &&
+                    frontMatterEnd > 0) {
+                    const titleIndex = lines.findIndex((line, index) => index > 0 &&
+                        index < frontMatterEnd &&
+                        /^title\s*:/i.test(line));
+                    const titleLine = `title: ${JSON.stringify(title)}`;
+                    if (titleIndex >= 0) {
+                        lines[titleIndex] = titleLine;
+                    }
+                    else {
+                        lines.splice(1, 0, titleLine);
+                    }
+                    editorContent.value =
+                        lines.join('\n');
+                }
+                else {
+                    editorContent.value =
+                        `---
+title: ${JSON.stringify(title)}
+---\n\n${editorContent.value}`;
+                }
+                activeDocMeta.value = {
+                    ...activeDocMeta.value,
+                    title
+                };
+                if (activeDocId.value) {
+                    syncCurrentTitleToList(title);
+                }
+                if (vditorInstance && isVditorReady) {
+                    vditorInstance.setValue(editorContent.value);
+                }
+                handleInput();
+                ElementPlus.ElMessage.success(`标题已更新：${title}`);
+            }
+            catch (error) {
+                console.error('提取标题失败:', error);
+                ElementPlus.ElMessage.error(error.message ||
+                    '提取标题失败');
+            }
+            finally {
+                clipboardTitleLoading.value =
+                    false;
+            }
+        };
+        const syncCurrentTitleToList = title => {
+            if (!activeDocId.value ||
+                !title) {
+                return;
+            }
+            const index = documents.value.findIndex(doc => doc.id ===
+                activeDocId.value);
+            if (index === -1) {
+                return;
+            }
+            documents.value[index] = {
+                ...documents.value[index],
+                title
+            };
+        };
+        const syncDocumentMetaToList = meta => {
+            if (!meta || !meta.id) {
+                return;
+            }
+            const index = documents.value.findIndex(doc => doc.id === meta.id);
+            if (index >= 0) {
+                documents.value[index] = {
+                    ...documents.value[index],
+                    ...meta
+                };
+            }
+            else {
+                documents.value.unshift({
+                    ...meta
+                });
+            }
+        };
+        const pinnedDocs = computed(() => documents.value.filter(doc => doc.is_pinned === 1));
+        const inboxDocs = computed(() => documents.value.filter(doc => doc.status === 'active' &&
+            doc.is_pinned === 0));
+        const archiveDocs = computed(() => documents.value.filter(doc => doc.status === 'archive' &&
+            doc.is_pinned === 0));
+        const activeDocStatus = computed(() => {
+            if (!activeDocId.value) {
+                return isCreating.value
+                    ? 'active'
+                    : '-';
+            }
+            return (documents.value.find(doc => doc.id ===
+                activeDocId.value)?.status ||
+                activeDocMeta.value.status ||
+                '-');
+        });
+        const createdTimeAgo = computed(() => formatTimeAgo(activeDocMeta.value
+            .created_time));
+        const updatedTimeAgo = computed(() => formatTimeAgo(activeDocMeta.value
+            .update_time));
+        const fullCreatedTime = computed(() => formatDateTime(activeDocMeta.value
+            .created_time));
+        const fullUpdateTime = computed(() => formatDateTime(activeDocMeta.value
+            .update_time));
+        const contentWithoutFrontMatter = computed(() => {
+            const content = editorContent.value || '';
+            const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
+            return match
+                ? content.slice(match[0].length)
+                : content;
+        });
+        const charCount = computed(() => contentWithoutFrontMatter.value
+            .replace(/\s/g, '')
+            .length);
+        const totalChars = computed(() => contentWithoutFrontMatter.value.length);
+        const lineCount = computed(() => contentWithoutFrontMatter.value
+            .split('\n')
+            .length);
+        const paragraphCount = computed(() => contentWithoutFrontMatter.value
+            .split(/\n\s*\n/)
+            .filter(p => p.trim().length > 0)
+            .length);
+        const readTime = computed(() => Math.max(1, Math.ceil(charCount.value / 500)));
+        const escapeRegExp = str => str
+            ? str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            : '';
+        const highlightText = text => {
+            if (!searchQuery.value) {
+                return String(text ?? '').replace(/[&<>"']/g, char => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[char]));
+            }
+            const regex = new RegExp(`(${escapeRegExp(searchQuery.value)})`, 'gi');
+            const safe = String(text ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[char]));
+            return safe.replace(regex, '<mark class="highlight-mark">$1</mark>');
+        };
+        const forceSearch = async () => {
+            clearTimeout(searchTimer);
+            const q = searchQuery.value.trim();
+            if (!q) {
+                searchResults.value = [];
+                return;
+            }
+            isSearching.value = true;
+            try {
+                const res = await fetch(`/docapi/search?q=${encodeURIComponent(q)}`);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                if (q === searchQuery.value.trim()) {
+                    searchResults.value = data.results || [];
+                }
+            }
+            catch (error) {
+                console.error(error);
+                ElementPlus.ElMessage.error('搜索失败');
+            }
+            finally {
+                isSearching.value = false;
+            }
+        };
+        watch(searchQuery, () => {
+            clearTimeout(searchTimer);
+            searchTimer =
+                setTimeout(forceSearch, 400);
+        });
+        const calendarMonth = computed(() => {
+            const date = new Date(timelineCursor.value);
+            return new Date(date.getFullYear(), date.getMonth(), 1);
+        });
+        const calendarTitle = computed(() => calendarMonth.value
+            .toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: 'long'
+        }));
+        const monthDocCounts = computed(() => {
+            const result = {};
+            const month = calendarMonth.value;
+            const year = month.getFullYear();
+            const monthIndex = month.getMonth();
+            documents.value.forEach(doc => {
+                const timestamp = getTimelineTimestamp(doc);
+                if (!timestamp) {
+                    return;
+                }
+                const date = new Date(timestamp * 1000);
+                if (date.getFullYear() !== year ||
+                    date.getMonth() !== monthIndex) {
+                    return;
+                }
+                const key = dateKey(date);
+                result[key] =
+                    (result[key] || 0) + 1;
+            });
+            return result;
+        });
+        const currentMonthDocCount = computed(() => Object.values(monthDocCounts.value).reduce((sum, value) => sum + value, 0));
+        const makeCalendarCell = (date, currentMonth) => {
+            const key = dateKey(date);
+            const todayKey = dateKey(new Date());
+            const selectedKey = dateKey(timelineCursor.value);
+            const count = monthDocCounts.value[key] || 0;
+            return {
+                key,
+                date,
+                day: date.getDate(),
+                currentMonth,
+                today: key === todayKey,
+                selected: key === selectedKey,
+                count
+            };
+        };
+        const calendarCells = computed(() => {
+            const month = calendarMonth.value;
+            const year = month.getFullYear();
+            const monthIndex = month.getMonth();
+            const first = new Date(year, monthIndex, 1);
+            const firstDay = first.getDay() === 0
+                ? 6
+                : first.getDay() - 1;
+            const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+            const previousMonthDays = new Date(year, monthIndex, 0).getDate();
+            const cells = [];
+            for (let i = firstDay - 1; i >= 0; i--) {
+                const date = new Date(year, monthIndex - 1, previousMonthDays - i);
+                cells.push(makeCalendarCell(date, false));
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, monthIndex, day);
+                cells.push(makeCalendarCell(date, true));
+            }
+            let nextDay = 1;
+            while (cells.length < 42) {
+                const date = new Date(year, monthIndex + 1, nextDay++);
+                cells.push(makeCalendarCell(date, false));
+            }
+            return cells;
+        });
+        const timelineRange = computed(() => {
+            if (timelineRangeMode.value ===
+                'day') {
+                const start = startOfDay(timelineCursor.value);
+                const end = new Date(start);
+                end.setDate(end.getDate() + 1);
+                return {
+                    start,
+                    end
+                };
+            }
+            const start = startOfWeek(timelineCursor.value);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 7);
+            return {
+                start,
+                end
+            };
+        });
+        const timelineDocs = computed(() => {
+            const start = timelineRange.value.start
+                .getTime() / 1000;
+            const end = timelineRange.value.end
+                .getTime() / 1000;
+            return documents.value
+                .filter(doc => {
+                const timestamp = getTimelineTimestamp(doc);
+                return (timestamp >= start &&
+                    timestamp < end);
+            })
+                .sort((a, b) => getTimelineTimestamp(b) -
+                getTimelineTimestamp(a));
+        });
+        const timelineDayGroups = computed(() => {
+            const groups = {};
+            timelineDocs.value.forEach(doc => {
+                const date = new Date(getTimelineTimestamp(doc) * 1000);
+                const key = dateKey(date);
+                if (!groups[key]) {
+                    const names = [
+                        '周日',
+                        '周一',
+                        '周二',
+                        '周三',
+                        '周四',
+                        '周五',
+                        '周六'
+                    ];
+                    groups[key] = {
+                        key,
+                        label: `${date.getMonth() + 1}月` +
+                            `${date.getDate()}日 ` +
+                            `${names[date.getDay()]}`,
+                        docs: []
+                    };
+                }
+                groups[key].docs.push(doc);
+            });
+            return Object.values(groups)
+                .sort((a, b) => b.key.localeCompare(a.key));
+        });
+        const selectedDateLabel = computed(() => timelineCursor.value
+            .toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'short'
+        }));
+        const selectedWeekLabel = computed(() => {
+            const start = startOfWeek(timelineCursor.value);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 6);
+            return (`${start.toLocaleDateString('zh-CN', {
+                month: 'long',
+                day: 'numeric'
+            })} ～ ${end.toLocaleDateString('zh-CN', {
+                month: 'long',
+                day: 'numeric'
+            })}`);
+        });
+        const timelineTitle = computed(() => timelineRangeMode.value ===
+            'day'
+            ? selectedDateLabel.value
+            : selectedWeekLabel.value);
+        const moveTimelineMonth = offset => {
+            const date = new Date(timelineCursor.value);
+            const originalDay = date.getDate();
+            date.setDate(1);
+            date.setMonth(date.getMonth() + offset);
+            const maxDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            date.setDate(Math.min(originalDay, maxDay));
+            timelineCursor.value =
+                date;
+        };
+        const timelineToday = () => {
+            timelineCursor.value =
+                new Date();
+        };
+        const selectCalendarDay = date => {
+            timelineCursor.value =
+                new Date(date);
+            timelineRangeMode.value =
+                'day';
+        };
+        const toggleTimelinePanel = () => {
+            if (sidebarMode.value !== 'timeline') {
+                sidebarMode.value =
+                    'timeline';
+                calendarCollapsed.value =
+                    false;
+                return;
+            }
+            calendarCollapsed.value =
+                !calendarCollapsed.value;
+        };
+        const fetchDocuments = async () => {
+            try {
+                const response = await fetch('/docapi/documents');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                documents.value =
+                    data.docs || [];
+            }
+            catch (error) {
+                console.error('加载文档失败:', error);
+                ElementPlus.ElMessage.error('文档列表加载失败');
+            }
+        };
+        const fetchRelated = async (id) => {
+            try {
+                const response = await fetch(`/docapi/document/${encodeURIComponent(id)}/related`);
+                if (response.ok) {
+                    relatedDocs.value =
+                        await response.json();
+                }
+                else {
+                    relatedDocs.value = [];
+                }
+            }
+            catch (error) {
+                console.error('相关文档加载失败:', error);
+                relatedDocs.value = [];
+            }
+        };
+        const createSaveSnapshot = () => {
+            return {
+                id: docIdInput.value,
+                content: editorContent.value,
+                created_time: activeDocMeta.value.created_time,
+                sequence: ++saveSequence
+            };
+        };
+        const executeSave = async (snapshot) => {
+            if (!snapshot ||
+                !snapshot.id) {
+                return false;
+            }
+            const targetId = snapshot.id;
+            const targetSequence = snapshot.sequence;
+            if (docIdInput.value === targetId) {
+                saving.value = true;
+                saveStatus.value = '保存中...';
+            }
+            try {
+                const response = await fetch('/docapi/document/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id: targetId,
+                        content: snapshot.content,
+                        created_time: snapshot.created_time
+                    })
+                });
+                if (!response.ok) {
+                    const detail = await response.text()
+                        .catch(() => '');
+                    throw new Error(`HTTP ${response.status} ${detail}`);
+                }
+                const data = await response.json()
+                    .catch(() => ({}));
+                if (data.meta) {
+                    if (isCreating.value && !activeDocId.value &&
+                        docIdInput.value === targetId) {
+                        activeDocId.value = targetId;
+                        isCreating.value = false;
+                    }
+                    syncDocumentMetaToList(data.meta);
+                    if (activeDocId.value ===
+                        targetId) {
+                        activeDocMeta.value = {
+                            ...activeDocMeta.value,
+                            ...data.meta
+                        };
+                    }
+                }
+                if (docIdInput.value ===
+                    targetId &&
+                    targetSequence ===
+                        saveSequence) {
+                    dirty.value = false;
+                    pendingSnapshot.value =
+                        null;
+                    saveStatus.value =
+                        `已保存 ${new Date().toLocaleTimeString('zh-CN', {
+                            hour12: false
+                        })}`;
+                }
+                if (autoAiTags.value)
+                    scheduleAutoAiTags();
+                return true;
+            }
+            catch (error) {
+                console.error('保存失败:', error);
+                if (docIdInput.value ===
+                    targetId) {
+                    saveStatus.value =
+                        '保存失败';
+                }
+                return false;
+            }
+            finally {
+                if (docIdInput.value ===
+                    targetId) {
+                    saving.value =
+                        false;
+                }
+            }
+        };
+        const queueSave = snapshot => {
+            saveQueue =
+                saveQueue
+                    .catch(() => { })
+                    .then(() => executeSave(snapshot));
+            return saveQueue;
+        };
+        const flushCurrentDocument = async () => {
+            clearTimeout(saveTimer);
+            if (!dirty.value) {
+                try {
+                    const ok = await saveQueue;
+                    return ok !== false;
+                }
+                catch (error) {
+                    console.error(error);
+                    return false;
+                }
+            }
+            const snapshot = pendingSnapshot.value ||
+                createSaveSnapshot();
+            pendingSnapshot.value =
+                null;
+            return await queueSave(snapshot);
+        };
+        const handleInput = () => {
+            dirty.value = true;
+            saveStatus.value =
+                '有未保存修改';
+            clearTimeout(saveTimer);
+            const snapshot = createSaveSnapshot();
+            pendingSnapshot.value =
+                snapshot;
+            saveTimer =
+                setTimeout(() => {
+                    const pending = pendingSnapshot.value;
+                    pendingSnapshot.value =
+                        null;
+                    if (pending) {
+                        queueSave(pending);
+                    }
+                }, 800);
+        };
+        const manualSave = async () => {
+            clearTimeout(saveTimer);
+            const snapshot = pendingSnapshot.value ||
+                createSaveSnapshot();
+            pendingSnapshot.value =
+                null;
+            await queueSave(snapshot);
+        };
+        const initOrUpdateVditor = content => {
+            if (vditorInstance &&
+                isVditorReady) {
+                vditorInstance
+                    .setValue(content);
+                return;
+            }
+            if (vditorInstance) {
+                return;
+            }
+            vditorInstance =
+                new Vditor('vditor-container', {
+                    cdn: '/static/cdn/vditor',
+                    mode: 'ir',
+                    height: '100%',
+                    cache: {
+                        enable: false
+                    },
+                    outline: {
+                        enable: false,
+                        position: 'left'
+                    },
+                    preview: {
+                        hljs: false,
+                        math: false,
+                        mermaid: false
+                    },
+                    toolbar: [
+                        'headings',
+                        'bold',
+                        'italic',
+                        'strike',
+                        'link',
+                        '|',
+                        'list',
+                        'ordered-list',
+                        'check',
+                        '|',
+                        'quote',
+                        'line',
+                        'code',
+                        'inline-code',
+                        '|',
+                        'table',
+                        'undo',
+                        'redo',
+                        '|',
+                        'outline',
+                        'fullscreen'
+                    ],
+                    value: content,
+                    input: value => {
+                        editorContent.value =
+                            value;
+                        handleInput();
+                        if (activeDocId.value) {
+                            const title = parseTitleFromContent(value);
+                            if (title) {
+                                syncCurrentTitleToList(title);
+                                activeDocMeta.value = {
+                                    ...activeDocMeta.value,
+                                    title
+                                };
+                            }
+                        }
+                    },
+                    after: () => {
+                        isVditorReady =
+                            true;
+                        vditorInstance
+                            .setValue(editorContent.value);
+                    }
+                });
+        };
+        const createNew = async () => {
+            if (activeDocId.value ||
+                dirty.value) {
+                const success = await flushCurrentDocument();
+                if (!success) {
+                    ElementPlus.ElMessage.error('当前文章保存失败，无法创建新文章');
+                    return;
+                }
+            }
+            const timestamp = Date.now();
+            activeDocId.value =
+                '';
+            isCreating.value =
+                true;
+            docIdInput.value =
+                `note_${timestamp}`;
+            activeDocMeta.value = {
+                id: `note_${timestamp}`,
+                title: `随记_${timestamp}`,
+                created_time: Math.floor(timestamp / 1000),
+                update_time: Math.floor(timestamp / 1000),
+                is_pinned: 0,
+                status: 'active'
+            };
+            relatedDocs.value = [];
+            generatedTags.value = [];
+            dirty.value = false;
+            pendingSnapshot.value =
+                null;
+            editorContent.value =
+                `---
+title: 随记_${timestamp}
+tags:
+  - 笔记
+---
+
+`;
+            saveStatus.value =
+                '新建待存';
+            sidebarMode.value =
+                'docs';
+            nextTick(() => {
+                initOrUpdateVditor(editorContent.value);
+            });
+            if (isMobile.value) {
+                mobileView.value =
+                    'editor';
+            }
+        };
+        const loadDocument = async (id) => {
+            if ((activeDocId.value && activeDocId.value !== id) ||
+                isCreating.value) {
+                const success = await flushCurrentDocument();
+                if (!success) {
+                    ElementPlus.ElMessage.error('当前文章保存失败，已取消切换');
+                    return;
+                }
+            }
+            try {
+                const response = await fetch(`/docapi/document/${encodeURIComponent(id)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                activeDocId.value =
+                    id;
+                docIdInput.value =
+                    id;
+                editorContent.value =
+                    data.content || '';
+                activeDocMeta.value =
+                    data.meta || {
+                        id,
+                        title: '',
+                        created_time: null,
+                        update_time: null,
+                        is_pinned: 0
+                    };
+                isCreating.value =
+                    false;
+                dirty.value = false;
+                pendingSnapshot.value =
+                    null;
+                saveStatus.value =
+                    '已加载';
+                relatedDocs.value =
+                    [];
+                generatedTags.value =
+                    [];
+                if (data.meta) {
+                    syncDocumentMetaToList(data.meta);
+                }
+                nextTick(() => {
+                    initOrUpdateVditor(editorContent.value);
+                });
+                fetchRelated(id);
+                if (isMobile.value) {
+                    mobileView.value =
+                        'editor';
+                }
+            }
+            catch (error) {
+                console.error('加载文档失败:', error);
+                ElementPlus.ElMessage.error('文档加载失败');
+            }
+        };
+        const loadDocumentFromTimeline = async (id) => {
+            await loadDocument(id);
+        };
+        const flushAndBack = async () => {
+            const success = await flushCurrentDocument();
+            if (!success) {
+                ElementPlus.ElMessage.error('保存失败，暂不返回');
+                return;
+            }
+            mobileView.value =
+                'list';
+        };
+        const resetEditorState = () => {
+            activeDocId.value = '';
+            docIdInput.value = '';
+            editorContent.value = '';
+            isCreating.value = false;
+            dirty.value = false;
+            pendingSnapshot.value = null;
+            relatedDocs.value = [];
+            generatedTags.value = [];
+            saveStatus.value = '';
+            activeDocMeta.value = {
+                id: '',
+                title: '',
+                created_time: null,
+                update_time: null,
+                is_pinned: 0,
+                status: 'active'
+            };
+            if (vditorInstance && isVditorReady) {
+                vditorInstance.setValue('');
+            }
+            if (isMobile.value) {
+                mobileView.value = 'list';
+            }
+        };
+        const deleteDocument = async () => {
+            if (isCreating.value && !activeDocId.value) {
+                let confirmed = false;
+                try {
+                    await ElementPlus.ElMessageBox.confirm('放弃这篇尚未保存的笔记？', '提示', {
+                        type: 'warning',
+                        confirmButtonText: '放弃',
+                        cancelButtonText: '继续编辑'
+                    });
+                    confirmed = true;
+                }
+                catch (e) {
+                    confirmed = false;
+                }
+                if (!confirmed) {
+                    return;
+                }
+                clearTimeout(saveTimer);
+                pendingSnapshot.value = null;
+                resetEditorState();
+                ElementPlus.ElMessage.success('已放弃草稿');
+                return;
+            }
+            const id = activeDocId.value;
+            if (!id) {
+                return;
+            }
+            let confirmed = false;
+            try {
+                await ElementPlus.ElMessageBox.confirm(`确定删除「${getDocTitle(activeDocMeta.value || { id })}」吗？\n` +
+                    '文件会移入服务器回收站，可手动找回。', '删除确认', {
+                    type: 'warning',
+                    confirmButtonText: '删除',
+                    cancelButtonText: '取消',
+                    confirmButtonClass: 'el-button--danger'
+                });
+                confirmed = true;
+            }
+            catch (e) {
+                confirmed = false;
+            }
+            if (!confirmed) {
+                return;
+            }
+            clearTimeout(saveTimer);
+            pendingSnapshot.value = null;
+            dirty.value = false;
+            try {
+                await saveQueue;
+            }
+            catch (e) {
+                console.error(e);
+            }
+            deleting.value = true;
+            try {
+                const response = await fetch('/docapi/document/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id })
+                });
+                const data = await response.json()
+                    .catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error ||
+                        `HTTP ${response.status}`);
+                }
+                documents.value =
+                    documents.value.filter(doc => doc.id !== id);
+                searchResults.value =
+                    searchResults.value.filter(doc => doc.id !== id);
+                resetEditorState();
+                ElementPlus.ElMessage.success('已删除');
+            }
+            catch (error) {
+                console.error('删除失败:', error);
+                ElementPlus.ElMessage.error(error.message || '删除失败');
+            }
+            finally {
+                deleting.value = false;
+            }
+        };
+        const commitRename = async () => {
+            if (isCreating.value) {
+                return;
+            }
+            if (renaming.value) {
+                return;
+            }
+            const oldId = activeDocId.value;
+            if (!oldId) {
+                return;
+            }
+            const newId = String(docIdInput.value || '').trim();
+            if (!newId) {
+                docIdInput.value =
+                    oldId;
+                return;
+            }
+            if (newId === oldId) {
+                return;
+            }
+            const saved = await flushCurrentDocument();
+            if (!saved) {
+                docIdInput.value =
+                    oldId;
+                ElementPlus.ElMessage.error('当前文章保存失败，无法重命名');
+                return;
+            }
+            renaming.value =
+                true;
+            try {
+                const response = await fetch('/docapi/document/rename', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        old_id: oldId,
+                        new_id: newId
+                    })
+                });
+                const data = await response.json()
+                    .catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error ||
+                        `HTTP ${response.status}`);
+                }
+                const actualNewId = (data.meta && data.meta.id) ||
+                    newId;
+                activeDocId.value =
+                    actualNewId;
+                docIdInput.value =
+                    actualNewId;
+                if (data.meta) {
+                    activeDocMeta.value = {
+                        ...activeDocMeta.value,
+                        ...data.meta
+                    };
+                    documents.value =
+                        documents.value.filter(doc => doc.id !==
+                            oldId);
+                    syncDocumentMetaToList(data.meta);
+                }
+                saveStatus.value =
+                    '重命名成功';
+                await fetchDocuments();
+            }
+            catch (error) {
+                console.error('重命名失败:', error);
+                docIdInput.value =
+                    oldId;
+                ElementPlus.ElMessage.error(error.message ||
+                    '文件名修改失败');
+            }
+            finally {
+                renaming.value =
+                    false;
+            }
+        };
+        const toggleAction = async (action) => {
+            if (!activeDocId.value) {
+                return;
+            }
+            const saved = await flushCurrentDocument();
+            if (!saved) {
+                ElementPlus.ElMessage.error('当前文章保存失败，操作已取消');
+                return;
+            }
+            const currentId = activeDocId.value;
+            try {
+                const response = await fetch('/docapi/document/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id: currentId,
+                        action
+                    })
+                });
+                const data = await response.json()
+                    .catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error ||
+                        `HTTP ${response.status}`);
+                }
+                if (data.meta) {
+                    activeDocMeta.value = {
+                        ...activeDocMeta.value,
+                        ...data.meta
+                    };
+                    syncDocumentMetaToList(data.meta);
+                }
+                await fetchDocuments();
+                const reloadResponse = await fetch(`/docapi/document/${encodeURIComponent(currentId)}`);
+                if (reloadResponse.ok) {
+                    const reloadData = await reloadResponse.json();
+                    editorContent.value =
+                        reloadData.content || '';
+                    activeDocMeta.value =
+                        reloadData.meta || activeDocMeta.value;
+                    dirty.value =
+                        false;
+                    pendingSnapshot.value =
+                        null;
+                    nextTick(() => {
+                        initOrUpdateVditor(editorContent.value);
+                    });
+                }
+            }
+            catch (error) {
+                console.error('操作失败:', error);
+                ElementPlus.ElMessage.error(error.message ||
+                    '操作失败');
+            }
+        };
+        const generateTags = async () => {
+            if (!editorContent.value.trim()) {
+                return;
+            }
+            aiLoading.value =
+                true;
+            try {
+                const response = await fetch('/docapi/document/ai/tags', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: editorContent.value
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                if (data.tags?.includes('API_KEY_MISSING')) {
+                    throw new Error('未配置 OP_API_KEY，无法生成 AI 标签');
+                }
+                if (data.tags?.includes('AI_ERROR')) {
+                    throw new Error('AI 服务暂时不可用');
+                }
+                if (data.tags &&
+                    Array.isArray(data.tags) &&
+                    data.tags.length > 0) {
+                    generatedTags.value =
+                        data.tags;
+                }
+                else {
+                    ElementPlus.ElMessage.warning('未能提取有效标签');
+                }
+            }
+            catch (error) {
+                console.error(error);
+                ElementPlus.ElMessage.error(error.message || 'AI 解析失败');
+            }
+            finally {
+                aiLoading.value =
+                    false;
+            }
+        };
+        const applyGeneratedTags = () => {
+            if (!generatedTags.value.length || (!activeDocId.value && !isCreating.value))
+                return;
+            const newLine = `tags: [${generatedTags.value.map(tag => JSON.stringify(tag)).join(', ')}]`;
+            const original = editorContent.value || '';
+            const front = original.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+            let result;
+            if (front) {
+                const lines = front[1].split(/\r?\n/);
+                const position = lines.findIndex(line => /^tags\s*:/.test(line));
+                if (position >= 0) {
+                    let last = position + 1;
+                    while (last < lines.length && /^[ \t]+\S/.test(lines[last]))
+                        last++;
+                    lines.splice(position, last - position, newLine);
+                }
+                else {
+                    lines.push(newLine);
+                }
+                result = `---\n${lines.join('\n')}\n---\n${original.slice(front[0].length)}`;
+            }
+            else {
+                result = `---\n${newLine}\n---\n${original}`;
+            }
+            editorContent.value = result;
+            activeDocMeta.value = { ...activeDocMeta.value,
+                tags: [...generatedTags.value], tags_cache: generatedTags.value.join(',') };
+            if (vditorInstance && isVditorReady)
+                vditorInstance.setValue(result);
+            handleInput();
+            ElementPlus.ElMessage.success('标签已写入笔记，正在自动保存');
+        };
+        const rebuildIndex = async () => {
+            syncing.value =
+                true;
+            try {
+                const saved = await flushCurrentDocument();
+                if (!saved) {
+                    ElementPlus.ElMessage.error('当前文章保存失败，无法同步');
+                    return;
+                }
+                const response = await fetch('/docapi/init', {
+                    method: 'POST'
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                await fetchDocuments();
+                ElementPlus.ElMessage.success('索引同步完成');
+            }
+            catch (error) {
+                console.error(error);
+                ElementPlus.ElMessage.error('索引同步失败');
+            }
+            finally {
+                syncing.value =
+                    false;
+            }
+        };
+        const handleBeforeUnload = event => {
+            if (dirty.value ||
+                saving.value) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        const handleGlobalKeyDown = event => {
+            const ctrl = event.ctrlKey || event.metaKey;
+            if (ctrl && event.key.toLowerCase() === 's') {
+                event.preventDefault();
+                if (activeDocId.value || isCreating.value)
+                    manualSave();
+            }
+            else if (ctrl && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                if (isFocusMode.value)
+                    isFocusMode.value = false;
+                if (isMobile.value)
+                    mobileView.value = 'list';
+                nextTick(() => document.querySelector('.header-search input')?.focus());
+            }
+            else if (ctrl && event.key.toLowerCase() === 'n') {
+                event.preventDefault();
+                createNew();
+            }
+            else if (event.key === 'Escape' && isFocusMode.value) {
+                isFocusMode.value = false;
+            }
+        };
+        onMounted(async () => {
+            updateIsMobile();
+            window.addEventListener('keydown', handleGlobalKeyDown);
+            await fetchDocuments();
+        });
+        onUnmounted(() => {
+            window.removeEventListener('keydown', handleGlobalKeyDown);
+            window.removeEventListener('resize', updateIsMobile);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            clearTimeout(saveTimer);
+            clearTimeout(searchTimer);
+            clearTimeout(autoAiTimer);
+            vditorInstance?.destroy?.();
+        });
+        return {
+            documents,
+            searchResults,
+            searchQuery,
+            activeDocId,
+            docIdInput,
+            editorContent,
+            isCreating,
+            activeDocMeta,
+            relatedDocs,
+            saving,
+            syncing,
+            isSearching,
+            renaming,
+            clipboardTitleLoading,
+            deleting,
+            saveStatus,
+            dirty,
+            aiLoading,
+            generatedTags,
+            isFocusMode,
+            autoAiTags,
+            isMobile,
+            mobileView,
+            sidebarMode,
+            pinnedDocs,
+            inboxDocs,
+            archiveDocs,
+            activeDocStatus,
+            createdTimeAgo,
+            updatedTimeAgo,
+            fullCreatedTime,
+            fullUpdateTime,
+            charCount,
+            totalChars,
+            lineCount,
+            paragraphCount,
+            readTime,
+            timelineCursor,
+            timelineTimeField,
+            timelineRangeMode,
+            calendarCollapsed,
+            weekNames,
+            calendarTitle,
+            calendarCells,
+            currentMonthDocCount,
+            timelineTitle,
+            selectedDateLabel,
+            selectedWeekLabel,
+            timelineDocs,
+            timelineDayGroups,
+            getDocTitle,
+            getDocPreview,
+            highlightText,
+            createNew,
+            loadDocument,
+            loadDocumentFromTimeline,
+            manualSave,
+            handleInput,
+            setTitleFromClipboard,
+            forceSearch,
+            rebuildIndex,
+            toggleAction,
+            generateTags,
+            applyGeneratedTags,
+            commitRename,
+            deleteDocument,
+            resetEditorState,
+            moveTimelineMonth,
+            timelineToday,
+            selectCalendarDay,
+            toggleTimelinePanel,
+            flushAndBack,
+            formatTimelineTime
+        };
+    }
+});
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+    app.component(key, component);
+}
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+
 </body>
 </html>

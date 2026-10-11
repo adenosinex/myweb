@@ -2,830 +2,431 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Python Runner Pro</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="pys-api" content="/pys">
+<title>Python Runner Pro · 工作台</title>
 <style>
-    :root { --primary:#2563eb; --success:#16a34a; --danger:#dc2626; --warning:#ea580c; --bg:#f8fafc; }
-    * { box-sizing:border-box; }
-    body { font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
-           margin:0; padding:20px; background:var(--bg); color:#334155; }
-    h2 { margin:0 0 4px; }
-    .subtitle { margin:0 0 14px; color:#64748b; font-size:13px; }
-    .connbar { display:flex; align-items:center; gap:10px; margin:0 0 12px;
-               font-size:12.5px; color:#64748b; }
-    .conn { font-size:12px; padding:3px 10px; border-radius:20px; white-space:nowrap;
-            background:#e2e8f0; color:#475569; }
-    .conn.ok   { background:#dcfce7; color:#166534; }
-    .conn.err  { background:#fee2e2; color:#991b1b; }
-
-    .portbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-               background:#fff; padding:10px 14px; border-radius:8px;
-               box-shadow:0 1px 3px rgba(0,0,0,0.05); margin:0 0 18px;
-               position: sticky; top: 0; z-index: 50; }
-    .portbar label { font-size:13px; font-weight:600; color:#475569; }
-    .portbar input { width:130px; padding:6px 10px; border:1px solid #cbd5e1;
-                     border-radius:6px; font-family:ui-monospace, monospace; font-size:13px; }
-    .portbar .hint { font-size:11.5px; color:#94a3b8; }
-    .portbar .divider { display:inline-block; width:1px; height:20px;
-                        background:#e2e8f0; margin:0 6px; }
-
-    .group-title { font-size:14px; font-weight:700; color:#64748b; margin:20px 0 10px;
-                   border-left:4px solid #cbd5e1; padding-left:8px; }
-    .card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px;
-            box-shadow:0 1px 3px rgba(0,0,0,0.05); border-left:4px solid transparent; transition:all .2s; }
-    .card.running  { border-left-color:var(--primary); background:#eff6ff; }
-    .card.finished { border-left-color:var(--success); }
-    .card.error    { border-left-color:var(--danger);  background:#fef2f2; }
-    .header { display:flex; justify-content:space-between; align-items:center;
-              margin-bottom:12px; flex-wrap:wrap; gap:10px; }
-    .file-name { font-weight:600; font-size:15px; }
-    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-
-    .btn { padding:6px 14px; border:none; border-radius:6px; cursor:pointer;
-           font-size:13px; font-weight:600; color:#fff; transition:all .2s; text-decoration:none;
-           display:inline-flex; align-items:center; gap:4px; }
-    .btn:hover:not(:disabled) { transform:translateY(-1px); filter:brightness(110%); }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
-    .btn-run  { background:var(--primary); }
-    .btn-stop { background:var(--danger); }
-    .btn-kill { background:var(--warning); }
-    .btn-edit { background:#7c3aed; }
-    .btn-log  { background:#fff; color:#475569; border:1px solid #cbd5e1; }
-    .btn-link { background:var(--success); }
-    .btn-proxy { background:#0891b2; }
-
-    .tag { font-size:11px; padding:3px 8px; border-radius:4px;
-           background:#e2e8f0; color:#475569; }
-    .tag-running { background:#dcfce7; color:#166534; }
-    .tag-busy { background:#fee2e2; color:#991b1b; }
-    .tag-editable { cursor:pointer; }
-    .tag-editable:hover { background:#cbd5e1; }
-    .tag-manual { background:#dbeafe; color:#1e40af; }
-
-    .log-box { background:#1e293b; color:#e2e8f0; padding:12px; border-radius:6px;
-               max-height:340px; min-height:80px; overflow-y:auto;
-               font-family:ui-monospace, Menlo, Consolas, monospace;
-               font-size:12px; white-space:pre-wrap; margin-top:12px; display:none;
-               line-height:1.5; word-break:break-word; }
-    .log-box.show { display:block; }
-    .log-box:empty::before { content:"（暂无日志输出）"; color:#64748b; }
-
-    .others-toggle {
-        display:inline-flex; align-items:center; gap:6px;
-        margin:4px 0 12px; padding:6px 14px;
-        font-size:12.5px; color:#475569;
-        background:#fff; border:1px dashed #cbd5e1; border-radius:6px;
-        cursor:pointer; user-select:none;
-    }
-    .others-toggle:hover { border-color:var(--primary); color:var(--primary); }
-    .others-toggle .chev { transition:transform .18s; display:inline-block; }
-    .others-toggle.open .chev { transform:rotate(90deg); }
-    .others-group { display:none; }
-    .others-group.open { display:block; }
-
-    .modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none;
-             justify-content:center; align-items:center; z-index:1000; backdrop-filter:blur(2px); }
-    .modal-content { background:#fff; padding:24px; border-radius:12px; width:90%;
-                     max-width:400px; box-shadow:0 10px 25px rgba(0,0,0,.2); }
-    .modal-edit .modal-content { max-width:1000px; width:94%; padding:20px; }
-    .modal-edit h3 { margin:0 0 10px; font-size:16px; }
-    .modal-edit .meta { font-size:12px; color:#94a3b8; margin-bottom:10px; }
-    .modal-edit textarea {
-        width:100%; height:62vh; min-height:280px;
-        padding:12px; border:1px solid #cbd5e1; border-radius:6px;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-size:13px; line-height:1.55; resize:vertical;
-        background:#0f172a; color:#e2e8f0; tab-size:4;
-    }
-    .modal-edit textarea:focus { outline:none; border-color:var(--primary);
-                                 box-shadow:0 0 0 3px rgba(37,99,235,.15); }
-    .modal-edit .footer { display:flex; align-items:center; gap:10px;
-                          margin-top:12px; flex-wrap:wrap; }
-    .modal-edit .footer .spacer { flex:1; }
-    .modal-edit .status { font-size:12.5px; color:#64748b; }
-    .modal-edit .status.ok  { color:var(--success); }
-    .modal-edit .status.err { color:var(--danger); }
-    .modal-edit .btn-save { background:var(--primary); }
-    .modal-edit .btn-cancel { background:#94a3b8; }
-
-    .modal-port .modal-content { max-width:420px; }
-    .modal-port h3 { margin:0 0 10px; }
-    .modal-port .filelabel { font-size:12.5px; color:#94a3b8; margin-bottom:10px;
-                             word-break:break-all; font-family:ui-monospace, monospace; }
-    .modal-port input[type=number] { width:100%; padding:9px 12px;
-        border:1px solid #cbd5e1; border-radius:6px; font-size:14px;
-        font-family:ui-monospace, monospace; }
-    .modal-port .tip { font-size:12px; color:#94a3b8; margin-top:8px; line-height:1.6; }
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color-scheme:light;
+  --bg:#f4f6fa;--surface:#fff;--surface2:#f8fafc;--text:#172339;--muted:#758398;--line:#e4eaf3;--accent:#4f46e5;
+  --accent-bg:#eef2ff;--green:#0f9d75;--green-bg:#e7fbf2;--amber:#c58016;--amber-bg:#fff6e5;--red:#dc4c58;
+  --red-bg:#fff0f0;--shadow:0 8px 28px rgba(22,33,62,.045);--radius:16px}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0b1120;--surface:#151e31;--surface2:#10182a;--text:#eef2fa;
+  --muted:#93a1b9;--line:#2a374e;--accent:#a29bff;--accent-bg:#24234a;--green:#40d6a5;--green-bg:#103a32;
+  --amber:#ffc269;--amber-bg:#47341d;--red:#ff7d83;--red-bg:#48252d;--shadow:0 8px 28px rgba(0,0,0,.13)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);min-height:100vh}
+button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+a{color:inherit;text-decoration:none}a:hover{text-decoration:none}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible,summary:focus-visible{
+ outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:2px}
+.shell{max-width:1460px;margin:auto;padding:28px 34px 60px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}
+.brand{display:flex;align-items:center;gap:14px}.brand-icon{width:48px;height:48px;border-radius:15px;
+ background:linear-gradient(140deg,#4f46e5,#776cf8);color:white;display:grid;place-items:center;
+ font-size:24px;font-weight:800;box-shadow:0 9px 20px #4f46e535}
+.brand h1{font-size:23px;letter-spacing:-.65px;margin:0;font-weight:760}.brand p{font-size:12px;color:var(--muted);margin:4px 0 0}
+.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.pill{border:1px solid var(--line);border-radius:999px;
+ background:var(--surface);padding:8px 12px;font-size:12px;color:var(--muted);display:inline-flex;gap:7px;align-items:center}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;flex-shrink:0}
+.status-dot.ok{background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}.status-dot.bad{background:var(--red)}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--text);display:inline-flex;align-items:center;justify-content:center;
+ gap:7px;border-radius:10px;padding:9px 13px;line-height:1.3;font-size:13px;font-weight:630;white-space:nowrap;transition:.15s}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.primary:hover:not(:disabled){filter:brightness(1.12);color:#fff}
+.btn.danger{color:var(--red);background:var(--red-bg);border-color:transparent}.btn.ghost{border:0;background:transparent}
+.btn.small{padding:7px 10px;font-size:12px;border-radius:8px}.btn.icon-btn{min-width:37px;padding:9px}
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.hero h2{margin:0 0 5px;font-size:25px;letter-spacing:-.7px}.hero p{margin:0;color:var(--muted);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--line);padding:18px 21px;border-radius:var(--radius);box-shadow:var(--shadow)}
+.stat-top{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;font-weight:570}
+.stat-symbol{width:30px;height:30px;border-radius:10px;background:var(--accent-bg);color:var(--accent);
+ display:grid;place-items:center;font-size:16px}.stat strong{display:block;font-size:29px;letter-spacing:-1.2px;margin-top:5px;font-variant-numeric:tabular-nums}
+.panel{border:1px solid var(--line);background:var(--surface);padding:15px;border-radius:var(--radius);box-shadow:var(--shadow)}
+.toolbar{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:22px}
+.search{flex:1 1 220px;display:flex;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--line);
+ border-radius:10px;padding:0 11px;color:var(--muted)}.search input{height:39px;min-width:0;flex:1;border:0;background:transparent;
+ outline:none;color:var(--text);font-size:13px}.search input::placeholder{color:var(--muted)}
+select,.field{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:10px;padding:10px 11px;min-width:0}
+.toolbar select{min-height:40px;font-size:13px}.toolbar .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);white-space:nowrap;cursor:pointer}
+.switch input{accent-color:var(--accent)}
+.group{margin-bottom:24px}.group-head{display:flex;align-items:center;gap:10px;margin:0 0 13px;padding:0 2px}
+.group-head h3{font-size:15px;margin:0;font-weight:720}.counter{background:var(--accent-bg);color:var(--accent);padding:3px 9px;border-radius:99px;font-size:11px}
+.items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.task{min-width:0;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);
+ box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s,transform .15s}
+.task:hover{border-color:color-mix(in srgb,var(--accent) 32%,var(--line))}.task.running,.task.external{border-color:color-mix(in srgb,var(--green) 45%,var(--line))}
+.task.conflict{border-color:color-mix(in srgb,var(--amber) 45%,var(--line))}
+.task-inner{padding:19px}.task-heading{display:flex;align-items:flex-start;gap:11px;min-width:0}
+.python-icon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+ background:var(--accent-bg);color:var(--accent);font-size:13px;font-weight:800;flex-shrink:0}
+.task-title{flex:1;min-width:0}.task-title strong{font-size:15px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-title small{display:block;margin-top:5px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{display:inline-flex;gap:6px;align-items:center;border-radius:99px;padding:6px 9px;font-size:11px;font-weight:700;white-space:nowrap;
+ background:var(--surface2);color:var(--muted)}.badge.running{background:var(--green-bg);color:var(--green)}
+.badge.occupied,.badge.conflict{background:var(--amber-bg);color:var(--amber)}
+.badge.external{background:var(--green-bg);color:var(--green)}
+.proc-stat{background:var(--surface2);border:1px solid var(--line);padding:12px;border-radius:11px}
+.proc-stat small{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+.proc-stat strong{font-size:17px;font-variant-numeric:tabular-nums}
+.proc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:18px}
+.proc-field{padding:10px 0;border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:flex-start;font-size:12px}
+.proc-field strong{min-width:88px;color:var(--muted);font-weight:550}
+.proc-field span{min-width:0;flex:1;overflow-wrap:anywhere}
+.proc-command{margin:6px 0 0;padding:12px;background:#0b1325;color:#cce0ff;border-radius:10px;
+ font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;max-height:190px;overflow:auto}
+@media(max-width:520px){.proc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.task-meta{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 15px}.meta-tag{display:inline-flex;align-items:center;gap:5px;
+ font-size:11px;border:1px solid var(--line);background:var(--surface2);border-radius:7px;padding:6px 9px;color:var(--muted)}
+.meta-tag.click{cursor:pointer}.meta-tag.click:hover{color:var(--accent);border-color:var(--accent)}
+.args{width:100%;margin-bottom:12px;font-size:12px;padding:10px 11px;background:var(--surface2)}
+.task-controls{display:flex;flex-wrap:wrap;gap:7px}.task-controls .btn{flex:0 0 auto}
+.task-footer{display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-top:1px solid var(--line);
+ background:var(--surface2);font-size:11px;color:var(--muted);gap:10px}
+.fold{border:1px dashed var(--line);border-radius:12px;margin-top:13px;background:var(--surface)}
+.fold>summary{cursor:pointer;padding:14px;font-size:12px;color:var(--muted);font-weight:650;list-style:none}
+.fold>summary::before{content:'›';font-size:20px;margin-right:8px;vertical-align:-1px;display:inline-block;transition:transform .15s}
+.fold[open]>summary::before{transform:rotate(90deg)}.fold .items{padding:0 13px 13px}
+.log-pane{border-top:1px solid var(--line);background:#0b1325;color:#e6edfb}
+.log-tools{padding:8px 11px;display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid #273348}
+.log-tools span{font-size:11px;color:#91a3c1}.log-tools button{background:none;color:#a9bad6;border:none;font-size:11px;padding:5px;cursor:pointer}
+.log-tools button:hover{color:#fff}.log-output{height:215px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+ margin:0;padding:13px;line-height:1.62;font-size:12px;tab-size:4;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.empty{padding:58px 20px;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);background:var(--surface)}
+.empty strong{font-size:17px}.empty p{color:var(--muted);font-size:13px}
+.toast-host{position:fixed;right:22px;bottom:22px;z-index:3000;display:flex;flex-direction:column;gap:9px;max-width:min(390px,90vw)}
+.toast{padding:12px 16px;border-radius:11px;background:#20314a;color:#fff;box-shadow:0 12px 40px #0002;font-size:13px;
+ border-left:4px solid #91a3c1}.toast.good{border-left-color:#36cb97}.toast.bad{border-left-color:#ff7676}
+dialog{border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--text);
+ width:min(94vw,480px);padding:0;box-shadow:0 30px 90px #0004;max-height:92vh}
+dialog::backdrop{background:#0b1427ad;backdrop-filter:blur(4px)}dialog.wide{width:min(96vw,1100px)}
+.modal-head{padding:19px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:15px}
+.modal-head h3{font-size:17px;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-body{padding:21px 22px}.modal-body p{font-size:13px;color:var(--muted);line-height:1.7;margin:0 0 13px}
+.modal-body label{display:block;font-size:12px;font-weight:700;margin-bottom:8px}.modal-body .field{width:100%}
+.modal-actions{padding:15px 22px;display:flex;justify-content:flex-end;gap:9px;border-top:1px solid var(--line);flex-wrap:wrap}
+.editor-info{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-bottom:10px}
+#editorText{width:100%;height:min(59vh,650px);min-height:270px;background:#111b2d;color:#e6edfb;border:1px solid #39465e;
+ border-radius:10px;padding:15px;font:12.5px/1.55 ui-monospace,Consolas,monospace;tab-size:4;resize:vertical}
+#editorState{margin-right:auto;align-self:center;font-size:12px;color:var(--muted)}
+.loading{animation:spin .8s linear infinite;display:inline-block}@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1000px){.items{grid-template-columns:1fr}.shell{padding:20px 20px 50px}}
+@media(max-width:650px){.shell{padding:15px 13px 48px}.topbar{align-items:flex-start}.brand h1{font-size:19px}
+ .brand-icon{width:42px;height:42px}.top-actions{justify-content:flex-end}.top-actions .hide-mobile{display:none}
+ .hero h2{font-size:22px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{padding:14px}
+ .stat strong{font-size:25px}.toolbar{gap:8px}.toolbar .right{width:100%;margin:0;justify-content:space-between}
+ .task-inner{padding:14px}.task-footer{padding:10px 13px}.task-controls .btn{padding:8px 10px}
+ .modal-head,.modal-body,.modal-actions{padding:15px}dialog{width:96vw}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-
-<h2>🐍 Python Runner Pro</h2>
-<p class="subtitle">与本机后端同源，API 固定使用 <code>/pys</code></p>
-
-<div class="connbar">
-    <span>后端状态：</span>
-    <span id="connStatus" class="conn">未连接</span>
-</div>
-
-<div class="portbar">
-    <label for="forcePort">强制停止端口：</label>
-    <input id="forcePort" type="number" min="1" max="65535"
-           placeholder="例如 5000" spellcheck="false">
-    <button class="btn btn-stop" onclick="forceKillPort()">🛑 停止端口</button>
-
-    <span class="divider"></span>
-
-    <label for="proxyPort">转发打开：</label>
-    <input id="proxyPort" type="number" min="1" max="65535"
-           placeholder="例如 5000" spellcheck="false">
-    <button class="btn btn-proxy" onclick="openProxy()">🔗 打开</button>
-
-    <span class="hint">通过本服务转发到 127.0.0.1:&lt;端口&gt;，使 HTTP 服务也能走 HTTPS 访问。</span>
-</div>
-
-<div id="app"></div>
-
-<div id="killModal" class="modal">
-    <div class="modal-content">
-        <h3 style="margin-top:0;">⚠️ 端口被占用</h3>
-        <p>端口 <b id="mPort" style="color:var(--danger)"></b> 正被以下进程占用：</p>
-        <pre id="mInfo" style="background:#f8fafc; padding:10px; border-radius:6px;
-                               font-size:12px; max-height:100px; overflow:auto;"></pre>
-        <div style="text-align:right; margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
-            <button class="btn" style="background:#94a3b8" onclick="closeModal()">取消</button>
-            <button class="btn btn-kill" onclick="confirmKill()">🔪 强制杀死</button>
-        </div>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">Py</span><div><h1>Python Runner Pro</h1><p>脚本管理 · 运行监控 · 端口转发</p></div></div>
+    <div class="top-actions">
+      <span class="pill"><span id="connDot" class="status-dot"></span><span id="connText">检查连接中</span></span>
+      <button class="btn icon-btn" id="themeBtn" title="切换深色模式" aria-label="切换主题">◐</button>
+      <button class="btn hide-mobile" id="authBtn">访问密钥</button>
+      <button class="btn" id="refreshBtn">↻ <span class="hide-mobile">刷新</span></button>
     </div>
+  </header>
+  <section class="hero"><div><h2>脚本工作台</h2><p>查看进程、管理 Python 脚本并访问本机服务。</p></div>
+    <span style="font-size:12px;color:var(--muted)" id="lastRefresh">等待首次同步</span></section>
+  <section class="stats" aria-label="运行统计">
+    <article class="stat"><div class="stat-top"><span>全部脚本</span><span class="stat-symbol">⌘</span></div><strong id="nAll">—</strong></article>
+    <article class="stat"><div class="stat-top"><span>正在运行</span><span class="stat-symbol" style="color:var(--green);background:var(--green-bg)">▷</span></div><strong id="nRunning">—</strong></article>
+    <article class="stat"><div class="stat-top"><span>端口冲突</span><span class="stat-symbol" style="color:var(--amber);background:var(--amber-bg)">◎</span></div><strong id="nOccupied">—</strong></article>
+    <article class="stat"><div class="stat-top"><span>可启动</span><span class="stat-symbol">＋</span></div><strong id="nIdle">—</strong></article>
+  </section>
+  <section class="toolbar panel" aria-label="搜索与操作">
+    <div class="search"><span>⌕</span><input id="search" type="search" placeholder="搜索脚本、目录、端口…" autocomplete="off" aria-label="搜索脚本"></div>
+    <select id="filter" aria-label="运行状态筛选"><option value="all">全部状态</option><option value="running">正在运行</option><option value="external">外部运行</option><option value="conflict">端口冲突</option><option value="idle">未运行</option></select>
+    <div class="right"><label class="switch"><input type="checkbox" id="autoRefresh" checked> 自动刷新</label>
+      <button class="btn" id="openPortBtn">↗ 端口转发</button><button class="btn danger" id="killPortBtn">停止端口</button></div>
+  </section>
+  <main id="app"><div class="empty"><strong>正在加载脚本…</strong><p>正在检查后端及目录内容</p></div></main>
 </div>
-
-<div id="portModal" class="modal modal-port">
-    <div class="modal-content">
-        <h3>🔢 设置推荐端口</h3>
-        <div class="filelabel" id="pmFile">-</div>
-        <input id="pmInput" type="number" min="1" max="65535"
-               placeholder="输入端口号（1-65535），留空则清除">
-        <div class="tip">
-            端口会保存到该文件所在目录的 <code>_pys_ports.txt</code>。<br>
-            端口已被占用时，卡片显示"运行中"，不会重复启动。
-        </div>
-        <div style="text-align:right; margin-top:18px; display:flex; gap:10px; justify-content:flex-end;">
-            <button class="btn" style="background:#94a3b8" onclick="closePortModal()">取消</button>
-            <button class="btn" style="background:#94a3b8" onclick="clearPort()">🗑 清除</button>
-            <button class="btn btn-run" onclick="savePort()">💾 保存</button>
-        </div>
-    </div>
-</div>
-
-<div id="editModal" class="modal modal-edit">
-    <div class="modal-content">
-        <h3>✏️ 编辑文件：<span id="editFileName" style="color:#7c3aed;"></span></h3>
-        <div class="meta">
-            编码：<span id="editEncoding">-</span> ｜
-            大小：<span id="editSize">-</span> ｜
-            <span style="color:#94a3b8;">保存时会自动备份为同名 .bak 文件</span>
-        </div>
-        <textarea id="editContent" spellcheck="false"></textarea>
-        <div class="footer">
-            <span id="editStatus" class="status"></span>
-            <span class="spacer"></span>
-            <button class="btn btn-cancel" onclick="closeEditor()">取消 (Esc)</button>
-            <button class="btn btn-save" id="editSaveBtn" onclick="saveEditor()">💾 保存 (Ctrl+S)</button>
-        </div>
-    </div>
-</div>
-
+<div class="toast-host" id="toasts" aria-live="polite"></div>
+<dialog id="portDialog"><div class="modal-head"><h3>设置推荐端口</h3><button class="btn ghost" data-close="portDialog">✕</button></div>
+ <form id="portForm"><div class="modal-body"><p id="portName"></p><label for="portInput">端口号 (1–65535)</label>
+ <input class="field" type="number" min="1" max="65535" id="portInput" placeholder="留空可清除手动配置">
+ <p style="margin:12px 0 0">保存在文件所在目录的 <code>_pys_ports.txt</code> 中。</p></div>
+ <div class="modal-actions"><button class="btn" type="button" id="clearPortBtn">清除配置</button><button class="btn" type="button" data-close="portDialog">取消</button><button class="btn primary" type="submit">保存</button></div></form></dialog>
+<dialog id="numberDialog"><div class="modal-head"><h3 id="numberTitle">输入端口</h3><button class="btn ghost" data-close="numberDialog">✕</button></div>
+ <form id="numberForm"><div class="modal-body"><p id="numberHint"></p><label for="numberInput">端口号 (1–65535)</label>
+ <input class="field" id="numberInput" type="number" min="1" max="65535" required placeholder="例如 5000"></div>
+ <div class="modal-actions"><button class="btn" type="button" data-close="numberDialog">取消</button><button class="btn primary" type="submit" id="numberSubmit">确认</button></div></form></dialog>
+<dialog id="authDialog"><div class="modal-head"><h3>访问密钥</h3><button class="btn ghost" data-close="authDialog">✕</button></div>
+ <form id="authForm"><div class="modal-body"><p>后端启用 <code>PY_RUNNER_TOKEN</code> 后，需要在此输入访问密钥。密钥仅用于建立 HttpOnly 认证 Cookie，不在本地存储。</p>
+ <label for="authInput">访问密钥</label><input class="field" type="password" id="authInput" autocomplete="off" placeholder="请输入密钥" required></div>
+ <div class="modal-actions"><button class="btn" type="button" data-close="authDialog">取消</button><button class="btn primary" type="submit">验证并连接</button></div></form></dialog>
+<dialog id="processDialog" class="wide"><div class="modal-head"><h3 id="processTitle">进程实时监控</h3>
+<button class="btn ghost" data-close="processDialog">✕</button></div>
+<div class="modal-body" id="processContent"><p>正在读取进程信息…</p></div>
+<div class="modal-actions"><span style="margin-right:auto;font-size:11px;color:var(--muted)" id="processTimestamp">等待检测</span>
+<button class="btn" type="button" id="processCopy">复制信息</button>
+<button class="btn" type="button" id="processRefresh">立即检测</button>
+<button class="btn danger" type="button" id="processStop" hidden>停止外部进程</button>
+<button class="btn primary" type="button" data-close="processDialog">关闭</button></div></dialog>
+<dialog id="editorDialog" class="wide"><div class="modal-head"><h3 id="editorTitle">文件编辑器</h3><button class="btn ghost" id="editorX">✕</button></div>
+ <div class="modal-body" style="padding-bottom:10px"><div class="editor-info"><span id="editorMeta">UTF-8</span><span id="editorLines">0 行</span></div>
+ <textarea id="editorText" spellcheck="false" aria-label="源代码编辑区"></textarea></div>
+ <div class="modal-actions"><span id="editorState">就绪</span><button class="btn" id="editorCancel">关闭 Esc</button><button class="btn primary" id="editorSave">保存 Ctrl+S</button></div></dialog>
 <script>
-const API_BASE = '/pys';
-const CACHE_KEY = 'py_runner_tasks';
-const LOG_VIS_KEY = 'py_runner_log_visible';
-const OTHERS_VIS_KEY = 'py_runner_others_visible';
-
-let killTarget = null;
-let editingFile = null;
-let editingEncoding = 'utf-8';
-let editingDirty = false;
-let portTargetFile = null;
-
-const pollingTimers = {};
-const logCache = {};
-let logVisible = (() => {
-    try { return JSON.parse(localStorage.getItem(LOG_VIS_KEY)) || {}; } catch { return {}; }
-})();
-let othersVisible = (() => {
-    try { return JSON.parse(localStorage.getItem(OTHERS_VIS_KEY)) || {}; } catch { return {}; }
-})();
-
-function saveLogVisible() {
-    try { localStorage.setItem(LOG_VIS_KEY, JSON.stringify(logVisible)); } catch (e) {}
+'use strict';
+const API=(document.querySelector('meta[name="pys-api"]')?.content||'/pys').replace(/\/$/,'');
+const $=id=>document.getElementById(id);
+const store=(key,value)=>{try{localStorage.setItem('pys.v2.'+key,JSON.stringify(value));}catch(_){}};
+const read=(key,otherwise)=>{try{return JSON.parse(localStorage.getItem('pys.v2.'+key))??otherwise;}catch(_){return otherwise;}};
+const state={groups:{},logs:new Map(),logOpen:new Set(read('logs',[])),folds:new Set(read('folds',[])),
+  args:new Map(),busy:new Set(),filter:'all',query:'',auto:read('refresh',true),theme:read('theme','light'),
+  edit:null,portFile:null,numberMode:'proxy',updating:false,authorized:false,needsAuth:false,
+  processFile:null,processData:null,processLoading:false};
+$('autoRefresh').checked=state.auto;document.documentElement.dataset.theme=state.theme;
+function esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function idOf(x){return 'f'+Array.from(new TextEncoder().encode(x)).map(n=>n.toString(16).padStart(2,'0')).join('');}
+function toast(text,kind=''){const item=document.createElement('div');item.className='toast '+kind;item.textContent=text;
+ $('toasts').append(item);setTimeout(()=>item.remove(),4500);}
+function connect(ok,text){$('connDot').className='status-dot '+(ok?'ok':'bad');$('connText').textContent=text;}
+function dialog(id){const el=$(id);if(!el.open)el.showModal();}
+function closeDialog(id){$(id).close();if(id==='processDialog'){state.processFile=null;state.processData=null;}}
+function validPort(raw){if(!/^\d{1,5}$/.test(String(raw)))return null;const n=Number(raw);return n>=1&&n<=65535?n:null;}
+async function api(path,{method='GET',body,timeout=15000}={}){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
+ try{const resp=await fetch(API+path,{method,headers:body===undefined?{}:{'Content-Type':'application/json'},
+  body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin',cache:'no-store',signal:controller.signal});
+  const d=await resp.json().catch(()=>({ok:false,error:'接口未返回有效 JSON'}));
+  if(resp.status===401){state.needsAuth=true;connect(false,'需要登录');dialog('authDialog');}
+  else connect(true,'后端已连接');
+  if(!resp.ok||d.ok===false)throw Error(d.error||d.message||`请求失败 (HTTP ${resp.status})`);
+  return d;
+ }catch(err){if(err.name==='AbortError')throw Error('接口响应超时');if(err instanceof TypeError)connect(false,'无法连接');throw err;}
+ finally{clearTimeout(timer);}
 }
-function saveOthersVisible() {
-    try { localStorage.setItem(OTHERS_VIS_KEY, JSON.stringify(othersVisible)); } catch (e) {}
+function allFiles(){return Object.values(state.groups).flat();}
+function stats(){const files=allFiles();$('nAll').textContent=files.length;
+ $('nRunning').textContent=files.filter(f=>f.is_running).length;
+ $('nOccupied').textContent=files.filter(f=>f.port_conflict).length;
+ $('nIdle').textContent=files.filter(f=>f.can_run).length;}
+function label(f){return f.active_task?['running','本工具运行中']:f.external_running?['external','外部运行中']:
+ f.port_conflict?['conflict','端口冲突']:['','未运行'];}
+function match(f){const kind=f.active_task?'running':f.external_running?'external':f.port_conflict?'conflict':'idle';
+ const matchFilter=state.filter==='all'||kind===state.filter||(state.filter==='running'&&f.is_running);
+ return matchFilter&&`${f.id} ${f.port||''} ${f.process_info?.name||''} ${f.process_info?.pid||''}`.toLowerCase().includes(state.query);}
+function button(action,text,f,classes='',extra=''){
+ return `<button type="button" class="btn small ${classes}" data-action="${action}" data-id="${esc(f.id)}" ${extra}>${text}</button>`;
 }
-function safeIdOf(fileId) {
-    return String(fileId).replace(/[^a-zA-Z0-9]/g, '_');
-}
-function safeGroupId(g) {
-    return 'g_' + String(g).replace(/[^a-zA-Z0-9]/g, '_');
-}
-function getCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; } catch { return {}; } }
-function setCache(c) { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); }
-
-function setConn(state, text) {
-    const el = document.getElementById('connStatus');
-    el.textContent = text;
-    el.classList.remove('ok', 'err');
-    if (state === 'ok')  el.classList.add('ok');
-    if (state === 'err') el.classList.add('err');
-}
-
-async function api(path, options = {}) {
-    const url = API_BASE + path;
-    try {
-        const res = await fetch(url, options);
-        setConn('ok', '已连接');
-        let data = null;
-        try { data = await res.json(); } catch { data = null; }
-        return { ok: res.ok, status: res.status, data };
-    } catch (e) {
-        setConn('err', '未连接');
-        throw e;
-    }
-}
-
-function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[c]));
-}
-function escapeAttr(s) {
-    return String(s).replace(/'/g, "\\'");
-}
-
-function updateLogBox(fileId, autoScroll) {
-    const safeId = safeIdOf(fileId);
-    const el = document.getElementById(`log_${safeId}`);
-    if (!el) return;
-    const text = logCache[fileId] || '';
-    if (el.textContent !== text) el.textContent = text;
-    if (autoScroll && logVisible[fileId] !== false) {
-        el.scrollTop = el.scrollHeight;
-    }
-}
-
-async function ensureLog(fileId) {
-    if (logCache[fileId] !== undefined) return;
-    try {
-        const resp = await api('/log?file=' + encodeURIComponent(fileId));
-        const d = resp.data || {};
-        if (d.ok) {
-            logCache[fileId] = d.output || '';
-            updateLogBox(fileId, false);
-        }
-    } catch (e) {}
+function fmtCPU(x){return x===null||x===undefined?'采集中':x.toFixed(1)+'%';}
+function fmtMem(x){return x===null||x===undefined?'—':x.toFixed(1)+' MB';}
+function fmtUptime(value){if(value===null||value===undefined)return '—';
+ const s=Math.max(0,Math.floor(value)),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
+ return (d?d+'天 ':'')+(h?h+'小时 ':'')+m+'分钟';}
+function taskCard(f){const [style,status]=label(f),key=idOf(f.id),port=validPort(f.port);
+ const managed=!!f.active_task,external=!!f.external_running,conflict=!!f.port_conflict;
+ const info=f.process_info,owner=f.port_owner||f.occupier_info;
+ const controls=managed?button('stop','■ 停止',f,'danger'):
+   external?button('stop-external','■ 停止外部进程',f,'danger'):
+   conflict?button('stop-port','■ 结束占用',f,'danger'):
+   button('run','▷ 启动',f,'primary');
+ const listening=validPort(f.running_port)||(f.occupied?validPort(f.occupied_port):null);
+ const links=listening?
+   `<a class="btn small" href="${esc(API+'/port/'+listening+'/')}" target="_blank" rel="noopener noreferrer">↗ 转发</a>`+
+   `<a class="btn small" href="${esc('http://'+location.hostname+':'+listening+'/')}" target="_blank" rel="noopener noreferrer">直连</a>`:'';
+ const opened=state.logOpen.has(f.id),log=state.logs.get(f.id)?.text||'';
+ const infoTag=info?`<span class="meta-tag" title="${esc(info.name||'进程')}">${esc(info.name||'进程')} · PID ${esc(info.pid)}</span>`:
+   owner?`<span class="meta-tag">占用 PID ${esc(owner.pid??'未知')}</span>`:'';
+ const meter=info?`<span class="meta-tag">CPU ${esc(fmtCPU(info.cpu_percent))}</span><span class="meta-tag">内存 ${esc(fmtMem(info.memory_mb))}</span>`:'';
+ const stateHint=conflict?'<span class="meta-tag" style="color:var(--amber)">推荐端口由其他进程占用</span>':
+  external?'<span class="meta-tag" style="color:var(--green)">已匹配脚本</span>':'';
+ const logLabel=external?'历史日志（非实时）':'查看日志';
+ return `<article class="task ${managed?'running':external?'external':conflict?'conflict':''}" data-task="${esc(f.id)}" id="${key}">
+ <div class="task-inner"><div class="task-heading"><div class="python-icon">.py</div>
+ <div class="task-title"><strong title="${esc(f.file)}">${esc(f.file)}</strong><small title="${esc(f.id)}">${esc(f.id)}</small></div>
+ <span class="badge ${style}"><span class="status-dot ${managed||external?'ok':conflict?'bad':''}"></span>${status}</span></div>
+ <div class="task-meta"><button class="meta-tag click" data-action="port" data-id="${esc(f.id)}" title="点击配置端口">端口：${port||'未指定'} ✎</button>
+ ${f.manual_port?'<span class="meta-tag">手动设置</span>':''}${infoTag}${meter}${stateHint}</div>
+ <input class="args field" data-args="${esc(f.id)}" placeholder="启动参数（可选，例如 --port 8000）" value="${esc(state.args.get(f.id)||'')}" ${!f.can_run?'disabled':''} autocomplete="off">
+ <div class="task-controls">${controls}${button('edit','✎ 编辑',f)}${info||owner?button('process','◉ 运行详情',f):''}${links}
+ ${(f.has_log||managed)?button('toggle-log',opened?'收起日志':logLabel,f):''}</div></div>
+ ${opened?`<div class="log-pane"><div class="log-tools"><span>${external?'历史日志（外部进程 stdout 不可附加）':'● 终端输出 · '+esc(f.file)}</span><span>
+ <button data-action="copy-log" data-id="${esc(f.id)}">复制</button><button data-action="clear-log" data-id="${esc(f.id)}">清屏</button>
+ <button data-action="bottom-log" data-id="${esc(f.id)}">到底部 ↓</button></span></div>
+ <pre class="log-output" data-log="${esc(f.id)}">${esc(log||'暂无日志输出')}</pre></div>`:''}
+ <div class="task-footer"><span>${f.is_primary?'主要入口':'Python 脚本'}${info?' · 已运行 '+fmtUptime(info.uptime_seconds):''}</span>
+ <span>${external?'外部 PID 实时检测 · 不接管 stdout':conflict?'端口监听并不等于对应脚本运行':f.has_log?'可查看运行日志':'等待运行'}</span></div></article>`;
 }
 
-function renderCard(f) {
-    const safeId = safeIdOf(f.id);
-    const isRunning = !!f.is_running;
-    const isOccupied = f.occupied && !f.active_task;
-    const port = f.port;
-
-    let cardClass = 'card';
-    if (isRunning) cardClass += ' running';
-
-    let runBtn;
-    if (isRunning) {
-        runBtn = `<button class="btn btn-run" disabled title="端口已被占用，视为正在运行">✔ 正在运行</button>`;
-    } else {
-        runBtn = `<button class="btn btn-run" onclick="run('${escapeAttr(f.id)}')">▶ 运行</button>`;
-    }
-
-    let stopBtn = '';
-    if (f.active_task) {
-        stopBtn = `<button class="btn btn-stop" onclick="stop('${escapeAttr(f.id)}','${f.active_task}')">■ 停止</button>`;
-    } else if (f.external_running && port) {
-        stopBtn = `<button class="btn btn-stop" onclick="stopPort('${escapeAttr(f.id)}', ${port})">■ 停止 :${port}</button>`;
-    }
-
-    let killBtn = '';
-    if (isOccupied && f.occupier_info) {
-        killBtn = `<button class="btn btn-kill" onclick='showKillModal(${f.occupier_info.pid}, ${JSON.stringify(f.occupier_info.name)}, ${port})'>🔪 杀死占用</button>`;
-    }
-
-    // 打开按钮：直连 + 转发
-    let linkBtn = '';
-    if (1 || port && isRunning) {
-        const directHref = `http://apple4.su7.dpdns.org:${port}`;
-        const proxyHref = `/pys/port/${port}/`;
-        linkBtn =
-            `<a href="${directHref}" target="_blank" class="btn btn-link" title="直连 IP:端口">🚀 打开 :${port}</a>` +
-            `<a href="${proxyHref}" target="_blank" class="btn btn-proxy" title="通过本服务转发">🔗 转发打开</a>`;
-    }
-
-    let portTag = '';
-    if (port) {
-        let cls = 'tag';
-        let title = '点击编辑推荐端口';
-        if (f.external_running && f.occupier_info) {
-            cls = 'tag tag-running';
-            title = '端口被占用（外部进程运行中），点击编辑推荐端口';
-        } else if (isOccupied && f.occupier_info) {
-            cls = 'tag tag-busy';
-            title = '端口被占用，点击查看/编辑';
-        } else if (f.manual_port) {
-            cls = 'tag tag-manual';
-            title = '手动设置的推荐端口，点击编辑';
-        }
-        portTag = `<span class="${cls} tag-editable" title="${title}"
-                         onclick='editPort("${escapeAttr(f.id)}", ${f.manual_port != null ? f.manual_port : 'null'})'>Port: ${port} ✏️</span>`;
-    } else {
-        portTag = `<span class="tag tag-editable" title="点击设置推荐端口"
-                         onclick='editPort("${escapeAttr(f.id)}", null)'>Port: — ✏️</span>`;
-    }
-
-    const userVisible = logVisible[f.id];
-    const isLogVisible = userVisible !== undefined
-        ? userVisible
-        : (isRunning || !!logCache[f.id] || !!f.has_log);
-
-    return `
-    <div class="${cardClass}" id="card_${safeId}">
-        <div class="header">
-            <span class="file-name" title="cwd: ${escapeHtml(f.run_cwd || '')}">${escapeHtml(f.file)}</span>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                ${portTag}
-                ${linkBtn}
-            </div>
-        </div>
-        <div class="controls">
-            <input id="arg_${safeId}" placeholder="启动参数 (可选)"
-                   style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; width:160px;">
-            ${runBtn}
-            ${stopBtn}
-            ${killBtn}
-            <button class="btn btn-edit" onclick="openEditor('${escapeAttr(f.id)}', ${JSON.stringify(f.file)})">✏️ 编辑</button>
-            <button class="btn btn-log" onclick="toggleLog('${escapeAttr(f.id)}')">📄 日志</button>
-        </div>
-        <div id="log_${safeId}" class="log-box ${isLogVisible ? 'show' : ''}"></div>
-    </div>`;
+function render(){const host=$('app'),active=document.activeElement;
+ const editingArg=active?.dataset?.args;const start=editingArg?active.selectionStart:null,end=editingArg?active.selectionEnd:null;
+ host.querySelectorAll('[data-args]').forEach(el=>state.args.set(el.dataset.args,el.value));
+ const priorScroll=new Map();host.querySelectorAll('[data-log]').forEach(el=>priorScroll.set(el.dataset.log,{
+ top:el.scrollTop,stick:el.scrollHeight-el.clientHeight-el.scrollTop<35}));
+ let output='',shown=0;
+ for(const [group,files] of Object.entries(state.groups)){
+  const found=files.filter(match);if(!found.length)continue;shown+=found.length;
+  const first=found.filter(f=>f.is_primary),rest=found.filter(f=>!f.is_primary),hasFold=first.length&&rest.length;
+  const open=state.query||state.filter!=='all'||state.folds.has(group);
+  output+=`<section class="group"><div class="group-head"><h3>${esc(group)}</h3><span class="counter">${found.length} 个脚本</span></div>`;
+  output+=`<div class="items">${(hasFold?first:found).map(taskCard).join('')}</div>`;
+  if(hasFold)output+=`<details class="fold" data-fold="${esc(group)}" ${open?'open':''}>
+   <summary>${open?'收起':'展开'}其余 ${rest.length} 个文件</summary><div class="items">${rest.map(taskCard).join('')}</div></details>`;
+  output+='</section>';
+ }
+ host.innerHTML=shown?output:`<div class="empty"><strong>${state.query||state.filter!=='all'?'没有匹配的脚本':'未发现 Python 脚本'}</strong>
+ <p>${state.query||state.filter!=='all'?'尝试修改搜索关键词或状态筛选':'请检查 PY_RUNNER_ROOT 目录是否包含 .py 文件'}</p></div>`;
+ for(const el of host.querySelectorAll('[data-log]')){const prior=priorScroll.get(el.dataset.log);if(prior)el.scrollTop=prior.stick?el.scrollHeight:prior.top;else el.scrollTop=el.scrollHeight;}
+ if(editingArg){const el=[...host.querySelectorAll('[data-args]')].find(x=>x.dataset.args===editingArg);if(el){el.focus();try{el.setSelectionRange(start,end);}catch(_){}}}
 }
-
-async function load() {
-    let resp;
-    try {
-        resp = await api('/list');
-    } catch (e) {
-        document.getElementById('app').innerHTML =
-            `<div style="padding:20px; background:#fee2e2; color:#991b1b; border-radius:8px;">
-               无法连接后端 <code>${API_BASE}</code>。
-             </div>`;
-        return;
-    }
-
-    const data = resp.data || {};
-    const app = document.getElementById('app');
-
-    let html = '';
-
-    for (const [group, files] of Object.entries(data)) {
-        html += `<div class="group-title">${escapeHtml(group)}</div>`;
-
-        const primaries = files.filter(f => f.is_primary);
-        const others = files.filter(f => !f.is_primary);
-        const hasFold = primaries.length > 0 && others.length > 0;
-
-        if (hasFold) {
-            primaries.forEach(f => { html += renderCard(f); });
-
-            const gid = safeGroupId(group);
-            const opened = !!othersVisible[gid];
-            html += `
-                <div class="others-toggle ${opened ? 'open' : ''}"
-                     id="othersToggle_${gid}"
-                     onclick="toggleOthers('${gid}')">
-                    <span class="chev">${opened ? '▼' : '▶'}</span>
-                    <span>${opened ? '收起' : '显示'}其他 ${others.length} 个 py 文件</span>
-                </div>
-                <div class="others-group ${opened ? 'open' : ''}" id="othersGroup_${gid}">
-                    ${others.map(f => renderCard(f)).join('')}
-                </div>`;
-        } else {
-            files.forEach(f => { html += renderCard(f); });
-        }
-    }
-    app.innerHTML = html;
-
-    for (const files of Object.values(data)) {
-        for (const f of files) {
-            if (logCache[f.id] !== undefined) {
-                updateLogBox(f.id, false);
-            } else if (f.has_log) {
-                ensureLog(f.id);
-            }
-            if (f.active_task && f.is_running) {
-                startPolling(f.id, f.active_task);
-            }
-        }
-    }
+async function refresh(silent=false){if(state.updating)return;state.updating=true;
+ try{const groups=await api('/list');state.groups=groups;stats();render();
+  $('lastRefresh').textContent='上次同步：'+new Date().toLocaleTimeString('zh-CN',{hour12:false});
+  if(!silent)toast('脚本列表已更新','good');
+  for(const f of allFiles())if(state.logOpen.has(f.id)&&!state.logs.has(f.id))fetchLog(f);
+ }catch(e){if(!silent)toast(e.message,'bad');if(!Object.keys(state.groups).length){$('app').innerHTML=`<div class="empty"><strong>无法加载脚本列表</strong><p>${esc(e.message)}</p></div>`;}}
+ finally{state.updating=false;}
 }
-
-function toggleOthers(gid) {
-    const t = document.getElementById(`othersToggle_${gid}`);
-    const g = document.getElementById(`othersGroup_${gid}`);
-    if (!t || !g) return;
-    const nowOpen = !g.classList.contains('open');
-    g.classList.toggle('open', nowOpen);
-    t.classList.toggle('open', nowOpen);
-    const chev = t.querySelector('.chev');
-    const label = t.querySelector('span:last-child');
-    if (chev) chev.textContent = nowOpen ? '▼' : '▶';
-    if (label) label.textContent = (nowOpen ? '收起' : '显示') +
-        label.textContent.replace(/^(收起|显示)/, '');
-    othersVisible[gid] = nowOpen;
-    saveOthersVisible();
+function appendLog(id,d){const previous=state.logs.get(id)||{text:'',offset:0};
+ const text=(d.reset?d.output:previous.text+(d.output||'')).slice(-250000);
+ state.logs.set(id,{text,offset:d.offset??0});const el=[...document.querySelectorAll('[data-log]')].find(x=>x.dataset.log===id);
+ if(el){const stick=el.scrollHeight-el.clientHeight-el.scrollTop<40;el.textContent=text||'暂无日志输出';if(stick)el.scrollTop=el.scrollHeight;}}
+async function fetchLog(f){if(state.busy.has('log:'+f.id))return;state.busy.add('log:'+f.id);
+ try{const log=state.logs.get(f.id);const uri=f.active_task?`/status/${encodeURIComponent(f.active_task)}`:'/log?file='+encodeURIComponent(f.id);
+  const sep=uri.includes('?')?'&':'?';const d=await api(uri+sep+'offset='+(log?.offset||0));appendLog(f.id,d);
+  if(d.has_more&&state.logOpen.has(f.id))queueMicrotask(()=>fetchLog(f));
+ }catch(e){if(!e.message.includes('任务不存在'))console.warn('读取日志失败',e);}finally{state.busy.delete('log:'+f.id);}}
+async function poll(){if(!state.auto||document.hidden)return;
+ for(const f of allFiles())if(f.active_task||state.logOpen.has(f.id))fetchLog(f);
 }
-
-async function run(id) {
-    const safeId = safeIdOf(id);
-    const arg = document.getElementById(`arg_${safeId}`).value;
-
-    logCache[id] = '';
-    logVisible[id] = true;
-    saveLogVisible();
-    updateLogBox(id, true);
-    const logEl = document.getElementById(`log_${safeId}`);
-    if (logEl) logEl.classList.add('show');
-
-    let resp;
-    try {
-        resp = await api('/run', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file: id, args: arg })
-        });
-    } catch (e) {
-        alert('请求失败：' + e.message);
-        return;
-    }
-
-    const d = resp.data || {};
-    if (d.task) {
-        let c = getCache(); c[id] = d.task; setCache(c);
-        startPolling(id, d.task);
-        await load();
-    } else if (resp.status === 409 && d.already_running) {
-        alert(d.message || `端口 ${d.port} 已被占用，未重复启动。`);
-        await load();
-    } else if (d.error) {
-        alert(d.error);
-        await load();
-    }
+async function mutate(path,body,message){const d=await api(path,{method:'POST',body});if(message)toast(message,'good');await refresh(true);return d;}
+async function onAction(action,id){const f=allFiles().find(x=>x.id===id);if(!f)return;
+ if(state.busy.has(id))return;
+ if(action==='toggle-log'){state.logOpen.has(id)?state.logOpen.delete(id):state.logOpen.add(id);
+  store('logs',[...state.logOpen]);render();if(state.logOpen.has(id))fetchLog(f);return;}
+ if(action==='copy-log'){try{await navigator.clipboard.writeText(state.logs.get(id)?.text||'');toast('日志已复制','good');}catch(_){toast('复制失败，请检查浏览器权限','bad');}return;}
+ if(action==='clear-log'){const prev=state.logs.get(id);state.logs.set(id,{text:'',offset:prev?.offset||0});const el=[...document.querySelectorAll('[data-log]')].find(x=>x.dataset.log===id);
+  if(el)el.textContent='（已清空当前视图，后续日志仍会继续显示）';return;}
+ if(action==='bottom-log'){const el=[...document.querySelectorAll('[data-log]')].find(x=>x.dataset.log===id);if(el)el.scrollTop=el.scrollHeight;return;}
+ if(action==='port'){state.portFile=id;$('portName').textContent='脚本：'+id;
+  $('portInput').value=f.manual_port??'';dialog('portDialog');$('portInput').focus();return;}
+ if(action==='edit'){return openEditor(f);}
+ if(action==='process'){return openProcess(f);}
+ if(action==='stop-port'&&(!f.occupied_port||!confirm(`终止端口 ${f.occupied_port} 的占用进程（PID ${f.port_owner?.pid??'未知'}）？这可能不是该 Python 脚本，请确认。`)))return;
+ if(action==='stop-external'&&(!f.process_info?.pid||!confirm(`确认结束外部启动的 ${f.file}（PID ${f.process_info.pid}）及其子进程吗？`)))return;
+ if(action==='stop'&&!confirm(`确认停止 ${f.file} 吗？`))return;
+ state.busy.add(id);
+ try{
+  if(action==='run'){state.logs.delete(id);state.logOpen.add(id);store('logs',[...state.logOpen]);
+   await mutate('/run',{file:id,args:state.args.get(id)||''},'启动指令已发送');}
+  if(action==='stop')await mutate('/stop',{task:f.active_task},'停止指令已发送');
+  if(action==='stop-port')await mutate('/stop-port',{port:f.occupied_port,pid:f.port_owner?.pid,create_time:f.port_owner?.create_time},'端口停止完成');
+  if(action==='stop-external')await mutate('/stop-external',{file:id,pid:f.process_info.pid,create_time:f.process_info.create_time,confirm:true},'外部进程已收到停止指令');
+ }catch(e){toast(e.message,'bad');await refresh(true);}finally{state.busy.delete(id);}
 }
-
-async function stop(id, taskId) {
-    if (!taskId) return;
-    try {
-        await api('/stop', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task: taskId })
-        });
-    } catch (e) {}
-    let c = getCache(); delete c[id]; setCache(c);
-    setTimeout(load, 400);
+function procField(name,value){return `<div class="proc-field"><strong>${esc(name)}</strong><span>${esc(value??'—')}</span></div>`;}
+function renderProcessDetails(d){const info=d.process_info||d.port_owner;
+ const status=d.managed?'本工具运行中':d.external_running?'外部运行中':d.port_conflict?'端口冲突':'未运行';
+ const check=info?.alive===false?'进程已退出':d.running_port?'TCP 端口监听中':d.port_occupied?'检测到监听端口':'无关联监听端口';
+ const statsHtml=`<div class="proc-grid">
+ <div class="proc-stat"><small>检测状态</small><strong>${esc(status)}</strong></div>
+ <div class="proc-stat"><small>进程 PID</small><strong>${esc(info?.pid??'—')}</strong></div>
+ <div class="proc-stat"><small>已运行</small><strong>${esc(fmtUptime(info?.uptime_seconds))}</strong></div>
+ <div class="proc-stat"><small>CPU 占用</small><strong>${esc(fmtCPU(info?.cpu_percent))}</strong></div>
+ <div class="proc-stat"><small>内存占用</small><strong>${esc(fmtMem(info?.memory_mb))}</strong></div>
+ <div class="proc-stat"><small>监听端口</small><strong>${esc((info?.listen_ports||[]).join(', ')||d.occupied_port||'—')}</strong></div></div>`;
+ const detail=info?procField('进程名称',info.name)+procField('进程状态',`${info.process_status||'未知'} · ${check}`)+
+ procField('启动时间',info.create_time?new Date(info.create_time*1000).toLocaleString('zh-CN'):'—')+
+ procField('用户',info.username)+procField('线程数',info.threads)+
+ procField('工作目录',info.cwd)+procField('可执行路径',info.exe)+
+ procField('匹配依据',d.external_running?'启动命令关联当前脚本路径或模块':d.managed?'由本工具启动':'端口被占用，未匹配脚本'):
+ '<p>没有读取到关联 PID。可能是端口已经释放，也可能是权限不足。</p>';
+ $('processContent').innerHTML=statsHtml+detail+(info?.command?`<div style="font-size:12px;font-weight:700;margin-top:15px">启动命令</div>
+ <pre class="proc-command">${esc(info.command)}</pre>`:'')+
+ `<p style="margin-top:14px">注意：监听状态不是 HTTP 健康检查。外部进程的历史 stdout/stderr 无法直接接管，本界面只显示实时进程信息。</p>`;
+ $('processStop').hidden=!d.external_running||!d.can_stop_external;
+ $('processTimestamp').textContent='检测时间 '+new Date(d.detected_at*1000).toLocaleTimeString('zh-CN',{hour12:false});
 }
-
-async function stopPort(id, port) {
-    if (!port) return;
-    if (!confirm(`确定停止占用端口 ${port} 的程序吗？`)) return;
-    try {
-        const resp = await api('/stop-port', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ port: port })
-        });
-        if (!resp.data || !resp.data.ok) {
-            alert((resp.data && resp.data.error) || '停止失败');
-        }
-    } catch (e) {
-        alert('停止请求失败: ' + e.message);
-    }
-    await load();
-}
-
-async function forceKillPort() {
-    const input = document.getElementById('forcePort');
-    const port = parseInt(input.value, 10);
-    if (!port || port < 1 || port > 65535) {
-        alert('请输入 1-65535 之间的端口号');
-        input.focus();
-        return;
-    }
-    if (!confirm(`确定强制停止占用端口 ${port} 的进程吗？`)) return;
-
-    try {
-        const resp = await api('/stop-port', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ port: port })
-        });
-        const d = resp.data || {};
-        if (d.ok) {
-            alert(`✓ 端口 ${port} 已停止（进程: ${d.process || '未知'}，PID: ${d.pid}）`);
-            input.value = '';
-        } else {
-            alert(d.error || '停止失败');
-        }
-    } catch (e) {
-        alert('请求失败: ' + e.message);
-    }
-    await load();
-}
-
-function editPort(fileId, currentManual) {
-    portTargetFile = fileId;
-    document.getElementById('pmFile').textContent = fileId;
-    const input = document.getElementById('pmInput');
-    input.value = currentManual != null ? currentManual : '';
-    document.getElementById('portModal').style.display = 'flex';
-    setTimeout(() => input.focus(), 50);
-}
-
-function closePortModal() {
-    document.getElementById('portModal').style.display = 'none';
-    portTargetFile = null;
-}
-
-async function savePort() {
-    if (!portTargetFile) return;
-    const raw = document.getElementById('pmInput').value.trim();
-    if (raw === '') return clearPort();
-    const port = parseInt(raw, 10);
-    if (!port || port < 1 || port > 65535) {
-        alert('端口必须是 1-65535 之间的数字');
-        return;
-    }
-
-    try {
-        const resp = await api('/set-port', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file: portTargetFile, port: port })
-        });
-        const d = resp.data || {};
-        if (d.ok) {
-            closePortModal();
-            await load();
-        } else {
-            alert(d.error || '保存失败');
-        }
-    } catch (e) {
-        alert('请求失败: ' + e.message);
-    }
-}
-
-async function clearPort() {
-    if (!portTargetFile) return;
-    if (!confirm('清除该文件的手动端口配置？')) return;
-    try {
-        const resp = await api('/set-port', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file: portTargetFile, port: null })
-        });
-        const d = resp.data || {};
-        if (d.ok) {
-            closePortModal();
-            await load();
-        } else {
-            alert(d.error || '清除失败');
-        }
-    } catch (e) {
-        alert('请求失败: ' + e.message);
-    }
-}
-
-document.getElementById('pmInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') savePort();
-    if (e.key === 'Escape') closePortModal();
-});
-
-function openProxy() {
-    const input = document.getElementById('proxyPort');
-    const port = parseInt(input.value, 10);
-    if (!port || port < 1 || port > 65535) {
-        alert('请输入 1-65535 之间的端口号');
-        input.focus();
-        return;
-    }
-    window.open(`/pys/port/${port}/`, '_blank');
-    input.value = '';
-}
-document.getElementById('proxyPort').addEventListener('keydown', e => {
-    if (e.key === 'Enter') openProxy();
-});
-
-function startPolling(fileId, taskId) {
-    if (!taskId) return;
-    if (pollingTimers[taskId]) return;
-
-    let timer = null;
-
-    const tick = async () => {
-        try {
-            const resp = await api(`/status/${taskId}`);
-            const d = resp.data || {};
-
-            if (typeof d.output === 'string') {
-                logCache[fileId] = d.output;
-                updateLogBox(fileId, true);
-            }
-
-            const safeId = safeIdOf(fileId);
-            const cardEl = document.getElementById(`card_${safeId}`);
-
-            if (d.status === 'completed') {
-                if (cardEl) cardEl.className = 'card finished';
-                if (timer) clearInterval(timer);
-                delete pollingTimers[taskId];
-                let c = getCache(); delete c[fileId]; setCache(c);
-                setTimeout(load, 300);
-            } else if (d.status === 'error' || d.status === 'stopped') {
-                if (cardEl) cardEl.className = 'card error';
-                if (timer) clearInterval(timer);
-                delete pollingTimers[taskId];
-                setTimeout(load, 300);
-            } else if (d.status === 'not_found') {
-                if (timer) clearInterval(timer);
-                delete pollingTimers[taskId];
-            }
-        } catch (e) {
-            if (timer) clearInterval(timer);
-            delete pollingTimers[taskId];
-        }
-    };
-
-    timer = setInterval(tick, 500);
-    pollingTimers[taskId] = timer;
-    tick();
-}
-
-function toggleLog(fileId) {
-    const safeId = safeIdOf(fileId);
-    const el = document.getElementById(`log_${safeId}`);
-    if (!el) return;
-    const nowVisible = !el.classList.contains('show');
-    el.classList.toggle('show', nowVisible);
-    logVisible[fileId] = nowVisible;
-    saveLogVisible();
-    if (nowVisible && logCache[fileId] === undefined) {
-        ensureLog(fileId);
-    }
-}
-
-function showKillModal(pid, name, port) {
-    killTarget = pid;
-    document.getElementById('mPort').innerText = port;
-    document.getElementById('mInfo').innerText = `进程名: ${name}\nPID: ${pid}`;
-    document.getElementById('killModal').style.display = 'flex';
-}
-function closeModal() {
-    document.getElementById('killModal').style.display = 'none';
-    killTarget = null;
-}
-async function confirmKill() {
-    if (!killTarget) return;
-    try {
-        await api('/kill-port', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pid: killTarget })
-        });
-    } catch (e) {}
-    closeModal();
-    load();
-}
-
-async function openEditor(fileId, fileName) {
-    document.getElementById('editStatus').textContent = '读取中…';
-    document.getElementById('editStatus').className = 'status';
-    document.getElementById('editFileName').innerText = fileName;
-    document.getElementById('editEncoding').innerText = '-';
-    document.getElementById('editSize').innerText = '-';
-    document.getElementById('editContent').value = '';
-    document.getElementById('editModal').style.display = 'flex';
-
-    try {
-        const resp = await api('/read?file=' + encodeURIComponent(fileId));
-        const d = resp.data || {};
-        if (!d.ok) {
-            document.getElementById('editStatus').textContent =
-                '读取失败：' + (d.error || '未知错误');
-            document.getElementById('editStatus').className = 'status err';
-            return;
-        }
-        editingFile = fileId;
-        editingEncoding = d.encoding || 'utf-8';
-        editingDirty = false;
-        document.getElementById('editContent').value = d.content || '';
-        document.getElementById('editEncoding').innerText = editingEncoding;
-        document.getElementById('editSize').innerText = (d.size || 0) + ' 字节';
-        document.getElementById('editStatus').textContent = '已加载';
-        document.getElementById('editStatus').className = 'status ok';
-        document.getElementById('editContent').focus();
-    } catch (e) {
-        document.getElementById('editStatus').textContent = '请求失败：' + e.message;
-        document.getElementById('editStatus').className = 'status err';
-    }
-}
-
-function closeEditor() {
-    if (editingDirty) {
-        if (!confirm('有未保存的修改，确定关闭吗？')) return;
-    }
-    document.getElementById('editModal').style.display = 'none';
-    editingFile = null;
-    editingDirty = false;
-}
-
-async function saveEditor() {
-    if (!editingFile) return;
-    const btn = document.getElementById('editSaveBtn');
-    const statusEl = document.getElementById('editStatus');
-    const content = document.getElementById('editContent').value;
-
-    btn.disabled = true;
-    statusEl.textContent = '保存中…';
-    statusEl.className = 'status';
-
-    try {
-        const resp = await api('/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                file: editingFile,
-                content: content,
-                encoding: editingEncoding
-            })
-        });
-        const d = resp.data || {};
-        if (d.ok) {
-            editingDirty = false;
-            statusEl.textContent = `✓ 已保存（${d.size || content.length} 字节，${d.encoding || editingEncoding}）`;
-            statusEl.className = 'status ok';
-            setTimeout(() => {
-                document.getElementById('editModal').style.display = 'none';
-                editingFile = null;
-            }, 600);
-        } else {
-            statusEl.textContent = '保存失败：' + (d.error || '未知错误');
-            statusEl.className = 'status err';
-        }
-    } catch (e) {
-        statusEl.textContent = '请求失败：' + e.message;
-        statusEl.className = 'status err';
-    } finally {
-        btn.disabled = false;
-    }
-}
-
-document.addEventListener('keydown', e => {
-    const editOpen = document.getElementById('editModal').style.display === 'flex';
-    const portOpen = document.getElementById('portModal').style.display === 'flex';
-
-    if (editOpen && e.key === 'Escape') { e.preventDefault(); closeEditor(); return; }
-    if (editOpen && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault(); saveEditor(); return;
-    }
-    if (portOpen && e.key === 'Escape') { e.preventDefault(); closePortModal(); return; }
-});
-
-document.getElementById('editContent').addEventListener('input', () => {
-    editingDirty = true;
-    const statusEl = document.getElementById('editStatus');
-    statusEl.textContent = '● 未保存';
-    statusEl.className = 'status';
-});
-
-document.getElementById('editContent').addEventListener('keydown', e => {
-    if (e.key === 'Tab') {
-        e.preventDefault();
-        const ta = e.target;
-        const start = ta.selectionStart;
-        const end = ta.selectionEnd;
-        ta.value = ta.value.substring(0, start) + '    ' + ta.value.substring(end);
-        ta.selectionStart = ta.selectionEnd = start + 4;
-        editingDirty = true;
-    }
-});
-
-document.getElementById('forcePort').addEventListener('keydown', e => {
-    if (e.key === 'Enter') forceKillPort();
-});
-
-load();
-setInterval(load, 5000);
+async function refreshProcess(){const file=state.processFile;
+ if(!file||state.processLoading||!$('processDialog').open)return;
+ state.processLoading=true;
+ try{const d=await api('/process-info?file='+encodeURIComponent(file));
+  if(file!==state.processFile)return;state.processData=d;renderProcessDetails(d);
+ }catch(e){if(file===state.processFile)$('processContent').innerHTML=`<p>${esc(e.message)}</p>`;}
+ finally{state.processLoading=false;}}
+function openProcess(f){state.processFile=f.id;state.processData=null;
+ $('processTitle').textContent='进程实时监控 · '+f.file;
+ $('processContent').innerHTML='<p>正在检查端口监听、进程身份和资源使用情况…</p>';
+ dialog('processDialog');refreshProcess();}
+$('processRefresh').addEventListener('click',refreshProcess);
+$('processCopy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(state.processData,null,2));
+ toast('运行信息已复制','good');}catch(e){toast('无法复制到剪贴板','bad');}});
+$('processStop').addEventListener('click',async()=>{const d=state.processData;
+ if(!d?.external_running||!d.process_info?.pid)return;
+ if(!confirm(`确定终止外部进程 PID ${d.process_info.pid} 及其子进程吗？`))return;
+ $('processStop').disabled=true;
+ try{await mutate('/stop-external',{file:d.file,pid:d.process_info.pid,create_time:d.process_info.create_time,confirm:true},'停止指令已发送');
+  await refreshProcess();}
+ catch(e){toast(e.message,'bad');}finally{$('processStop').disabled=false;}});
+async function openEditor(f){try{const d=await api('/read?file='+encodeURIComponent(f.id));state.edit={id:f.id,encoding:d.encoding,
+ etag:d.etag,original:d.content,dirty:false};$('editorTitle').textContent='编辑 · '+f.id;
+ $('editorText').value=d.content;$('editorMeta').textContent=`${d.encoding} · ${d.size.toLocaleString()} 字节 · 保存自动备份 .bak`;
+ $('editorState').textContent='已加载';updateLines();dialog('editorDialog');$('editorText').focus();}
+ catch(e){toast('打开编辑器失败：'+e.message,'bad');}}
+function updateLines(){$('editorLines').textContent=($('editorText').value.split('\n').length)+' 行';}
+function closeEditor(){if(state.edit?.dirty&&!confirm('存在未保存的更改，确定关闭？'))return;
+ closeDialog('editorDialog');state.edit=null;}
+async function saveEditor(force=false){const e=state.edit;if(!e)return;const content=$('editorText').value;
+ $('editorSave').disabled=true;$('editorState').textContent='保存中…';
+ try{const d=await api('/save',{method:'POST',body:{file:e.id,content,encoding:e.encoding,etag:e.etag,force}});
+  e.etag=d.etag;e.original=content;e.dirty=false;$('editorState').textContent='已保存（已生成 .bak）';
+  toast('文件保存成功','good');
+ }catch(err){if(err.message.includes('其他程序修改')&&confirm('文件在编辑期间已被外部修改，是否仍要覆盖？')){
+  $('editorSave').disabled=false;return saveEditor(true);}
+  $('editorState').textContent='保存失败';toast(err.message,'bad');
+ }finally{$('editorSave').disabled=false;}}
+$('app').addEventListener('click',e=>{const t=e.target.closest('[data-action]');if(t)onAction(t.dataset.action,t.dataset.id);});
+$('app').addEventListener('input',e=>{if(e.target.matches('[data-args]'))state.args.set(e.target.dataset.args,e.target.value);});
+$('app').addEventListener('toggle',e=>{const el=e.target;if(!el.matches('[data-fold]'))return;
+ el.open?state.folds.add(el.dataset.fold):state.folds.delete(el.dataset.fold);store('folds',[...state.folds]);},true);
+$('search').addEventListener('input',e=>{state.query=e.target.value.trim().toLowerCase();render();});
+$('filter').addEventListener('change',e=>{state.filter=e.target.value;render();});
+$('refreshBtn').addEventListener('click',()=>refresh());
+$('autoRefresh').addEventListener('change',e=>{state.auto=e.target.checked;store('refresh',state.auto);if(state.auto)refresh(true);});
+$('themeBtn').addEventListener('click',()=>{state.theme=state.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=state.theme;store('theme',state.theme);});
+$('authBtn').addEventListener('click',()=>dialog('authDialog'));
+$('authForm').addEventListener('submit',async e=>{e.preventDefault();try{await api('/auth',{method:'POST',body:{token:$('authInput').value}});
+ $('authInput').value='';closeDialog('authDialog');state.needsAuth=false;toast('已授权','good');refresh(true);
+ }catch(err){toast(err.message,'bad');}});
+$('portForm').addEventListener('submit',async e=>{e.preventDefault();const text=$('portInput').value.trim(),port=text?validPort(text):null;
+ if(text&&!port)return toast('端口必须为 1–65535','bad');try{await mutate('/set-port',{file:state.portFile,port},'端口设置已保存');closeDialog('portDialog');}
+ catch(err){toast(err.message,'bad');}});
+$('clearPortBtn').addEventListener('click',async()=>{if(!state.portFile)return;try{await mutate('/set-port',{file:state.portFile,port:null},'已清除手动端口');closeDialog('portDialog');}catch(e){toast(e.message,'bad');}});
+function askNumber(mode){state.numberMode=mode;$('numberTitle').textContent=mode==='proxy'?'端口转发':'停止端口';
+ $('numberHint').textContent=mode==='proxy'?'通过当前站点安全转发到后端主机上的本地 HTTP 服务。':'将终止监听该端口的进程，请谨慎操作。';
+ $('numberSubmit').textContent=mode==='proxy'?'转发打开':'确认停止';$('numberInput').value='';dialog('numberDialog');$('numberInput').focus();}
+$('openPortBtn').addEventListener('click',()=>askNumber('proxy'));
+$('killPortBtn').addEventListener('click',()=>askNumber('stop'));
+$('numberForm').addEventListener('submit',async e=>{e.preventDefault();const port=validPort($('numberInput').value);
+ if(!port)return toast('端口必须为 1–65535','bad');if(state.numberMode==='proxy'){
+  window.open(API+'/port/'+port+'/','_blank','noopener,noreferrer');closeDialog('numberDialog');return;}
+ if(!confirm(`确认终止端口 ${port} 的监听进程？`))return;
+ try{await mutate('/stop-port',{port},'端口停止完成');closeDialog('numberDialog');}catch(err){toast(err.message,'bad');}});
+$('editorText').addEventListener('input',()=>{if(!state.edit)return;state.edit.dirty=$('editorText').value!==state.edit.original;
+ $('editorState').textContent=state.edit.dirty?'● 有未保存更改':'已保存';updateLines();});
+$('editorText').addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();const el=e.target,start=el.selectionStart,end=el.selectionEnd;
+ el.setRangeText('    ',start,end,'end');el.dispatchEvent(new Event('input',{bubbles:true}));}});
+$('editorSave').addEventListener('click',()=>saveEditor());$('editorCancel').addEventListener('click',closeEditor);
+$('editorX').addEventListener('click',closeEditor);
+document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',()=>closeDialog(el.dataset.close)));
+$('editorDialog').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&$('editorDialog').open){e.preventDefault();saveEditor();}});
+async function boot(){try{const auth=await api('/auth');state.needsAuth=auth.required&&!auth.authorized;
+ if(state.needsAuth)dialog('authDialog');else await refresh(true);
+ }catch(e){toast(e.message,'bad');}setInterval(()=>{if(state.auto&&!document.hidden)refresh(true);},7000);
+ setInterval(poll,1800);setInterval(()=>{if(!document.hidden)refreshProcess();},3500);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.auto)refresh(true);});}
+boot();
 </script>
 </body>
 </html>
