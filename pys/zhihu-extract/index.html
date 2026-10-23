@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta content="width=device-width, initial-scale=1" name="viewport">
-<title>知乎 / 微信文章转文本</title>
+<title>知乎 / 微信 / YouTube 转文本</title>
 <style>
   :root{
     --bg:#f5f7fa; --card:#fff; --ink:#14171c; --sub:#69707d;
@@ -17,6 +17,7 @@
           --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5);}
   }
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   html{-webkit-text-size-adjust:100%}
   body{margin:0;background:var(--bg);color:var(--ink);
        font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",
@@ -87,6 +88,10 @@
   .btn.done{background:var(--ok)}
   .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
   .status{margin-left:auto;font-size:12.5px;color:var(--sub)}
+  .task-progress{margin-top:16px;padding:14px;background:var(--bg);border-radius:10px}
+  .task-progress .spread{display:flex;justify-content:space-between;gap:12px;font-size:13px}
+  .task-progress progress{display:block;width:100%;height:12px;margin-top:10px;accent-color:var(--blue)}
+  .task-metrics{margin-top:8px;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
 
   .links{margin-top:14px;padding:13px 14px;background:var(--bg);
          border:1px solid var(--line);border-radius:10px}
@@ -138,6 +143,10 @@
   details.cookiewrap[open]>summary{border-bottom:1px solid var(--line)}
   details.cookiewrap[open]>summary .chev{transform:rotate(180deg)}
   .cookiebody{padding:18px 20px 20px}
+  .cookie-links{display:grid;gap:12px;margin-bottom:16px}
+  .cookie-links a{color:var(--blue);overflow-wrap:anywhere}
+  .cookie-links input{margin-top:5px}
+  .cookie-test-status{font-size:12.5px;white-space:pre-wrap;overflow-wrap:anywhere}
 
   .hint{font-size:12.5px;color:var(--sub);line-height:1.75}
   .hint code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px}
@@ -191,6 +200,7 @@
     .actions .btn{flex:1 1 auto;justify-content:center}
     .status{margin-left:0;width:100%;text-align:center}
     .meta{grid-template-columns:1fr}
+    #conversionStats{grid-template-columns:repeat(2,minmax(0,1fr))}
     .chip .tail{max-width:140px}
     pre{max-height:56vh;font-size:12.5px}
     .labelrow .btn{width:100%;justify-content:center}
@@ -212,8 +222,8 @@
 
 <div class="wrap">
   <header>
-    <h1>知乎 / 微信文章转文本</h1>
-    <p>粘贴链接或整段文本，自动识别其中的知乎 / 微信公众号链接，提取标题、作者与正文为 Markdown / 纯文本 / JSON</p>
+    <h1>知乎 / 微信 / YouTube 转文本</h1>
+    <p>粘贴链接或整段文本，自动识别其中的知乎 / 微信公众号 / YouTube 链接，提取标题、作者与正文；YouTube 简体字幕优先，字幕不可用时自动转写音频并展示文本。支持 Markdown / 纯文本 / JSON</p>
 
     <div class="zenbar">
       <label class="zenSwitch" id="zenSwitch" for="zenMode">
@@ -242,13 +252,16 @@
       知乎回答 <code>/question/&lt;qid&gt;/answer/&lt;aid&gt;</code>、
       知乎专栏 <code>zhuanlan.zhihu.com/p/&lt;id&gt;</code>、
       知乎问题 <code>/question/&lt;qid&gt;</code>、
-      微信公众号 <code>mp.weixin.qq.com/s/…</code>
+      微信公众号 <code>mp.weixin.qq.com/s/…</code>、YouTube / youtu.be / Shorts
     </div>
 
     <div class="links" hidden id="links">
       <div class="linkshead" id="linkCount"></div>
       <div class="chips" id="linkChips"></div>
     </div>
+
+    <p class="hint" id="youtubeNodeStatus">YouTube 节点：192.168.31.243:8765 · 正在读取配置…</p>
+    <p class="hint" id="transcriptionNodeStatus">音频转写服务：192.168.31.197:5840</p>
 
     <div class="row" style="margin-top:18px">
       <div>
@@ -261,12 +274,26 @@
       </div>
     </div>
 
+    <details style="margin-top:16px">
+      <summary>YouTube 音频大小设置（仅在字幕不可用时使用）</summary>
+      <div class="row" style="margin-top:12px">
+        <div><label for="audioMax">大小上限 MiB（1–50）</label><input id="audioMax" type="number" min="1" max="50" value="20"></div>
+        <div><label for="audioCodec">音频格式</label><select id="audioCodec"><option value="mp3">MP3（通用）</option><option value="opus">Opus（更小）</option></select></div>
+      </div>
+      <p class="hint">优先简体字幕；繁体字幕自动转简体。字幕不可用时，音频自动上传转写服务，完成后展示可复制、下载的文本。</p>
+    </details>
     <div class="actions">
       <button class="btn btn-primary" id="go">提取文本</button>
       <button class="btn btn-primary" id="oneClick" title="读取剪贴板链接 → 自动提取 → 点击任意处复制">⚡ 一键获取</button>
       <button class="btn btn-ghost" disabled id="dl">下载</button>
       <button class="btn btn-ghost" id="reset">清空</button>
+      <button class="btn btn-ghost" id="cancelTask" hidden>取消任务</button>
       <span class="status" id="status"></span>
+    </div>
+    <div class="task-progress" id="taskProgress" hidden>
+      <div class="spread"><span id="progressStage" role="status" aria-live="polite"></span><span id="progressPercent"></span></div>
+      <progress id="progressBar" max="100" aria-label="当前阶段进度"></progress>
+      <div class="task-metrics"><span id="taskElapsed"></span><span id="taskMetrics"></span></div>
     </div>
   </div>
 
@@ -281,6 +308,8 @@
         <button class="btn btn-primary btn-sm" disabled id="copy">一键复制</button>
       </div>
       <div class="meta" id="meta"></div>
+      <div class="meta" id="conversionStats" aria-label="转换数据" hidden></div>
+      <div id="downloads" style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0" hidden></div>
       <pre id="content"></pre>
     </div>
   </div>
@@ -294,6 +323,18 @@
     </summary>
 
     <div class="cookiebody">
+      <div class="cookie-links">
+        <div>
+          <label for="cookieHelpUrl">获取 Cookie 的页面（可修改，自动保存到本机浏览器）</label>
+          <input type="text" id="cookieHelpUrl" spellcheck="false" value="https://www.zhihu.com/commercial_api/banners_v3">
+          <a id="openCookieHelp" href="https://www.zhihu.com/commercial_api/banners_v3" target="_blank" rel="noopener noreferrer">点击打开知乎页面，登录后在开发者工具中获取 Cookie ↗</a>
+        </div>
+        <div>
+          <label for="cookieTestUrl">Cookie 测试回答（可修改，自动保存到本机浏览器）</label>
+          <input type="text" id="cookieTestUrl" spellcheck="false" value="https://www.zhihu.com/question/30311473/answer/2093279761095209383">
+          <a id="openCookieTest" href="https://www.zhihu.com/question/30311473/answer/2093279761095209383" target="_blank" rel="noopener noreferrer">点击查看测试回答 ↗</a>
+        </div>
+      </div>
       <textarea id="cookie" placeholder="粘贴整行 Cookie：d_c0=…; z_c0=…（留空则用服务器已保存的）" rows="3" spellcheck="false"></textarea>
 
       <div class="hint" style="margin-top:9px">
@@ -303,10 +344,12 @@
       </div>
 
       <div class="actions">
-        <button class="btn btn-primary" id="saveCookie">保存到服务器</button>
+        <button class="btn btn-primary" id="saveCookie">保存到服务器并自动测试</button>
+        <button class="btn btn-ghost" id="testCookie">重新测试 Cookie</button>
         <button class="btn btn-ghost" id="clearCookie">删除服务器 Cookie</button>
         <span class="status" id="cookieStatus"></span>
       </div>
+      <p class="cookie-test-status" id="cookieTestStatus" role="status" aria-live="polite"></p>
     </div>
   </details>
 </div>
@@ -445,7 +488,7 @@ function clearGlobalCopySilently(){
 /* ==================== 从文本中识别有效链接 ==================== */
 
 /* 同时匹配 zhihu.com 与 mp.weixin.qq.com / weixin.qq.com */
-const URL_RE = /(?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)*(?:zhihu\.com|weixin\.qq\.com)\/[^\s\u0022\u0027<>《》「」『』【】（）()[\]{}，,。；;、！!？?…]+/gi;
+const URL_RE = /(?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)*(?:zhihu\.com|weixin\.qq\.com|youtube\.com|youtu\.be)\/[^\s"'<>《》「」『』【】（）()[\]{}，,。；;、！!…]+/gi;
 
 const KINDS = [
   { name:"回答", re:/\/question\/(\d+)\/answer\/(\d+)/, idx:[1,2] },
@@ -466,6 +509,13 @@ function classify(u){
   try{ parsed = new URL(u); }catch(e){ return null; }
   const host = (parsed.hostname || "").toLowerCase();
 
+  /* ---- YouTube ---- */
+  if(['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtu.be','www.youtu.be'].includes(host)){
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const id = /(^|\.)youtu\.be$/.test(host) ? parts[0] : parts[0]==='watch' ? parsed.searchParams.get('v') : ['shorts','embed','live'].includes(parts[0]) ? parts[1] : '';
+    if(/^[A-Za-z0-9_-]{11}$/.test(id || '')) return {url:'https://www.youtube.com/watch?v='+id,kind:'YouTube',nums:[id]};
+    return null;
+  }
   /* ---- 微信公众号 ---- */
   if(/(^|\.)weixin\.qq\.com$/.test(host)){
     const p = parsed.pathname || "";
@@ -501,6 +551,7 @@ function extractLinks(text){
 }
 
 function chipLabel(info){
+  if(info.kind === 'YouTube') return {kind:'YouTube',tail:info.nums[0]};
   if(info.kind === "微信"){
     return { kind:"微信", tail: String(info.nums[0] || "").slice(0, 22) };
   }
@@ -606,7 +657,7 @@ $("pasteBtn").addEventListener("click", async () => {
     if(state.links.length){
       setMsg(`已粘贴，识别到 ${state.links.length} 个可用链接。`, "ok");
     }else{
-      setMsg("已粘贴，但没有识别到可用的知乎 / 微信链接。", "err");
+      setMsg("已粘贴，但没有识别到可用的知乎 / 微信 / YouTube 链接。", "err");
     }
   }catch(e){
     setMsg("无法读取剪贴板：" + (e && e.message ? e.message : "权限被拒绝") +
@@ -616,6 +667,66 @@ $("pasteBtn").addEventListener("click", async () => {
     btn.textContent = label;
   }
 });
+
+/* ==================== Cookie 链接本地设置及自动验证 ==================== */
+const COOKIE_LINK_DEFAULTS = {
+  cookieHelpUrl: 'https://www.zhihu.com/commercial_api/banners_v3',
+  cookieTestUrl: 'https://www.zhihu.com/question/30311473/answer/2093279761095209383'
+};
+function validZhihuUrl(value){
+  try{
+    const u = new URL(value.trim());
+    return u.protocol === 'https:' && (u.hostname === 'zhihu.com' || u.hostname.endsWith('.zhihu.com'));
+  }catch(e){ return false; }
+}
+function syncCookieLink(id, anchorId){
+  const value = $(id).value.trim();
+  const link = $(anchorId);
+  if(validZhihuUrl(value)){
+    link.href = value;
+    link.removeAttribute('aria-disabled');
+    try{ localStorage.setItem('zhihu_setting_'+id, value); }catch(e){}
+  }else{
+    link.removeAttribute('href');
+    link.setAttribute('aria-disabled','true');
+  }
+}
+for(const [id, anchor] of [['cookieHelpUrl','openCookieHelp'],['cookieTestUrl','openCookieTest']]){
+  try{ $(id).value = localStorage.getItem('zhihu_setting_'+id) || COOKIE_LINK_DEFAULTS[id]; }catch(e){}
+  syncCookieLink(id,anchor);
+  $(id).addEventListener('input',()=>syncCookieLink(id,anchor));
+}
+let cookieTesting = false;
+async function testSavedCookie(){
+  if(cookieTesting) return;
+  const testUrl = $('cookieTestUrl').value.trim();
+  if(!validZhihuUrl(testUrl) || !classify(testUrl)){
+    $('cookieTestStatus').textContent = '测试地址无效：请填写知乎问题、回答或专栏链接。';
+    return;
+  }
+  cookieTesting = true;
+  $('testCookie').disabled = true;
+  $('cookieTestStatus').textContent = '正在使用服务器保存的 Cookie 访问测试链接…';
+  try{
+    const response = await fetch('/api/extract', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:testUrl,cookie:'',format:'text'})
+    });
+    const data = await response.json();
+    if(!response.ok || !data.ok){
+      const detail = data.detail || data.error || ('HTTP '+response.status);
+      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    }
+    if(!String(data.content || '').trim()) throw new Error('请求成功，但没有获取到正文，无法确认 Cookie 有效');
+    $('cookieTestStatus').textContent = '✓ 验证成功：已使用保存的 Cookie 获取到测试内容（'+String(data.content).length+' 字符）。';
+  }catch(e){
+    $('cookieTestStatus').textContent = '✗ 验证失败：'+e.message+'。可能是 Cookie 过期、知乎限制访问或后端异常。';
+  }finally{
+    cookieTesting = false;
+    $('testCookie').disabled = false;
+  }
+}
+$('testCookie').onclick = testSavedCookie;
 
 /* ==================== Cookie 本地持久化 ==================== */
 
@@ -688,6 +799,7 @@ $("saveCookie").onclick = async () => {
     $("cookie").value = "";
     setCookieStatus("✓ 已写入服务器 " + (d.file || "cookies.txt"));
     setMsg("");
+    await testSavedCookie();
   }catch(e){
     setCookieStatus("❌ 保存失败：" + e.message);
   }finally{
@@ -723,6 +835,7 @@ $("clearCookie").onclick = async () => {
     serverCookie.source = "";
     serverCookie.masked = "";
     setCookieStatus(d.removed ? "已删除服务器本地 Cookie" : "服务器本地没有 Cookie");
+    $("cookieTestStatus").textContent = "";
   }catch(e){
     setCookieStatus("❌ 删除失败：" + e.message);
   }finally{
@@ -762,6 +875,10 @@ async function loadHealth(){
   try{
     const r = await fetch("/api/health");
     const d = await r.json();
+    const videoNode=d.youtube_service || {};
+    $('youtubeNodeStatus').textContent='YouTube 节点：'+(videoNode.api_url || 'http://192.168.31.243:8765')+' · '+(videoNode.configured ? '已配置地址，核心服务直接调用' : '请配置节点 IP 和端口');
+    const asrNode=d.transcription_service || {};
+    $('transcriptionNodeStatus').textContent='音频转写服务：'+(asrNode.api_url || 'http://192.168.31.197:5840')+' · '+(asrNode.model_profile === 'accurate' ? '高准确率' : '日常模式');
     $("status").textContent = d.browser_mode ? "浏览器模式 · 就绪" : "就绪";
   }catch(e){
     $("status").textContent = "未连接本地服务";
@@ -773,33 +890,150 @@ async function loadHealth(){
 
 /* ==================== 提取 ==================== */
 
+let activeVideoJob = '';
+let extractGeneration = 0;
+let activeExtraction = null;
+
+function isMetric(value){
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function formatDuration(seconds){
+  if(!isMetric(seconds)) return '';
+  if(seconds < 60) return Number(seconds.toFixed(2))+' 秒';
+  const rounded = Math.round(seconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor(rounded % 3600 / 60);
+  return (hours ? hours+' 小时 ' : '')+(minutes ? minutes+' 分 ' : '')+(rounded % 60)+' 秒';
+}
+
+function taskElapsedSeconds(data){
+  if(isMetric(data?.elapsed)) return data.elapsed;
+  const task = activeExtraction;
+  if(!task) return null;
+  const now = task.finishedAt ?? performance.now();
+  if(isMetric(task.lastData?.elapsed)){
+    return task.lastData.elapsed + (['done','failed','cancelled'].includes(task.lastData.state) ? 0 : (now-task.lastDataAt)/1000);
+  }
+  return (now-task.startedAt)/1000;
+}
+
+function updateTaskMetrics(data){
+  const task = activeExtraction;
+  if(!task) return;
+  if(data){ task.lastData=data; task.lastDataAt=performance.now(); }
+  $('taskElapsed').textContent = '已用时 '+formatDuration(taskElapsedSeconds());
+  const stats = task.lastData?.metadata?.transcription || {};
+  const parts = [];
+  if(isMetric(stats.duration)) parts.push('音频 '+formatDuration(stats.duration));
+  if(isMetric(stats.processed)) parts.push('已识别 '+formatDuration(stats.processed));
+  if(isMetric(stats.speed_x) && stats.speed_x > 0) parts.push('速度 '+stats.speed_x.toFixed(2)+'× 实时');
+  $('taskMetrics').textContent = parts.length ? ' · '+parts.join(' · ') : '';
+}
+
+function renderConversionStats(data){
+  const cells = [];
+  const total = taskElapsedSeconds(data);
+  if(isMetric(total)) cells.push(['本次总用时', formatDuration(total)]);
+  const stats = data.metadata?.transcription || {};
+  for(const [key, label] of [
+    ['duration','音频时长'], ['total_elapsed','转写处理用时'],
+    ['transcribe_elapsed','语音识别用时'], ['preprocess_elapsed','音频预处理'],
+    ['model_load_elapsed','模型加载'], ['format_elapsed','文本整理'],
+  ]){
+    if(isMetric(stats[key])) cells.push([label, formatDuration(stats[key])]);
+  }
+  if(isMetric(stats.speed_x) && stats.speed_x > 0) cells.push(['识别速度', stats.speed_x.toFixed(2)+'× 实时']);
+  const mode = {daily:'日常模式',accurate:'高准确率模式'}[stats.model_profile];
+  if(mode) cells.push(['识别模式', mode]);
+  if(stats.model_label || stats.model) cells.push(['识别模型', stats.model_label || stats.model]);
+  if(isMetric(stats.chunk_count)) cells.push(['音频分段', stats.chunk_count+' 段']);
+  if(isMetric(stats.char_count)) cells.push(['转写字数', stats.char_count+' 字符']);
+  if(isMetric(stats.file_bytes)) cells.push(['音频大小', (stats.file_bytes/1048576).toFixed(2)+' MiB']);
+  const box = $('conversionStats');
+  box.replaceChildren();
+  box.hidden = !cells.length;
+  for(const [label, value] of cells){
+    const cell = document.createElement('div');
+    cell.textContent = label;
+    const bold = document.createElement('b');
+    bold.textContent = value;
+    cell.appendChild(bold);
+    box.appendChild(cell);
+  }
+}
+
+function showProgress(stage, percent){
+  $('taskProgress').hidden = false;
+  $('progressStage').textContent = stage;
+  $('status').textContent = stage;
+  if(typeof percent === 'number' && Number.isFinite(percent)){
+    const value = Math.max(0, Math.min(100, percent));
+    $('progressBar').value = value;
+    $('progressPercent').textContent = Math.round(value)+'%';
+  }else{
+    $('progressBar').removeAttribute('value');
+    $('progressPercent').textContent = '处理中';
+  }
+}
+
+async function cancelExtraction(){
+  const task = activeExtraction;
+  if(!task || task.cancelSent) return;
+  task.cancelRequested = true;
+  showProgress(task.jobId ? '正在请求取消…' : '正在等待任务建立后取消…', null);
+  $('cancelTask').disabled = true;
+  if(!task.jobId) return;
+  try{
+    const r = await fetch('/api/youtube/jobs/'+task.jobId+'/cancel', {method:'POST'});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || '取消请求失败');
+    task.cancelSent = true;
+    showProgress('取消请求已提交，等待任务停止…', null);
+  }catch(e){
+    task.cancelRequested = false;
+    task.clearAfterCancel = false;
+    $('cancelTask').disabled = false;
+    setMsg('取消失败：'+e.message+'，可再次点击取消任务。', 'err');
+  }
+}
+$('cancelTask').onclick = cancelExtraction;
+
 async function extract(){
+  if(state.busy) return false;
   clearGlobalCopySilently();
 
   if(!$("url").value.trim()){
-    setMsg("请粘贴知乎 / 微信链接，或一段包含链接的文本。", "err");
+    setMsg("请粘贴知乎 / 微信 / YouTube 链接，或一段包含链接的文本。", "err");
     $("url").focus();
     return false;
   }
 
   renderLinks();
   if(!state.links.length){
-    setMsg("没有识别到可用的链接。支持知乎回答 / 专栏 / 问题，以及微信公众号文章。", "err");
+    setMsg("没有识别到可用的链接。支持知乎回答 / 专栏 / 问题，微信公众号文章与 YouTube 视频。", "err");
     $("url").focus();
     return false;
   }
   if(!state.url) state.url = state.links[0].url;
 
   const isWechat = /weixin\.qq\.com/i.test(state.url);
+  const isYouTube = classify(state.url)?.kind === 'YouTube';
+  const generation = ++extractGeneration;
+  const maxMb = Number($('audioMax').value);
+  if(isYouTube && (!Number.isInteger(maxMb) || maxMb<1 || maxMb>50)) { setMsg('音频大小必须是 1–50 MiB 整数','err'); return false; }
+  if(activeVideoJob){ fetch('/api/youtube/jobs/'+activeVideoJob,{method:'DELETE'}).catch(()=>{}); activeVideoJob=''; }
+  $('downloads').textContent = '';
+  $('downloads').hidden = true;
 
-  let cookie = $("cookie").value.trim();
+  let cookie = isYouTube ? "" : $("cookie").value.trim();
   if(cookie && !hasCookie(cookie)){
     setMsg("输入框里的 Cookie 缺少 d_c0 或 z_c0，请核对后重试；留空则使用服务器已保存的 Cookie。", "err");
     openCookiePanel();
     return false;
   }
   /* 微信文章不需要登录态；只有抓知乎时才强制要求 Cookie */
-  if(!isWechat && !cookie && !serverCookie.configured){
+  if(!isWechat && !isYouTube && !cookie && !serverCookie.configured){
     setMsg(COOKIE_TIP, "err");
     openCookiePanel();
     $("cookie").focus();
@@ -819,44 +1053,177 @@ async function extract(){
     }
   }
 
+  $("format").disabled = true;
   $("go").disabled = true;
   $("oneClick").disabled = true;
+  $('audioMax').disabled = true;
+  $('audioCodec').disabled = true;
+  state.busy = true;
+  state.content = '';
+  $('copy').disabled = true;
+  $('dl').disabled = true;
+  const task = {generation, jobId:'', cancelRequested:false, cancelSent:false, clearAfterCancel:false, startedAt:performance.now()};
+  activeExtraction = task;
+  updateTaskMetrics();
+  task.timer = setInterval(updateTaskMetrics, 500);
+  $('conversionStats').hidden = true;
+  $('cancelTask').hidden = !isYouTube;
+  $('cancelTask').disabled = false;
   setMsg("");
   $("result").style.display = "none";
-  $("status").innerHTML = '<span class="spin"></span>抓取中…';
+  showProgress('正在建立提取任务…', null);
 
   try{
     const r = await fetch("/api/extract", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ url: state.url, cookie, format: $("format").value })
+      body: JSON.stringify({ url: state.url, cookie, format: $("format").value, max_mb:maxMb, codec:$("audioCodec").value })
     });
-    const d = await r.json();
+    let d = await r.json();
+    updateTaskMetrics(d);
+    if(!r.ok) throw new Error(d.detail ? JSON.stringify(d.detail) : 'HTTP '+r.status);
+    if(generation !== extractGeneration){
+      if(d.job_id) fetch('/api/youtube/jobs/'+d.job_id,{method:'DELETE'}).catch(()=>{});
+      return false;
+    }
+    if(d.job_id && d.state === 'running'){
+      activeVideoJob = d.job_id;
+      task.jobId = d.job_id;
+      if(task.cancelRequested) await cancelExtraction();
+      const deadline = Date.now()+6*3600000+60000;
+      while(['running','cancelling'].includes(d.state)){
+        if(generation !== extractGeneration) return false;
+        const stage = task.cancelRequested ? '取消请求已提交，等待任务停止…' : (d.stage || '正在获取字幕或转写音频…');
+        showProgress(stage, task.cancelRequested ? null : d.percent);
+        if(Date.now()>deadline) throw new Error('任务等待超时，请重试');
+        await new Promise(resolve=>setTimeout(resolve,1000));
+        if(generation !== extractGeneration) return false;
+        const status = await fetch('/api/youtube/jobs/'+activeVideoJob);
+        d = await status.json();
+        updateTaskMetrics(d);
+        if(!status.ok) throw new Error(d.detail || '任务状态获取失败');
+      }
+    }
+    if(generation !== extractGeneration) return false;
+    if(d.state === 'cancelled'){
+      task.cancelled = true;
+      showProgress('任务已取消', 0);
+      $('progressPercent').textContent = '已停止';
+      setMsg('任务已取消。');
+      return false;
+    }
     if(!d.ok){
       setMsg("提取失败：" + String(d.error || "未知错误"), "err");
-      $("status").textContent = "失败";
+      showProgress(d.error || '提取失败', 0);
+      $('progressPercent').textContent = '失败';
       return false;
     }
     render(d);
     return true;
   }catch(e){
+    if(task.jobId) fetch('/api/youtube/jobs/'+task.jobId+'/cancel',{method:'POST'}).catch(()=>{});
     setMsg("请求出错：" + e.message +
            "\n请确认后端服务已启动：本机运行 python app.py，再从 http://127.0.0.1:8320 打开本页。", "err");
-    $("status").textContent = "失败";
+    showProgress('请求失败，已尝试取消远端任务', 0);
+    $('progressPercent').textContent = '失败';
     return false;
   }finally{
+    task.finishedAt = performance.now();
+    clearInterval(task.timer);
+    updateTaskMetrics();
+    $("format").disabled = false;
     $("go").disabled = false;
     $("oneClick").disabled = false;
+    $('audioMax').disabled = false;
+    $('audioCodec').disabled = false;
+    $('cancelTask').hidden = true;
+    activeExtraction = null;
+    state.busy = false;
+    if(task.clearAfterCancel && task.cancelled) resetUI();
   }
 }
 
+/* ====== 转写结果：把标题 / 统计信息拼到输出文本头部 ====== */
+function transcriptionStatRows(d){
+  const meta = d.metadata || {};
+  const stats = meta.transcription || {};
+  const rows = [];
+
+  rows.push(['标题', d.title || '—']);
+  rows.push(['作者', d.author || '—']);
+  if(d.published) rows.push(['发布时间', d.published]);
+  if(d.url) rows.push(['原链接', d.url]);
+
+  if(d.kind === 'youtube'){
+    const like = meta.like_count ?? meta.like_count_text;
+    const view = meta.view_count ?? meta.view_count_text;
+    if(like != null) rows.push(['点赞', String(like)]);
+    if(view != null) rows.push(['观看', String(view)]);
+  }
+
+  const total = taskElapsedSeconds(d);
+  if(isMetric(total)) rows.push(['本次总用时', formatDuration(total)]);
+  if(isMetric(stats.duration)) rows.push(['音频时长', formatDuration(stats.duration)]);
+  if(isMetric(stats.total_elapsed)) rows.push(['转写总用时', formatDuration(stats.total_elapsed)]);
+  if(isMetric(stats.transcribe_elapsed)) rows.push(['语音识别用时', formatDuration(stats.transcribe_elapsed)]);
+  if(isMetric(stats.preprocess_elapsed)) rows.push(['音频预处理', formatDuration(stats.preprocess_elapsed)]);
+  if(isMetric(stats.model_load_elapsed)) rows.push(['模型加载', formatDuration(stats.model_load_elapsed)]);
+  if(isMetric(stats.format_elapsed)) rows.push(['文本整理', formatDuration(stats.format_elapsed)]);
+  if(isMetric(stats.speed_x) && stats.speed_x > 0) rows.push(['识别速度', stats.speed_x.toFixed(2) + '× 实时']);
+
+  const mode = {daily:'日常模式', accurate:'高准确率模式'}[stats.model_profile];
+  if(mode) rows.push(['识别模式', mode]);
+  if(stats.model_label || stats.model) rows.push(['识别模型', stats.model_label || stats.model]);
+  if(isMetric(stats.chunk_count)) rows.push(['音频分段', stats.chunk_count + ' 段']);
+  if(isMetric(stats.char_count)) rows.push(['转写字数', stats.char_count + ' 字符']);
+  if(isMetric(stats.file_bytes)) rows.push(['音频大小', (stats.file_bytes / 1048576).toFixed(2) + ' MiB']);
+
+  return rows;
+}
+
+function buildOutputContent(d, fmt){
+  const raw = d.content || '';
+  /* 只有「音频转写」结果才加统计头；字幕结果保持原样 */
+  if(d.result_type !== 'transcription') return raw;
+
+  const rows = transcriptionStatRows(d);
+
+  if(fmt === 'markdown'){
+    const head = ['# ' + (d.title || 'YouTube 视频转写'), ''];
+    for(const [k, v] of rows) head.push('- **' + k + '**：' + v);
+    head.push('', '---', '', '## 转写正文', '');
+    return head.join('\n') + raw;
+  }
+
+  if(fmt === 'json'){
+    try{
+      const obj = JSON.parse(raw);
+      if(obj && typeof obj === 'object' && !Array.isArray(obj)){
+        if(!obj.title) obj.title = d.title;
+        if(!obj.author) obj.author = d.author;
+        if(!obj.transcription_stats) obj.transcription_stats = Object.fromEntries(rows);
+        return JSON.stringify(obj, null, 2);
+      }
+    }catch(e){}
+    return raw;
+  }
+
+  /* 纯文本 */
+  const head = [];
+  for(const [k, v] of rows) head.push(k + '：' + v);
+  head.push('', '---', '');
+  return head.join('\n') + raw;
+}
+
 function render(d){
+  if(activeExtraction) activeExtraction.finishedAt = performance.now();
+  renderConversionStats(d);
   const fmt = $("format").value;
-  state.content = d.content || "";
+  state.content = buildOutputContent(d, fmt);
   state.title = d.title || d.id || "article";
   state.ext = fmt === "markdown" ? "md" : (fmt === "json" ? "json" : "txt");
 
-  const kindMap = { article:"专栏文章", answer:"回答", question:"问题", wechat:"微信文章" };
+  const kindMap = { article:"专栏文章", answer:"回答", question:"问题", wechat:"微信文章", youtube:"YouTube 视频" };
   const cells = [
     ["类型", kindMap[d.kind] || d.kind],
     ["标题", d.title || "—"],
@@ -865,6 +1232,10 @@ function render(d){
     ["赞同 / 评论", `${d.voteup} / ${d.comment_count}`],
     ["字数", (d.content || "").length + " 字符"],
   ];
+  if(d.kind === 'youtube'){
+    cells.splice(4,1,['点赞 / 观看',`${d.metadata?.like_count ?? (d.metadata?.like_count_text || '暂不可用')} / ${d.metadata?.view_count ?? (d.metadata?.view_count_text || '暂不可用')}`]);
+    cells.push(['字幕策略','简体优先'],['原链接',d.url],['输出',d.result_type==='transcription'?'音频转写文本':'字幕文本']);
+  }
   if(d.images && d.images.length) cells.push(["图片数", d.images.length]);
   const meta = $("meta");
   meta.textContent = "";
@@ -877,12 +1248,21 @@ function render(d){
     meta.appendChild(cell);
   });
 
+  const links = $('downloads');
+  links.textContent = '';
+  links.hidden = !(d.downloads || []).length;
+  for(const file of d.downloads || []){
+    const a = document.createElement('a');
+    a.href = file.url; a.download = ''; a.textContent = '↓ '+file.name+(file.size ? ' ('+(file.size/1048576).toFixed(2)+' MiB)' : '');
+    links.appendChild(a);
+  }
+  $('dl').textContent = '下载文本';
   $("content").textContent = state.content;
   $("result").style.display = "flex";
   $("copy").disabled = !state.content;
   $("dl").disabled = false;
-  $("status").textContent = "完成 ✓";
-  setMsg("提取成功", "ok");
+  showProgress('完成 ✓', 100);
+  setMsg(d.result_type === 'transcription' ? '音频转写完成，文本已就绪。' : '提取成功', 'ok');
 }
 
 $("go").onclick = extract;
@@ -890,7 +1270,15 @@ $("url").addEventListener("keydown", e => {
   if((e.ctrlKey || e.metaKey) && e.key === "Enter") extract();
 });
 
-$("reset").onclick = () => {
+function resetUI(){
+  extractGeneration++;
+  if(activeVideoJob){ fetch('/api/youtube/jobs/'+activeVideoJob,{method:'DELETE'}).catch(()=>{}); activeVideoJob=''; }
+  $('downloads').textContent=''; $('downloads').hidden=true;
+  $('taskProgress').hidden=true;
+  $('taskElapsed').textContent='';
+  $('taskMetrics').textContent='';
+  $('conversionStats').replaceChildren();
+  $('conversionStats').hidden=true;
   clearGlobalCopySilently();
   $("url").value = "";
   renderLinks();
@@ -903,6 +1291,18 @@ $("reset").onclick = () => {
   zen.phase = "idle";
   zen.lastClip = "";
   $("url").focus();
+}
+$("reset").onclick = () => {
+  if(activeExtraction){
+    if(!activeExtraction.jobId && $('cancelTask').hidden){
+      setMsg('正在提取文章，请稍候。');
+      return;
+    }
+    activeExtraction.clearAfterCancel = true;
+    cancelExtraction();
+    return;
+  }
+  resetUI();
 };
 
 /* ==================== 一键复制 ==================== */
@@ -971,7 +1371,7 @@ $("oneClick").onclick = async () => {
     renderLinks();
 
     if(!state.links.length){
-      setMsg("剪贴板里没有识别到可用的链接。支持知乎回答 / 专栏 / 问题，以及微信公众号文章。", "err");
+      setMsg("剪贴板里没有识别到可用的链接。支持知乎回答 / 专栏 / 问题，微信公众号文章与 YouTube 视频。", "err");
       urlEl.focus();
       return;
     }
@@ -1064,7 +1464,7 @@ async function zenExtractFromClipboard(){
 
   const links = extractLinks(text);
   if(!links.length){
-    toast("剪贴板里没有识别到知乎 / 微信链接");
+    toast("剪贴板里没有识别到知乎 / 微信 / YouTube 链接");
     return;
   }
 

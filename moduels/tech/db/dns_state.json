@@ -1,0 +1,51 @@
+{
+  "one": {
+    "lan_ipv4": "192.168.31.204",
+    "ipv4dns": "one4.su7.dpdns.org",
+    "ipv6dns": "one.su7.dpdns.org",
+    "last_ipv6": "2409:8a60:c025:2c5c:b9:8756:240b:c4ab",
+    "last_seen": 1791901203.066761
+  },
+  "fast": {
+    "lan_ipv4": "192.168.31.82",
+    "ipv4dns": "fast4.su7.dpdns.org",
+    "ipv6dns": "fast.su7.dpdns.org",
+    "last_ipv6": null,
+    "last_seen": 0
+  },
+  "one2": {
+    "lan_ipv4": "192.168.31.18",
+    "ipv4dns": "one24.su7.dpdns.org",
+    "ipv6dns": "one2.su7.dpdns.org",
+    "last_ipv6": null,
+    "last_seen": 0
+  },
+  "15xa": {
+    "lan_ipv4": "192.168.31.241",
+    "ipv4dns": "15xa4.su7.dpdns.org",
+    "ipv6dns": "15xa.su7.dpdns.org",
+    "last_ipv6": "2409:8a60:c025:2c5c:1d16:a0d6:cf39:bd06",
+    "last_seen": 1791901209.480991
+  },
+  "15xb": {
+    "lan_ipv4": "192.168.31.243",
+    "ipv4dns": "15xb4.su7.dpdns.org",
+    "ipv6dns": "15xb.su7.dpdns.org",
+    "last_ipv6": "2409:8a60:c025:2c5c:1d16:a0d6:cf39:bd06",
+    "last_seen": 1791901194.9633338
+  },
+  "15x": {
+    "lan_ipv4": "192.168.31.240",
+    "ipv4dns": "15x4.su7.dpdns.org",
+    "ipv6dns": "15x.su7.dpdns.org",
+    "last_ipv6": "2409:8a60:c025:2c5c:1d16:a0d6:cf39:bd06",
+    "last_seen": 1791901208.439352
+  },
+  "apple": {
+    "lan_ipv4": "192.168.31.197",
+    "ipv4dns": "apple4.su7.dpdns.org",
+    "ipv6dns": "apple.su7.dpdns.org",
+    "last_ipv6": "2409:8a60:c025:2c5c:c80:59c7:962:7030",
+    "last_seen": 1791901209.925227
+  }
+}

@@ -2,25 +2,22 @@
 
 配置：
     app.register_blueprint(dynamic_bp)
-    管理密钥首次启动自动生成并保存为本地文件，重启后继续使用
-    环境变量 PWA_ADMIN_TOKEN 可选（仅首次创建时用作初始管理密钥）
-    环境变量 PWA_ADMIN_TOKEN_FILE 可选（自定义本地密钥文件路径）
     环境变量 PWA_TOOLS_DIR 可选（默认 app.root_path/db/dynamic_tools）
 
-注意：仅允许发布自己信任的 HTML。上传代码会在网站同源执行。
+注意：此版本不验证管理身份，管理页面和创建/修改/删除接口直接开放。
+仅推荐局域网、可信环境使用；请勿将管理 API 无防护地暴露到公网。
+上传代码会在网站同源执行。
 """
 from __future__ import annotations
 
 import hashlib
-import hmac
 import io
 import json
 import os
 import re
-import secrets
-import stat
 import shutil
 import tempfile
+import threading
 from functools import lru_cache
 from html import escape
 from html.parser import HTMLParser
@@ -33,10 +30,427 @@ from flask import (
 from PIL import Image, ImageDraw, ImageFont
 
 
+# ========= 网址资源抓取和 HTML 单文件整合（原 url_importer.py，现已内置） =========
+
+import base64
+import http.client
+import re
+import socket
+import ssl
+import time
+import zlib
+from dataclasses import dataclass
+from urllib.parse import urljoin, urlsplit, urlunsplit
+
+from bs4 import BeautifulSoup
+from bs4.dammit import UnicodeDammit
+
+# 个人内网使用：允许 HTTP/HTTPS 目标，包括 localhost、本机、内网及保留 IP。
+# 不设文件大小、资源数量、端口、请求次数或总抓取时长额度。
+# 单次 socket 超时属于故障检测，不是整页抓取额度。
+SOCKET_TIMEOUT = 30
+
+
+class ImportFailed(Exception):
+    """面向用户的导入失败。"""
+
+
+class _PinnedHTTP(http.client.HTTPConnection):
+    def __init__(self, host, port, ip, timeout):
+        super().__init__(host, port=port, timeout=timeout)
+        self.pinned_ip = ip
+
+    def connect(self):
+        self.sock = socket.create_connection((self.pinned_ip, self.port), timeout=self.timeout)
+
+
+class _PinnedHTTPS(http.client.HTTPSConnection):
+    def __init__(self, host, port, ip, timeout):
+        super().__init__(host, port=port, timeout=timeout, context=ssl.create_default_context())
+        self.pinned_ip = ip
+
+    def connect(self):
+        sock = socket.create_connection((self.pinned_ip, self.port), timeout=self.timeout)
+        try:
+            # TLS SNI 与证书校验始终使用原始主机名，而非 IP。
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        except Exception:
+            sock.close()
+            raise
+
+
+def canonical_url(url: str, base: str | None = None) -> str:
+    url = urljoin(base, url.strip()) if base else url.strip()
+    try:
+        u = urlsplit(url)
+        port = u.port
+    except (ValueError, TypeError) as exc:
+        raise ImportFailed('URL 或端口格式错误') from exc
+    if u.scheme.lower() not in ('http', 'https') or not u.hostname:
+        raise ImportFailed('只支持 http:// 或 https:// 网页链接')
+    if u.username is not None or u.password is not None:
+        raise ImportFailed('URL 不允许包含用户名或密码')
+    if '\x00' in url:
+        raise ImportFailed('URL 包含非法空字符')
+    if any(ch.isspace() for ch in u.hostname):
+        raise ImportFailed('非法域名')
+    # 仅校验 URL 结构，不按公网、内网或保留地址分类拦截。
+    return urlunsplit((u.scheme.lower(), u.netloc, u.path or '/', u.query, ''))
+
+
+def _resolve_target_ip(host: str, port: int) -> str:
+    """解析任何可连接的地址，包括 loopback / RFC1918 / 链路本地等。"""
+    try:
+        records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ImportFailed(f'无法解析网站地址：{host}') from exc
+    addresses = list(dict.fromkeys(row[4][0] for row in records))
+    if not addresses:
+        raise ImportFailed('域名没有有效的 IP 地址')
+    # 优先 IPv4，可兼容无 IPv6 出口的内部部署环境。
+    return sorted(addresses, key=lambda ip: ':' in ip)[0]
+
+
+def _unzip(data: bytes, encoding: str) -> bytes:
+    encoding = encoding.strip().lower()
+    if encoding in ('', 'identity'):
+        return data
+    if encoding not in ('gzip', 'x-gzip', 'deflate'):
+        raise ImportFailed('资源使用了不支持的压缩编码')
+    try:
+        code = 16 + zlib.MAX_WBITS if encoding in ('gzip', 'x-gzip') else zlib.MAX_WBITS
+        return zlib.decompress(data, wbits=code)
+    except zlib.error as exc:
+        raise ImportFailed('资源解压失败') from exc
+
+
+@dataclass
+class Download:
+    url: str
+    content: bytes
+    mime: str
+    charset: str | None
+
+
+class SafeFetcher:
+    def __init__(self):
+        self.requests = 0
+        self.memo: dict[str, Download] = {}
+
+    def get(self, url: str, *, max_bytes: int | None = None, kind: str = 'asset') -> Download:
+        url = canonical_url(url)
+        if kind != 'page' and url in self.memo:
+            return self.memo[url]
+        visited: set[str] = set()
+        while True:
+            if url in visited:
+                raise ImportFailed('远程网站存在循环跳转')
+            visited.add(url)
+            u = urlsplit(url)
+            port = u.port or (443 if u.scheme == 'https' else 80)
+            ip = _resolve_target_ip(u.hostname, port)
+            self.requests += 1
+            conn = (_PinnedHTTPS if u.scheme == 'https' else _PinnedHTTP)(u.hostname, port, ip, SOCKET_TIMEOUT)
+            try:
+                host_header = u.hostname.encode('idna').decode('ascii')
+                if ':' in host_header:
+                    host_header = f'[{host_header}]'
+                if u.port:
+                    host_header += f':{u.port}'
+                conn.request('GET', (u.path or '/') + ('?' + u.query if u.query else ''), headers={
+                    'Host': host_header,
+                    'User-Agent': 'Mozilla/5.0 (compatible; PWA-HTML-Importer/1.0)',
+                    'Accept': 'text/html,text/css,application/javascript,image/*,*/*;q=0.5',
+                    'Accept-Encoding': 'identity',
+                    'Connection': 'close',
+                })
+                response = conn.getresponse()
+                if response.status in (301, 302, 303, 307, 308):
+                    next_url = response.getheader('Location', '')
+                    if not next_url:
+                        raise ImportFailed('远程网站跳转缺少 Location')
+                    url = canonical_url(next_url, url)
+                    continue
+                if response.status != 200:
+                    raise ImportFailed(f'远程资源返回 HTTP {response.status}')
+                raw = response.read()
+                raw = _unzip(raw, response.getheader('Content-Encoding', ''))
+                mime_header = response.getheader('Content-Type', 'application/octet-stream')
+                mime = mime_header.split(';', 1)[0].strip().lower()
+                match = re.search(r'charset\s*=\s*["\']?([\w.-]+)', mime_header, re.I)
+                charset = match.group(1) if match else None
+                if kind == 'page' and mime not in ('text/html', 'application/xhtml+xml', 'application/octet-stream'):
+                    raise ImportFailed('该链接返回的不是 HTML 页面')
+                output = Download(url, raw, mime, charset)
+                if kind != 'page':
+                    self.memo[url] = output
+                return output
+            except (OSError, ssl.SSLError, TimeoutError, http.client.HTTPException) as exc:
+                raise ImportFailed(f'网络连接失败：{str(exc)[:130]}') from exc
+            finally:
+                conn.close()
+
+
+def decode_text(data: Download) -> str:
+    if data.charset:
+        try:
+            return data.content.decode(data.charset, errors='replace')
+        except LookupError:
+            pass
+    return UnicodeDammit(data.content).unicode_markup or data.content.decode('utf-8', errors='replace')
+
+
+def _data_uri(raw: bytes, mime: str) -> str:
+    return f'data:{mime};base64,{base64.b64encode(raw).decode("ascii")}'
+
+
+def _resource_mime(mime: str, kind: str) -> bool:
+    if kind == 'image':
+        return mime.startswith('image/')
+    if kind == 'css':
+        return mime in ('text/css', 'text/plain', 'application/octet-stream')
+    if kind == 'script':
+        return mime in ('text/javascript', 'application/javascript', 'application/x-javascript',
+                        'text/plain', 'application/octet-stream')
+    if kind == 'font-or-image':
+        return (mime.startswith('image/') or mime.startswith('font/') or
+                mime in ('application/font-woff', 'application/font-woff2', 'application/vnd.ms-fontobject',
+                         'application/x-font-ttf', 'application/octet-stream'))
+    return False
+
+
+class PageBundler:
+    def __init__(self, fetcher: SafeFetcher):
+        self.fetcher = fetcher
+        self.success = 0
+        self.warnings: list[str] = []
+        self.css_seen: set[str] = set()
+
+    def warn(self, text: str):
+        if len(self.warnings) < 150 and text not in self.warnings:
+            self.warnings.append(text)
+
+    def absolute(self, maybe: str, base: str) -> str:
+        if not maybe or maybe.startswith(('#', 'data:', 'blob:', 'javascript:', 'mailto:', 'tel:')):
+            return maybe
+        try:
+            return canonical_url(maybe, base)
+        except ImportFailed:
+            return maybe
+
+    def inline_url(self, raw_url: str, base: str, kind: str) -> str:
+        if not raw_url or raw_url.startswith(('data:', '#', 'blob:')):
+            return raw_url
+        absolute = self.absolute(raw_url, base)
+        if not absolute.startswith(('http://', 'https://')):
+            return absolute
+        try:
+            download = self.fetcher.get(absolute, max_bytes=None)
+            if not _resource_mime(download.mime, kind):
+                raise ImportFailed(f'文件类型不匹配 ({download.mime})')
+            self.success += 1
+            return _data_uri(download.content, download.mime)
+        except ImportFailed as exc:
+            self.warn(f'未内联：{absolute[:120]}（{exc}）')
+            return absolute
+
+    _css_import = re.compile(r'''@import\s+(?:url\(\s*['\"]?([^'\")\s]+)['\"]?\s*\)|['\"]([^'\"]+)['\"])\s*([^;]*);''', re.I)
+    _css_url = re.compile(r'''url\(\s*(?:"([^"]+)"|'([^']+)'|([^\s)]+))\s*\)''', re.I)
+
+    def css(self, source: str, base: str, depth: int = 0) -> str:
+        if depth > 10:
+            self.warn('CSS @import 嵌套超过 10 级，部分样式保持在线加载')
+            return source
+
+        def import_repl(match):
+            path = match.group(1) or match.group(2)
+            media = (match.group(3) or '').strip()
+            absolute = self.absolute(path, base)
+            if absolute in self.css_seen:
+                return '/* duplicate CSS import skipped */'
+            self.css_seen.add(absolute)
+            try:
+                resp = self.fetcher.get(absolute, max_bytes=None)
+                if not _resource_mime(resp.mime, 'css'):
+                    raise ImportFailed('返回的不是样式表')
+                self.success += 1
+                merged = self.css(decode_text(resp), resp.url, depth + 1)
+                return '@media ' + media + '{\n' + merged + '\n}' if media and media.lower() != 'all' else merged
+            except ImportFailed as exc:
+                self.warn(f'未合并 CSS：{absolute[:120]}（{exc}）')
+                return f'@import url("{absolute}") {media};'
+
+        source = self._css_import.sub(import_repl, source)
+
+        def url_repl(match):
+            value = match.group(1) or match.group(2) or match.group(3) or ''
+            # 不加载 css filter/javascript scheme 等非资源链接。
+            if not value or value.startswith(('#', 'data:', 'blob:')):
+                return match.group(0)
+            resolved = self.inline_url(value, base, 'font-or-image')
+            return 'url("' + resolved.replace('"', '%22') + '")'
+
+        return self._css_url.sub(url_repl, source)
+
+    def bundle(self, page: Download) -> tuple[str, dict]:
+        original = decode_text(page)
+        soup = BeautifulSoup(original, 'html.parser')
+        if soup.html is None:
+            shell = BeautifulSoup('<!DOCTYPE html><html><head></head><body></body></html>', 'html.parser')
+            for node in list(soup.contents):
+                shell.body.append(node.extract())
+            soup = shell
+        if soup.head is None:
+            soup.html.insert(0, soup.new_tag('head'))
+        if soup.body is None:
+            soup.html.append(soup.new_tag('body'))
+        # 去掉原站点的 <base>，避免影响 PWA 路径；所有可见链接改为绝对地址。
+        base = page.url
+        for tag in list(soup.select('base[href]')):
+            candidate = self.absolute(str(tag.get('href')), base)
+            if candidate.startswith(('http://', 'https://')):
+                base = candidate
+            tag.decompose()
+        # 保留文档来源，不会影响脚本运行。
+        origin_meta = soup.new_tag('meta')
+        origin_meta.attrs = {'name': 'pwa-original-url', 'content': page.url}
+        soup.head.append(origin_meta)
+        # 原站 manifest 和 CSP 通常不适用于新域名；删除以允许内联资源及 PWA manifest 注入。
+        for tag in list(soup.select('link[rel], meta[http-equiv]')):
+            if tag.name == 'link' and 'manifest' in (tag.get('rel') or []):
+                tag.decompose()
+            elif tag.name == 'meta' and str(tag.get('http-equiv', '')).lower() == 'content-security-policy':
+                tag.decompose()
+        for tag in list(soup.find_all('link', href=True)):
+            href = str(tag.get('href', ''))
+            rel = [str(x).lower() for x in (tag.get('rel') or [])]
+            if 'stylesheet' in rel:
+                absolute = self.absolute(href, base)
+                try:
+                    resp = self.fetcher.get(absolute, max_bytes=None)
+                    if not _resource_mime(resp.mime, 'css'):
+                        raise ImportFailed('返回的不是 CSS 文件')
+                    style = soup.new_tag('style')
+                    style['data-imported-from'] = resp.url
+                    if tag.has_attr('media'):
+                        style['media'] = tag['media']
+                    css = self.css(decode_text(resp), resp.url)
+                    # 防止 CSS 内容含 HTML 风格闭合标签导致插入页面异常。
+                    style.string = css.replace('</style', '<\\/style')
+                    tag.replace_with(style)
+                    self.success += 1
+                except ImportFailed as exc:
+                    self.warn(f'样式需联网：{absolute[:120]}（{exc}）')
+                    tag['href'] = absolute
+            elif 'icon' in rel or 'apple-touch-icon' in rel:
+                tag['href'] = self.inline_url(href, base, 'image')
+            elif 'preload' in rel or 'modulepreload' in rel or 'prefetch' in rel or 'preconnect' in rel or 'dns-prefetch' in rel:
+                # 内联后不应再预加载源站资源。JS modulepreload 可能仍依赖网络，后续会有警告。
+                tag.decompose()
+            else:
+                tag['href'] = self.absolute(href, base)
+        for tag in list(soup.find_all('script', src=True)):
+            raw_src = str(tag['src'])
+            absolute = self.absolute(raw_src, base)
+            if tag.get('type', '').lower() in ('application/ld+json', 'importmap', 'speculationrules'):
+                tag['src'] = absolute
+                self.warn('结构化数据、Import Map 或浏览器特殊脚本不自动合并')
+                continue
+            try:
+                resp = self.fetcher.get(absolute, max_bytes=None)
+                if not _resource_mime(resp.mime, 'script'):
+                    raise ImportFailed('返回的不是 JavaScript')
+                js = decode_text(resp)
+                if tag.has_attr('async') or tag.has_attr('defer'):
+                    self.warn('异步 / defer 外部脚本已转换为内联脚本，执行顺序可能改变')
+                if tag.get('type', '').lower() == 'module' and re.search(r'\b(?:import|export)\b', js):
+                    self.warn('检测到 JavaScript 模块引用：模块依赖未打包，可能仍需联网')
+                    # 对常见的 from './x.js'、import './x.js' 改为原站绝对地址，避免请求 /pwa/slug/x.js。
+                    js = re.sub(r'''(\bfrom\s*|\bimport\s*)([\"'])(\.{1,2}/[^\"']+)(\2)''',
+                                lambda m: m.group(1) + m.group(2) + self.absolute(m.group(3), resp.url) + m.group(4), js)
+                    js = re.sub(r'''(\bimport\s*\(\s*)([\"'])(\.{1,2}/[^\"']+)(\2)''',
+                                lambda m: m.group(1) + m.group(2) + self.absolute(m.group(3), resp.url) + m.group(4), js)
+                if re.search(r'\b(?:fetch\s*\(|XMLHttpRequest\b|import\s*\()', js):
+                    self.warn('检测到动态请求或模块加载：这些运行时资源不会自动合并，可能仍需联网')
+                tag.attrs.pop('src', None)
+                for attr in ('integrity', 'crossorigin', 'referrerpolicy', 'defer', 'async'):
+                    tag.attrs.pop(attr, None)
+                tag['data-imported-from'] = resp.url
+                tag.string = js.replace('</script', '<\\/script')
+                self.success += 1
+            except ImportFailed as exc:
+                self.warn(f'脚本需联网：{absolute[:120]}（{exc}）')
+                tag['src'] = absolute
+        for tag in soup.find_all('style'):
+            if tag.get('data-imported-from'):
+                continue
+            if tag.string:
+                tag.string = self.css(str(tag.string), base).replace('</style', '<\\/style')
+        for tag in soup.find_all(style=True):
+            tag['style'] = self.css(str(tag['style']), base)
+        for tag in soup.find_all('img', src=True):
+            tag['src'] = self.inline_url(str(tag['src']), base, 'image')
+        for tag in soup.find_all('input', src=True):
+            if str(tag.get('type', '')).lower() == 'image':
+                tag['src'] = self.inline_url(str(tag['src']), base, 'image')
+            else:
+                tag['src'] = self.absolute(str(tag['src']), base)
+        for tag in soup.find_all('source', src=True):
+            kind = str(tag.get('type', '')).lower()
+            if kind.startswith('image/'):
+                tag['src'] = self.inline_url(str(tag['src']), base, 'image')
+            else:
+                tag['src'] = self.absolute(str(tag['src']), base)
+        for tag in soup.find_all(['img', 'source'], srcset=True):
+            # 原始 srcset 以逗号区分多个候选；转换前拆分，避免把 data URI 的逗号再次解析。
+            candidates = []
+            for part in str(tag['srcset']).split(','):
+                part = part.strip()
+                if not part:
+                    continue
+                bits = part.split()
+                candidates.append(self.inline_url(bits[0], base, 'image') + (' ' + ' '.join(bits[1:]) if len(bits) > 1 else ''))
+            tag['srcset'] = ', '.join(candidates)
+        for tag in soup.find_all(['video'], poster=True):
+            tag['poster'] = self.inline_url(str(tag['poster']), base, 'image')
+        for tag in soup.find_all(background=True):
+            tag['background'] = self.inline_url(str(tag['background']), base, 'image')
+        for tag in soup.find_all(['a', 'form', 'iframe']):
+            attr = 'action' if tag.name == 'form' else 'src' if tag.name == 'iframe' else 'href'
+            if tag.has_attr(attr):
+                tag[attr] = self.absolute(str(tag[attr]), base)
+            if tag.name == 'iframe':
+                self.warn('iframe 内的内容不能合并为一个 HTML，仍依赖联网')
+        # 媒体文件通常很大，为避免 OOM 保留在线链接并提示。
+        for tag in soup.find_all(['video', 'audio', 'source']):
+            if tag.has_attr('src') and not str(tag['src']).startswith('data:'):
+                tag['src'] = self.absolute(str(tag['src']), base)
+                if tag.name in ('video', 'audio', 'source'):
+                    self.warn('音视频资源未内联，离线时可能无法播放')
+        output = str(soup)
+        title = soup.title.get_text(' ', strip=True) if soup.title else ''
+        title = title[:100] or (urlsplit(page.url).hostname or '导入的网页')
+        return output, {
+            'name': title,
+            'source_url': page.url,
+            'resource_count': self.success,
+            'http_requests': self.fetcher.requests,
+            'size_bytes': len(output.encode('utf-8')),
+            'warnings': self.warnings,
+        }
+
+
+def import_webpage(url: str) -> tuple[str, dict]:
+    client = SafeFetcher()
+    page = client.get(url, max_bytes=None, kind='page')
+    return PageBundler(client).bundle(page)
+
+# ========= PWA 蓝图路由 =========
+
 dynamic_bp = Blueprint("dynamic_pwa", __name__, url_prefix="/pwa")
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62})$")
 RESERVED = {"api", "manager"}
-MAX_HTML_BYTES = 2 * 1024 * 1024
+IMPORT_LIMITER = threading.BoundedSemaphore(value=2)
 
 
 def tools_root() -> Path:
@@ -74,95 +488,15 @@ def no_store(response: Response) -> Response:
     return response
 
 
-def admin_token_path() -> Path:
-    """管理密钥的本地持久化位置；与工具数据保持在同一持久化存储区域。"""
-    configured = os.environ.get("PWA_ADMIN_TOKEN_FILE", "").strip()
-    if configured:
-        # 自定义路径可使用绝对路径；相对路径以 Flask 项目根目录为基准。
-        path = Path(configured).expanduser()
-        if not path.is_absolute():
-            path = Path(current_app.root_path) / path
-        return path.absolute()
-    return tools_root().parent / ".pwa_admin_token"
-
-
-def read_saved_token(path: Path) -> str:
-    """读取密钥时禁止文件符号链接，避免误读其他敏感文件。"""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(path, flags)
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or path.is_symlink():
-            raise RuntimeError(f"PWA 管理密钥不是普通文件：{path}")
-        if os.name == "posix" and info.st_mode & 0o077:
-            # 已有文件的权限自动收紧为仅运行服务的用户可读写。
-            os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "r", encoding="utf-8") as stream:
-            fd = -1
-            token = stream.read(1024).strip()
-        if not token or len(token) > 512 or "\n" in token or "\r" in token:
-            raise RuntimeError(f"PWA 管理密钥文件为空或内容无效：{path}")
-        return token
-    finally:
-        if fd >= 0:
-            os.close(fd)
-
-
-def admin_token() -> str:
-    """首次原子生成密钥文件；已有文件永不被环境变量覆盖。"""
-    path = admin_token_path()
-    try:
-        return read_saved_token(path)
-    except FileNotFoundError:
-        pass
-
-    # 仅在没有保存的密钥文件时，才读取环境变量作为初始值。
-    initial = os.environ.get("PWA_ADMIN_TOKEN", "").strip()
-    if not initial:
-        initial = secrets.token_urlsafe(32)
-    if len(initial) > 512 or "\n" in initial or "\r" in initial:
-        raise RuntimeError("PWA_ADMIN_TOKEN 必须是不含换行且长度不超过 512 的字符串")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=".pwa-token-", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            stream.write(initial + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        # 使用硬链接做原子“首次创建”：多进程同时启动也不会覆盖已有密钥。
-        try:
-            os.link(tmp_name, path)
-        except FileExistsError:
-            pass
-    finally:
-        os.unlink(tmp_name)
-    return read_saved_token(path)
-
-
-@dynamic_bp.record_once
-def initialize_pwa_admin(state) -> None:
-    # 注册蓝图时就写盘，避免第一次打开管理器时才创建文件。
-    with state.app.app_context():
-        admin_token()
-
-
-def require_admin() -> None:
-    supplied = request.headers.get("X-PWA-Admin-Token", "")
-    if not hmac.compare_digest(supplied, admin_token()):
-        abort(401, description="管理密钥无效")
-
-
 @dynamic_bp.errorhandler(400)
-@dynamic_bp.errorhandler(401)
-@dynamic_bp.errorhandler(403)
 @dynamic_bp.errorhandler(404)
 @dynamic_bp.errorhandler(409)
 @dynamic_bp.errorhandler(413)
+@dynamic_bp.errorhandler(429)
 @dynamic_bp.errorhandler(503)
 def handle_error(err):
     # 管理 API 返回 JSON，其它路由仍正常返回 HTTP 错误
-    if request.path.startswith(url_for("dynamic_pwa.api_tools")):
+    if request.path.startswith(url_for("dynamic_pwa.api_tools")) or request.path.startswith(url_for("dynamic_pwa.api_import_url")):
         return no_store(jsonify(error=err.description)), err.code
     return err
 
@@ -276,8 +610,6 @@ def atomic_write(path: Path, contents: str) -> None:
 
 
 def read_payload() -> tuple[str, str]:
-    if request.content_length and request.content_length > MAX_HTML_BYTES * 2:
-        abort(413, description="提交内容太大")
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         abort(400, description="必须提交 JSON 对象")
@@ -287,21 +619,61 @@ def read_payload() -> tuple[str, str]:
         abort(400, description="slug 只能使用小写字母、数字、连字符，长度 1～63")
     if not isinstance(html, str) or not html.strip():
         abort(400, description="HTML 不能为空")
-    if len(html.encode("utf-8")) > MAX_HTML_BYTES:
-        abort(413, description="HTML 超过 2 MB 限制")
     return slug, html
 
 
 @dynamic_bp.route("/manager", methods=["GET"])
 def manager():
-    # 管理页面本身没有密钥；密钥只能手动输入，且仅保存在前端内存中
+    # 管理页面直接可用，无需登录。
     page_file = Path(__file__).with_name("pwa_manager.html")
     return no_store(send_file(page_file, mimetype="text/html"))
 
 
+@dynamic_bp.route("/api/import-url", methods=["POST"])
+def api_import_url():
+    """抓取任意可访问的 HTTP/HTTPS 网页并转换单文件 HTML。"""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        abort(400, description="请使用 JSON 提交链接")
+    url = data.get("url")
+    if not isinstance(url, str) or not url.strip():
+        abort(400, description="请输入 http:// 或 https:// 网页链接")
+    save = data.get("save", False)
+    if not isinstance(save, bool):
+        abort(400, description="save 必须是布尔值")
+    slug = data.get("slug", "")
+    if save and (not isinstance(slug, str) or not valid_slug(slug)):
+        abort(400, description="导入创建需要合法的工具标识 slug")
+    if not IMPORT_LIMITER.acquire(blocking=False):
+        abort(429, description="已有导入任务正在执行，请稍后再试")
+    try:
+        try:
+            html, report = import_webpage(url)
+        except ImportFailed as exc:
+            abort(400, description=str(exc))
+    finally:
+        IMPORT_LIMITER.release()
+    if not save:
+        return no_store(jsonify(html=html, **report))
+    # 导入成功后才落盘；同名工具不覆盖，避免破坏已有 PWA。
+    root = tools_root()
+    root.mkdir(parents=True, exist_ok=True)
+    folder = tool_path(slug)
+    try:
+        folder.mkdir()
+    except FileExistsError:
+        abort(409, description="此工具标识已经存在，请更换 slug")
+    try:
+        atomic_write(folder / "index.html", html)
+    except Exception:
+        shutil.rmtree(folder)
+        raise
+    return no_store(jsonify(message="链接导入并创建成功", slug=slug,
+                                 url=url_for("dynamic_pwa.serve_tool", slug=slug), **report)), 201
+
+
 @dynamic_bp.route("/api/tools", methods=["GET"])
 def api_tools():
-    require_admin()
     root = tools_root()
     output = []
     if root.is_dir():
@@ -325,7 +697,6 @@ def api_tools():
 
 @dynamic_bp.route("/api/tools", methods=["POST"])
 def api_create_tool():
-    require_admin()
     slug, html = read_payload()
     root = tools_root()
     root.mkdir(parents=True, exist_ok=True)
@@ -344,14 +715,12 @@ def api_create_tool():
 
 @dynamic_bp.route("/api/tools/<slug>", methods=["GET"])
 def api_get_tool(slug):
-    require_admin()
     html = read_html(slug)
     return no_store(jsonify(slug=slug, html=html, **metadata(html, slug)))
 
 
 @dynamic_bp.route("/api/tools/<slug>", methods=["PUT"])
 def api_update_tool(slug):
-    require_admin()
     old = source_path(slug)
     submitted_slug, html = read_payload()
     if submitted_slug != slug:
@@ -362,7 +731,6 @@ def api_update_tool(slug):
 
 @dynamic_bp.route("/api/tools/<slug>", methods=["DELETE"])
 def api_delete_tool(slug):
-    require_admin()
     folder = tool_path(slug)
     if not folder.is_dir() or folder.is_symlink():
         abort(404)

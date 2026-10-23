@@ -2,384 +2,214 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云端书库 - 智能索引</title>
-    <script src="/static/cdn/tailwindcss3.4.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>阅读器</title>
+    <script>tailwind = { config: { } };</script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f4f4f5; font-family: -apple-system, "PingFang SC", sans-serif; }
+        :root { --bg: #f4f4f5; --text: #27272a; --panel: rgba(255,255,255,0.9); }
+        .dark-mode { --bg: #121214; --text: #d4d4d8; --panel: rgba(24,24,27,0.9); }
+        body { background-color: var(--bg); color: var(--text); font-family: "PingFang SC", "Microsoft YaHei", sans-serif; transition: background 0.3s; }
         
-        /* 动态样式定义 */
-        .tag-active { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; }
-        .book-clicked { opacity: 0.6; filter: grayscale(30%); transition: opacity 0.2s, filter 0.2s; }
-        
-        /* 一键获取按钮的渐变样式 */
-        .btn-primary-gradient {
-            background: linear-gradient(135deg, #2563eb, #7c3aed);
-            color: white;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-        }
-        
-        /* 隐藏滚动条 */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .reader-content { font-size: 20px; line-height: 1.8; letter-spacing: 0.5px; text-align: justify; white-space: pre-wrap; word-break: break-all; }
+        .drawer { transform: translateX(100%); transition: transform 0.3s ease; }
+        .drawer.open { transform: translateX(0); }
+        .glass { backdrop-filter: blur(10px); background: var(--panel); border-bottom: 1px solid rgba(128,128,128,0.2); }
     </style>
 </head>
-<body class="h-screen flex flex-col selection:bg-blue-500 overflow-hidden text-zinc-800">
+<body class="h-screen flex flex-col overflow-hidden">
 
-    <header class="bg-white shadow-sm sticky top-0 z-20 border-b border-zinc-100 flex-shrink-0">
-        <div class="p-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
-                <span class="text-2xl">📚</span> 云端幻境书库
-            </h1>
-            <div class="flex items-center gap-2">
-                <a href="/noveltxt" class="text-[11px] text-zinc-500 hover:text-zinc-800 font-medium transition">纯文本版</a>
-                <a href="/novel-ai" target="_blank" class="text-[11px] bg-zinc-800 text-white px-3 py-2 rounded-lg font-bold hover:bg-zinc-700 transition">⚙️ AI 管理</a>
-            </div>
+    <header class="h-14 glass flex items-center justify-between px-4 shrink-0 shadow-sm z-20">
+        <div class="flex items-center gap-3">
+            <a href="javascript:history.back()" class="p-2 -ml-2 rounded-full hover:bg-zinc-500/20 transition active:scale-90">⬅️</a>
+            <h1 id="chapterTitle" class="font-bold text-sm truncate max-w-[150px] sm:max-w-xs text-zinc-500">加载中...</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-zinc-500/20" title="切换主题">🌓</button>
+            <button onclick="toggleDrawer()" class="p-2 rounded-full hover:bg-zinc-500/20 text-xl" title="查看目录">📑</button>
         </div>
     </header>
 
-    <main class="flex-1 overflow-y-auto bg-zinc-100/30 scroll-smooth no-scrollbar relative">
-        <div class="p-4 sm:p-6 pb-0 flex flex-col gap-4">
-            
-            <div class="flex flex-col sm:flex-row gap-3 w-full">
-                <div class="relative flex-1">
-                    <input type="text" id="searchInput" placeholder="搜索书名或标签..." 
-                           class="w-full bg-white border border-zinc-200 rounded-2xl py-3 px-4 pl-11 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition shadow-sm">
-                    <span class="absolute left-4 top-3.5 opacity-30">🔍</span>
-                </div>
-
-                <button id="btnUploadTrigger" onclick="document.getElementById('fileUpload').click()" class="bg-zinc-800 text-white px-5 py-3 rounded-2xl text-sm font-bold transition active:scale-95 whitespace-nowrap flex items-center justify-center gap-2 hover:bg-zinc-700 shadow-sm">
-                    📤 批量上传
-                </button>
-                <input type="file" id="fileUpload" multiple accept=".txt" class="hidden" onchange="handleFileUpload(event)">
-
-                <button onclick="fetchAllFiltered()" id="btnFetchAll" class="btn-primary-gradient px-5 py-3 rounded-2xl text-sm font-bold transition active:scale-95 whitespace-nowrap">
-                    🚀 一键全量获取 (字数降序)
-                </button>
-            </div>
-            
-            <div class="bg-white/50 border border-zinc-200/50 rounded-2xl p-3">
-                <div class="flex justify-between items-center mb-2 px-1">
-                    <span class="text-[10px] font-black text-zinc-400 uppercase tracking-widest">分类筛选</span>
-                    <div class="flex gap-4">
-                        <button onclick="clearFilters()" class="text-[10px] text-red-500 font-bold hidden" id="btnClearFilters">清除过滤</button>
-                        <button onclick="toggleExpandTags()" id="btnExpand" class="text-[10px] text-blue-600 font-bold flex items-center gap-1">
-                            <span>展开全部</span> <span id="expandIcon" class="transition-transform">↓</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="tagContainer" class="flex flex-wrap gap-2 max-h-[76px] overflow-hidden transition-all duration-300 ease-in-out">
-                    <div class="h-8 w-16 bg-zinc-200 rounded-xl animate-pulse"></div>
-                </div>
-            </div>
+    <div id="drawer" class="drawer fixed inset-y-0 right-0 w-72 bg-white dark:bg-zinc-900 shadow-2xl z-30 flex flex-col border-l border-zinc-200 dark:border-zinc-800">
+        <div class="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+            <span class="font-bold text-zinc-800 dark:text-zinc-200">目录</span>
+            <button onclick="toggleDrawer()" class="text-2xl opacity-50 hover:opacity-100">&times;</button>
         </div>
+        <div id="tocList" class="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
+            <div class="p-10 text-center text-zinc-400 text-sm animate-pulse">正在同步章节索引...</div>
+        </div>
+    </div>
 
-        <div class="p-4 sm:p-6">
-            <div class="flex justify-between items-center mb-4">
-                <span class="text-[11px] font-bold text-zinc-400 uppercase tracking-widest" id="resultCount">数据同步中...</span>
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 scroll-smooth" id="scrollContainer">
+        <div class="max-w-2xl mx-auto">
+            <h2 id="innerTitle" class="text-2xl font-bold mb-10 mt-4 leading-tight"></h2>
+            <div id="readerContent" class="reader-content min-h-[70vh]">
+                <div class="mt-20 text-center flex flex-col items-center gap-4">
+                    <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-zinc-400 text-sm animate-pulse tracking-widest">正在从云端节点提取章节数据...</p>
+                </div>
             </div>
-            <div id="novelGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
             
-            <div id="loading" class="py-10 flex flex-col items-center justify-center text-zinc-400 gap-2 invisible">
-                <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            
-            <div id="emptyState" class="hidden py-20 flex-col items-center justify-center text-zinc-400 gap-3">
-                <span class="text-4xl opacity-50">📭</span>
-                <p class="text-sm font-medium">没有找到相关书籍</p>
+            <div id="pagination" class="mt-16 mb-24 flex justify-between items-center hidden pt-8 border-t border-zinc-300 dark:border-zinc-700">
+                <button id="prevChapter" onclick="changeChapter(-1)" class="px-8 py-3 bg-zinc-200 dark:bg-zinc-800 rounded-2xl font-bold active:scale-95 transition disabled:opacity-40">上一章</button>
+                <button id="nextChapter" onclick="changeChapter(1)" class="px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold active:scale-95 transition shadow-lg shadow-blue-500/30 disabled:opacity-40">下一章</button>
             </div>
         </div>
     </main>
 
     <script>
-        let currentPage = 1;
-        let isLoading = false;
-        let hasMore = true;
-        let globalTagStats = {};
-        let selectedTags = new Set();
-        let isExpanded = false;
+        const urlParams = new URLSearchParams(window.location.search);
+        const novelName = urlParams.get('novel');
+        let currentChIdx = parseInt(urlParams.get('ch')) || 0;
+        let toc = []; // 仅存储标题目录
+        let chapterRequest = 0;
+        let chapterController = null;
+        let highlightedChapter = -1;
+        let pendingProgress = null;
+        let savingProgress = false;
+        const progressKey = 'progress_' + btoa(Array.from(new TextEncoder().encode(novelName || ''),
+            byte => String.fromCharCode(byte)).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-        // 工具函数：字数格式化
-        const formatWordCount = (num) => {
-            if (!num || isNaN(num)) return '0字';
-            return num >= 10000 ? (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w字' : num + '字';
-        };
+        if(!novelName) window.location.href = '/';
 
-        // 工具函数：防抖
-        const debounce = (func, delay) => {
-            let timeout;
-            return (...args) => {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), delay);
-            };
-        };
+        const toggleTheme = () => document.body.classList.toggle('dark-mode');
+        const toggleDrawer = () => document.getElementById('drawer').classList.toggle('open');
 
-        // 初始化
         async function init() {
             try {
-                const res = await fetch('/api/novel/tags/stats');
-                globalTagStats = await res.json();
-                renderTagButtons();
-            } catch (e) {
-                console.error("加载标签失败:", e);
-            }
-            
-            loadNextPage(true);
-
-            // 滚动触底加载
-            const main = document.querySelector('main');
-            main.addEventListener('scroll', () => {
-                if (main.scrollTop + main.clientHeight >= main.scrollHeight - 300) {
-                    loadNextPage();
-                }
-            });
-
-            // 搜索框防抖监听
-            const handleSearchInput = debounce(() => loadNextPage(true), 500);
-            document.getElementById('searchInput').addEventListener('input', handleSearchInput);
-
-            // 事件委托绑定书籍点击效果
-            document.getElementById('novelGrid').addEventListener('click', (e) => {
-                const link = e.target.closest('a');
-                if (link) link.classList.add('book-clicked');
-            });
-        }
-
-        // =========================================================
-        // 批量上传处理函数
-        // =========================================================
-        async function handleFileUpload(event) {
-            const files = event.target.files;
-            if (!files || files.length === 0) return;
-
-            const formData = new FormData();
-            for (let i = 0; i < files.length; i++) {
-                formData.append('files', files[i]);
-            }
-
-            const btn = document.getElementById('btnUploadTrigger');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = `⏳ 上传中... (${files.length})`;
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/novel/upload', {
-                    method: 'POST',
-                    body: formData
-                });
+                // 1. 🌟 获取轻量化目录
+                const tocRes = await fetch(`/api/novel/toc/${encodeURIComponent(novelName)}`);
+                if (!tocRes.ok) throw new Error(`HTTP ${tocRes.status}`);
+                const tocData = await tocRes.json();
+                if(tocData.error) throw new Error(tocData.error);
                 
-                const result = await res.json();
-                
-                if (result.status === 'success') {
-                    alert(`✅ 成功上传 ${result.count} 本小说！已自动打上 [手动上传] 标签。`);
-                    
-                    // 体验优化：上传成功后，自动清空旧搜索条件，并选中 "手动上传" 标签
-                    document.getElementById('searchInput').value = '';
-                    selectedTags.clear();
-                    selectedTags.add('手动上传');
-                    
-                    // 重新初始化全局状态并刷新列表
-                    await init();
-                    
-                    // 展开标签栏，让用户看到“手动上传”标签亮起
-                    if (!isExpanded) toggleExpandTags();
-                } else {
-                    alert(`❌ 上传失败: ${result.error}`);
-                }
-            } catch (e) {
-                alert(`❌ 上传发生异常: ${e.message}`);
-            } finally {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-                event.target.value = ''; // 清除 input 状态以便下次同名文件能触发 onchange
+                toc = Array.isArray(tocData.toc) ? tocData.toc : [];
+                if (!toc.length) throw new Error('暂无章节');
+                currentChIdx = Math.max(0, Math.min(currentChIdx, toc.length - 1));
+                renderTOC();
+                loadChapter();
+            } catch(e) {
+                document.getElementById('readerContent').innerHTML = '<div class="text-red-500 text-center mt-20">无法解析目录或权限不足</div>';
             }
         }
 
-        // 折叠/展开标签
-        function toggleExpandTags() {
-            isExpanded = !isExpanded;
-            const container = document.getElementById('tagContainer');
-            const btnText = document.querySelector('#btnExpand span');
-            const icon = document.getElementById('expandIcon');
-            
-            if (isExpanded) {
-                container.classList.replace('max-h-[76px]', 'max-h-[1000px]');
-                btnText.textContent = '收起筛选';
-                icon.style.transform = 'rotate(180deg)';
-            } else {
-                container.classList.replace('max-h-[1000px]', 'max-h-[76px]');
-                btnText.textContent = '展开全部';
-                icon.style.transform = 'rotate(0deg)';
-                document.querySelector('main').scrollTop = 0; // 收起时重置滚动位置
-            }
+        function renderTOC() {
+            const listEl = document.getElementById('tocList');
+            listEl.innerHTML = toc.map((ch, idx) => `
+                <div id="toc-${idx}" onclick="jumpTo(${idx})" class="${tocClass(idx)}">
+                    <span class="inline-block w-6 opacity-30 font-mono">${idx + 1}</span> ${ch.title}
+                </div>
+            `).join('');
+            highlightedChapter = currentChIdx;
         }
 
-        // 核心：分页加载数据
-        async function loadNextPage(reset = false) {
-            if (isLoading || (!hasMore && !reset)) return;
-            
-            if (reset) { 
-                currentPage = 1; 
-                hasMore = true; 
-                document.getElementById('novelGrid').innerHTML = ''; 
-                document.getElementById('emptyState').classList.add('hidden');
-            }
-            
-            isLoading = true;
-            document.getElementById('loading').classList.remove('invisible');
-            
-            const keyword = document.getElementById('searchInput').value.trim();
-            const tags = Array.from(selectedTags).join(',');
+        function tocClass(idx) {
+            return 'p-4 cursor-pointer text-sm truncate transition ' + (idx === currentChIdx
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 font-bold'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800');
+        }
+
+        function updateTOCHighlight() {
+            const previous = document.getElementById(`toc-${highlightedChapter}`);
+            const current = document.getElementById(`toc-${currentChIdx}`);
+            if (previous) previous.className = tocClass(highlightedChapter);
+            if (current) current.className = tocClass(currentChIdx);
+            highlightedChapter = currentChIdx;
+        }
+
+        async function loadChapter() {
+            if (!toc.length) return;
+            // 范围修正
+            if (currentChIdx < 0) currentChIdx = 0;
+            if (toc.length > 0 && currentChIdx >= toc.length) currentChIdx = toc.length - 1;
+            const index = currentChIdx;
+            const requestId = ++chapterRequest;
+            chapterController?.abort();
+            const controller = new AbortController();
+            chapterController = controller;
+
+            const out = document.getElementById('readerContent');
+            const innerTitle = document.getElementById('innerTitle');
+            const chapterTitle = document.getElementById('chapterTitle');
+
+            // 显示加载中状态
+            out.innerHTML = '<div class="mt-20 text-center animate-pulse text-zinc-400">正在同步数据域内容...</div>';
+            innerTitle.innerText = "";
             
             try {
-                const res = await fetch(`/api/novel/list?page=${currentPage}&size=24&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`);
+                // 2. 🌟 精准请求单章内容 (POST 或 Cookie 校验)
+                const res = await fetch(`/api/novel/chapter/${encodeURIComponent(novelName)}/${index}`,
+                    { signal: controller.signal });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
+                if (requestId !== chapterRequest) return;
                 
-                // 当前页内按字数降序
-                const sortedItems = (data.items || []).sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
-                
-                renderGrid(sortedItems, !reset);
-                
-                const currentCount = document.querySelectorAll('#novelGrid > a').length;
-                document.getElementById('resultCount').innerText = `已加载: ${currentCount} / ${data.total || 0}`;
-                
-                // 处理空状态
-                if (currentCount === 0) {
-                    document.getElementById('emptyState').classList.remove('hidden');
-                    document.getElementById('resultCount').innerText = '搜索完成';
-                }
-                
-                currentPage++;
-                hasMore = data.has_more;
-            } catch (e) {
-                console.error("加载数据失败:", e);
-            } finally { 
-                isLoading = false;
-                if (!hasMore || document.querySelectorAll('#novelGrid > a').length === 0) {
-                    document.getElementById('loading').classList.add('invisible');
-                }
-            }
-        }
+                if(data.error) throw new Error(data.error);
 
-        // 一键全量获取
-        async function fetchAllFiltered() {
-            if (isLoading) return;
-            const btn = document.getElementById('btnFetchAll');
-            const originalText = btn.innerText;
-            btn.disabled = true;
-            btn.innerText = "⚡ 正在全量获取...";
-            
-            let allFetchedItems = [];
-            let tempPage = 1;
-            let tempHasMore = true;
-            
-            document.getElementById('novelGrid').innerHTML = '';
-            document.getElementById('emptyState').classList.add('hidden');
-            document.getElementById('loading').classList.remove('invisible');
-            
-            const keyword = document.getElementById('searchInput').value.trim();
-            const tags = Array.from(selectedTags).join(',');
-            
-            try {
-                while (tempHasMore) {
-                    const res = await fetch(`/api/novel/list?page=${tempPage}&size=50&search=${encodeURIComponent(keyword)}&tags=${encodeURIComponent(tags)}`);
-                    const data = await res.json();
-                    
-                    if (data.items) allFetchedItems = allFetchedItems.concat(data.items);
-                    tempHasMore = data.has_more;
-                    tempPage++;
-                    
-                    btn.innerText = `已获取 ${allFetchedItems.length} 本...`;
-                }
+                chapterTitle.innerText = data.title;
+                innerTitle.innerText = data.title;
+                out.innerText = data.content; // 使用 innerText 防止 HTML 注入，同时保持换行
                 
-                // 全量按字数降序排列
-                allFetchedItems.sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
-                renderGrid(allFetchedItems, false);
-                
-                document.getElementById('resultCount').innerText = `已收录全部: ${allFetchedItems.length} 本`;
-                if (allFetchedItems.length === 0) document.getElementById('emptyState').classList.remove('hidden');
-                hasMore = false; // 阻断懒加载
+                document.getElementById('pagination').classList.remove('hidden');
+                document.getElementById('prevChapter').disabled = index === 0;
+                document.getElementById('nextChapter').disabled = index === toc.length - 1;
+                document.getElementById('scrollContainer').scrollTo(0, 0);
+
+                updateTOCHighlight();
+                saveProgress(index);
+
+                // 更改 URL 以便刷新
+                window.history.replaceState(null, '', `?novel=${encodeURIComponent(novelName)}&ch=${index}`);
             } catch (e) {
-                alert("获取失败，请检查网络或后端接口。");
+                if (requestId !== chapterRequest || e.name === 'AbortError') return;
+                out.innerHTML = `<div class="text-red-500 text-center mt-20">章节提取失败: ${e.message}</div>`;
             } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-                document.getElementById('loading').classList.add('invisible');
+                if (requestId === chapterRequest) chapterController = null;
             }
         }
 
-        // 渲染标签筛选器
-        function renderTagButtons() {
-            const topTags = ['已完结', '连载中', '未解析', '手动上传'];
-            const sortedTags = Object.keys(globalTagStats).sort((a, b) => {
-                if (topTags.includes(a) && !topTags.includes(b)) return -1;
-                if (!topTags.includes(a) && topTags.includes(b)) return 1;
-                return globalTagStats[b] - globalTagStats[a];
-            });
-
-            document.getElementById('tagContainer').innerHTML = sortedTags.map(tag => {
-                const isActiveClass = selectedTags.has(tag) ? 'tag-active' : '';
-                return `
-                <button onclick="toggleTag('${tag}')" id="tag-btn-${tag}" 
-                        class="px-3 py-1.5 rounded-xl text-[11px] border border-zinc-200 bg-white text-zinc-600 transition-all flex items-center gap-2 hover:border-blue-300 ${isActiveClass}">
-                    <span class="font-medium">${tag}</span>
-                    <span class="text-[9px] opacity-40 font-mono">${globalTagStats[tag]}</span>
-                </button>
-                `;
-            }).join('');
-            
-            // 每次渲染后检查是否需要显示清除按钮
-            const btnClear = document.getElementById('btnClearFilters');
-            selectedTags.size > 0 ? btnClear.classList.remove('hidden') : btnClear.classList.add('hidden');
-        }
-
-        // 切换标签状态
-        function toggleTag(tag) {
-            if (selectedTags.has(tag)) {
-                selectedTags.delete(tag);
-            } else {
-                selectedTags.add(tag);
-            }
-            renderTagButtons(); // 重新渲染以更新颜色状态
-            loadNextPage(true);
-        }
-
-        // 清除所有标签过滤
-        function clearFilters() {
-            selectedTags.clear();
-            renderTagButtons();
-            loadNextPage(true);
-        }
-
-        // 渲染书籍网格
-        function renderGrid(items, append) {
-            const grid = document.getElementById('novelGrid');
-            const html = items.map(item => `
-                <a href="/novel-detail?novel=${encodeURIComponent(item.filename)}" class="bg-white rounded-2xl p-3 shadow-sm border border-zinc-100 flex flex-col gap-3 relative group hover:shadow-md transition-shadow">
-                    <div class="aspect-[3/4] bg-zinc-50 rounded-xl flex items-center justify-center text-3xl shadow-inner border border-zinc-100/50 group-hover:scale-[1.02] transition-transform">📗</div>
-                    <div class="flex flex-col gap-1 flex-1">
-                        <h3 class="font-bold text-[12px] text-zinc-800 line-clamp-2 leading-snug">${item.displayTitle || item.filename}</h3>
-                        
-                        <div class="text-[10px] text-zinc-400 font-mono mt-0.5 flex items-center gap-1">
-                            <span>📊</span> ${formatWordCount(item.wordCount)}
-                        </div>
-
-                        <div class="flex gap-1 flex-wrap mt-auto pt-2">
-                            ${(item.tags || []).slice(0, 2).map(t => `<span class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-[9px] font-medium">${t}</span>`).join('')}
-                        </div>
-                    </div>
-                </a>`).join('');
-            
-            if (append) {
-                grid.insertAdjacentHTML('beforeend', html);
-            } else {
-                grid.innerHTML = html;
+        async function saveProgress(index = currentChIdx) {
+            pendingProgress = index;
+            if (savingProgress) return;
+            savingProgress = true;
+            try {
+                while (pendingProgress !== null) {
+                    const page = pendingProgress;
+                    pendingProgress = null;
+                    const response = await fetch(`/api2/kv/${progressKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ payload: { page } })
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                console.error('阅读进度保存失败:', error);
+            } finally {
+                savingProgress = false;
             }
         }
 
-        // 页面加载完成后启动
-        window.addEventListener('DOMContentLoaded', init);
+        function changeChapter(delta) { jumpTo(currentChIdx + delta); }
+
+        function jumpTo(idx) {
+            if (idx >= 0 && idx < toc.length) {
+                currentChIdx = idx;
+                document.getElementById('drawer').classList.remove('open');
+                loadChapter();
+            } else if (idx >= toc.length && toc.length > 0) {
+                alert('已经是最后一章了');
+            } else if (idx < 0) {
+                alert('已经是第一章了');
+            }
+        }
+
+        // 快捷键支持
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') changeChapter(-1);
+            if (e.key === 'ArrowRight') changeChapter(1);
+        });
+
+        init();
     </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-app.py — 知乎 / 微信公众号文章链接转文本 Web 服务
+app.py — 知乎 / 微信公众号 / YouTube 链接转文本与音频下载
 
 启动：
     python app.py                 # 默认 http://127.0.0.1:8320
@@ -10,6 +10,11 @@ app.py — 知乎 / 微信公众号文章链接转文本 Web 服务
     ZHIHU_COOKIE_FILE Cookie 文件路径（可选，默认 cookies.txt）
     ZHIHU_BROWSER=1   知乎改用浏览器模式（抗风控，较慢）
     ZHIHU_HEADLESS=0  浏览器模式下显示窗口
+    ZHIHU_AUTO_REFRESH=0  关闭"每次提取时自动续期 Cookie"（默认开启）
+    WECHAT_PROXY      微信文章请求代理（默认 http://192.168.31.204:8758）
+    YOUTUBE_API_URL   独立 YouTube 服务地址，默认 http://192.168.31.243:8765
+    TRANSCRIPTION_API_URL 音频转写地址，默认 http://192.168.31.197:5840
+    TRANSCRIPTION_MODEL_PROFILE 转写模式：daily（默认）/ accurate
 
 接口：
     GET    /api/health    服务与 Cookie 状态
@@ -25,29 +30,235 @@ import html as html_lib
 import json
 import os
 import re
+import threading
 import time
 import traceback
+import secrets
+from urllib.parse import urlsplit, parse_qs
 from html.parser import HTMLParser
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field
 
 import zhihu_extract as ze
+from video_pipeline import RemoteError, TranscriptionClient, YouTubePipeline
+# ==================== YouTube remote API client (embedded) ====================
+import json
+import os
+import secrets
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import requests
+from fastapi.responses import StreamingResponse, Response
+from starlette.background import BackgroundTask
+
+HOSTS={'youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtu.be','www.youtu.be',
+       'youtube-nocookie.com','www.youtube-nocookie.com'}
+TTL=3600
+MAX_JSON=12*1024*1024
+
+@dataclass
+class Reference:
+    owner: str
+    remote_id: str
+    created: float
+    max_mb: int
+
+class YouTubeClient:
+    def __init__(self,root):
+        config_path=Path(root)/'youtube_service.json'
+        config={}
+        if config_path.exists():
+            try:config=json.loads(config_path.read_text(encoding='utf-8-sig'))
+            except (ValueError,OSError):raise RuntimeError('youtube_service.json 格式错误')
+            if not isinstance(config,dict):raise RuntimeError('youtube_service.json 必须为对象')
+        default_url=config.get('api_url') or f"http://{config.get('host','192.168.31.243')}:{config.get('port',8765)}"
+        self.url=os.environ.get('YOUTUBE_API_URL',default_url).strip().rstrip('/')
+        self.references={}
+        self.lock=threading.RLock()
+
+    def public_config(self):
+        return {'configured':bool(self.url),'api_url':self.url,'mode':'remote','auth_required':False}
+
+    def _configured(self):
+        if not self.url:
+            raise RemoteError('请在 youtube_service.json 中配置 YouTube 节点的 IP 和端口。',503)
+        parsed=urlsplit(self.url)
+        if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise RemoteError('YouTube 服务地址格式错误，请填写 HTTP / HTTPS 服务根地址。',503)
+
+    def _request(self,method,path,read_timeout=12,**kwargs):
+        self._configured()
+        session=requests.Session()
+        session.trust_env=False  # The configured API machine is separate from the YouTube proxy.
+        try:
+            response=session.request(method,self.url+path,
+                        timeout=(3,read_timeout),allow_redirects=False,**kwargs)
+        except requests.RequestException as exc:
+            session.close()
+            import logging
+            logging.getLogger(__name__).exception(
+                "YouTube API 请求失败：method=%s url=%s%s",
+                method, self.url, path
+            )
+            raise RemoteError(
+                f"YouTube API 请求失败：{type(exc).__name__}: {exc}",
+                502
+            ) from exc
+        response._client_session=session
+        if not 200<=response.status_code<300:
+            status=response.status_code
+            message={401:'节点拒绝了请求，请确认节点已更新为免密钥版本。',404:'任务或文件不存在，可能已过期。',
+                     429:'YouTube 服务繁忙，请稍后重试。'}.get(status,'YouTube 服务返回错误。')
+            if status in {400,422,503}:
+                try:
+                    detail=response.json().get('detail')
+                    if isinstance(detail,str):message=detail[:500]
+                except ValueError:pass
+            response.close();session.close()
+            raise RemoteError(message,404 if status==404 else 502)
+        return response
+
+    def _json(self,method,path,**kwargs):
+        response=self._request(method,path,stream=True,**kwargs)
+        try:
+            payload=bytearray()
+            for chunk in response.iter_content(65536):
+                payload.extend(chunk)
+                if len(payload)>MAX_JSON:raise RemoteError('YouTube 服务响应超过大小限制。')
+            value=json.loads(payload)
+            if not isinstance(value,dict):raise ValueError('not an object')
+            return value
+        except (ValueError,requests.RequestException):
+            raise RemoteError('YouTube 服务响应不完整或格式错误。')
+        finally:
+            response.close();response._client_session.close()
+
+    def _clean(self):
+        now=time.time()
+        for jid,ref in list(self.references.items()):
+            if now-ref.created>=TTL:self.references.pop(jid,None)
+
+    def _owned(self,jid,owner):
+        with self.lock:
+            self._clean()
+            ref=self.references.get(jid)
+            if not ref or ref.owner!=owner:raise RemoteError('任务不存在或已过期。',404)
+            return ref
+
+    def submit(self,owner,url,fmt,max_mb,codec):
+        with self.lock:
+            self._clean()
+            if len(self.references)>=64:raise RemoteError('本机任务数量已满，请清理旧任务。',429)
+            # Reserve before the HTTP call, so concurrent submissions respect the bound.
+            jid=secrets.token_hex(16)
+            ref=Reference(owner,'',time.time(),max_mb)
+            self.references[jid]=ref
+        try:
+            data=self._json('POST','/v1/jobs',json={'url':url,'format':fmt if fmt in {'text','markdown','json'} else 'text',
+                                                      'max_mb':max_mb,'codec':codec})
+            remote_id=data.get('job_id','')
+            if not isinstance(remote_id,str) or len(remote_id)!=32 or any(c not in '0123456789abcdef' for c in remote_id):
+                raise RemoteError('YouTube 服务未返回有效任务编号。')
+            ref.remote_id=remote_id
+            return {'ok':True,'kind':'youtube','state':'running','job_id':jid,'stage':data.get('stage','远程服务正在提取字幕')}
+        except Exception:
+            with self.lock:self.references.pop(jid,None)
+            raise
+
+    def status(self,jid,owner,format=None):
+        ref=self._owned(jid,owner)
+        data=self._json('GET','/v1/jobs/'+ref.remote_id,params={'format':format} if format else {})
+        old='/v1/jobs/'+ref.remote_id
+        new='/api/youtube/jobs/'+jid
+        # Rewriting only this job's prefix keeps all browser downloads on the main app.
+        if isinstance(data.get('content'),str):data['content']=data['content'].replace(old,new)
+        for item in data.get('downloads') or []:
+            path=item.get('url','')
+            if not isinstance(path,str) or not path.startswith(old+'/'):raise RemoteError('YouTube 服务下载地址不正确。')
+            item['url']=new+path[len(old):]
+        audio=data.get('auto_download') or ''
+        if audio and (not isinstance(audio,str) or not audio.startswith(old+'/files/audio.')):
+            raise RemoteError('YouTube 服务音频地址不正确。')
+        data['auto_download']=new+audio[len(old):] if audio else ''
+        data['job_id']=jid
+        return data
+
+    def delete(self,jid,owner):
+        ref=self._owned(jid,owner)
+        try:
+            data=self._json('DELETE','/v1/jobs/'+ref.remote_id)
+        except RemoteError as exc:
+            if exc.status!=404:raise
+            data={'ok':True,'deleted':True}
+        with self.lock:self.references.pop(jid,None)
+        return data
+
+    def download(self,jid,owner,name=None,format='text'):
+        ref=self._owned(jid,owner)
+        if name is not None and name not in {'transcript.txt','subtitles.srt','audio.mp3','audio.opus'}:
+            raise RemoteError('文件不存在。',404)
+        fmt=format if format in {'text','markdown','json'} else 'text'
+        if name is None:
+            data=self.status(jid,owner,format=fmt)
+            if data.get('state')!='done':raise RemoteError('文件尚未生成。',404)
+            content=data.get('content','')
+            if not isinstance(content,str) or len(content.encode('utf-8'))>MAX_JSON:raise RemoteError('文本超过大小限制。')
+            ext={'text':'txt','markdown':'md','json':'json'}[fmt]
+            return Response(content,media_type='text/plain; charset=utf-8',headers={
+                'Content-Disposition':f'attachment; filename="YouTube_{jid}.{ext}"','Cache-Control':'no-store'})
+        path='/v1/jobs/'+ref.remote_id+('/files/'+name if name else '/document')
+        response=self._request('GET',path,stream=True,read_timeout=30)
+        limit=ref.max_mb*1024*1024 if name and name.startswith('audio.') else MAX_JSON
+        try:
+            length=int(response.headers.get('Content-Length','0'))
+            if length<0 or length>limit:raise ValueError('size')
+        except ValueError:
+            response.close();response._client_session.close()
+            raise RemoteError('远程文件超过大小限制。')
+        ext=name.rsplit('.',1)[-1] if name else {'text':'txt','markdown':'md','json':'json'}[fmt]
+        def stream():
+            size=0
+            try:
+                for chunk in response.iter_content(65536):
+                    size+=len(chunk)
+                    if size>limit:raise RuntimeError('Remote file exceeds size limit')
+                    yield chunk
+            finally:
+                response.close();response._client_session.close()
+        headers={'Content-Disposition':f'attachment; filename="YouTube_{jid}.{ext}"','Cache-Control':'no-store'}
+        if length:headers['Content-Length']=str(length)
+        def close():
+            response.close();response._client_session.close()
+        return StreamingResponse(stream(),media_type={'mp3':'audio/mpeg','opus':'audio/ogg','srt':'application/x-subrip'}.get(ext,'text/plain'),headers=headers,background=BackgroundTask(close))
+
+# ==================== Original article application ====================
+
 
 APP_DIR = Path(__file__).parent.resolve()
 DEFAULT_COOKIE_FILE = APP_DIR / "cookies.txt"
 
-app = FastAPI(title="知乎 / 微信文章转文本", version="1.1.0")
+app = FastAPI(title="知乎 / 微信 / YouTube 转文本", version="3.0.0")
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
+    CORSMiddleware, allow_origins=[], allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get('SECRET_KEY') or secrets.token_hex(32),
+                   session_cookie='extractor_session', same_site='strict')
+transcription_client = TranscriptionClient()
+video_client = YouTubePipeline(YouTubeClient(APP_DIR), transcription_client)
 
 # 微信请求代理（可通过环境变量 WECHAT_PROXY 覆盖；设为空字符串则不走代理）
 WECHAT_PROXY = os.environ.get("WECHAT_PROXY", "http://192.168.31.204:8758").strip()
+
 # =====================================================================
 #  微信文章提取（UA 伪装方案，纯 requests，无浏览器依赖）
 # =====================================================================
@@ -65,7 +276,7 @@ class WeChatError(Exception):
 
 
 def is_wechat_url(url: str) -> bool:
-    return "mp.weixin.qq.com" in (url or "").lower()
+    return urlsplit(url).hostname == 'mp.weixin.qq.com'
 
 
 def _grab(text: str, pattern: str, group: int = 1) -> str:
@@ -311,7 +522,7 @@ def extract_wechat(url: str, cookie: str = "", timeout: int = 15,
                    verbose: bool = False) -> WeChatDoc:
     """抓取微信公众号文章并转成文本。
 
-    - 通过 WECHAT_PROXY 指定的代理发送请求（默认 192.168.31.124:8758）。
+    - 通过 WECHAT_PROXY 指定的代理发送请求（默认 192.168.31.204:8758）。
     - 代理不可用时自动回退为直连，尽量保证可用性。
     """
     try:
@@ -435,9 +646,11 @@ def extract_wechat(url: str, cookie: str = "", timeout: int = 15,
 
 
 class ExtractReq(BaseModel):
-    url: str = Field(..., description="知乎或微信公众号文章链接")
+    url: str = Field(..., max_length=8000, description="知乎、微信或 YouTube 链接")
     cookie: str = Field("", description="可选，本次请求使用的 Cookie")
     format: str = Field("markdown", description="markdown | text | json")
+    max_mb: int = Field(20, ge=1, le=50)
+    codec: str = Field('mp3', pattern='^(mp3|opus)$')
 
 
 class ExtractResp(BaseModel):
@@ -453,6 +666,16 @@ class ExtractResp(BaseModel):
     content: str = ""
     images: list[str] = []
     error: str = ""
+    state: str = "done"
+    job_id: str = ""
+    result_type: str = "text"
+    stage: str = ""
+    percent: float | None = None
+    phase: str = ""
+    elapsed: float | None = None
+    metadata: dict = Field(default_factory=dict)
+    downloads: list[dict] = Field(default_factory=list)
+    auto_download: str = ""
 
 
 class CookieReq(BaseModel):
@@ -520,8 +743,186 @@ def _resolve_cookie(req_cookie: str) -> str:
     return stored_cookie()
 
 
+def _resolve_cookie_with_source(req_cookie: str) -> tuple[str, str]:
+    """返回 (cookie, source)。
+
+    source ∈ {"request", "env", "file", ""}
+      · request — 调用方本次请求带过来的
+      · env     — 从环境变量 ZHIHU_COOKIE 读到
+      · file    — 从服务器本地 cookies.txt 读到（只有这种才写回盘）
+    """
+    if req_cookie.strip():
+        return req_cookie.strip(), "request"
+    env_cookie = os.environ.get("ZHIHU_COOKIE", "").strip()
+    if env_cookie:
+        return env_cookie, "env"
+    stored = stored_cookie()
+    if stored:
+        return stored, "file"
+    return "", ""
+
+
 def _use_browser() -> bool:
     return os.environ.get("ZHIHU_BROWSER", "").strip() in ("1", "true", "yes")
+
+
+# =====================================================================
+#  知乎 Cookie 自动续期（每次提取请求后静默执行）
+# =====================================================================
+
+# 只接受知乎会话相关的键，过滤统计类噪音
+_ZHIHU_COOKIE_KEYS = {
+    "z_c0", "d_c0", "_zap", "_xsrf", "__zse_ck", "q_c1",
+    "BEC", "SESSIONID", "captcha_session_v2", "__snaker__id", "z_c0_f",
+}
+
+_ZHIHU_REFRESH_URL = "https://www.zhihu.com/"
+_ZHIHU_REFRESH_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+# 续期节流：两次刷新的最小间隔（秒），防止高并发把续期打成风暴
+_REFRESH_MIN_INTERVAL = 300
+
+_refresh_lock = threading.Lock()
+_last_refresh_ts = 0.0
+
+
+def _auto_refresh_enabled() -> bool:
+    return os.environ.get("ZHIHU_AUTO_REFRESH", "1").strip().lower() \
+        not in ("0", "false", "no", "off")
+
+
+def _parse_cookie_pairs(raw: str) -> dict[str, str]:
+    """把 Cookie 字符串解析成 {k: v}（保留原始顺序）。"""
+    out: dict[str, str] = {}
+    for piece in re.split(r"[;\n]", raw or ""):
+        piece = piece.strip()
+        if "=" not in piece:
+            continue
+        k, v = piece.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if k:
+            out[k] = v
+    return out
+
+
+def _collect_set_cookie(resp) -> dict[str, str]:
+    """从 requests 响应头里收集知乎会话相关的 Set-Cookie 键值。"""
+    out: dict[str, str] = {}
+    try:
+        raw_list = resp.raw.headers.getlist("Set-Cookie")
+    except Exception:  # noqa: BLE001
+        raw_list = []
+
+    for raw in raw_list:
+        # 一条 Set-Cookie 里 name=value 在最前面，后面是 Path/Expires 等属性
+        for piece in raw.split(";"):
+            piece = piece.strip()
+            if "=" not in piece:
+                continue
+            k, v = piece.split("=", 1)
+            k, v = k.strip(), v.strip()
+            # 空值代表"清除"，绝不能覆盖本地已有的有效值
+            if k in _ZHIHU_COOKIE_KEYS and v:
+                out[k] = v
+    return out
+
+
+def refresh_zhihu_cookie(cookie: str, timeout: int = 10) -> tuple[str, list[str]]:
+    """带现有 Cookie 访问一次知乎，抓取服务端下发的新 Cookie 并合并。
+
+    返回 (合并后的 Cookie 字符串, 实际发生变化的键名列表)。
+    网络错误 / 未登录 / 无新 Cookie 时原样返回。
+    """
+    if not cookie.strip():
+        return cookie, []
+
+    try:
+        import requests
+    except ImportError:
+        return cookie, []
+
+    headers = {
+        "User-Agent": _ZHIHU_REFRESH_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": "https://www.zhihu.com/",
+        "Cookie": cookie,
+    }
+
+    try:
+        resp = requests.get(_ZHIHU_REFRESH_URL, headers=headers,
+                            timeout=timeout, allow_redirects=True)
+    except Exception:  # noqa: BLE001
+        return cookie, []
+
+    new_pairs = _collect_set_cookie(resp)
+    if not new_pairs:
+        return cookie, []
+
+    current = _parse_cookie_pairs(cookie)
+    changed: list[str] = []
+    for k, v in new_pairs.items():
+        if current.get(k) != v:
+            current[k] = v
+            changed.append(k)
+
+    if not changed:
+        return cookie, []
+
+    merged = "; ".join(f"{k}={v}" for k, v in current.items())
+    return merged, sorted(set(changed))
+
+
+def _persist_cookie(new_cookie: str) -> bool:
+    """把续期后的 Cookie 原子写回本地文件。"""
+    path = _cookie_file()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(new_cookie + "\n", encoding="utf-8", newline="\n")
+        os.replace(tmp, path)
+        _restrict(path)
+        return True
+    except OSError:
+        return False
+
+
+def _maybe_refresh_cookie(cookie: str, source: str) -> None:
+    """静默续期：仅在 Cookie 来源为本地文件时才写回磁盘。
+
+    请求自带 Cookie / 环境变量 Cookie 只做内存刷新、不回写，
+    避免把调用方的临时凭证覆盖到服务端本地文件里。
+    """
+    global _last_refresh_ts
+
+    if source != "file" or not cookie:
+        return
+    if not _auto_refresh_enabled():
+        return
+
+    now = time.time()
+    if now - _last_refresh_ts < _REFRESH_MIN_INTERVAL:
+        return
+
+    with _refresh_lock:
+        # 双重检查：拿到锁后可能已被其他请求刷新过
+        if time.time() - _last_refresh_ts < _REFRESH_MIN_INTERVAL:
+            return
+        try:
+            new_cookie, changed = refresh_zhihu_cookie(cookie)
+        except Exception:  # noqa: BLE001
+            _last_refresh_ts = time.time()   # 失败也计数，防止风暴
+            return
+
+        _last_refresh_ts = time.time()
+        if not changed:
+            return
+        if _persist_cookie(new_cookie):
+            print(f"[cookie] 自动续期：更新 {len(changed)} 项 "
+                  f"({', '.join(changed)})")
 
 
 # =====================================================================
@@ -546,28 +947,87 @@ def health() -> dict:
         "cookie_source": "env" if env_set else ("file" if stored else ""),
         "cookie_file": str(_cookie_file()),
         "cookie_masked": mask_cookie(stored),
-         "wechat_proxy": WECHAT_PROXY or "(直连)",   # ← 新增
+        "wechat_proxy": WECHAT_PROXY or "(直连)",
+        "youtube_service": video_client.public_config(),
+        "transcription_service": transcription_client.public_config(),
+        "youtube_language": "简体优先，繁体转换为简体",
+        "auto_refresh": _auto_refresh_enabled(),
+        "last_refresh_at": (
+            time.strftime("%Y-%m-%d %H:%M:%S",
+                          time.localtime(_last_refresh_ts))
+            if _last_refresh_ts else ""
+        ),
         "hint": ("已就绪" if cookie_ready or _use_browser()
                  else "尚未配置 Cookie：抓取知乎前请在页面末尾保存，"
                       "或放置 cookies.txt。微信文章无需 Cookie。"),
     }
 
 
+def video_owner(request: Request) -> str:
+    if 'video_owner' not in request.session:
+        request.session['video_owner'] = secrets.token_hex(24)
+    return request.session['video_owner']
+
+
+def is_youtube_url(url: str) -> bool:
+    try:return urlsplit(url).hostname in HOSTS
+    except ValueError:return False
+
+@app.get('/api/youtube/jobs/{jid}')
+def video_status(jid: str,request: Request):
+    try:return video_client.status(jid,video_owner(request))
+    except RemoteError as exc:
+        if exc.status==404:raise HTTPException(404,str(exc))
+        return {'ok':False,'state':'failed','error':str(exc),'kind':'youtube','job_id':jid}
+
+@app.delete('/api/youtube/jobs/{jid}')
+def video_delete(jid: str,request: Request):
+    try:return video_client.delete(jid,video_owner(request))
+    except RemoteError as exc:raise HTTPException(exc.status,str(exc))
+
+@app.post('/api/youtube/jobs/{jid}/cancel')
+def video_cancel(jid: str,request: Request):
+    try:return video_client.cancel(jid,video_owner(request))
+    except RemoteError as exc:raise HTTPException(exc.status,str(exc))
+
+@app.get('/api/youtube/jobs/{jid}/files/{name}')
+def video_file(jid: str,name: str,request: Request):
+    try:return video_client.download(jid,video_owner(request),name=name)
+    except RemoteError as exc:raise HTTPException(exc.status,str(exc))
+
+@app.get('/api/youtube/jobs/{jid}/document')
+def video_text(jid: str,request: Request,format: str='text'):
+    try:return video_client.download(jid,video_owner(request),format=format)
+    except RemoteError as exc:raise HTTPException(exc.status,str(exc))
+
 @app.post("/api/extract", response_model=ExtractResp)
-def api_extract(req: ExtractReq) -> ExtractResp:
+def api_extract(req: ExtractReq, request: Request) -> ExtractResp:
     url = req.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail="请提供链接")
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError('invalid URL')
+    except ValueError:
+        raise HTTPException(400, '请提供有效的 HTTP / HTTPS 链接')
+
+    if is_youtube_url(url):
+        try:
+            return ExtractResp(**video_client.submit(video_owner(request),url,req.format,req.max_mb,req.codec))
+        except RemoteError as exc:
+            return ExtractResp(ok=False,error=str(exc),state='failed')
 
     wechat = is_wechat_url(url)
-    zhihu = "zhihu.com" in url
+    host = urlsplit(url).hostname or ''
+    zhihu = host == 'zhihu.com' or host.endswith('.zhihu.com')
     if not (wechat or zhihu):
         raise HTTPException(
             status_code=400,
-            detail="仅支持 zhihu.com 与 mp.weixin.qq.com 域名链接",
+            detail="仅支持知乎、微信公众号与 YouTube 视频链接",
         )
 
-    cookie = _resolve_cookie(req.cookie)
+    cookie, cookie_source = _resolve_cookie_with_source(req.cookie)
     use_browser = _use_browser()
 
     # 微信文章不需要登录态；知乎需要
@@ -579,6 +1039,7 @@ def api_extract(req: ExtractReq) -> ExtractResp:
                   "或设置环境变量 ZHIHU_BROWSER=1 改用浏览器模式。",
         )
 
+    # ── 无论提取成败，都顺手给 Cookie 续一次期 ──
     try:
         if wechat:
             doc = extract_wechat(url, cookie=req.cookie.strip(), verbose=False)
@@ -596,6 +1057,12 @@ def api_extract(req: ExtractReq) -> ExtractResp:
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         return ExtractResp(ok=False, error=f"服务器内部错误：{type(e).__name__}: {e}")
+    finally:
+        if zhihu and cookie:
+            try:
+                _maybe_refresh_cookie(cookie, cookie_source)
+            except Exception:  # noqa: BLE001
+                pass    # 续期失败绝不影响主流程
 
     fmt = req.format.lower()
     if fmt == "text":
@@ -614,9 +1081,9 @@ def api_extract(req: ExtractReq) -> ExtractResp:
 
 
 @app.get("/api/extract")
-def api_extract_get(url: str, format: str = "markdown",
+def api_extract_get(request: Request, url: str, format: str = "markdown",
                     cookie: str = "") -> JSONResponse:
-    resp = api_extract(ExtractReq(url=url, format=format, cookie=cookie))
+    resp = api_extract(ExtractReq(url=url, format=format, cookie=cookie), request)
     return JSONResponse(content=resp.model_dump())
 
 
@@ -694,6 +1161,9 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("PORT", "8320"))
-    host = os.environ.get("HOST", "0.0.0.0")
-    print(f"\n  知乎 / 微信文章转文本服务已启动 →  http://127.0.0.1:{port}\n")
+    host = os.environ.get("HOST", "127.0.0.1")
+    print(f"\n  知乎 / 微信 / YouTube 服务已启动 →  http://127.0.0.1:{port}\n")
+    if os.environ.get('OPEN_BROWSER', '1') != '0':
+        import webbrowser
+        threading.Timer(1.2, lambda: webbrowser.open(f'http://127.0.0.1:{port}/')).start()
     uvicorn.run(app, host=host, port=port, log_level="info")

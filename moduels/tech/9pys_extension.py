@@ -24,7 +24,7 @@ import signal
 import subprocess
 import sys
 import threading
-import time
+import time 
 from urllib.parse import urlsplit
 import uuid
 
@@ -182,6 +182,46 @@ def _target(rel, *, suffix=None):
         return file
     except (OSError, ValueError, RuntimeError):
         return None
+
+
+def _python_environments(path):
+    """Discover virtual environments in the script directory and its project ancestors."""
+    folders = [path.parent]
+    parent = path.parent
+    while parent != ROOT and ROOT in parent.parents:
+        parent = parent.parent
+        folders.append(parent)
+    found = []
+    seen = set()
+    for folder in folders:
+        for name in ('.venv', 'venv', 'env'):
+            env_dir = folder / name
+            if not env_dir.is_dir() or env_dir.is_symlink():
+                continue
+            candidates = ([env_dir / 'Scripts' / 'python.exe'] if sys.platform == 'win32'
+                          else [env_dir / 'bin' / 'python', env_dir / 'bin' / 'python3'])
+            for exe in candidates:
+                if exe.is_file() and (sys.platform == 'win32' or os.access(exe, os.X_OK)):
+                    resolved = str(exe.absolute())
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        found.append({'id': resolved, 'label': str(env_dir.relative_to(ROOT)) +
+                                      (' (当前目录)' if folder == path.parent else ' (上级目录)'),
+                                      'python': resolved})
+                    break
+    return found
+
+
+def _choose_python(path, selection):
+    envs = _python_environments(path)
+    if selection in (None, '', 'auto'):
+        return (envs[0]['python'] if envs else sys.executable), envs
+    if selection == 'system':
+        return sys.executable, envs
+    for env in envs:
+        if selection == env['id']:
+            return env['python'], envs
+    raise ValueError('指定的虚拟环境不存在或已不可用，请刷新列表')
 
 
 def _relative(path):
@@ -684,6 +724,7 @@ def list_files():
             'can_stop_external': bool(external and external.get('matched_by') == 'script_reference'),
             'can_run': not bool(active or external or busy), 'is_primary': primary,
             'has_log': _log_path(rel).exists(),
+            'python_envs': _python_environments(paths[rel]),
         })
     return jsonify(groups)
 
@@ -740,6 +781,10 @@ def run():
     except ValueError as exc:
         return result(False, code=400, error=f'启动参数不完整：{exc}')
     rel = _relative(path)
+    try:
+        python_exe, available_envs = _choose_python(path, data.get('python_env', 'auto'))
+    except ValueError as exc:
+        return result(False, code=400, error=str(exc))
     _prune_tasks()
     with LOCK:
         tid, _ = _active_task(rel)
@@ -760,6 +805,13 @@ def run():
         env.pop('WERKZEUG_SERVER_FD', None)
         env.pop('WERKZEUG_RUN_MAIN', None)
         env['PYTHONUNBUFFERED'] = '1'
+        if python_exe != sys.executable:
+            env_dir = str(Path(python_exe).parent.parent)
+            env['VIRTUAL_ENV'] = env_dir
+            env['PATH'] = str(Path(python_exe).parent) + os.pathsep + env.get('PATH', '')
+            env.pop('PYTHONHOME', None)
+        else:
+            env.pop('VIRTUAL_ENV', None)
         env['PYTHONIOENCODING'] = 'utf-8'
         env['PYTHONPATH'] = os.pathsep.join(filter(None,
             (str(path.parent), str(ROOT), env.get('PYTHONPATH', ''))))
@@ -769,7 +821,7 @@ def run():
         else:
             kwargs['start_new_session'] = True
         try:
-            proc = subprocess.Popen([sys.executable, str(path), *argv], cwd=path.parent,
+            proc = subprocess.Popen([python_exe, str(path), *argv], cwd=path.parent,
                                     env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, bufsize=0, **kwargs)
         except OSError as exc:
@@ -778,12 +830,13 @@ def run():
         log_path = _log_path(rel)
         header = (f'[Runner] 启动时间：{time.strftime("%Y-%m-%d %H:%M:%S")}\n'
                   f'[Runner] 脚本：{rel}\n[Runner] PID：{proc.pid}\n'
+                  f'[Runner] Python：{python_exe}\n'
                   f'[Runner] 启动参数：{args}\n\n').encode('utf-8')
         log_path.write_bytes(header)
         TASKS[tid] = {'file': rel, 'status': 'running', 'port': None,
-                      'process': proc, 'log_file': log_path, 'start_time': time.time()}
+                      'process': proc, 'python_exe': python_exe, 'log_file': log_path, 'start_time': time.time()}
         threading.Thread(target=_capture, args=(tid,), daemon=True).start()
-    return result(task=tid, pid=proc.pid)
+    return result(task=tid, pid=proc.pid, python=python_exe)
 
 
 @py_runner_bp.get('/status/<task_id>')

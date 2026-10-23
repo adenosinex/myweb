@@ -6,8 +6,10 @@ import time
 import json
 import sqlite3
 import threading
+import base64
 from urllib.parse import quote
-from collections import Counter
+from collections import Counter, OrderedDict
+from contextlib import closing
 
 import requests
 from flask import Blueprint, request, jsonify, make_response
@@ -51,8 +53,12 @@ stop_event = threading.Event()
 scan_thread = None
 start_time = 0
 
-# 文本分章内存缓存 (Novel_Name -> Chapters)
-text_cache = {}
+# 按版本缓存分章结果，使用 LRU 与字符预算限制常驻内存。
+text_cache = OrderedDict()
+text_cache_lock = threading.RLock()
+TEXT_CACHE_MAX_BOOKS = 8
+TEXT_CACHE_MAX_CHARS = 5_000_000
+TEXT_CACHE_REMOTE_TTL = 300
 
 
 # ==============================================================================
@@ -106,39 +112,72 @@ def get_novel_content_text(novel_name):
 # ==============================================================================
 # [4] 文本处理工具箱 (Text Processing Utilities)
 # ==============================================================================
+CHAPTER_RE = re.compile(r'(?:^|\n)[ \t\u3000]*([（【《\[]?(?:正文[ \t\u3000]*)?第[ \t\u3000]*[零一二两三四五六七八九十百千万\d]+[ \t\u3000]*[章回节卷部集折篇][^\n]{0,50})')
+
+
+def split_novel_text(text):
+    """只负责分章；保留短正文，跳过空前言，无章节标题时按 5000 字分段。"""
+    chapters, last_idx, last_title = [], 0, '前言'
+    matched = False
+    for match in CHAPTER_RE.finditer(text):
+        matched = True
+        content = text[last_idx:match.start()].strip()
+        # 目录等短前言仍忽略，但真实章节的短正文不能丢失。
+        if content and (last_title != '前言' or len(content) > 20):
+            chapters.append({'title': last_title, 'content': content})
+        last_title = match.group(1).strip()
+        last_idx = match.end()
+    if matched:
+        chapters.append({'title': last_title, 'content': text[last_idx:].strip()})
+        return chapters
+    return [{'title': f'第 {i // 5000 + 1} 节', 'content': text[i:i + 5000]}
+            for i in range(0, len(text), 5000)]
+
+
 def get_and_split_chapters(novel_name):
     """拉取小说内容并通过正则拆分为独立章节"""
-    if novel_name in text_cache: 
-        return text_cache[novel_name]
+    if not novel_name:
+        return []
+    local_path = os.path.join(UPLOAD_DIR, novel_name)
+    try:
+        stat = os.stat(local_path)
+        version = (stat.st_mtime_ns, stat.st_size)
+    except FileNotFoundError:
+        version = None
+    now = time.monotonic()
+    with text_cache_lock:
+        cached = text_cache.get(novel_name)
+        if cached and cached['version'] == version and (
+                version is not None or now - cached['loaded_at'] < TEXT_CACHE_REMOTE_TTL):
+            text_cache.move_to_end(novel_name)
+            return cached['chapters']
+        text_cache.pop(novel_name, None)
         
     text = get_novel_content_text(novel_name)
     if not text:
         return []
     
-    # 兼容性极强的章节匹配正则
-    pattern = r'(?:^|\n)[ \t\u3000]*([（【《\[]?(?:正文[ \t\u3000]*)?第[ \t\u3000]*[零一二两三四五六七八九十百千万\d]+[ \t\u3000]*[章回节卷部集折篇][^\n]{0,50})'
-    regex = re.compile(pattern)
-    
-    chapters, last_idx, last_title = [], 0, "前言"
-    
-    for match in regex.finditer(text):
-        content = text[last_idx:match.start()].strip()
-        # 过滤开头过短的“目录列表”等杂乱信息
-        if len(content) > 20 or not chapters: 
-            chapters.append({"title": last_title, "content": content})
-            
-        last_title = match.group(1).strip()
-        last_idx = match.end()
+    chapters = split_novel_text(text)
         
-    # 补充最后一章
-    chapters.append({"title": last_title, "content": text[last_idx:].strip()})
-    
-    # 兜底机制：无明确章节时，按 5000 字强制切块
-    if len(chapters) <= 1: 
-        chapters = [{"title": f"第 {i//5000 + 1} 节", "content": text[i:i+5000]} for i in range(0, len(text), 5000)]
-        
-    text_cache[novel_name] = chapters
+    with text_cache_lock:
+        if len(text) <= TEXT_CACHE_MAX_CHARS:
+            text_cache[novel_name] = {'chapters': chapters, 'version': version,
+                                      'loaded_at': time.monotonic(), 'characters': len(text)}
+        total = sum(entry['characters'] for entry in text_cache.values())
+        while len(text_cache) > TEXT_CACHE_MAX_BOOKS or total > TEXT_CACHE_MAX_CHARS:
+            _, removed = text_cache.popitem(last=False)
+            total -= removed['characters']
     return chapters
+
+
+def novel_progress_keys(novel_name):
+    """完整书名生成新键，同时兼容两种旧版截断键用于清理。"""
+    encoded = novel_name.encode('utf-8')
+    current = base64.urlsafe_b64encode(encoded).decode('ascii').rstrip('=')
+    legacy = base64.b64encode(encoded).decode('ascii')[:16]
+    escaped = quote(novel_name, safe="~!*'()-._").encode('ascii')
+    legacy_browser = base64.b64encode(escaped).decode('ascii')[:16]
+    return tuple(dict.fromkeys(f'progress_{key}' for key in (current, legacy, legacy_browser)))
 
 
 # ==============================================================================
@@ -653,7 +692,7 @@ def confirm_maintenance_delete():
             return jsonify({"status": "success", "cleaned_count": 0})
             
         cleaned_count = 0
-        with sqlite3.connect(DB_PATH) as conn:
+        with closing(sqlite3.connect(DB_PATH)) as conn, conn:
             for fname in filenames:
                 clean_fname = fname.strip()
                 match_pattern = f'%"filename": "{clean_fname}"%'
@@ -664,11 +703,13 @@ def confirm_maintenance_delete():
                 conn.execute("DELETE FROM store WHERE collection='novel_analysis' AND payload LIKE ?", (novel_name_pattern,))
                 
                 # 删除阅读进度
-                import base64
-                prog_key = f"progress_{base64.b64encode(clean_fname.encode('utf-8')).decode('utf-8')[:16]}"
-                conn.execute("DELETE FROM store WHERE collection='kv' AND key=?", (prog_key,))
+                keys = novel_progress_keys(clean_fname)
+                conn.execute(f"DELETE FROM kv_store WHERE k IN ({','.join('?' for _ in keys)})", keys)
                 
                 cleaned_count += 1
+        with text_cache_lock:
+            for fname in filenames:
+                text_cache.pop(fname.strip(), None)
                 
         return jsonify({"status": "success", "cleaned_count": cleaned_count})
     except Exception as e:

@@ -9,6 +9,12 @@
     <script>
         tailwind.config = { darkMode: 'class' }
     </script>
+    <style>
+        /* 卡片最小宽度，避免宽屏4列时标题、标签被操作按钮挤成竖排 */
+        #cardGrid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+        .query-title { min-width: 0; overflow-wrap: anywhere; word-break: normal; }
+        .tag-chip { max-width: 100%; overflow-wrap: anywhere; word-break: normal; }
+    </style>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-6">
     <div class="max-w-6xl mx-auto">
@@ -39,7 +45,7 @@
         </header>
 
         <div id="keyResult" class="hidden mb-6 bg-gray-800 border border-gray-700 rounded-xl p-5"></div>
-        <div id="cardGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
+        <div id="cardGrid" class="grid gap-6"></div>
     </div>
 
     <div id="detailModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4 overflow-y-auto" onclick="closeOnBg(event, 'detailModal')">
@@ -207,7 +213,9 @@
             });
         }
 
-    const API_BASE = '/card-tag/'; 
+    const API_BASE = '/card-tag/';
+    const COLLECT_API_BASE = 'http://192.168.31.240'; // 文件检索服务地址
+    const COLLECT_MAX_GB = null; // null 使用后端默认限制；可指定数值如 20 
         let currentTags = new Set();
         let echartInstances = []; 
         
@@ -336,7 +344,7 @@ async function fetchTags() {
             const keys = String(key).split(/\s+/).filter(Boolean);
             if (keys.length === 0) return;
             const first = keys[0]; // 默认跳转第一个空格分隔的关键词
-            window.open(`http://192.168.31.124/?search=${encodeURIComponent(first)}`, '_blank');
+            window.open(`http://192.168.31.240/?search=${encodeURIComponent(first)}`, '_blank');
         }
 
         /**
@@ -360,7 +368,7 @@ async function fetchTags() {
             try {
                 // 3. 多次并发请求（每个关键词一个请求）
                 const results = await Promise.all(keys.map(k =>
-                    fetch(`http://192.168.31.124/videos/count?key=${encodeURIComponent(k)}`)
+                    fetch(`http://192.168.31.240/videos/count?key=${encodeURIComponent(k)}`)
                         .then(r => r.json())
                         .then(d => Number(d.total) || 0)
                         .catch(() => 0)
@@ -468,19 +476,20 @@ async function fetchTags() {
      onerror="this.style.display='none'">
                     </div>
                     <div class="p-5 flex-1 flex flex-col">
-                        <div class="flex justify-between items-start mb-3">
+                        <div class="flex items-start gap-2 mb-3 min-w-0">
                             <h4 data-query="${escapeHTML(card.query)}"
                                 onclick="event.stopPropagation(); countByKey(this.dataset.query, this)"
-                                class="query-title font-bold text-lg text-gray-100 leading-tight cursor-pointer hover:text-green-400">
+                                class="query-title flex-1 min-w-0 font-bold text-lg text-gray-100 leading-tight cursor-pointer hover:text-green-400">
                                 ${escapeHTML(card.query)}
                             </h4>
-                            ${card.stats_data ? '<span class="text-[10px] bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded whitespace-nowrap">已校验</span>' : ''}
+                            ${card.stats_data ? '<span class="shrink-0 text-[10px] bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded whitespace-nowrap">已校验</span>' : ''}
                         </div>
-                        <div class="flex justify-between items-end mt-auto pt-3 border-t border-gray-700/50 relative">
-                            <div class="flex flex-wrap gap-2 flex-1">
-                                ${card.tags.map(t => `<span onclick="event.stopPropagation(); toggleTag('${t}')" class="bg-gray-900 border border-gray-600 hover:border-green-500 hover:text-green-400 text-gray-300 px-2.5 py-1 rounded text-xs font-medium z-10 relative transition shadow-sm">${escapeHTML(t)}</span>`).join('')}
+                        <div class="flex flex-col gap-3 mt-auto pt-3 border-t border-gray-700/50 relative min-w-0">
+                            <div class="flex flex-wrap gap-2 w-full min-w-0">
+                                ${card.tags.map(t => `<span onclick="event.stopPropagation(); toggleTag('${t}')" class="tag-chip bg-gray-900 border border-gray-600 hover:border-green-500 hover:text-green-400 text-gray-300 px-2.5 py-1 rounded text-xs font-medium z-10 relative transition shadow-sm">${escapeHTML(t)}</span>`).join('')}
                             </div>
-                            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-2 z-10">
+                            <div class="flex flex-wrap justify-end gap-2 w-full z-10">
+                                <button data-query="${escapeHTML(card.query || '')}" onclick="event.stopPropagation(); collectByKey(this.dataset.query, this)" class="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">收集</button>
                                 <button onclick="event.stopPropagation(); openEditModal('${card.id}', '${queryStr}', '${tagsStr}')" class="px-2.5 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">编辑</button>
                                 <button onclick="event.stopPropagation(); openUploadWithTags('${tagsStr}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded shadow-md whitespace-nowrap">+ 同类</button>
                             </div>
@@ -505,6 +514,54 @@ async function fetchTags() {
                 const cardsElements = grid.children;
                 const lastCard = cardsElements[cardsElements.length - 1];
                 if (lastCard) observer.observe(lastCard);
+            }
+        }
+
+        // ================= 收集：预览后硬链接 =================
+        async function collectByKey(query, button) {
+            // 与原有跳转搜索一致：卡片多个 key 用空格分隔时取第一个。
+            const key = String(query || '').trim().split(/\s+/)[0];
+            if (!key || button.disabled) return;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '查询中...';
+            try {
+                const url = `${COLLECT_API_BASE}/videos/collect/preview?key=${encodeURIComponent(key)}`;
+                const previewRes = await fetch(url);
+                const preview = await previewRes.json().catch(() => ({}));
+                if (!previewRes.ok) throw new Error(preview.error || preview.detail || `预览接口错误 HTTP ${previewRes.status}，请检查 Flask 后端是否已重启并注册路由`);
+                if (!preview.count) {
+                    alert(`关键词「${key}」没有匹配的文件`);
+                    return;
+                }
+
+                const gb = n => (n / (1024 ** 3)).toFixed(2);
+                const listed = preview.files.slice(0, 12).map(f =>
+                    `${f.name} (${gb(f.size_bytes)} GiB)${f.exists === false ? ' [源文件不可用]' : ''}`
+                ).join('\n');
+                const rest = preview.count > 12 ? `\n...另有 ${preview.count - 12} 个文件` : '';
+                const limit = COLLECT_MAX_GB !== null ? COLLECT_MAX_GB : preview.default_max_total_gb;
+                const prompt = `收集关键词：${key}\n匹配：${preview.count} 个文件\n总体积：${gb(preview.total_size_bytes)} GiB\n大小限制：${limit ? `${limit} GiB` : '不限制'}\n\n${listed}${rest}\n\n确认创建硬链接吗？`;
+                if (!confirm(prompt)) return;
+
+                button.textContent = '收集中...';
+                const linkRes = await fetch(`${COLLECT_API_BASE}/videos/collect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, max_total_gb: COLLECT_MAX_GB })
+                });
+                const result = await linkRes.json().catch(() => ({}));
+                if (!linkRes.ok) throw new Error(result.error || result.detail || `创建硬链接失败 HTTP ${linkRes.status}`);
+
+                const errorPreview = (result.failed || []).slice(0, 3)
+                    .map(f => `${f.name}: ${f.reason}`).join('\n');
+                alert(`收集完成：${key}\n成功：${result.linked_count} 个（${gb(result.linked_bytes)} GiB）\n跳过：${result.skipped_count} 个\n失败：${result.failed_count} 个\n目录：${result.target_dir}${errorPreview ? `\n\n失败示例：\n${errorPreview}` : ''}`);
+            } catch (error) {
+                alert(`收集失败：${error.message || error}`);
+                console.error('collectByKey:', error);
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
             }
         }
 

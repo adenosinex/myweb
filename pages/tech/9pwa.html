@@ -13,6 +13,8 @@
     h2 { font-size: 19px; margin: 0 0 14px; }
     .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 18px; box-shadow: 0 8px 22px #10203b08; }
     .muted { color: #596174; margin: 5px 0 14px; }
+    .status { color: #40546e; font-size: 13px; margin-top: 10px; white-space: pre-wrap; }
+    .import-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
     label { display: block; font-weight: 600; margin: 12px 0 5px; }
     input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #bdc6d7; border-radius: 9px; background: #fff; font: inherit; }
     textarea { min-height: 290px; resize: vertical; font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -38,27 +40,29 @@
 <body>
 <main>
   <h1>PWA 工具管理器</h1>
-  <section class="card" id="loginPanel">
-    <h2>管理身份验证</h2>
-    <p class="muted">输入服务器管理密钥。首次启动时系统会自动生成并保存到本地 db/.pwa_admin_token（可配置路径），重启后仍有效。为安全起见，密钥不会保存在浏览器，刷新后需重新输入。</p>
-    <form id="loginForm">
-      <label for="adminToken">管理密钥</label>
-      <input id="adminToken" type="password" autocomplete="off" required>
-      <div style="margin-top:12px"><button type="submit">进入管理器</button></div>
-    </form>
-    <div id="loginMessage" aria-live="polite"></div>
-  </section>
-
-  <div id="workspace" hidden>
-    <section class="card">
+  <section class="card">
       <div class="row">
         <h2>已创建的工具</h2>
         <div class="actions">
           <button class="secondary small" id="reloadBtn" type="button">刷新列表</button>
-          <button class="secondary small" id="lockBtn" type="button">退出管理</button>
         </div>
       </div>
       <div id="toolsList" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <h2>从网页链接导入</h2>
+      <p class="muted">输入公网或内网可访问的网页 URL，服务端尝试将 CSS、JavaScript、图片和字体合并到单个 HTML。适合静态页面；需要登录、前端动态渲染、远程 API 或复杂模块依赖的网站无法保证完整复制或离线运行。</p>
+      <label for="importUrl">网页 URL</label>
+      <input id="importUrl" type="url" placeholder="https://example.com/tool.html" autocomplete="url">
+      <label for="importSlug">工具 URL 标识（创建时必填，可自动建议）</label>
+      <input id="importSlug" type="text" placeholder="例如 my-tool" maxlength="63" pattern="[a-z0-9][a-z0-9-]{0,62}">
+      <div class="import-actions">
+        <button type="button" id="fetchBtn" class="secondary">抓取到编辑器</button>
+        <button type="button" id="importBtn">抓取并创建 PWA</button>
+      </div>
+      <div id="importMessage" aria-live="polite"></div>
+      <p id="importStats" class="status" hidden></p>
     </section>
 
     <section class="card">
@@ -76,15 +80,14 @@
       </form>
       <div id="formMessage" aria-live="polite"></div>
     </section>
-  </div>
 </main>
 <script>
 (() => {
   'use strict';
   const BASE = "/pwa";
   const API = BASE + "/api/tools";
+  const IMPORT_API = BASE + "/api/import-url";
   const el = (id) => document.getElementById(id);
-  let adminToken = '';
   let editingSlug = null;
   let saving = false;
 
@@ -99,7 +102,7 @@
   }
 
   async function callAPI(path = '', options = {}) {
-    const headers = { 'X-PWA-Admin-Token': adminToken };
+    const headers = {};
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     const res = await fetch(API + path, { ...options, headers, cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
@@ -107,27 +110,64 @@
     return data;
   }
 
-  async function login(event) {
-    event.preventDefault();
-    adminToken = el('adminToken').value;
+  function proposeSlug(rawUrl) {
     try {
-      await loadTools();
-      el('adminToken').value = '';
-      el('loginPanel').hidden = true;
-      el('workspace').hidden = false;
-    } catch (error) {
-      adminToken = '';
-      message('loginMessage', error.message, true);
-    }
+      const url = new URL(rawUrl);
+      let path = url.pathname.split('/').filter(Boolean).pop() || '';
+      path = path.replace(/\.(html?|php|aspx?)$/i, '');
+      const host = url.hostname.replace(/^www\./, '');
+      const text = (path || host).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
+      return text || 'imported-tool';
+    } catch (_) { return 'imported-tool'; }
   }
 
-  function lock() {
-    adminToken = '';
-    resetForm();
-    el('toolsList').replaceChildren();
-    el('workspace').hidden = true;
-    el('loginPanel').hidden = false;
-    message('loginMessage', '已退出当前管理会话');
+  let importing = false;
+  async function importURL(save) {
+    if (importing) return;
+    const url = el('importUrl').value.trim();
+    const slug = el('importSlug').value.trim() || proposeSlug(url);
+    if (!url) { message('importMessage', '请输入网页 URL', true); return; }
+    if (save && !/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
+      message('importMessage', '工具标识只能包含小写字母、数字和连字符', true);
+      return;
+    }
+    importing = true;
+    el('fetchBtn').disabled = true;
+    el('importBtn').disabled = true;
+    el('importStats').hidden = true;
+    message('importMessage', '正在请求网页并整合资源……');
+    try {
+      const res = await fetch(IMPORT_API, {
+        method: 'POST', cache: 'no-store',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url, slug, save})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '导入失败：HTTP ' + res.status);
+      const stats = '已内联资源 ' + data.resource_count + ' 个；共发起 ' + data.http_requests +
+        ' 次 HTTP 请求；结果 ' + (data.size_bytes / 1024).toFixed(1) + ' KB。';
+      const warningText = (data.warnings || []).length
+        ? '\n未能完全内联的资源：\n' + data.warnings.map(x => '• ' + x).join('\n')
+        : '\n没有发现需要提示的资源加载失败。';
+      el('importStats').textContent = stats + warningText;
+      el('importStats').hidden = false;
+      if (save) {
+        message('importMessage', '已创建 PWA：' + data.url + '。请打开工具页检查效果。');
+        await loadTools();
+      } else {
+        resetForm();
+        el('slug').value = slug;
+        el('html').value = data.html;
+        message('importMessage', '已抓取并填入下方编辑区。确认页面源码后，点击“创建工具”保存。');
+        el('toolForm').scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    } catch (err) {
+      message('importMessage', err.message, true);
+    } finally {
+      importing = false;
+      el('fetchBtn').disabled = false;
+      el('importBtn').disabled = false;
+    }
   }
 
   async function loadTools() {
@@ -236,13 +276,17 @@
     }
   }
 
-  el('loginForm').addEventListener('submit', login);
-  el('lockBtn').addEventListener('click', lock);
+  el('importUrl').addEventListener('change', () => {
+    if (!el('importSlug').value.trim()) el('importSlug').value = proposeSlug(el('importUrl').value);
+  });
+  el('fetchBtn').addEventListener('click', () => importURL(false));
+  el('importBtn').addEventListener('click', () => importURL(true));
   el('reloadBtn').addEventListener('click', async () => {
     try { await loadTools(); } catch (error) { message('formMessage', error.message, true); }
   });
   el('toolForm').addEventListener('submit', saveTool);
   el('cancelBtn').addEventListener('click', () => { resetForm(); message('formMessage', ''); });
+  loadTools().catch(error => message('formMessage', '加载列表失败：' + error.message, true));
 })();
 </script>
 </body>

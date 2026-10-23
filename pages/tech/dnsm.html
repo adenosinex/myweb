@@ -1,328 +1,394 @@
 <!doctype html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>DNS Panel</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS Control Panel</title>
 <style>
-    body {
-        font-family: system-ui, -apple-system, sans-serif;
-        background-color: #f5f7fa;
-        color: #333;
-        padding: 20px;
-    }
-
-    h2 {
-        border-bottom: 2px solid #ddd;
-        padding-bottom: 10px;
-    }
-
-    .topbar {
-        margin-bottom: 16px;
-        display: flex;
-        gap: 12px;
-    }
-
-    .topbar button {
-        padding: 10px 18px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        color: white;
-        font-size: 14px;
-        font-weight: 600;
-    }
-
-    .btn-green { background: #10b981; }
-    .btn-blue { background: #3b82f6; }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        background: #fff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    th, td {
-        padding: 12px 15px;
-        text-align: left;
-        border-bottom: 1px solid #eee;
-        vertical-align: middle;
-    }
-
-    th {
-        background-color: #f8f9fa;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    tr:hover { background-color: #f1f4f8; }
-
-    /* 状态灯样式 */
-    .status {
-        display: inline-block;
-        flex-shrink: 0;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-    }
-    .ok { background-color: #10b981; }
-    .err { background-color: #ef4444; }
-    .pending {
-        background-color: #d1d5db;
-        animation: pulse 1.5s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { opacity: 0.5; }
-        50% { opacity: 1; }
-        100% { opacity: 0.5; }
-    }
-
-    /* 布局对齐 */
-    .flex-cell {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .action-group {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .action-group input {
-        padding: 6px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        width: 160px;
-    }
-
-    .action-group button {
-        padding: 6px 12px;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .auto-btn { background: #10b981; }
-    .update-btn { background: #3b82f6; }
-
-    .domain-text {
-        color: #555;
-        font-family: monospace;
-        font-size: 13px;
-    }
-
-    .ipv6-text {
-        font-family: monospace;
-        font-size: 13px;
-        color: #333;
-        word-break: break-all;
-    }
-
+  :root {
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color-scheme: light;
+    --bg: #f5f7fb; --surface: #fff; --text: #172033; --muted: #64748b;
+    --line: #e5eaf2; --primary: #3165e7; --primary-hover: #2454cf;
+    --green: #0f9d75; --red: #df5252; --gray: #c5cedb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); }
+  .container { max-width: 1540px; padding: 32px 24px 64px; margin: auto; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 25px; letter-spacing: -.5px; }
+  .sub { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button { border: 0; border-radius: 9px; cursor: pointer; transition: background .16s, opacity .16s; font: inherit; }
+  button:focus-visible, input:focus-visible { outline: 3px solid #9db7ff; outline-offset: 2px; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+  .button { padding: 10px 17px; font-size: 14px; font-weight: 650; }
+  .button.primary { background: var(--primary); color: #fff; }
+  .button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .button.light { color: #29405f; background: #e7ecf6; }
+  .button.light:hover:not(:disabled) { background: #dbe3f0; }
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 15px; }
+  .stat { background: var(--surface); padding: 14px 19px; border: 1px solid var(--line);
+          border-radius: 11px; min-width: 165px; }
+  .stat strong { display: block; font-size: 23px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .table-card { background: var(--surface); border: 1px solid var(--line);
+                border-radius: 13px; overflow: hidden; box-shadow: 0 3px 18px #1a325005; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; min-width: 1170px; border-collapse: collapse; text-align: left; }
+  th { background: #f8fafd; color: #52647d; font-size: 12px; font-weight: 700;
+       white-space: nowrap; letter-spacing: .25px; }
+  td { font-size: 13px; }
+  th, td { padding: 17px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: #fafcff; }
+  .host-name { font-weight: 750; font-size: 14px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+  .wrap { overflow-wrap: anywhere; }
+  .muted { color: var(--muted); }
+  .address { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .address .content { min-width: 0; overflow-wrap: anywhere; }
+  .detail { margin: 5px 0 0 21px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+  .light { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: 0 0 10px; background: var(--gray); }
+  .light.ok { background: var(--green); box-shadow: 0 0 0 3px #e5f8f0; }
+  .light.err { background: var(--red); box-shadow: 0 0 0 3px #fff0f0; }
+  .light.pending { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .actions { display: flex; gap: 7px; align-items: center; }
+  .actions input { width: 205px; max-width: 205px; height: 34px; padding: 0 9px;
+                   border: 1px solid #d4dce8; background: white; border-radius: 7px;
+                   font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .small-btn { padding: 8px 10px; white-space: nowrap; font-size: 12px; font-weight: 650; }
+  .small-btn.auto { background: #e1f6ee; color: #087b59; }
+  .small-btn.auto:hover:not(:disabled) { background: #d0efe3; }
+  .small-btn.update { background: #e5edff; color: #2758c1; }
+  .small-btn.update:hover:not(:disabled) { background: #d5e2ff; }
+  .empty { text-align: center; color: var(--muted); padding: 55px 16px; }
+  .footer { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between;
+            margin-top: 15px; color: var(--muted); font-size: 12px; }
+  .legend { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+  .legend span { display: inline-flex; gap: 7px; align-items: center; }
+  #notice { position: fixed; right: 22px; bottom: 24px; padding: 14px 18px; border-radius: 10px;
+            max-width: min(470px, calc(100vw - 44px)); background: #22334e; color: white;
+            box-shadow: 0 10px 35px #11182730; line-height: 1.5; font-size: 13px;
+            visibility: hidden; opacity: 0; transition: opacity .2s; z-index: 10; white-space: pre-line; }
+  #notice.show { visibility: visible; opacity: 1; }
+  #notice.bad { background: #a32938; }
+  @media(max-width: 700px) {
+    .container { padding: 20px 12px 35px; } h1 { font-size: 21px; }
+    .toolbar { width: 100%; } .toolbar .button { flex: 1; }
+    .stat { flex: 1; min-width: 95px; padding: 12px; }
+  }
 </style>
 </head>
-
 <body>
-
-<h2>DNS Control Panel</h2>
-
-<div class="topbar">
-    <button class="btn-green" onclick="autoIpv6All(event)">Auto Update All IPv6</button>
-    <button class="btn-blue" onclick="load()">Refresh</button>
+<div class="container">
+  <header>
+    <div>
+      <h1>DNS Control Panel</h1>
+      <p class="sub">局域网连通性、DNS 指向及 IPv6 动态更新</p>
+    </div>
+    <div class="toolbar">
+      <button id="autoAll" type="button" class="button primary">自动更新全部 IPv6</button>
+      <button id="refresh" type="button" class="button light">刷新状态</button>
+    </div>
+  </header>
+  <section class="stats" aria-label="状态概览">
+    <div class="stat"><strong id="countHosts">—</strong><span>主机总数</span></div>
+    <div class="stat"><strong id="countOnline">—</strong><span>IPv4 Ping 在线</span></div>
+    <div class="stat"><strong id="countDns">—</strong><span>IPv4 / IPv6 DNS 均正确</span></div>
+  </section>
+  <div class="table-card">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>主机</th><th>IPv4（局域网 Ping）</th><th>IPv4 域名（DNS）</th>
+            <th>IPv6 域名（DNS）</th><th>IPv6（记录 / Ping）</th><th>最后上报 / 更新</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tb"><tr><td colspan="7" class="empty">正在加载主机配置…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="legend">
+      <span><i class="light ok" aria-hidden="true"></i> 正常 / 指向正确</span>
+      <span><i class="light err" aria-hidden="true"></i> 异常 / 不匹配</span>
+      <span><i class="light" aria-hidden="true"></i> 未检测 / 无记录</span>
+    </div>
+    <span id="lastChecked">尚未完成检测</span>
+  </div>
 </div>
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>IPv4 (局域网Ping)</th>
-            <th>IPv4 Domain (DNS解析)</th>
-           
-            <th>IPv6 Domain (DNS解析)</th>
-            <th>Last Seen</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-    <tbody id="tb">
-        <tr>
-            <td colspan="7">Loading...</td>
-        </tr>
-    </tbody>
-</table>
-
+<div id="notice" role="status" aria-live="polite"></div>
 <script>
+(() => {
+  'use strict';
+  const tb = document.getElementById('tb');
+  const refreshButton = document.getElementById('refresh');
+  const allButton = document.getElementById('autoAll');
+  const rows = new Map();
+  let hosts = {};
+  let refreshing = false;
+  let refreshAgain = false;
+  let working = 0;
+  let notifyTimer;
+  let token = '';
+  try { token = sessionStorage.getItem('dns_panel_token') || ''; } catch (_) {}
 
-function renderTable(data, isPending) {
-    const tb = document.getElementById("tb");
-    tb.innerHTML = "";
+  const elem = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = String(text);
+    return node;
+  };
 
-    for (const [name, h] of Object.entries(data)) {
-        const tr = document.createElement("tr");
+  function notify(message, bad = false) {
+    const box = document.getElementById('notice');
+    box.textContent = message;
+    box.className = bad ? 'show bad' : 'show';
+    clearTimeout(notifyTimer);
+    notifyTimer = setTimeout(() => box.className = '', bad ? 6500 : 4200);
+  }
 
-        // 将状态灯直接封装成小组件，贴在对应的数据旁边
-        const getLight = (status, title) => 
-            `<span class="status ${isPending ? 'pending' : (status ? 'ok' : 'err')}" title="${title}"></span>`;
-
-        const v4LocalLight = getLight(h.ipv4_ok, "IPv4 Ping 连通性");
-        const v4DnsLight = getLight(h.dns_ok, "IPv4 DNS 解析状态");
-        const v6LocalLight = getLight(h.ipv6_ok, "IPv6 Ping 连通性 (需有历史记录)");
-        const v6DnsLight = getLight(h.ipv6_dns_ok, "IPv6 DNS 解析状态");
-
-        const timeStr = h.last_seen ? new Date(h.last_seen * 1000).toLocaleString() : "-";
-        const v6AddressHtml = h.last_ipv6 
-            ? `<span class="ipv6-text">${h.last_ipv6}</span>` 
-            : `<span class="ipv6-text" style="color:#aaa;">无本地记录</span>`;
-
-        tr.innerHTML = `
-            <td><strong>${name}</strong></td>
-            
-            <!-- IPv4 物理连通性 -->
-            <td>
-                <div class="flex-cell">
-                    ${v4LocalLight}
-                    <span>${h.lan_ipv4 || '-'}</span>
-                </div>
-            </td>
-            
-            <!-- IPv4 域名解析 -->
-            <td>
-                <div class="flex-cell">
-                    ${v4DnsLight}
-                    <span class="domain-text">${h.ipv4dns || '-'}</span>
-                </div>
-            </td>
-            
-           
-            
-            <!-- IPv6 域名解析 -->
-            <td>
-                <div class="flex-cell">
-                    ${v6DnsLight}
-                    <span class="domain-text">${h.ipv6dns || '-'}</span>
-                </div>
-            </td>
-            
-            <td style="font-size:0.9em; color:#666;">${timeStr}</td>
-            
-            <td>
-                <div class="action-group">
-                    <input id="ip_${name}" placeholder="Enter IPv6" value="">
-                    <button class="auto-btn" onclick="autoIpv6('${h.lan_ipv4}')">Auto</button>
-                    <button class="update-btn" onclick="upd('${h.lan_ipv4}', '${name}')">Update</button>
-                </div>
-            </td>
-        `;
-        tb.appendChild(tr);
-    }
-}
-
-async function load() {
-    const tb = document.getElementById("tb");
-    
-    try {
-        // 第一阶段：快速渲染静态信息和 Loading 状态
-        const hostRes = await fetch("/dns/api/hosts");
-        if (!hostRes.ok) throw new Error("Failed to fetch static configurations.");
-        const hostData = await hostRes.json();
-        renderTable(hostData, true);
-
-        // 第二阶段：拉取耗时状态并更新灯光
-        const statusRes = await fetch("/dns/api/status");
-        if (!statusRes.ok) throw new Error("Failed to fetch live status.");
-        const statusData = await statusRes.json();
-        renderTable(statusData, false);
-
-    } catch (error) {
-        tb.innerHTML = `
-            <tr>
-                <td colspan="7" style="color:red; text-align:center;">
-                    Error loading data: ${error.message}
-                </td>
-            </tr>
-        `;
-    }
-}
-
-async function autoIpv6(lan) {
-    try {
-        const res = await fetch("/dns/auto_ipv6_update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lan_ipv4: lan })
+  async function api(url, { method = 'GET', data = null, timeout = 20000 } = {}) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const headers = { Accept: 'application/json' };
+        if (data !== null) headers['Content-Type'] = 'application/json';
+        if (method !== 'GET' && token) headers['X-DNS-Panel-Token'] = token;
+        const response = await fetch(url, {
+          method, headers, credentials: 'same-origin', cache: 'no-store',
+          body: data === null ? undefined : JSON.stringify(data), signal: controller.signal,
         });
-        const data = await res.json();
-        
-        if (data.ipv6) {
-            alert("IPv6 Updated\n\n" + data.ipv6);
-        } else {
-            alert("IPv6 not found");
+        const payload = await response.json().catch(() => ({}));
+        if (response.status === 401 && method !== 'GET' && attempt === 0) {
+          const entered = window.prompt('写入接口需要访问令牌（DNS_PANEL_API_TOKEN）：', '');
+          if (!entered) throw new Error('已取消：未提供访问令牌');
+          token = entered.trim();
+          try { sessionStorage.setItem('dns_panel_token', token); } catch (_) {}
+          continue;
         }
-        await load();
-    } catch (e) {
-        alert(e);
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        return payload;
+      } catch (error) {
+        if (error.name === 'AbortError') throw new Error('请求超时，请稍后重试');
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
     }
-}
+    throw new Error('认证失败');
+  }
 
-async function autoIpv6All(event) {
+  function light(title) {
+    const node = elem('span', 'light pending');
+    node.title = `${title}：检测中`;
+    node.setAttribute('role', 'img');
+    node.setAttribute('aria-label', node.title);
+    return node;
+  }
+
+  function setLight(node, value, title) {
+    const state = value === null || value === undefined ? '未检测' : (value ? '正常' : '异常');
+    node.className = 'light' + (value === null || value === undefined ? '' : value ? ' ok' : ' err');
+    node.title = `${title}：${state}`;
+    node.setAttribute('aria-label', node.title);
+  }
+
+  function addressCell(row, address, title, extra = '') {
+    const td = elem('td');
+    const box = elem('div', 'address');
+    const dot = light(title);
+    const content = elem('span', 'content mono wrap', address || '—');
+    box.append(dot, content);
+    td.append(box);
+    if (extra) td.append(elem('div', 'detail', extra));
+    row.append(td);
+    return { dot, content, td };
+  }
+
+  function timeText(unix) {
+    if (!unix || !Number.isFinite(Number(unix))) return '—';
+    return new Date(Number(unix) * 1000).toLocaleString('zh-CN', { hour12: false });
+  }
+
+  function buildRow(name, host, priorValue = '') {
+    const tr = elem('tr');
+    const nameCell = elem('td');
+    nameCell.append(elem('strong', 'host-name', name));
+    tr.append(nameCell);
+    const v4 = addressCell(tr, host.lan_ipv4, 'IPv4 Ping');
+    const a = addressCell(tr, host.ipv4dns, 'IPv4 DNS 指向正确');
+    const aaaa = addressCell(tr, host.ipv6dns, 'IPv6 DNS 指向正确');
+    const v6 = addressCell(tr, host.last_ipv6 || '未记录', 'IPv6 Ping');
+    const timeCell = elem('td', 'muted', timeText(host.last_seen));
+    tr.append(timeCell);
+    const actionCell = elem('td');
+    const actions = elem('div', 'actions');
+    const input = elem('input');
+    input.type = 'text';
+    input.placeholder = '输入公网 IPv6';
+    input.value = priorValue;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', `${name} 的 IPv6`);
+    const autoBtn = elem('button', 'small-btn auto', '自动');
+    autoBtn.type = 'button';
+    const updateBtn = elem('button', 'small-btn update', '更新');
+    updateBtn.type = 'button';
+    autoBtn.addEventListener('click', () => runOne(name, host.lan_ipv4, autoBtn, true, input));
+    updateBtn.addEventListener('click', () => runOne(name, host.lan_ipv4, updateBtn, false, input));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); updateBtn.click(); }
+    });
+    actions.append(input, autoBtn, updateBtn);
+    actionCell.append(actions);
+    tr.append(actionCell);
+    return { tr, v4, a, aaaa, v6, timeCell, input, autoBtn, updateBtn,
+             lan: host.lan_ipv4, aName: host.ipv4dns, aaaaName: host.ipv6dns };
+  }
+
+  function showHosts(data) {
+    const entries = Object.entries(data);
+    // 配置未变时直接复用现有 DOM，避免自动刷新打断正在输入的 IPv6。
+    const unchanged = entries.length === rows.size && entries.every(([name, host]) => {
+      const row = rows.get(name);
+      return row && row.lan === host.lan_ipv4 && row.aName === host.ipv4dns
+        && row.aaaaName === host.ipv6dns;
+    });
+    if (unchanged) return;
+    const drafts = new Map([...rows].map(([name, row]) => [name, row.input.value]));
+    rows.clear();
+    const frag = document.createDocumentFragment();
+    for (const [name, host] of Object.entries(data)) {
+      const row = buildRow(name, host, drafts.get(name) || '');
+      rows.set(name, row);
+      frag.append(row.tr);
+    }
+    if (!rows.size) {
+      const tr = elem('tr');
+      const td = elem('td', 'empty', '暂无主机');
+      td.colSpan = 7;
+      tr.append(td); frag.append(tr);
+    }
+    tb.replaceChildren(frag);
+    document.getElementById('countHosts').textContent = rows.size;
+    document.getElementById('countOnline').textContent = '—';
+    document.getElementById('countDns').textContent = '—';
+  }
+
+  function showStatus(statuses) {
+    let online = 0, dnsBoth = 0;
+    for (const [name, row] of rows) {
+      const h = statuses[name];
+      if (!h) {
+        [row.v4, row.a, row.aaaa, row.v6].forEach(c => setLight(c.dot, null, '未收到状态'));
+        continue;
+      }
+      setLight(row.v4.dot, h.ipv4_ok, 'IPv4 Ping');
+      setLight(row.a.dot, h.dns_ok, 'IPv4 DNS 指向正确');
+      setLight(row.aaaa.dot, h.ipv6_dns_ok, 'IPv6 DNS 指向正确');
+      setLight(row.v6.dot, h.ipv6_ok, 'IPv6 可达（ICMP 或指定 TCP 端口）');
+      row.v6.content.textContent = h.last_ipv6 || '未记录';
+      row.timeCell.textContent = timeText(h.last_seen);
+      row.a.dot.title += `；当前解析：${(h.ipv4_resolved || []).join(', ') || '无'}`;
+      row.aaaa.dot.title += `；当前解析：${(h.ipv6_resolved || []).join(', ') || '无'}`;
+      if (h.ipv4_ok === true) online++;
+      if (h.dns_ok === true && h.ipv6_dns_ok === true) dnsBoth++;
+    }
+    document.getElementById('countOnline').textContent = online;
+    document.getElementById('countDns').textContent = dnsBoth;
+    document.getElementById('lastChecked').textContent =
+      `检测时间：${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · 每 60 秒自动刷新`;
+  }
+
+  async function load() {
+    if (refreshing) { refreshAgain = true; return; }
+    refreshing = true;
+    refreshButton.disabled = true;
+    refreshButton.textContent = '检测中…';
     try {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.innerText = "Updating...";
-
-        const res = await fetch("/dns/auto_ipv6_update_all", { method: "POST" });
-        const data = await res.json();
-
-        let ok = 0;
-        let fail = 0;
-
-        for (const [name, r] of Object.entries(data)) {
-            if (r.status === "updated") ok++;
-            else fail++;
+      const config = await api('/dns/api/hosts');
+      hosts = config;
+      showHosts(hosts); // 先展示配置，不阻塞于 Ping / DNS
+      try {
+        const statuses = await api('/dns/api/status', { timeout: 30000 });
+        showStatus(statuses); // 仅更新状态，保留输入内容
+      } catch (error) {
+        for (const row of rows.values()) {
+          [row.v4, row.a, row.aaaa, row.v6].forEach(c => setLight(c.dot, null, '检测失败'));
         }
-
-        alert(`IPv6 Update Finished\n\nSuccess: ${ok}\nFailed: ${fail}`);
-        await load();
-        btn.disabled = false;
-        btn.innerText = "Auto Update All IPv6";
-    } catch (e) {
-        alert(e);
-    }
-}
-
-async function upd(lan, name) {
-    const inputEl = document.getElementById(`ip_${name}`);
-    if (!inputEl) return;
-    
-    const ip = inputEl.value;
-    if (!ip) {
-        alert("Please input IPv6");
-        return;
-    }
-
-    try {
-        await fetch("/dns/manual_update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lan_ipv4: lan, ipv6: ip })
-        });
-        inputEl.value = "";
-        await load();
+        notify('主机已加载，但状态检测失败：' + error.message, true);
+      }
     } catch (error) {
-        alert("Update failed: " + error.message);
+      notify('加载失败：' + error.message, true);
+      if (!rows.size) {
+        const tr = elem('tr'); const td = elem('td', 'empty', '加载失败，请点击刷新重试');
+        td.colSpan = 7; tr.append(td); tb.replaceChildren(tr);
+      }
+    } finally {
+      refreshing = false;
+      refreshButton.disabled = false;
+      refreshButton.textContent = '刷新状态';
+      if (refreshAgain) { refreshAgain = false; void load(); }
     }
-}
+  }
 
-// 页面初始化加载
-load();
+  async function runOne(name, lan, button, automatic, input) {
+    const ipv6 = input.value.trim();
+    if (!automatic && !ipv6) { notify('请先输入 IPv6 地址', true); input.focus(); return; }
+    button.disabled = true;
+    const label = button.textContent;
+    button.textContent = '处理中…';
+    working++;
+    try {
+      const url = automatic ? '/dns/auto_ipv6_update' : '/dns/manual_update';
+      const payload = automatic ? { lan_ipv4: lan } : { lan_ipv4: lan, ipv6 };
+      const result = await api(url, { method: 'POST', data: payload, timeout: 40000 });
+      notify(`${name} 更新成功：${result.ipv6}`);
+      if (!automatic) input.value = '';
+      await load();
+    } catch (error) {
+      notify(`${name} 更新失败：${error.message}`, true);
+    } finally {
+      working--;
+      button.textContent = label;
+      button.disabled = false;
+    }
+  }
 
+  async function updateAll() {
+    if (working) return;
+    working++;
+    allButton.disabled = true;
+    allButton.textContent = '正在批量更新…';
+    try {
+      const result = await api('/dns/auto_ipv6_update_all', {
+        method: 'POST', data: {}, timeout: 180000,
+      });
+      const entries = Object.entries(result);
+      const success = entries.filter(([, value]) => value.status === 'updated');
+      const failed = entries.filter(([, value]) => value.status !== 'updated');
+      const summary = `批量更新完成：成功 ${success.length} 台，失败 ${failed.length} 台`;
+      const details = failed.map(([name, value]) => `${name}：${value.error || value.status}`).join('\n');
+      notify(details ? summary + '\n' + details : summary, failed.length > 0);
+      await load();
+    } catch (error) {
+      notify('批量更新失败：' + error.message, true);
+    } finally {
+      working--;
+      allButton.disabled = false;
+      allButton.textContent = '自动更新全部 IPv6';
+    }
+  }
+
+  refreshButton.addEventListener('click', load);
+  allButton.addEventListener('click', updateAll);
+  void load();
+  setInterval(() => { if (!refreshing && !working && !document.hidden) void load(); }, 60000);
+})();
 </script>
-
 </body>
 </html>

@@ -181,7 +181,7 @@ const $=id=>document.getElementById(id);
 const store=(key,value)=>{try{localStorage.setItem('pys.v2.'+key,JSON.stringify(value));}catch(_){}};
 const read=(key,otherwise)=>{try{return JSON.parse(localStorage.getItem('pys.v2.'+key))??otherwise;}catch(_){return otherwise;}};
 const state={groups:{},logs:new Map(),logOpen:new Set(read('logs',[])),folds:new Set(read('folds',[])),
-  args:new Map(),busy:new Set(),filter:'all',query:'',auto:read('refresh',true),theme:read('theme','light'),
+  args:new Map(),pythonEnv:new Map(),busy:new Set(),filter:'all',query:'',auto:read('refresh',true),theme:read('theme','light'),
   edit:null,portFile:null,numberMode:'proxy',updating:false,authorized:false,needsAuth:false,
   processFile:null,processData:null,processLoading:false};
 $('autoRefresh').checked=state.auto;document.documentElement.dataset.theme=state.theme;
@@ -193,6 +193,23 @@ function connect(ok,text){$('connDot').className='status-dot '+(ok?'ok':'bad');$
 function dialog(id){const el=$(id);if(!el.open)el.showModal();}
 function closeDialog(id){$(id).close();if(id==='processDialog'){state.processFile=null;state.processData=null;}}
 function validPort(raw){if(!/^\d{1,5}$/.test(String(raw)))return null;const n=Number(raw);return n>=1&&n<=65535?n:null;}
+/* —— 复制输出优化：统一文本规整 + 剪贴板降级 —— */
+function normalizeText(text){return String(text??'').replace(/\r\n?/g,'\n').replace(/[ \t]+$/gm,'').replace(/^\n+|\n+$/g,'');}
+async function copyText(text){
+ const value=String(text??'');
+ if(!value)return false;
+ try{if(window.isSecureContext&&navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return true;}}catch(_){}
+ try{
+  const ta=document.createElement('textarea');
+  ta.value=value;ta.setAttribute('readonly','');
+  ta.style.cssText='position:fixed;top:0;left:-9999px;width:1px;height:1px;padding:0;border:0;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();ta.select();ta.setSelectionRange(0,value.length);
+  const ok=document.execCommand('copy');
+  ta.remove();
+  return ok;
+ }catch(_){return false;}
+}
 async function api(path,{method='GET',body,timeout=15000}={}){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
  try{const resp=await fetch(API+path,{method,headers:body===undefined?{}:{'Content-Type':'application/json'},
@@ -247,6 +264,11 @@ function taskCard(f){const [style,status]=label(f),key=idOf(f.id),port=validPort
  <span class="badge ${style}"><span class="status-dot ${managed||external?'ok':conflict?'bad':''}"></span>${status}</span></div>
  <div class="task-meta"><button class="meta-tag click" data-action="port" data-id="${esc(f.id)}" title="点击配置端口">端口：${port||'未指定'} ✎</button>
  ${f.manual_port?'<span class="meta-tag">手动设置</span>':''}${infoTag}${meter}${stateHint}</div>
+ <select class="args field" data-python-env="${esc(f.id)}" ${!f.can_run?'disabled':''} aria-label="Python 执行环境">
+ <option value="auto">自动选择${f.python_envs?.length?'（'+esc(f.python_envs[0].label)+'）':'（系统 Python）'}</option>
+ <option value="system" ${state.pythonEnv.get(f.id)==='system'?'selected':''}>系统 Python</option>
+ ${(f.python_envs||[]).map(e=>`<option value="${esc(e.id)}" ${state.pythonEnv.get(f.id)===e.id?'selected':''}>虚拟环境 · ${esc(e.label)}</option>`).join('')}
+ </select>
  <input class="args field" data-args="${esc(f.id)}" placeholder="启动参数（可选，例如 --port 8000）" value="${esc(state.args.get(f.id)||'')}" ${!f.can_run?'disabled':''} autocomplete="off">
  <div class="task-controls">${controls}${button('edit','✎ 编辑',f)}${info||owner?button('process','◉ 运行详情',f):''}${links}
  ${(f.has_log||managed)?button('toggle-log',opened?'收起日志':logLabel,f):''}</div></div>
@@ -261,6 +283,7 @@ function taskCard(f){const [style,status]=label(f),key=idOf(f.id),port=validPort
 function render(){const host=$('app'),active=document.activeElement;
  const editingArg=active?.dataset?.args;const start=editingArg?active.selectionStart:null,end=editingArg?active.selectionEnd:null;
  host.querySelectorAll('[data-args]').forEach(el=>state.args.set(el.dataset.args,el.value));
+ host.querySelectorAll('[data-python-env]').forEach(el=>state.pythonEnv.set(el.dataset.pythonEnv,el.value));
  const priorScroll=new Map();host.querySelectorAll('[data-log]').forEach(el=>priorScroll.set(el.dataset.log,{
  top:el.scrollTop,stick:el.scrollHeight-el.clientHeight-el.scrollTop<35}));
  let output='',shown=0;
@@ -304,7 +327,13 @@ async function onAction(action,id){const f=allFiles().find(x=>x.id===id);if(!f)r
  if(state.busy.has(id))return;
  if(action==='toggle-log'){state.logOpen.has(id)?state.logOpen.delete(id):state.logOpen.add(id);
   store('logs',[...state.logOpen]);render();if(state.logOpen.has(id))fetchLog(f);return;}
- if(action==='copy-log'){try{await navigator.clipboard.writeText(state.logs.get(id)?.text||'');toast('日志已复制','good');}catch(_){toast('复制失败，请检查浏览器权限','bad');}return;}
+ if(action==='copy-log'){
+  const body=normalizeText(state.logs.get(id)?.text||'');
+  if(!body){toast('当前没有可复制的日志内容','bad');return;}
+  const header=`# ${f.file}（${f.id}）\n# 复制时间：${new Date().toLocaleString('zh-CN',{hour12:false})}\n\n`;
+  const ok=await copyText(header+body);
+  toast(ok?`日志已复制（${body.length} 字符）`:'复制失败，请检查浏览器剪贴板权限',ok?'good':'bad');
+  return;}
  if(action==='clear-log'){const prev=state.logs.get(id);state.logs.set(id,{text:'',offset:prev?.offset||0});const el=[...document.querySelectorAll('[data-log]')].find(x=>x.dataset.log===id);
   if(el)el.textContent='（已清空当前视图，后续日志仍会继续显示）';return;}
  if(action==='bottom-log'){const el=[...document.querySelectorAll('[data-log]')].find(x=>x.dataset.log===id);if(el)el.scrollTop=el.scrollHeight;return;}
@@ -318,7 +347,7 @@ async function onAction(action,id){const f=allFiles().find(x=>x.id===id);if(!f)r
  state.busy.add(id);
  try{
   if(action==='run'){state.logs.delete(id);state.logOpen.add(id);store('logs',[...state.logOpen]);
-   await mutate('/run',{file:id,args:state.args.get(id)||''},'启动指令已发送');}
+   await mutate('/run',{file:id,args:state.args.get(id)||'',python_env:state.pythonEnv.get(id)||'auto'},'启动指令已发送');}
   if(action==='stop')await mutate('/stop',{task:f.active_task},'停止指令已发送');
   if(action==='stop-port')await mutate('/stop-port',{port:f.occupied_port,pid:f.port_owner?.pid,create_time:f.port_owner?.create_time},'端口停止完成');
   if(action==='stop-external')await mutate('/stop-external',{file:id,pid:f.process_info.pid,create_time:f.process_info.create_time,confirm:true},'外部进程已收到停止指令');
@@ -347,6 +376,31 @@ function renderProcessDetails(d){const info=d.process_info||d.port_owner;
  $('processStop').hidden=!d.external_running||!d.can_stop_external;
  $('processTimestamp').textContent='检测时间 '+new Date(d.detected_at*1000).toLocaleTimeString('zh-CN',{hour12:false});
 }
+/* —— 进程信息复制：输出可读文本而非原始 JSON —— */
+function processReport(d){
+ const info=d.process_info||d.port_owner||{};
+ const status=d.managed?'本工具运行中':d.external_running?'外部运行中':d.port_conflict?'端口冲突':'未运行';
+ const rows=[
+  ['文件',d.file||state.processFile],
+  ['检测时间',d.detected_at?new Date(d.detected_at*1000).toLocaleString('zh-CN',{hour12:false}):'—'],
+  ['检测状态',status],
+  ['进程名称',info.name],
+  ['进程 PID',info.pid],
+  ['进程状态',info.process_status],
+  ['已运行',info.uptime_seconds===null||info.uptime_seconds===undefined?null:fmtUptime(info.uptime_seconds)],
+  ['CPU 占用',info.cpu_percent===null||info.cpu_percent===undefined?null:fmtCPU(info.cpu_percent)],
+  ['内存占用',info.memory_mb===null||info.memory_mb===undefined?null:fmtMem(info.memory_mb)],
+  ['线程数',info.threads],
+  ['用户',info.username],
+  ['启动时间',info.create_time?new Date(info.create_time*1000).toLocaleString('zh-CN'):null],
+  ['工作目录',info.cwd],
+  ['可执行路径',info.exe],
+  ['监听端口',(info.listen_ports||[]).join(', ')||d.occupied_port||null]
+ ];
+ let out=rows.filter(([,v])=>v!==null&&v!==undefined&&v!=='').map(([k,v])=>`${k}: ${v}`).join('\n');
+ if(info.command)out+='\n\n启动命令:\n'+normalizeText(info.command);
+ return out||'（没有可用的进程信息）';
+}
 async function refreshProcess(){const file=state.processFile;
  if(!file||state.processLoading||!$('processDialog').open)return;
  state.processLoading=true;
@@ -359,8 +413,12 @@ function openProcess(f){state.processFile=f.id;state.processData=null;
  $('processContent').innerHTML='<p>正在检查端口监听、进程身份和资源使用情况…</p>';
  dialog('processDialog');refreshProcess();}
 $('processRefresh').addEventListener('click',refreshProcess);
-$('processCopy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(state.processData,null,2));
- toast('运行信息已复制','good');}catch(e){toast('无法复制到剪贴板','bad');}});
+$('processCopy').addEventListener('click',async()=>{
+ const d=state.processData;
+ if(!d){toast('暂无可复制的进程信息','bad');return;}
+ const text=processReport(d);
+ const ok=await copyText(text);
+ toast(ok?`运行信息已复制（${text.length} 字符）`:'无法复制到剪贴板，请检查权限',ok?'good':'bad');});
 $('processStop').addEventListener('click',async()=>{const d=state.processData;
  if(!d?.external_running||!d.process_info?.pid)return;
  if(!confirm(`确定终止外部进程 PID ${d.process_info.pid} 及其子进程吗？`))return;
@@ -387,6 +445,7 @@ async function saveEditor(force=false){const e=state.edit;if(!e)return;const con
  }finally{$('editorSave').disabled=false;}}
 $('app').addEventListener('click',e=>{const t=e.target.closest('[data-action]');if(t)onAction(t.dataset.action,t.dataset.id);});
 $('app').addEventListener('input',e=>{if(e.target.matches('[data-args]'))state.args.set(e.target.dataset.args,e.target.value);});
+$('app').addEventListener('change',e=>{if(e.target.matches('[data-python-env]'))state.pythonEnv.set(e.target.dataset.pythonEnv,e.target.value);});
 $('app').addEventListener('toggle',e=>{const el=e.target;if(!el.matches('[data-fold]'))return;
  el.open?state.folds.add(el.dataset.fold):state.folds.delete(el.dataset.fold);store('folds',[...state.folds]);},true);
 $('search').addEventListener('input',e=>{state.query=e.target.value.trim().toLowerCase();render();});

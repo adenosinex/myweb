@@ -376,7 +376,8 @@ createApp({
                 const res = await axios.get('/api/daily_stats');
                 this.stats = (res.data || []).map(item => {
                     const [date = '1970-01-01', time = '00:00:00'] = (item._time || '').split(' ');
-                    return { ...item, date, time, count: Number(item.count) || null };
+                    const count = item.count === '' || item.count == null ? null : Number(item.count);
+                    return { ...item, date, time, count: Number.isFinite(count) ? count : null };
                 }).sort((a, b) =>
                     `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`) || b.project.localeCompare(a.project)
                 );
@@ -431,29 +432,22 @@ createApp({
             }
 
             const isEjec = this.project === 'ejec';
-            const sortedDates = [...new Set(projectData.map(i => i.date))].sort();
+            const totalsByDate = new Map();
+            projectData.forEach(record => {
+                const amount = isEjec ? (record.count || 0) : 1;
+                totalsByDate.set(record.date, (totalsByDate.get(record.date) || 0) + amount);
+            });
+            const sortedDates = [...totalsByDate.keys()].sort();
             const allDates = this.generateDateRange(sortedDates[0], sortedDates[sortedDates.length - 1]);
 
-            const overallData = allDates.map(d => {
-                const dayRecords = projectData.filter(i => i.date === d);
-                if (!dayRecords.length) return null;
-                return isEjec
-                    ? dayRecords.reduce((sum, c) => sum + (c.count || 0), 0)
-                    : dayRecords.length;
-            });
+            const overallData = allDates.map(d => totalsByDate.has(d) ? totalsByDate.get(d) : null);
 
             const today = this.localToday();
             const start30 = new Date();
             start30.setDate(start30.getDate() - 29);
             const start30Str = this.formatDate(start30);
             const recentDates = this.generateDateRange(start30Str, today);
-            const recentData = recentDates.map(d => {
-                const dayRecords = projectData.filter(i => i.date === d);
-                if (!dayRecords.length) return null;
-                return isEjec
-                    ? dayRecords.reduce((sum, c) => sum + (c.count || 0), 0)
-                    : dayRecords.length;
-            });
+            const recentData = recentDates.map(d => totalsByDate.has(d) ? totalsByDate.get(d) : null);
 
             window.overallChart = new Chart(ctxOverall, {
                 type: 'line',
@@ -488,9 +482,7 @@ createApp({
             });
 
             const intervalMap = {};
-            const activeRecentDates = recentDates.filter(d =>
-                projectData.some(i => i.date === d)
-            );
+            const activeRecentDates = recentDates.filter(d => totalsByDate.has(d));
             activeRecentDates.forEach((d, idx) => {
                 if (idx > 0) {
                     const diff = (this.parseDateUTC(d) - this.parseDateUTC(activeRecentDates[idx - 1])) / 86400000;
@@ -553,6 +545,12 @@ createApp({
     },
     mounted() {
         this.fetchStats();
+    },
+    beforeUnmount() {
+        window.overallChart?.destroy?.();
+        window.recentChart?.destroy?.();
+        window.overallChart = null;
+        window.recentChart = null;
     }
 }).mount('#app');
 </script>

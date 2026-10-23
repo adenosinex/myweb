@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>阅读模式 · 个人知识笔记</title>
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>文档时间线 · 个人知识笔记</title>
 
     <script>window.API_BASE = "";</script>
 
@@ -517,6 +517,262 @@
         @media (max-width: 768px) {
             .stats-grid { grid-template-columns: repeat(3, 1fr); }
         }
+
+        /* ==================== 2026 UI / responsive refresh ==================== */
+        :root {
+            color-scheme: light;
+            --page: #f3f6fb;
+            --surface: #ffffff;
+            --line: #e5eaf2;
+            --ink: #17243a;
+            --muted: #738197;
+            --primary: #4f46e5;
+            --primary-soft: #eef2ff;
+            --radius: 14px;
+            --shadow: 0 8px 28px rgba(25, 40, 70, .045);
+        }
+        html, body, #app { min-height: 100%; }
+        #app { height: 100dvh; }
+        body, .main { background: var(--page); color: var(--ink); }
+        button, input { font: inherit; }
+        button { -webkit-tap-highlight-color: transparent; }
+        button:focus-visible, input:focus-visible, .cat-item:focus-visible {
+            outline: 3px solid rgba(79,70,229,.28);
+            outline-offset: 2px;
+        }
+        .sidebar { width: 286px; min-width: 286px; border-color: var(--line); }
+        .sidebar-head { padding: 18px 16px 14px; }
+        .sidebar-title { color: var(--ink); font-size: 13px; letter-spacing: .2px; }
+        .sidebar-summary { gap: 7px; }
+        .sum-item { background: #f6f8fc; border-radius: 10px; padding: 10px 5px; }
+        .sum-value { font-size: 17px; color: var(--ink); }
+        .sum-label { font-size: 11px; }
+        .cat-item { border-radius: 9px; padding: 10px 11px; }
+        .cat-item.active { background: var(--primary-soft); color: #4338ca; }
+        .subcat-item { border-radius: 8px; padding: 8px; }
+        .topbar, .reader-bar { min-height: 68px; height: auto; background: rgba(255,255,255,.96); }
+        .topbar { padding: 10px 22px; gap: 16px; }
+        .brand { font-size: 16px; color: var(--ink); }
+        .topbar-right { gap: 10px; }
+        .view-switch { border-radius: 10px; background: #f6f8fc; padding: 3px; border-color: #edf1f7; }
+        .view-switch-btn { border-radius: 7px; min-height: 31px; padding: 6px 14px; font-size: 12px; }
+        .view-switch-btn + .view-switch-btn { border-left: 0; }
+        .view-switch-btn.active { background: #fff; box-shadow: 0 2px 8px rgba(10,20,50,.09); color: #4338ca; }
+        .doc-list-wrap { padding: 22px 26px 52px; }
+        .doc-group { max-width: 1040px; margin-left: auto; margin-right: auto; }
+        .doc-card { border-color: var(--line); border-radius: var(--radius); padding: 17px 19px; box-shadow: var(--shadow); }
+        .doc-card:hover { border-color: #a5b4fc; box-shadow: 0 7px 22px rgba(79,70,229,.10); }
+        .timeline-wrap { padding: 20px 25px 70px; overscroll-behavior: contain; }
+        .timeline-inner { max-width: 1040px; }
+        .timeline-toolbar {
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 16px 18px; margin-bottom: 15px;
+            display: flex; flex-direction: column; gap: 13px;
+        }
+        .timeline-toolbar-row, .timeline-control, .timeline-presets,
+        .timeline-range { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .timeline-toolbar-row { justify-content: space-between; gap: 12px 20px; }
+        .timeline-control { gap: 8px; }
+        .control-caption { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+        .timeline-presets { gap: 8px; }
+        .filter-pill {
+            color: #53627b; padding: 8px 12px; min-height: 36px; line-height: 1.2;
+            background: #f6f8fc; border: 1px solid transparent;
+            border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+        .filter-pill:hover { background: #e9edfb; }
+        .filter-pill.active { background: var(--primary-soft); color: #4338ca; border-color: #c7d2fe; }
+        .timeline-range { gap: 10px; }
+        .date-field {
+            display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto;
+            background: #f8fafd; padding: 5px 10px;
+            border: 1px solid var(--line); border-radius: 9px;
+            color: var(--muted); font-size: 12px;
+        }
+        .date-field input {
+            background: transparent; border: 0; outline: none; color: var(--ink);
+            min-height: 27px; font-size: 13px; min-width: 122px; max-width: 155px;
+        }
+        .text-action {
+            border: 0; border-radius: 8px; padding: 8px 9px;
+            background: transparent; color: #4f46e5; cursor: pointer;
+            font-size: 12px; font-weight: 600; white-space: nowrap;
+        }
+        .text-action:hover:not(:disabled) { background: #eef2ff; }
+        .text-action:disabled { opacity: .38; cursor: not-allowed; }
+        .timeline-metrics {
+            display: grid; grid-template-columns: 1.45fr repeat(3, minmax(0, 1fr));
+            gap: 12px; margin-bottom: 14px;
+        }
+        .metric {
+            min-width: 0; border: 1px solid var(--line); border-radius: var(--radius);
+            background: #fff; box-shadow: var(--shadow); padding: 17px 17px 15px;
+        }
+        .metric-primary { background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: 0; }
+        .metric-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+        .metric-value { margin-top: 9px; line-height: 1.08; font-size: clamp(24px, 3vw, 32px); font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .metric-unit { margin-top: 8px; font-size: 11px; color: #94a3b8; }
+        .metric-primary .metric-label, .metric-primary .metric-unit { color: rgba(255,255,255,.82); }
+        .selected-summary {
+            background: #eef2ff; color: #3730a3; padding: 12px 18px;
+            border-radius: 12px; border: 1px solid #c7d2fe; margin-bottom: 14px;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        }
+        .selected-summary-label { font-size: 12px; font-weight: 600; }
+        .selected-summary-total { font-size: 26px; font-weight: 750; font-variant-numeric: tabular-nums; margin-top: 3px; }
+        .selected-summary-total small { font-size: 12px; font-weight: 500; }
+        .trend-panel {
+            background: #fff; border: 1px solid var(--line);
+            border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 17px 18px 12px; margin-bottom: 17px;
+        }
+        .trend-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+        .trend-header strong { font-size: 14px; margin-right: 12px; }
+        .trend-header span, .trend-hint { color: var(--muted); font-size: 11px; }
+        .trend-hint { white-space: nowrap; }
+        .trend-scroll { overflow-x: auto; padding: 0 2px 5px; }
+        .trend-bars {
+            display: flex; align-items: stretch; gap: 9px;
+            height: 150px; min-width: max-content; width: 100%;
+        }
+        .trend-bar-button {
+            appearance: none; background: transparent; border: 0; padding: 0;
+            display: flex; flex: 1 0 30px; min-width: 30px; max-width: 80px;
+            flex-direction: column; align-items: center; cursor: pointer; color: var(--muted);
+        }
+        .trend-num { height: 22px; font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .trend-bar-track {
+            display: flex; align-items: flex-end; flex: 1;
+            width: 72%; min-width: 15px; border-radius: 5px 5px 0 0;
+        }
+        .trend-bar-fill {
+            display: block; width: 100%; min-height: 3px; max-height: 100%;
+            background: #a5b4fc; border-radius: 5px 5px 0 0;
+            transition: height .2s ease, background .2s ease;
+        }
+        .trend-bar-button:hover .trend-bar-fill,
+        .trend-bar-button.selected .trend-bar-fill { background: #4f46e5; }
+        .trend-bar-button.selected .trend-day { color: #4338ca; font-weight: 700; }
+        .trend-day { height: 22px; margin-top: 7px; font-size: 10px; white-space: nowrap; }
+        .timeline-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 3px 14px; }
+        .timeline-list-title { display: flex; align-items: center; gap: 10px; }
+        .timeline-list-title strong { font-size: 15px; }
+        .timeline-list-title span { color: var(--muted); font-size: 12px; }
+        .timeline-list-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+        .timeline-group { margin-bottom: 20px; }
+        .timeline-date {
+            top: -1px; position: sticky; z-index: 3;
+            padding: 11px 10px; gap: 9px; margin: 0 0 6px;
+            border: 1px solid #ebeff6; background: rgba(249,251,255,.96);
+            backdrop-filter: blur(8px); border-radius: 10px;
+        }
+        .timeline-date.chosen { background: #eef2ff; border-color: #c7d2fe; }
+        .day-check { display: flex; align-items: center; justify-content: center; padding: 2px; min-width: 25px; min-height: 28px; cursor: pointer; }
+        .day-check input { accent-color: var(--primary); width: 17px; height: 17px; cursor: pointer; }
+        .timeline-date-dot { width: 8px; height: 8px; background: var(--primary); box-shadow: 0 0 0 3px #e0e7ff; }
+        .date-select-btn { border: 0; background: transparent; padding: 5px 2px; cursor: pointer; text-align: left; color: var(--ink); }
+        .date-select-btn:disabled { cursor: default; }
+        .timeline-date-count { background: #e9eef7; color: #607086; }
+        .timeline-date-words { font-size: 12px; color: #4338ca; font-weight: 750; white-space: nowrap; }
+        .timeline-date-line { background: #e6eaf1; }
+        .timeline-items { border-left-color: #d9dff0; }
+        .timeline-item {
+            width: 100%; text-align: left; font-family: inherit;
+            border-color: var(--line); border-radius: 12px; margin-bottom: 8px;
+            box-shadow: var(--shadow); padding: 14px 16px; color: inherit;
+        }
+        .timeline-item:hover { border-color: #a5b4fc; }
+        .timeline-item::before { background: #a5b4fc; }
+        .timeline-item-title { color: var(--ink); font-size: 13.5px; }
+        .timeline-item-words { color: #4f46e5; font-size: 12px; font-weight: 750; white-space: nowrap; }
+        .timeline-footnote { color: #8591a3; font-size: 11px; line-height: 1.75; padding: 12px 3px; }
+        .cat-badge { border-radius: 7px; border: none; white-space: nowrap; }
+        .reader { padding: 30px 20px 70px; }
+        .reader-inner { background: #fff; border: 1px solid var(--line); padding: 26px 34px; border-radius: 16px; box-shadow: var(--shadow); max-width: 870px; }
+        .reader-bar { padding: 8px 16px; }
+        .stats-table-scroll { overflow-x: auto; max-width: 100%; }
+        .stats-table { min-width: 535px; }
+        @media (max-width: 1024px) {
+            .timeline-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .topbar { padding: 10px 14px; }
+        }
+        @media (max-width: 768px) {
+            #app { height: 100dvh; }
+            .sidebar { transition: transform .24s ease; padding-bottom: env(safe-area-inset-bottom,0px); }
+            .sidebar.open { box-shadow: 5px 0 36px rgba(15,23,42,.20); }
+            .main { min-width: 0; }
+            .topbar {
+                display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto;
+                grid-template-rows: auto auto; gap: 9px; align-items: center;
+                padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 10px;
+                min-height: 105px;
+            }
+            .topbar > .mobile-only { grid-column: 1; grid-row: 1; }
+            .topbar > .brand { grid-column: 2; grid-row: 1; min-width: 0; }
+            .brand span.brand-text { display: inline; font-size: 13px; }
+            .topbar > .search-wrap { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; }
+            .topbar > .view-switch { grid-column: 3; grid-row: 1; }
+            .topbar > .topbar-right { grid-column: 4; grid-row: 1; }
+            .view-switch-btn { padding: 6px 10px; font-size: 11px; min-height: 32px; }
+            .topbar-right .el-button { padding: 6px 9px; min-height: 33px; }
+            .stat-mini { display: none; }
+            .timeline-wrap { padding: 12px 10px calc(32px + env(safe-area-inset-bottom,0px)); }
+            .timeline-toolbar { padding: 13px; gap: 12px; }
+            .timeline-toolbar-row { gap: 10px; }
+            .timeline-control { gap: 6px; }
+            .control-caption { font-size: 11px; }
+            .timeline-presets { gap: 5px; }
+            .filter-pill { flex: 1 0 auto; padding: 8px 9px; min-height: 36px; }
+            .timeline-range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+            .date-field { flex-direction: column; align-items: stretch; gap: 3px; padding: 7px 10px; min-width: 0; }
+            .date-field input { width: 100%; min-width: 0; max-width: none; font-size: 13px; }
+            .timeline-range > .text-action { grid-column: 1 / -1; justify-self: start; }
+            .timeline-metrics { gap: 8px; }
+            .metric { padding: 13px 12px; border-radius: 12px; }
+            .metric-value { font-size: 25px; }
+            .metric-label { font-size: 11px; }
+            .metric-unit { font-size: 10px; }
+            .trend-panel { padding: 13px 12px 10px; }
+            .trend-header { align-items: flex-start; }
+            .trend-hint { display: none; }
+            .trend-header strong { display: block; margin-bottom: 3px; }
+            .trend-bar-button { flex-basis: 30px; }
+            .timeline-list-heading { align-items: flex-start; }
+            .timeline-list-title { display: block; }
+            .timeline-list-title span { display: block; margin-top: 3px; }
+            .timeline-date { gap: 7px; top: -1px; padding: 9px 7px; flex-wrap: wrap; }
+            .timeline-date-text { font-size: 13px; }
+            .timeline-date-words { font-size: 12px; }
+            .timeline-date-line { display: none; }
+            .timeline-items { padding-left: 13px; margin-left: 10px; }
+            .timeline-item { padding: 11px; flex-wrap: wrap; gap: 7px; }
+            .timeline-item::before { left: -20px; }
+            .timeline-item-time { width: 38px; }
+            .timeline-item-body { flex-basis: 50%; }
+            .timeline-item-words { margin-left: auto; }
+            .cat-badge { font-size: 11px; padding: 4px 7px; }
+            .reader { padding: 12px 9px calc(30px + env(safe-area-inset-bottom,0px)); }
+            .reader-inner { padding: 20px 15px; border-radius: 12px; }
+            .reader-title { font-size: 21px; }
+            .reader-body { font-size: 15px; line-height: 1.9; }
+            .reader-bar { gap: 7px; min-height: 52px; }
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .stats-dialog .el-dialog__body { max-height: 75dvh; overflow-y: auto; padding: 13px; }
+            .doc-list-wrap { padding: 12px 10px 30px; }
+        }
+        @media (max-width: 380px) {
+            .brand span.brand-text { display: none; }
+            .topbar { gap: 6px; }
+            .view-switch-btn { padding: 6px 8px; }
+            .timeline-control { width: 100%; }
+            .timeline-control .el-radio-group { flex: 1; }
+            .trend-header span { font-size: 10px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+        }
+
     </style>
 </head>
 
@@ -618,6 +874,7 @@
 
             <div class="topbar">
                 <el-button class="mobile-only" size="small" circle plain
+                           aria-label="打开分类目录"
                            @click="sidebarOpen = true">☰</el-button>
 
                 <div class="brand">
@@ -744,99 +1001,176 @@
                 </template>
             </div>
 
-            <!-- 时间线视图 -->
-            <div v-else class="timeline-wrap">
-
+            <!-- 时间线 · 日统计 / 日期区间 / 自由选日合计 -->
+            <section v-else class="timeline-wrap" aria-label="文档时间线">
                 <div class="timeline-inner">
+                    <div class="timeline-toolbar">
+                        <div class="timeline-toolbar-row">
+                            <div class="timeline-control">
+                                <span class="control-caption">日期依据</span>
+                                <el-radio-group v-model="timelineField" size="small">
+                                    <el-radio-button label="created">创建日期</el-radio-button>
+                                    <el-radio-button label="update">更新日期</el-radio-button>
+                                </el-radio-group>
+                            </div>
+                            <div class="timeline-control">
+                                <span class="control-caption">排序</span>
+                                <el-radio-group v-model="timelineOrder" size="small">
+                                    <el-radio-button label="desc">从新到旧</el-radio-button>
+                                    <el-radio-button label="asc">从旧到新</el-radio-button>
+                                </el-radio-group>
+                            </div>
+                        </div>
 
-                    <div class="timeline-bar">
-                        <span class="timeline-bar-label">时间字段</span>
-                        <el-radio-group v-model="timelineField" size="small">
-                            <el-radio-button label="created">创建</el-radio-button>
-                            <el-radio-button label="update">更新</el-radio-button>
-                        </el-radio-group>
-                        <span class="timeline-bar-label"
-                              style="margin-left:10px">
-                            方向
-                        </span>
-                        <el-radio-group v-model="timelineOrder" size="small">
-                            <el-radio-button label="desc">最新</el-radio-button>
-                            <el-radio-button label="asc">最早</el-radio-button>
-                        </el-radio-group>
-                        <span class="timeline-bar-count">
-                            共 {{ timelineTotal }} 篇 · {{ timelineGroups.length }} 天
-                        </span>
+                        <div class="timeline-presets" role="group" aria-label="快捷日期范围">
+                            <button v-for="p in datePresets" :key="p.value" type="button"
+                                    class="filter-pill"
+                                    :class="{ active: rangePreset === p.value }"
+                                    :aria-pressed="rangePreset === p.value"
+                                    @click="applyDatePreset(p.value)">{{ p.label }}</button>
+                        </div>
+
+                        <div class="timeline-range">
+                            <label class="date-field">
+                                <span>开始日期</span>
+                                <input type="date" v-model="dateStart" :max="dateEnd || undefined"
+                                       @change="markCustomRange" aria-label="开始日期">
+                            </label>
+                            <label class="date-field">
+                                <span>结束日期</span>
+                                <input type="date" v-model="dateEnd" :min="dateStart || undefined"
+                                       @change="markCustomRange" aria-label="结束日期">
+                            </label>
+                            <button class="text-action" type="button" @click="clearDateRange"
+                                    :disabled="!dateStart && !dateEnd">清除日期</button>
+                        </div>
+                    </div>
+
+                    <div v-if="!loadingDocs" class="timeline-metrics" aria-live="polite">
+                        <div class="metric metric-primary">
+                            <div class="metric-label">当前日期范围 · 合计字数</div>
+                            <div class="metric-value">{{ formatExactNum(timelineSummary.words) }}</div>
+                            <div class="metric-unit">字 · {{ timelineField === 'created' ? '按创建日期' : '按更新日期' }}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">文档</div>
+                            <div class="metric-value">{{ formatExactNum(timelineSummary.docs) }}</div>
+                            <div class="metric-unit">篇有日期的文档</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">覆盖日期</div>
+                            <div class="metric-value">{{ formatExactNum(timelineSummary.days) }}</div>
+                            <div class="metric-unit">个有文档的日期</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">日均字数</div>
+                            <div class="metric-value">{{ formatExactNum(timelineSummary.average) }}</div>
+                            <div class="metric-unit">按有文档的日期平均</div>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedSummary.days > 0" class="selected-summary" aria-live="polite">
+                        <div>
+                            <div class="selected-summary-label">已选 {{ selectedSummary.days }} 天 · {{ selectedSummary.docs }} 篇文档</div>
+                            <div class="selected-summary-total">{{ formatExactNum(selectedSummary.words) }} <small>字合计</small></div>
+                        </div>
+                        <button type="button" class="text-action" @click="clearSelectedDays">取消选择</button>
+                    </div>
+
+                    <div v-if="timelineChart.length && !loadingDocs" class="trend-panel">
+                        <div class="trend-header">
+                            <div>
+                                <strong>每日字数趋势</strong>
+                                <span>点击柱形可以选择日期并累计</span>
+                            </div>
+                            <span class="trend-hint">最多显示 42 个有文档日期</span>
+                        </div>
+                        <div class="trend-scroll">
+                            <div class="trend-bars" role="group" aria-label="每日字数柱形图">
+                                <button v-for="day in timelineChart" :key="day.key"
+                                        type="button" class="trend-bar-button"
+                                        :class="{ selected: isDaySelected(day.key) }"
+                                        :aria-pressed="isDaySelected(day.key)"
+                                        :title="day.key + ' · ' + formatExactNum(day.words) + ' 字 · ' + day.docs.length + ' 篇'"
+                                        @click="toggleDaySelection(day.key)">
+                                    <span class="trend-num">{{ shortNum(day.words) }}</span>
+                                    <span class="trend-bar-track">
+                                        <span class="trend-bar-fill" :style="{ height: trendHeight(day.words) + '%' }"></span>
+                                    </span>
+                                    <span class="trend-day">{{ day.key.slice(5) }}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="timelineGroups.length && !loadingDocs" class="timeline-list-heading">
+                        <div class="timeline-list-title">
+                            <strong>按日浏览</strong>
+                            <span>{{ timelineSummary.days }} 天 · {{ timelineSummary.docs }} 篇</span>
+                        </div>
+                        <div class="timeline-list-actions">
+                            <button class="text-action" type="button" @click="selectVisibleDays">全选当前日期</button>
+                            <button class="text-action" type="button" :disabled="!selectedDayKeys.length"
+                                    @click="clearSelectedDays">清空选择</button>
+                        </div>
                     </div>
 
                     <div v-if="loadingDocs" class="empty-hint">正在加载笔记...</div>
-
-                    <div v-else-if="timelineGroups.length === 0" class="empty-hint">
-                        <div style="font-size:36px;margin-bottom:8px">🕒</div>
-                        <div v-if="keyword">没有匹配「{{ keyword }}」的笔记</div>
-                        <div v-else>还没有笔记</div>
+                    <div v-else-if="!timelineGroups.length" class="empty-hint">
+                        <div style="font-size:30px;margin-bottom:8px">暂无结果</div>
+                        <p>选定日期范围内没有匹配的文档，可尝试扩大范围或清除筛选。</p>
                     </div>
 
                     <template v-else>
-                        <div class="timeline-group"
-                             v-for="group in timelineGroups"
-                             :key="group.key">
-
-                            <div class="timeline-date">
+                        <section class="timeline-group" v-for="group in timelineGroups" :key="group.key">
+                            <div class="timeline-date" :class="{ chosen: isDaySelected(group.key) }">
+                                <label class="day-check" :title="group.undated ? '无日期的文档无法按天选择' : '选择此日期'">
+                                    <input type="checkbox" :checked="isDaySelected(group.key)"
+                                           :disabled="group.undated"
+                                           @change="toggleDaySelection(group.key)"
+                                           :aria-label="'选择 ' + group.label">
+                                </label>
                                 <span class="timeline-date-dot"></span>
-                                <span class="timeline-date-text">{{ group.label }}</span>
-                                <span class="timeline-date-count">
-                                    {{ group.docs.length }} 篇
-                                </span>
+                                <button type="button" class="timeline-date-text date-select-btn"
+                                        @click="toggleDaySelection(group.key)" :disabled="group.undated">
+                                    {{ group.label }}
+                                </button>
+                                <span class="timeline-date-count">{{ group.docs.length }} 篇</span>
+                                <span class="timeline-date-words">{{ formatExactNum(group.words) }} 字</span>
                                 <span class="timeline-date-line"></span>
                             </div>
 
                             <div class="timeline-items">
-                                <div class="timeline-item"
-                                     v-for="d in group.docs"
-                                     :key="d.raw.id"
-                                     @click="openDoc(d.raw)">
-
-                                    <span class="timeline-item-time">
-                                        {{ formatTimeOfDay(d.timestamp) }}
-                                    </span>
-
-                                    <!-- 时间线徽章：点击跳该分类（含二级） -->
-                                    <span class="cat-badge"
-                                          :style="badgeStyle(d.cat)"
-                                          :title="`查看「${d.cat.l1}${d.cat.l2 ? ' ' + d.cat.l2 : ''}」全部文章`"
-                                          @click.stop="jumpToCategory(
-                                              (d.cat.l1 || '') + ' ' + (d.cat.l2 || ''))">
+                                <button type="button" class="timeline-item" v-for="d in group.docs"
+                                        :key="d.raw.id" @click="openDoc(d.raw)">
+                                    <span class="timeline-item-time">{{ group.undated ? '--:--' : formatTimeOfDay(d.timestamp) }}</span>
+                                    <span class="cat-badge" :style="badgeStyle(d.cat)"
+                                          :title="'查看该分类全部文章'"
+                                          @click.stop="jumpToCategory((d.cat.l1 || '') + ' ' + (d.cat.l2 || ''))">
                                         {{ d.cat.l1 }}{{ d.cat.l2 ? ' ' + d.cat.l2 : '' }}
                                     </span>
-
-                                    <div class="timeline-item-body">
-                                        <div class="timeline-item-title"
-                                             v-html="highlight(d.cat.clean)"></div>
-
-                                        <div class="timeline-item-preview"
-                                             v-if="d.previewText"
-                                             v-html="highlight(d.previewText)"></div>
-
-                                        <div class="timeline-item-meta">
-                                            <span v-if="d.raw.is_pinned === 1"
-                                                  style="color:#b45309">📌 置顶</span>
-                                            <span v-if="d.raw.status === 'archive'"
-                                                  style="color:#64748b">📦 归档</span>
-                                        </div>
-                                    </div>
-
-                                    <span class="timeline-item-words"
-                                          v-if="d.words > 0">
-                                        {{ formatNum(d.words) }} 字
+                                    <span class="timeline-item-body">
+                                        <span class="timeline-item-title" v-html="highlight(d.cat.clean)"></span>
+                                        <span class="timeline-item-preview" v-if="d.previewText"
+                                              v-html="highlight(d.previewText)"></span>
+                                        <span class="timeline-item-meta" v-if="d.raw.is_pinned === 1 || d.raw.status === 'archive'">
+                                            <span v-if="d.raw.is_pinned === 1">置顶</span>
+                                            <span v-if="d.raw.status === 'archive'">归档</span>
+                                        </span>
                                     </span>
-                                </div>
+                                    <span class="timeline-item-words">{{ formatExactNum(d.words) }} 字</span>
+                                </button>
                             </div>
-
-                        </div>
+                        </section>
                     </template>
-
+                    <p class="timeline-footnote" v-if="!loadingDocs">
+                        统计口径：根据文档{{ timelineField === 'created' ? '创建' : '更新' }}日期分组，对文档列表接口返回的
+                        word_count 当前字数求和（缺失时按 0 计算）；并非历史每日新增字数。
+                        <span v-if="timelineField === 'update'">更新日期缺失时回退到创建日期。</span>
+                        <span v-if="timelineMissingDates">另有 {{ timelineMissingDates }} 篇未标日期文档，未计入日期字数合计。</span>
+                    </p>
                 </div>
-            </div>
+            </section>
 
         </template>
 
@@ -844,6 +1178,7 @@
 
             <div class="reader-bar">
                 <el-button class="mobile-only" size="small" circle plain
+                           aria-label="打开分类目录"
                            @click="sidebarOpen = true">☰</el-button>
                 <el-button size="small" circle plain @click="closeReader">←</el-button>
                 <span class="reader-bar-title">
@@ -851,7 +1186,7 @@
                 </span>
                 <el-button size="small" plain @click="copyLink" title="复制链接">🔗</el-button>
                 <el-button size="small" plain
-                           @click="openDoc(currentDoc, true)" title="重新加载">🔄</el-button>
+                           @click="currentDoc && openDoc(currentDoc, true)" :disabled="!currentDoc" title="重新加载">🔄</el-button>
             </div>
 
             <div class="reader" ref="readerWrap">
@@ -915,8 +1250,8 @@
 
     </main>
 
-    <el-dialog v-model="statsDialog" title="📊 知识库统计"
-               width="640px" top="6vh" class="stats-dialog">
+    <el-dialog v-model="statsDialog" title="知识库统计"
+               :width="isMobile ? 'calc(100vw - 24px)' : '640px'" top="5vh" class="stats-dialog">
 
         <div v-if="statsLoading" class="empty-hint">正在加载统计...</div>
         <div v-else-if="!stats" class="empty-hint">暂无统计数据</div>
@@ -959,7 +1294,7 @@
             </div>
 
             <div class="stats-section-title">按分类统计</div>
-            <table class="stats-table">
+            <div class="stats-table-scroll"><table class="stats-table">
                 <thead>
                 <tr>
                     <th>分类</th>
@@ -986,7 +1321,7 @@
                     <td class="num">{{ formatNum(c.min) }}</td>
                 </tr>
                 </tbody>
-            </table>
+            </table></div>
 
             <div class="stats-section-title">最长的 5 篇</div>
             <div class="stats-top-list">
@@ -1005,7 +1340,7 @@
 </div>
 
 <script>
-const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
 
 const API_BASE = (window.API_BASE || '').replace(/\/$/, '');
 const api = path => /^https?:\/\//i.test(path) ? path : API_BASE + path;
@@ -1051,16 +1386,27 @@ function markdownToHtml(src) {
         '</blockquote>\n'
     );
 
+    // Markdown 转 HTML 时，仅允许常见安全协议和相对路径。
+    const safeUrl = input => {
+        const u = String(input || '').replace(/&amp;/g, '&').trim();
+        if (!/^(https?:\/\/|mailto:|\/(?!\/)|\.\.?\/|#)/i.test(u)) return '';
+        return escapeHtml(u).replace(/'/g, '&#39;');
+    };
     text = text.replace(
         /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
-        (m, alt, url, t) =>
-            `<img src="${url}" alt="${alt}"${t ? ` title="${t}"` : ''} loading="lazy">`
+        (m, alt, url, title) => {
+            const safe = safeUrl(url);
+            if (!safe || /^mailto:/i.test(url)) return alt;
+            return `<img src="${safe}" alt="${alt}"${title ? ` title="${title}"` : ''} loading="lazy">`;
+        }
     );
-
     text = text.replace(
         /\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
-        (m, label, url, t) =>
-            `<a href="${url}" target="_blank" rel="noopener"${t ? ` title="${t}"` : ''}>${label}</a>`
+        (m, label, url, title) => {
+            const safe = safeUrl(url);
+            if (!safe) return label;
+            return `<a href="${safe}" target="_blank" rel="noopener noreferrer"${title ? ` title="${title}"` : ''}>${label}</a>`;
+        }
     );
 
     text = text.replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, '<hr>');
@@ -1163,6 +1509,29 @@ const startOfDay = date => {
     return d;
 };
 
+/** 将 UNIX 秒/毫秒、ISO 字符串及 YYYY-MM-DD 转为本地时间戳（毫秒）。 */
+const parseTimestamp = input => {
+    if (input === null || input === undefined || input === '') return 0;
+    if (input instanceof Date) return Number.isFinite(input.getTime()) ? input.getTime() : 0;
+    const value = String(input).trim();
+    if (/^\d+(?:\.\d+)?$/.test(value)) {
+        const n = Number(value);
+        if (!Number.isFinite(n) || n <= 0) return 0;
+        const ms = n < 1e11 ? n * 1000 : n;
+        return Number.isFinite(new Date(ms).getTime()) ? ms : 0;
+    }
+    const pureDay = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (pureDay) {
+        const d = new Date(Number(pureDay[1]), Number(pureDay[2]) - 1, Number(pureDay[3]));
+        return Number.isFinite(d.getTime()) ? d.getTime() : 0;
+    }
+    const ms = Date.parse(value.replace(/^(\d{4}-\d{2}-\d{2}) (\d)/, '$1T$2'));
+    return Number.isFinite(ms) ? ms : 0;
+};
+const formatExactNumber = n => new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 })
+    .format(Math.max(0, Math.round(Number(n) || 0)));
+
+
 /* =========================================================
    App
    ========================================================= */
@@ -1184,6 +1553,17 @@ const app = createApp({
 
         const timelineField = ref('created');
         const timelineOrder = ref('desc');
+        const rangePreset = ref('all');
+        const dateStart = ref('');
+        const dateEnd = ref('');
+        const selectedDayKeys = ref([]);
+        const datePresets = [
+            { value: 'all', label: '全部时间' },
+            { value: '7d', label: '近 7 天' },
+            { value: '30d', label: '近 30 天' },
+            { value: 'month', label: '本月' },
+            { value: 'custom', label: '自定义' },
+        ];
 
         const currentDoc     = ref(null);
         const currentContent = ref('');
@@ -1232,8 +1612,9 @@ const app = createApp({
         };
 
         const getWordCount = doc => {
-            const wc = Number(doc && doc.word_count);
-            return wc > 0 ? wc : 0;
+            if (!doc) return 0;
+            const wc = Number(doc.word_count ?? doc.wordCount ?? doc.words ?? 0);
+            return Number.isFinite(wc) && wc > 0 ? Math.round(wc) : 0;
         };
 
         const badgeStyle = cat => {
@@ -1310,6 +1691,19 @@ const app = createApp({
             })).sort((a, b) => b.docs.length - a.docs.length);
         });
 
+        // 新出现的分类默认展开；不覆盖用户手动折叠的状态。
+        watch(groupedDocs, groups => {
+            const next = { ...expandedGroups.value };
+            let changed = false;
+            for (const group of groups) {
+                if (!(group.code in next)) {
+                    next[group.code] = true;
+                    changed = true;
+                }
+            }
+            if (changed) expandedGroups.value = next;
+        }, { immediate: true });
+
         const categoryTree = computed(() => {
             const map = {};
             for (const d of decoratedDocs.value) {
@@ -1362,49 +1756,149 @@ const app = createApp({
             }).sort((a, b) => b.count - a.count);
         });
 
-        /* ---------- 时间线 ---------- */
-        const timelineTotal = computed(() => filteredDocs.value.length);
+        /* ---------- 时间线：统一过滤后的每日汇总、区间与多日勾选 ---------- */
+        const getDocTimestamp = (doc, field = timelineField.value) => {
+            if (!doc) return 0;
+            const created = doc.created_time ?? doc.create_time ?? doc.created_at;
+            if (field === 'created') return parseTimestamp(created);
+            const updated = [doc.update_time, doc.updated_time, doc.modified_time, doc.updated_at]
+                .find(value => parseTimestamp(value) > 0);
+            return parseTimestamp(updated ?? created);
+        };
+
+        const applyDatePreset = preset => {
+            rangePreset.value = preset;
+            if (preset === 'custom') return;
+            if (preset === 'all') {
+                dateStart.value = '';
+                dateEnd.value = '';
+                return;
+            }
+            const today = startOfDay(new Date());
+            dateEnd.value = dateKey(today);
+            if (preset === 'month') {
+                dateStart.value = dateKey(new Date(today.getFullYear(), today.getMonth(), 1));
+            } else {
+                const days = preset === '7d' ? 7 : 30;
+                const from = new Date(today);
+                from.setDate(from.getDate() - days + 1);
+                dateStart.value = dateKey(from);
+            }
+        };
+
+        const markCustomRange = () => {
+            rangePreset.value = 'custom';
+            if (dateStart.value && dateEnd.value && dateStart.value > dateEnd.value) {
+                const tmp = dateStart.value;
+                dateStart.value = dateEnd.value;
+                dateEnd.value = tmp;
+            }
+        };
+        const clearDateRange = () => applyDatePreset('all');
+
+        const datedDocs = computed(() => filteredDocs.value.map(d => ({
+            ...d,
+            timestamp: getDocTimestamp(d.raw),
+        })));
+
+        const timelineMissingDates = computed(() =>
+            datedDocs.value.filter(d => !d.timestamp).length
+        );
 
         const timelineGroups = computed(() => {
-            const field = timelineField.value === 'created'
-                ? 'created_time'
-                : 'update_time';
-
-            const list = filteredDocs.value.slice().map(d => {
-                const ts = Number(d.raw[field]) || 0;
-                return { ...d, timestamp: ts };
-            }).filter(d => d.timestamp > 0);
-
-            list.sort((a, b) => timelineOrder.value === 'asc'
-                ? a.timestamp - b.timestamp
-                : b.timestamp - a.timestamp);
-
-            const groups = {};
-            const now = new Date();
-            const today = startOfDay(now);
-            const yesterday = new Date(today);
+            const groups = new Map();
+            const now = startOfDay(new Date());
+            const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
-
-            for (const d of list) {
-                const date = new Date(d.timestamp * 1000);
-                const key = dateKey(date);
-                if (!groups[key]) {
-                    groups[key] = {
-                        key, date,
-                        label: humanDate(date, today, yesterday),
+            for (const d of datedDocs.value) {
+                const valid = d.timestamp > 0;
+                const day = valid ? new Date(d.timestamp) : null;
+                const key = day ? dateKey(day) : 'undated';
+                if (valid && dateStart.value && key < dateStart.value) continue;
+                if (valid && dateEnd.value && key > dateEnd.value) continue;
+                // 输入了日期区间时，不把没有日期的文档混入统计。
+                if (!valid && (dateStart.value || dateEnd.value)) continue;
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        key,
+                        date: day,
+                        undated: !valid,
+                        label: day ? humanDate(day, now, yesterday) : '未标日期',
                         docs: [],
-                    };
+                        words: 0,
+                    });
                 }
-                groups[key].docs.push(d);
+                const group = groups.get(key);
+                group.docs.push(d);
+                group.words += d.words;
             }
-
-            const result = Object.values(groups);
-            result.sort((a, b) => timelineOrder.value === 'asc'
-                ? a.key.localeCompare(b.key)
-                : b.key.localeCompare(a.key));
-
-            return result;
+            const list = Array.from(groups.values());
+            list.sort((a, b) => {
+                if (a.undated) return 1;
+                if (b.undated) return -1;
+                return timelineOrder.value === 'asc'
+                    ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key);
+            });
+            for (const g of list) {
+                g.docs.sort((a, b) => timelineOrder.value === 'asc'
+                    ? a.timestamp - b.timestamp : b.timestamp - a.timestamp);
+            }
+            return list;
         });
+
+        const timelineTotal = computed(() => timelineGroups.value.reduce(
+            (n, g) => n + g.docs.length, 0
+        ));
+        const datedGroups = computed(() => timelineGroups.value.filter(g => !g.undated));
+        const timelineSummary = computed(() => {
+            const groups = datedGroups.value;
+            const docs = groups.reduce((n, g) => n + g.docs.length, 0);
+            const words = groups.reduce((n, g) => n + g.words, 0);
+            return {
+                docs, words, days: groups.length,
+                average: groups.length ? Math.round(words / groups.length) : 0,
+            };
+        });
+        const visibleDayKeys = computed(() => datedGroups.value.map(g => g.key));
+        const selectedSummary = computed(() => {
+            const keys = new Set(selectedDayKeys.value);
+            const picked = datedGroups.value.filter(g => keys.has(g.key));
+            return {
+                days: picked.length,
+                docs: picked.reduce((n, g) => n + g.docs.length, 0),
+                words: picked.reduce((n, g) => n + g.words, 0),
+            };
+        });
+        const toggleDaySelection = key => {
+            if (key === 'undated') return;
+            const values = new Set(selectedDayKeys.value);
+            if (values.has(key)) values.delete(key);
+            else values.add(key);
+            selectedDayKeys.value = [...values];
+        };
+        const isDaySelected = key => selectedDayKeys.value.includes(key);
+        const selectVisibleDays = () => { selectedDayKeys.value = [...visibleDayKeys.value]; };
+        const clearSelectedDays = () => { selectedDayKeys.value = []; };
+        watch([timelineField, activeCat, activeSub, keyword, dateStart, dateEnd],
+              clearSelectedDays);
+
+        const timelineChart = computed(() => {
+            const chronological = datedGroups.value.slice(0, 42);
+            return chronological.sort((a, b) => a.key.localeCompare(b.key));
+        });
+        const trendMax = computed(() =>
+            Math.max(1, ...timelineChart.value.map(g => g.words))
+        );
+        const trendHeight = words => Math.max(3,
+            Math.round(Math.max(0, Number(words) || 0) / trendMax.value * 100)
+        );
+        const shortNum = n => {
+            const v = Number(n) || 0;
+            if (v >= 10000) return (v / 10000).toFixed(1) + '万';
+            if (v >= 1000) return (v / 1000).toFixed(1) + '千';
+            return String(v);
+        };
+        const formatExactNum = formatExactNumber;
 
         const humanDate = (date, today, yesterday) => {
             const key = dateKey(date);
@@ -1467,19 +1961,19 @@ const app = createApp({
             return String(n);
         };
         const formatDate = ts => {
-            if (!ts) return '';
-            const d = new Date(Number(ts) * 1000);
-            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+            const ms = parseTimestamp(ts);
+            return ms ? dateKey(new Date(ms)) : '';
         };
         const formatDateTime = ts => {
-            if (!ts) return '';
-            const d = new Date(Number(ts) * 1000);
-            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} `
-                + `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+            const ms = parseTimestamp(ts);
+            if (!ms) return '';
+            const d = new Date(ms);
+            return `${dateKey(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
         };
         const formatTimeOfDay = ts => {
-            if (!ts) return '';
-            const d = new Date(Number(ts) * 1000);
+            const ms = parseTimestamp(ts);
+            if (!ms) return '';
+            const d = new Date(ms);
             return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
         };
         const escapeReg = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1618,7 +2112,8 @@ const app = createApp({
         const stripFrontmatter = c =>
             String(c || '').replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '');
 
-        const openDoc = async (docOrId, forceReload = false) => {
+        let contentRequest = null;
+        const openDoc = async (docOrId, forceReload = false, updateUrl = true) => {
             let doc = docOrId;
             if (typeof doc === 'string' || typeof doc === 'number') {
                 doc = { id: String(doc) };
@@ -1627,22 +2122,27 @@ const app = createApp({
 
             if (!forceReload && currentDoc.value && currentDoc.value.id === doc.id) {
                 view.value = 'read';
-                pushUrlForDoc(doc.id);
+                if (updateUrl) pushUrlForDoc(doc.id);
                 return;
             }
 
+            if (contentRequest) contentRequest.abort();
+            const controller = new AbortController();
+            contentRequest = controller;
             view.value = 'read';
             currentDoc.value = doc;
             currentContent.value = '';
             renderedHtml.value = '';
             loadingContent.value = true;
             missingId.value = '';
-            pushUrlForDoc(doc.id);
+            if (updateUrl) pushUrlForDoc(doc.id);
 
             try {
                 const res = await fetch(
-                    api(`/docapi/document/${encodeURIComponent(doc.id)}`)
+                    api(`/docapi/document/${encodeURIComponent(doc.id)}`),
+                    { signal: controller.signal }
                 );
+                if (controller.signal.aborted || contentRequest !== controller) return;
 
                 if (res.status === 404) {
                     missingId.value = doc.id;
@@ -1652,6 +2152,7 @@ const app = createApp({
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
                 const data = await res.json();
+                if (controller.signal.aborted || contentRequest !== controller) return;
                 if (typeof data.content !== 'string') {
                     throw new Error('缺少 content 字段');
                 }
@@ -1665,16 +2166,25 @@ const app = createApp({
 
                 if (readerWrap.value) readerWrap.value.scrollTop = 0;
             } catch (e) {
+                if (e.name === 'AbortError' || contentRequest !== controller) return;
                 console.error('[reader] 失败:', e);
                 ElementPlus.ElMessage.error(e.message || '内容加载失败');
                 currentContent.value = '';
                 renderedHtml.value = '';
             } finally {
-                loadingContent.value = false;
+                if (contentRequest === controller) {
+                    loadingContent.value = false;
+                    contentRequest = null;
+                }
             }
         };
 
         const closeReader = (updateUrl = true) => {
+            if (contentRequest) {
+                contentRequest.abort();
+                contentRequest = null;
+            }
+            loadingContent.value = false;
             view.value = 'list';
             currentDoc.value = null;
             currentContent.value = '';
@@ -1718,9 +2228,13 @@ const app = createApp({
             if (currentDoc.value && currentDoc.value.id === id &&
                 view.value === 'read') return;
             const hit = documents.value.find(d => d.id === id);
-            await openDoc(hit || { id }, true);
+            await openDoc(hit || { id }, true, false);
         };
         window.addEventListener('popstate', handlePopState);
+        const handleEscape = e => {
+            if (e.key === 'Escape' && sidebarOpen.value) sidebarOpen.value = false;
+        };
+        window.addEventListener('keydown', handleEscape);
 
         onMounted(async () => {
             updateIsMobile();
@@ -1753,12 +2267,20 @@ const app = createApp({
             try { localStorage.setItem('reader.viewMode', v); } catch (e) {}
         });
 
+        onUnmounted(() => {
+            window.removeEventListener('resize', updateIsMobile);
+            window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener('keydown', handleEscape);
+            if (contentRequest) contentRequest.abort();
+        });
+
         return {
             documents, loadingDocs, keyword,
             activeCat, activeSub,
             expandedCats, expandedGroups,
             view, viewMode, sidebarOpen,
             timelineField, timelineOrder,
+            datePresets, rangePreset, dateStart, dateEnd, selectedDayKeys,
             currentDoc, currentContent, renderedHtml,
             loadingContent, missingId,
             stats, statsLoading, statsDialog,
@@ -1767,24 +2289,28 @@ const app = createApp({
             L1_META,
 
             filteredDocs, groupedDocs, categoryTree,
-            timelineGroups, timelineTotal,
+            timelineGroups, timelineTotal, timelineSummary, timelineMissingDates,
+            timelineChart, selectedSummary,
             totalDocs, overallAvg, readingTime, currentCat,
             statsMap,
 
             parseCategory, getCleanTitle, getPreview, getWordCount,
             badgeStyle,
-            formatNum, formatDate, formatDateTime, formatTimeOfDay,
+            formatNum, formatExactNum, shortNum, trendHeight,
+            formatDate, formatDateTime, formatTimeOfDay,
             highlight,
 
             toggleCat, toggleGroup, selectCategory, jumpToCategory,
             doSearch,
+            applyDatePreset, markCustomRange, clearDateRange,
+            toggleDaySelection, isDaySelected, selectVisibleDays, clearSelectedDays,
             loadAll, loadStats, openStats, openFromStats,
             openDoc, closeReader, copyLink,
         };
     }
 });
 
-for (const [key, comp] of Object.entries(ElementPlusIconsVue || {})) {
+for (const [key, comp] of Object.entries(typeof ElementPlusIconsVue !== 'undefined' ? ElementPlusIconsVue : {})) {
     app.component(key, comp);
 }
 app.use(ElementPlus);

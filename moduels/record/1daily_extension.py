@@ -3,6 +3,7 @@ import sqlite3
 import csv
 import io
 from datetime import datetime
+from contextlib import closing
 import pytz
 from flask import Blueprint, render_template, request, jsonify, Response
 
@@ -22,7 +23,7 @@ def get_db_conn():
     return conn
 
 def init_db():
-    with get_db_conn() as conn:
+    with closing(get_db_conn()) as conn, conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS universal_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +46,7 @@ def add_record(project, addtime, count=None, remark_extra=""):
     if last_add_time == addtime:
         return
 
-    with get_db_conn() as conn:
+    with closing(get_db_conn()) as conn, conn:
         r = conn.execute(
             "SELECT record_time FROM universal_records "
             "WHERE category='daily_stats' AND remark LIKE '%auto%' "
@@ -65,11 +66,12 @@ def add_record(project, addtime, count=None, remark_extra=""):
         )
         last_add_time = addtime
 
-def get_stats():
-    with get_db_conn() as conn:
+def get_stats(descending=True):
+    direction = 'DESC' if descending else 'ASC'
+    with closing(get_db_conn()) as conn, conn:
         rows = conn.execute(
             "SELECT id, record_time, val1 as count, remark "
-            "FROM universal_records WHERE category='daily_stats' ORDER BY record_time DESC"
+            f"FROM universal_records WHERE category='daily_stats' ORDER BY record_time {direction}, id {direction}"
         ).fetchall()
 
     stats = []
@@ -95,7 +97,7 @@ def get_stats():
     return stats
 
 def delete_record(record_id):
-    with get_db_conn() as conn:
+    with closing(get_db_conn()) as conn, conn:
         cursor = conn.execute("DELETE FROM universal_records WHERE id=? AND category='daily_stats'", (record_id,))
         return cursor.rowcount > 0
 
@@ -134,15 +136,14 @@ def delete_daily_record(record_id):
 # ==========================================
 @stats_bp.route('/api/daily_stats/export', methods=['GET'])
 def export_csv():
-    stats = get_stats()
+    stats = get_stats(descending=False)
     si = io.StringIO()
     cw = csv.writer(si)
     # 写入表头
     cw.writerow(['Time', 'Project', 'Count', 'Remark'])
     
     # 写入数据（按时间正序排列以符合常理）
-    stats_asc = sorted(stats, key=lambda x: x['_time'])
-    for item in stats_asc:
+    for item in stats:
         cw.writerow([item['_time'], item['project'], item['count'], item['remark']])
 
     output = si.getvalue()
@@ -153,6 +154,27 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=daily_stats.csv"}
     )
+
+def parse_daily_csv_row(row):
+    """独立解析一行，兼容中英文表头与 Excel 常见时间格式。"""
+    def value(*keys):
+        return next((row[key] for key in keys if key in row), None)
+
+    timestamp = value('Time', 'time', '时间')
+    project = value('Project', 'project', '项目')
+    count = value('Count', 'count', '次数')
+    remark = value('Remark', 'remark', '备注') or ''
+    if not timestamp or not project:
+        return None
+    normalized = timestamp.replace('/', '-').replace('T', ' ').strip()
+    if ':' not in normalized:
+        normalized += ' 00:00:00'
+    elif len(normalized.split(':')) == 2:
+        normalized += ':00'
+    normalized = datetime.strptime(normalized, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
+    count_num = float(count) if count and count.strip() else None
+    return ('daily_stats', normalized, count_num, f'{project} | {remark}' if remark else project)
+
 
 @stats_bp.route('/api/daily_stats/import', methods=['POST'])
 def import_csv():
@@ -174,36 +196,17 @@ def import_csv():
     stream = io.StringIO(raw_content)
     csv_input = csv.DictReader(stream, delimiter=delimiter)
     
-    success_count = 0
-    with get_db_conn() as conn:
-        for row in csv_input:
-            try:
-                def get_val(keys):
-                    for k in keys:
-                        if k in row: return row[k]
-                    return None
-
-                t_val = get_val(['Time', 'time', '时间'])
-                p_val = get_val(['Project', 'project', '项目'])
-                c_val = get_val(['Count', 'count', '次数'])
-                r_val = get_val(['Remark', 'remark', '备注']) or ""
-
-                if not t_val or not p_val: continue
-                
-                # 规范化时间
-                raw_time = t_val.replace('/', '-').strip()
-                if len(raw_time.split(':')) == 2: raw_time += ":00"
-                
-                count_num = float(c_val) if c_val else None
-                final_remark = f"{p_val} | {r_val}" if r_val else p_val
-                
-                conn.execute(
-                    "INSERT INTO universal_records (category, record_time, val1, remark) VALUES (?, ?, ?, ?)",
-                    ('daily_stats', raw_time, count_num, final_remark)
-                )
-                success_count += 1
-            except Exception as e:
-                print(f"解析错误: {e}")
-                continue
-
-    return jsonify({'status': 'ok', 'imported_rows': success_count})
+    records = []
+    for row in csv_input:
+        try:
+            record = parse_daily_csv_row(row)
+            if record is not None:
+                records.append(record)
+        except (ValueError, TypeError) as e:
+            print(f"解析错误: {e}")
+    if records:
+        with closing(get_db_conn()) as conn, conn:
+            conn.executemany(
+                "INSERT INTO universal_records (category, record_time, val1, remark) VALUES (?, ?, ?, ?)",
+                records)
+    return jsonify({'status': 'ok', 'imported_rows': len(records)})
